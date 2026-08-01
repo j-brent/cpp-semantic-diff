@@ -116,6 +116,10 @@ degradation path (§11). Two consequences:
 
 - It requires **configure, not a full build** — `cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
   takes seconds where a build takes minutes. v0 configures both worktrees.
+- **The tool chooses the generator.** Only Ninja and the Makefile generators emit a compile
+  database; on Windows CMake defaults to Visual Studio, which configures successfully and emits
+  nothing. Leaving the choice to CMake turns a hard precondition into a silent one, so configure
+  selects Ninja unless the caller passes an explicit `-G`.
 - **Repositories with generated sources need more than configure.** The CodeAtlas measurements
   found `clang-scan-deps` failing on 119 of opencv's 1,292 TUs (9.2 %), every one on a
   `opencl_kernels_*.hpp` that CMake emits during the build. Where this happens the acquire stage

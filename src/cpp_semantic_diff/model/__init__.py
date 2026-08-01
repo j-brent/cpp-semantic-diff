@@ -1,0 +1,31 @@
+from cpp_semantic_diff.model.ir import (
+    AttrValue,
+    Completeness,
+    Edge,
+    EdgeId,
+    EdgeKind,
+    Location,
+    MatchTier,
+    Model,
+    Node,
+    NodeId,
+    NodeKind,
+    TuResult,
+    TuStatus,
+)
+
+__all__ = [
+    "AttrValue",
+    "Completeness",
+    "Edge",
+    "EdgeId",
+    "EdgeKind",
+    "Location",
+    "MatchTier",
+    "Model",
+    "Node",
+    "NodeId",
+    "NodeKind",
+    "TuResult",
+    "TuStatus",
+]
