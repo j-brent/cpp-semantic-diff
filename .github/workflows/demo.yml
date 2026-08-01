@@ -1,0 +1,168 @@
+name: demo
+
+# Runs the tool against real C++ repositories and publishes the result to the run
+# summary, so progress is visible in GitHub rather than only on a developer's terminal.
+#
+# What this currently shows is the *denominator* of the compression metric (ARCH-001 §10)
+# -- how much a reviewer has to read today -- plus proof that both revisions were
+# acquired and the parser is sound. The numerator is the semantic delta, and the stages
+# that produce it are not built yet. The summary says so explicitly and in place, because
+# a page that looks like semantic-diff output while showing none would be exactly the
+# confidently-wrong artifact this project exists to argue against.
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Git URL to analyze. Blank runs the default fixture set."
+        required: false
+        default: ""
+      base:
+        description: "Base ref for the comparison, e.g. HEAD~12 or a tag."
+        required: false
+        default: "HEAD~12"
+
+concurrency:
+  group: demo-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NO_COLOR: "1"
+  COLUMNS: "160"
+
+jobs:
+  targets:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        # Inputs go through the environment and jq rather than being interpolated into
+        # the script; `${{ }}` expansion happens before bash sees the line, so a crafted
+        # ref would otherwise run as shell.
+        env:
+          IN_REPO: ${{ inputs.repo }}
+          IN_BASE: ${{ inputs.base }}
+        run: |
+          set -euo pipefail
+          if [ -n "$IN_REPO" ]; then
+            matrix=$(jq -cn --arg url "$IN_REPO" --arg base "${IN_BASE:-HEAD~12}" \
+              '[{name: ($url | split("/") | last | sub("\\.git$";"")), url: $url, base: $base}]')
+          else
+            matrix=$(jq -cn '[
+              {name: "fmt",    url: "https://github.com/fmtlib/fmt.git",    base: "HEAD~12"},
+              {name: "spdlog", url: "https://github.com/gabime/spdlog.git", base: "HEAD~12"}
+            ]')
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | jq .
+
+  analyze:
+    needs: targets
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libclang1-18 libclang-common-18-dev llvm-18 cmake ninja-build
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      # Full history, deliberately. A shallow clone has no second point and the tool
+      # rejects it by design (ShallowRepositoryError), so `actions/checkout`-style
+      # depth-1 fetching would fail the precondition rather than the analysis.
+      - name: Clone ${{ matrix.target.name }}
+        env:
+          URL: ${{ matrix.target.url }}
+        run: git clone --quiet "$URL" "$RUNNER_TEMP/subject"
+
+      - name: Analyze
+        id: run
+        env:
+          BASE: ${{ matrix.target.base }}
+          NAME: ${{ matrix.target.name }}
+        run: |
+          set -uo pipefail
+          SUBJECT="$RUNNER_TEMP/subject"
+          OUT="$RUNNER_TEMP/out"
+          mkdir -p "$OUT"
+
+          # A fresh cache root per run, so "cold" is honestly cold. Reusing the default
+          # would measure a warm run and call it a cold one.
+          export CPPSD_CACHE_DIR="$RUNNER_TEMP/cache"
+
+          uv run cppsd doctor            > "$OUT/doctor.txt"  2>&1 || true
+          uv run cppsd plan "$SUBJECT" --base "$BASE" > "$OUT/plan.txt" 2>&1 || true
+
+          cold_start=$(date +%s%N)
+          uv run cppsd acquire "$SUBJECT" --base "$BASE" > "$OUT/acquire.txt" 2>&1
+          acquire_rc=$?
+          cold_ms=$(( ($(date +%s%N) - cold_start) / 1000000 ))
+
+          warm_start=$(date +%s%N)
+          uv run cppsd acquire "$SUBJECT" --base "$BASE" > "$OUT/acquire-warm.txt" 2>&1 || true
+          warm_ms=$(( ($(date +%s%N) - warm_start) / 1000000 ))
+
+          lines=$(grep -oP 'lines changed\s+\K[0-9]+' "$OUT/plan.txt" || echo "?")
+          echo "acquire_rc=$acquire_rc" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "# ${NAME} — \`${BASE}...HEAD\`"
+            echo
+            echo "## Parser"
+            echo
+            echo '```'
+            cat "$OUT/doctor.txt"
+            echo '```'
+            echo
+            echo "## The denominator — what a reviewer reads today"
+            echo
+            echo '```'
+            cat "$OUT/plan.txt"
+            echo '```'
+            echo
+            echo "## Acquire — both revisions materialized and configured"
+            echo
+            echo '```'
+            cat "$OUT/acquire.txt"
+            echo '```'
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| cold | ${cold_ms} ms |"
+            echo "| warm (worktrees cached by SHA) | ${warm_ms} ms |"
+            echo
+            echo "## The numerator — not built yet"
+            echo
+            echo "**${lines} changed lines compress to: not yet measurable.**"
+            echo
+            echo "Two of eight pipeline stages exist. \`produce\`, \`match\`, \`diff\`,"
+            echo "\`classify\`, \`enrich\`, \`rank\` and \`render\` are unimplemented, so this run"
+            echo "shows the cost of the text diff and the fact that both revisions were"
+            echo "acquired cleanly — not a semantic delta. This section fills in as those"
+            echo "stages land; that is the moment the project proves or disproves itself."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit $acquire_rc
+
+      - name: Upload raw output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-${{ matrix.target.name }}
+          path: ${{ runner.temp }}/out
+          if-no-files-found: warn
