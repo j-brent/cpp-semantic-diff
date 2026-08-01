@@ -16,6 +16,8 @@ model is an ordered list of lines.
 
 Pre-implementation. Research only; nothing is built yet.
 
+Decided so far: **Python**, and a **standalone repo** — not a `dev-team` submodule.
+
 ## Documents
 
 | Doc | What it is |
@@ -31,5 +33,7 @@ is a separate product rather than a feature of that one. CodeAtlas answers *what
 — a one-point question. This tool answers *what did this change do* — a two-point question with
 different identity, caching, and presentation requirements.
 
-CodeAtlas components worth extracting rather than rewriting: the graph IR and its JSON Schema, the
-clangd-backed producer, and the CMake file-API provider. See §5 of the founding document.
+CodeAtlas is TypeScript because it began as a VS Code extension — an accident of delivery, not a
+modelling requirement. This tool is Python, so what carries over is designs, not modules: the shape
+of the graph IR, the relation ontology, the CMake file-API approach to build metadata, and scope
+projection. See §5 of the founding document.

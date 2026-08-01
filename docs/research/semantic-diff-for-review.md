@@ -303,14 +303,19 @@ The product thesis: a semantic review diff *is* a graph diff over a semantic mod
 codebase, projected to the reviewer's current scope. Nothing in the landscape does this for C++,
 because everyone else would have to build the model first.
 
-**Reuse from CodeAtlas C++.** That project (`dev-team/projects/codeatlas-cpp`) has already built
-parts of the model: a graph IR with a JSON Schema and validator, a clangd-backed producer, a
-CMake file-API provider, and a scope-projecting renderer. Those are candidates for extraction, not
-a foundation to extend — the products have different shapes. CodeAtlas answers *what is this
-codebase*, a one-point question. This tool answers *what did this change do*, a two-point question,
-and two-point analysis imposes requirements a single-snapshot design does not have: stable identity
-across commits, model caching keyed by commit, and a presentation built around events rather than
-entities. Reuse the IR and the producers; do not inherit the architecture.
+**Relationship to CodeAtlas C++.** That project (`dev-team/projects/codeatlas-cpp`) has already
+solved parts of the modelling problem: a graph IR with a JSON Schema and validator, a clangd-backed
+producer, a CMake file-API provider, and a scope-projecting renderer. **Its designs carry over; its
+code does not.** CodeAtlas is TypeScript because it began as a VS Code extension — an accident of
+delivery, not a modelling requirement. This tool is Python, and inherits ideas rather than modules:
+the IR's shape, the relation ontology, the file-API approach to build metadata, the scope
+projection concept.
+
+The products also differ in kind, which limits how much would transfer even in one language.
+CodeAtlas answers *what is this codebase* — one point in time. This tool answers *what did this
+change do* — two points, which imposes requirements a single-snapshot design does not have: stable
+identity across commits, model caching keyed by commit SHA, and a presentation built around events
+rather than entities.
 
 Five pieces are missing regardless of what gets reused.
 
