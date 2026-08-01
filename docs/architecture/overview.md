@@ -98,6 +98,34 @@ and inspect at any boundary — which matters because most debugging here is "wh
 | **rank** | enriched events | ordered events with risk scores |
 | **render** | ranked events | JSON document; terminal/HTML views consume it |
 
+### 3.1 What "two commits" means
+
+The primary use case is **merging a branch back into main**, which fixes the comparison semantics:
+
+```
+base = git merge-base main HEAD        head = HEAD
+```
+
+Three-dot, not two-dot. Comparing against `main`'s current tip would attribute every change
+other people merged in the meantime to this branch — the reviewer would be shown work that is not
+under review. The merge base is the only defensible base, and it is what `git diff main...HEAD`
+already means.
+
+**A compile database is required at both revisions.** This is a hard precondition, not a
+degradation path (§11). Two consequences:
+
+- It requires **configure, not a full build** — `cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
+  takes seconds where a build takes minutes. v0 configures both worktrees.
+- **Repositories with generated sources need more than configure.** The CodeAtlas measurements
+  found `clang-scan-deps` failing on 119 of opencv's 1,292 TUs (9.2 %), every one on a
+  `opencl_kernels_*.hpp` that CMake emits during the build. Where this happens the acquire stage
+  must either run enough of the build to generate them or report the shortfall as incompleteness
+  (§4.4) — never parse the remainder silently.
+
+**If the base does not build, the tool does not run.** This is deliberate and not an edge case
+worth engineering around: the base is main, and a main branch that does not build is a problem this
+tool is not the right response to. Fail with an actionable message and stop.
+
 ---
 
 ## 4 · The model
@@ -421,11 +449,12 @@ cpp_semantic_diff/
 
 ## 13 · Open questions
 
-- **Does v0 require `compile_commands.json` at both commits?** Cheap for `fmt` and `spdlog`, where
-  configure is seconds. Real adoption needs an answer for "the base commit was never configured" —
-  possibly a degraded tier-1-only model from a single-file parse, explicitly labelled.
-- **What happens when the base does not build?** Common in practice, and currently a hard failure
-  under §11. There may be a defensible partial mode; it needs designing rather than emerging.
+Resolved and moved to §3.1: compile-database requirement at both revs, and the
+base-does-not-build case. Remaining:
+
+- **Generated sources.** §3.1 states the problem but not the policy. Configure-only is the v0
+  design; the threshold at which a repository needs a partial build to be analyzable at all is
+  unmeasured, and `fmt`/`spdlog` will not reveal it.
 - **Threshold tuning for tier 4.** Git's `-M` has one knob and decades of tuning. Assume this needs
   per-repository calibration and design the knob in early.
 - **Windows path normalization** in USRs and compile databases, given this is the primary
