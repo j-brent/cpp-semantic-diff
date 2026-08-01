@@ -83,11 +83,45 @@ def test_fatal_diagnostics_reports_errors_and_above() -> None:
     assert "stddef.h" in found[1]
 
 
-def test_candidates_are_existing_and_deduplicated() -> None:
-    for path in tc.candidate_libraries():
-        assert path.exists()
+def test_path_version_ignores_architecture_tuples() -> None:
+    """The `86` in `x86_64` is not a version.
+
+    Scanning a path for its first run of digits ranks
+    `/usr/lib/x86_64-linux-gnu/libclang-16.so.1` above an actual LLVM 20, silently
+    selecting an older compiler on any multiarch Linux -- which is every Debian and
+    Ubuntu host.
+    """
+    assert tc.path_version("/usr/lib/x86_64-linux-gnu/libclang-16.so.1") == 16
+    assert tc.path_version("/usr/lib/aarch64-linux-gnu/libclang-18.so.18") == 18
+    assert tc.path_version("/usr/lib64/libclang.so") == 0
+
+
+def test_path_version_reads_llvm_directories() -> None:
+    assert tc.path_version("/usr/lib/llvm-20/lib/libclang.so.1") == 20
+    assert tc.path_version("/usr/lib/llvm-9/lib/libclang.so.1") == 9
+
+
+def test_newer_llvm_outranks_older() -> None:
+    paths = [
+        "/usr/lib/x86_64-linux-gnu/libclang-16.so.1",
+        "/usr/lib/llvm-20/lib/libclang.so.1",
+        "/usr/lib/llvm-18/lib/libclang.so.1",
+    ]
+    assert sorted(paths, key=lambda p: -tc.path_version(p))[0].endswith("llvm-20/lib/libclang.so.1")
+
+
+def test_candidates_are_existing_files_and_deduplicated() -> None:
     found = tc.candidate_libraries()
-    assert len(found) == len(set(found))
+    for path in found:
+        assert path.exists()
+        assert not path.is_dir()
+    resolved = [p.resolve() for p in found]
+    assert len(resolved) == len(set(resolved)), "symlinks to one library counted twice"
+
+
+def test_candidates_exclude_libclang_cpp() -> None:
+    """`libclang-cpp` is the C++ API and cannot back the cindex bindings."""
+    assert not any(p.name.startswith("libclang-cpp") for p in tc.candidate_libraries())
 
 
 def test_env_override_is_preferred(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -95,6 +129,28 @@ def test_env_override_is_preferred(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     fake.write_bytes(b"")
     monkeypatch.setenv("CPPSD_LIBCLANG", str(fake))
     assert tc.candidate_libraries()[0] == fake
+
+
+def test_discovery_asks_the_system_before_guessing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The hardcoded globs must be a last resort, not the mechanism.
+
+    On this host `llvm-config` is absent but `llvm-config-18` is present, so a lookup for
+    the bare name alone finds nothing and quietly falls through to guessed directories.
+    """
+    monkeypatch.delenv("CPPSD_LIBCLANG", raising=False)
+    from_system = tc._llvm_config_libdirs() or tc._ldconfig_libraries()
+    if not from_system:
+        pytest.skip("no llvm-config or ldconfig entry on this host")
+    assert from_system, "system tools know where libclang is; discovery must ask them"
+
+
+def test_globs_are_not_the_only_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Blanking the guesses must not blank discovery on a correctly configured host."""
+    monkeypatch.delenv("CPPSD_LIBCLANG", raising=False)
+    monkeypatch.setattr(tc, "LIBRARY_GLOBS", ())
+    if not (tc._llvm_config_libdirs() or tc._ldconfig_libraries()):
+        pytest.skip("no system LLVM on this host")
+    assert tc.candidate_libraries()
 
 
 @pytest.mark.fixtures

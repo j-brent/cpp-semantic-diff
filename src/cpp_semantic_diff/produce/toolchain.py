@@ -37,14 +37,25 @@ from cpp_semantic_diff.errors import ClangToolchainError
 #: Bindings older than this do not know cursor kinds the v0 extraction scope relies on.
 MINIMUM_MAJOR = 16
 
-#: Searched in order after the environment override and llvm-config.
+#: Last resort only. Everything above this in `candidate_libraries` *asks* the system
+#: where its libraries are -- these are guesses about where a distribution puts them, and
+#: a guess is wrong on any host that does not match. They exist because a machine can
+#: have a usable LLVM with neither llvm-config on PATH nor an ldconfig cache entry
+#: (unpacked tarballs, Homebrew, nix). They are not the primary mechanism.
 LIBRARY_GLOBS = (
-    "/usr/lib/llvm-*/lib/libclang.so.1",
-    "/usr/lib/x86_64-linux-gnu/libclang-*.so.1",
-    "/usr/lib/aarch64-linux-gnu/libclang-*.so.1",
-    "/usr/local/lib/libclang.so.1",
+    "/usr/lib/llvm-*/lib/libclang.so*",
+    "/usr/lib/*-linux-gnu/libclang-*.so*",
+    "/usr/lib64/libclang.so*",
+    "/usr/local/lib/libclang.so*",
     "/opt/homebrew/opt/llvm/lib/libclang.dylib",
+    "/opt/homebrew/opt/llvm@*/lib/libclang.dylib",
+    "/usr/local/opt/llvm/lib/libclang.dylib",
 )
+
+#: `libclang-cpp` is the C++ API, not the stable C API the bindings call through. It sits
+#: right beside the real thing in every install and matches naive patterns, so it is
+#: excluded by name rather than by hoping the probe rejects it later.
+EXCLUDED_STEMS = ("libclang-cpp",)
 
 #: Nothing here is exotic; it fails only when builtin headers are unreachable, which is
 #: exactly the condition this module exists to catch.
@@ -64,43 +75,95 @@ PROBE_ARGS = ("-x", "c++", "-std=c++17")
 _loaded: Toolchain | None = None
 
 
-def _version_sort_key(path: str) -> tuple[int, str]:
-    """Newest LLVM first, so a box with several installs gets the most capable one."""
-    found = re.findall(r"(\d+)", path)
-    return (-int(found[0]) if found else 0, path)
+def path_version(path: str) -> int:
+    """The LLVM major version a path advertises, or 0 if it advertises none.
+
+    Only version-bearing components count: the `llvm-18` directory or the `-18`/`.so.18`
+    on the library itself. Scanning the whole string for digits reads the `86` out of
+    `x86_64-linux-gnu` and ranks an LLVM 16 above an LLVM 20 -- architecture tuples,
+    `lib64`, and `libc6` all look like versions to a naive regex.
+    """
+    versions = [int(m) for m in re.findall(r"(?:llvm-|libclang-|\.so\.)(\d+)", path) if m.isdigit()]
+    return max(versions, default=0)
+
+
+def _run(argv: list[str]) -> str:
+    try:
+        return subprocess.run(
+            argv, capture_output=True, text=True, timeout=10, check=True
+        ).stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        return ""
+
+
+def _llvm_config_libdirs() -> list[Path]:
+    """Ask every llvm-config on PATH where its libraries live, newest first.
+
+    Versioned names matter: Debian and Ubuntu ship `llvm-config-18` and frequently no
+    unsuffixed `llvm-config` at all, so looking only for the bare name finds nothing on
+    the exact systems this is meant to support.
+    """
+    names = ["llvm-config"] + [f"llvm-config-{v}" for v in range(30, MINIMUM_MAJOR - 1, -1)]
+    found = [p for name in names if (p := shutil.which(name))]
+    dirs: list[Path] = []
+    for tool in sorted(found, key=lambda p: -path_version(p)):
+        if libdir := _run([tool, "--libdir"]):
+            dirs.append(Path(libdir))
+    return dirs
+
+
+def _ldconfig_libraries() -> list[Path]:
+    """Ask the dynamic linker what it has, rather than guessing at directories.
+
+    This is how a correctly installed library is found on Linux regardless of where the
+    distribution chose to put it -- on this host it reports
+    `/lib/x86_64-linux-gnu/libclang-18.so.18`, which no reasonable hardcoded glob covers.
+    """
+    out = _run(["ldconfig", "-p"]) or _run(["/sbin/ldconfig", "-p"])
+    found: list[str] = []
+    for line in out.splitlines():
+        _, sep, path = line.partition("=>")
+        if not sep:
+            continue
+        path = path.strip()
+        stem = Path(path).name
+        if stem.startswith("libclang") and not stem.startswith(EXCLUDED_STEMS):
+            found.append(path)
+    return [Path(p) for p in sorted(found, key=lambda p: -path_version(p))]
 
 
 def candidate_libraries() -> list[Path]:
-    """Every plausible libclang on this host, most preferred first."""
+    """Every plausible libclang on this host, most preferred first.
+
+    Ordered by how much the host is being *asked* versus *guessed at*: an explicit
+    override, then llvm-config, then the dynamic linker's own cache, and only then
+    directory patterns. Whatever comes back is still probe-verified before use -- ranking
+    decides which working toolchain is picked, never whether a broken one is trusted.
+    """
     candidates: list[Path] = []
 
     if override := os.environ.get("CPPSD_LIBCLANG"):
         candidates.append(Path(override))
 
-    if llvm_config := shutil.which("llvm-config"):
-        try:
-            libdir = subprocess.run(
-                [llvm_config, "--libdir"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=True,
-            ).stdout.strip()
-        except (subprocess.SubprocessError, OSError):
-            pass
-        else:
-            if libdir:
-                candidates.extend(Path(libdir) / n for n in ("libclang.so.1", "libclang.so"))
+    for libdir in _llvm_config_libdirs():
+        candidates.extend(sorted(libdir.glob("libclang.so*"), key=lambda p: -path_version(str(p))))
+        candidates.extend(libdir.glob("libclang.dylib"))
+
+    candidates.extend(_ldconfig_libraries())
 
     for pattern in LIBRARY_GLOBS:
-        candidates.extend(Path(p) for p in sorted(glob(pattern), key=_version_sort_key))
+        candidates.extend(Path(p) for p in sorted(glob(pattern), key=lambda p: -path_version(p)))
 
     seen: set[Path] = set()
     unique: list[Path] = []
     for path in candidates:
-        if path not in seen and path.exists():
-            seen.add(path)
-            unique.append(path)
+        resolved = path.resolve() if path.exists() else path
+        if resolved in seen or not path.exists() or path.is_dir():
+            continue
+        if path.name.startswith(EXCLUDED_STEMS):
+            continue
+        seen.add(resolved)
+        unique.append(path)
     return unique
 
 

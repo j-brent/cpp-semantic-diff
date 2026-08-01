@@ -27,9 +27,10 @@ COMPILE_DB_LOCATIONS = ("build/compile_commands.json", "compile_commands.json")
 CONFIGURE_TIMEOUT_SECONDS = 600
 
 
-#: Only these CMake generators emit compile_commands.json. On Windows the default is a
-#: Visual Studio generator, which does not -- so leaving the choice to CMake produces a
-#: successful configure with no compile database, which is the worst of both outcomes.
+#: Only these CMake generators emit compile_commands.json. The tool picks one rather than
+#: letting CMake default, because a generator that cannot emit one still *configures
+#: successfully* -- turning a hard precondition into a silent one. Visual Studio and Xcode
+#: are the generators that behave this way.
 COMPILE_DB_GENERATORS = ("Ninja", "Ninja Multi-Config", "Unix Makefiles", "MinGW Makefiles")
 
 
@@ -55,20 +56,28 @@ def cached_generator(build_dir: Path) -> str | None:
 def is_rooted(path: str) -> bool:
     """True if `path` is absolute under *either* path flavour.
 
-    ``Path("/src/a.cpp").is_absolute()`` is False on Windows, because a POSIX-style path
-    carries no drive. Using that check directly would misclassify every entry of a
-    Linux-generated compile database as relative and join it onto the build directory.
-    Compile databases travel between hosts, so flavour-agnostic rootedness is the right
-    test (ARCH-001 §13, Windows path normalization).
+    A compile database records whatever the generating host wrote, and it is routinely
+    read somewhere else -- committed to a repo, copied off a build machine, produced in a
+    container. `Path.is_absolute()` answers only for the running platform, so a
+    POSIX-rooted entry read on Windows reads as relative and gets joined onto the build
+    directory, silently producing a path to nothing. Flavour-agnostic is the correct test
+    even though this tool now targets Linux only.
     """
     return PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute()
 
 
 def cache_root() -> Path:
+    """Where worktrees and cached models live.
+
+    Honours `XDG_CACHE_HOME` before falling back to `~/.cache`, which is the same
+    fallback the XDG spec itself defines. A user who has redirected their cache -- onto a
+    bigger disk, or off a synced home directory -- means it, and this cache grows by a
+    full worktree per revision.
+    """
     if override := os.environ.get("CPPSD_CACHE_DIR"):
         return Path(override)
-    if local_appdata := os.environ.get("LOCALAPPDATA"):
-        return Path(local_appdata) / "cpp-semantic-diff"
+    if xdg := os.environ.get("XDG_CACHE_HOME"):
+        return Path(xdg) / "cpp-semantic-diff"
     return Path.home() / ".cache" / "cpp-semantic-diff"
 
 
@@ -102,8 +111,8 @@ class CompileDatabase:
             if "arguments" in item:
                 arguments = list(item["arguments"])
             else:
-                # POSIX-style splitting is correct here even on Windows: CMake writes the
-                # command field with forward slashes and POSIX quoting.
+                # The spec defines `command` as shell-quoted, and CMake writes it with
+                # POSIX quoting regardless of host.
                 arguments = shlex.split(item.get("command", ""), posix=True)
             entries.append(CompileEntry(file=file, directory=directory, arguments=arguments))
         return cls(path=path, entries=entries)

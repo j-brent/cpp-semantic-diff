@@ -93,9 +93,13 @@ class ClangToolchainError(PreconditionError):
             parts.append("Searched:\n" + "\n".join(f"  {s}" for s in searched))
         parts.append(
             hint
-            or "Install a system LLVM, e.g.\n"
-            "  sudo apt install libclang1-18 libclang-common-18-dev\n"
-            "or set CPPSD_LIBCLANG to a libclang shared library."
+            or "Install a system LLVM with its development headers. The package names "
+            "differ by distribution:\n"
+            "  Debian/Ubuntu  apt install libclang1-<v> libclang-common-<v>-dev\n"
+            "  Fedora/RHEL    dnf install clang-libs clang-devel\n"
+            "  Arch           pacman -S clang\n"
+            "  macOS          brew install llvm\n"
+            "Or set CPPSD_LIBCLANG to a libclang shared library directly."
         )
         super().__init__("\n".join(parts))
 

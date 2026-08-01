@@ -60,23 +60,39 @@ implementation. Everything below was written on Windows. **None of it is broken 
 but several pieces carry Windows-motivated complexity that is now dead weight, and two places
 are hard-coded to Windows paths and will fail outright.
 
-### Must change — these break on Linux
+### Done — 2026-08-01, commit following `217c626`
 
-| Location | Problem |
-|---|---|
-| `tests/conftest.py:8` | `FIXTURE_ROOT = Path("C:/dev/cpp-demo-repos")`. Make it `CPPSD_FIXTURE_ROOT` env-driven with a sane Linux default. Nothing uses it yet (`require_fixture` has no callers), so this is cheap to fix now and painful later. |
-| `pyproject.toml:45` | The `fixtures` pytest marker description hard-codes the same Windows path. |
+Everything in this section has been applied. Kept here because the *reasons* still
+matter, and because "it works on my machine" is how they come back.
 
-### Should simplify — Windows-motivated, now unnecessary
-
-| Location | What it is | Recommendation |
+| Location | Was | Now |
 |---|---|---|
-| `acquire/workspace.py:56-64` | `is_rooted()` checks both path flavours because `Path("/src/a.cpp").is_absolute()` is `False` on Windows. | On Linux `Path.is_absolute()` is sufficient. **Keep anyway** — compile databases travel between hosts and the cost is two lines. Reword the docstring. |
-| `acquire/workspace.py:66-71` | `cache_root()` prefers `%LOCALAPPDATA%`. | Drop the Windows branch; use `XDG_CACHE_HOME` then `~/.cache`. Keep the `CPPSD_CACHE_DIR` override. |
-| `acquire/workspace.py:29-45` | Generator selection exists because CMake defaults to Visual Studio on Windows, which configures fine and emits **no** compile database. | On Linux the default is `Unix Makefiles`, which does emit one — so this stops being load-bearing. **Keep it anyway**: Ninja configures and builds much faster, and the "configure succeeded but produced nothing" failure mode is worth keeping guarded. Demote the rationale in the comment. |
-| `model/ir.py:88` | Comment says "Windows is the primary development platform". | Reword. Separator normalization is still right — compile databases and clang output both emit backslashes on some inputs. |
-| `acquire/workspace.py:105` | Comment justifying POSIX `shlex` splitting "even on Windows". | Simplify; POSIX splitting is simply correct now. |
-| `tests/test_ir.py:173,205` | Two tests named/documented around Windows behaviour. | Keep the tests — they assert correct cross-platform behaviour. Rename so they read as portability tests, not Windows tests. |
+| `tests/conftest.py` | `FIXTURE_ROOT = Path("C:/dev/cpp-demo-repos")` | `$CPPSD_FIXTURE_ROOT`, default `~/fixtures` |
+| `pyproject.toml` | `fixtures` marker hard-coded the same Windows path | Names the env var |
+| `acquire/workspace.py` `cache_root()` | Preferred `%LOCALAPPDATA%` | `$CPPSD_CACHE_DIR` → `$XDG_CACHE_HOME` → `~/.cache` |
+| `model/ir.py` | "Windows is the primary development platform" | Reworded; separator normalization kept and re-justified |
+| `acquire/workspace.py` `is_rooted()` | Cited a §13 open question that no longer exists | Kept — compile databases are read on hosts other than the one that wrote them |
+| `acquire/workspace.py` generator selection | Framed around Visual Studio | Reframed: a generator that emits nothing still *configures successfully* |
+| `acquire/workspace.py` `shlex` comment | Justified POSIX splitting "even on Windows" | The compile-database spec defines `command` as POSIX-quoted |
+
+**Still open from this section:** `tests/test_ir.py` has two tests named around Windows
+behaviour. They assert correct cross-platform behaviour and should be *renamed*, not
+removed — they read as Windows tests and are actually portability tests.
+
+### Hardcoded paths — the standing rule
+
+A tool that analyzes arbitrary repositories on arbitrary machines cannot carry
+assumptions about either. Three checks were added to `produce/toolchain.py` after this
+came up:
+
+- **Ask the system before guessing.** `$CPPSD_LIBCLANG`, then `llvm-config` (including
+  versioned names — Ubuntu ships `llvm-config-18` and no bare `llvm-config`, so looking
+  only for the bare name finds nothing on the target platform), then `ldconfig -p`, and
+  only then directory patterns. `LIBRARY_GLOBS` is documented as a last resort.
+- **Never parse a version out of a whole path.** `x86_64-linux-gnu` contains `86`, which
+  outranks any real LLVM version. `path_version()` matches only version-bearing
+  components; there is a test naming the failure.
+- **Distribution-specific advice belongs in error text, labelled**, never in logic.
 
 ### Docs to update
 

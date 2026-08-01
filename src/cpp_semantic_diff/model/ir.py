@@ -85,7 +85,9 @@ class Location(BaseModel):
     @field_validator("file")
     @classmethod
     def _normalize_separators(cls, v: str) -> str:
-        # Windows is the primary development platform; paths must not vary by host.
+        # A path is provenance, and provenance that varies by host is not comparable.
+        # Compile databases travel between machines and clang echoes back whatever
+        # separator it was given, so normalize rather than trust the input.
         return v.replace("\\", "/")
 
 

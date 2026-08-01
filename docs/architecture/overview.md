@@ -461,7 +461,9 @@ base-does-not-build case. Remaining:
   unmeasured, and `fmt`/`spdlog` will not reveal it.
 - **Threshold tuning for tier 4.** Git's `-M` has one knob and decades of tuning. Assume this needs
   per-repository calibration and design the knob in early.
-- **Windows path normalization** in USRs and compile databases, given this is the primary
-  development platform.
+- **Which libclang, and proving it is complete.** Resolved 2026-08-01, recorded here because the
+  failure is not obvious: a libclang without the compiler's builtin headers returns a *truncated*
+  AST and raises nothing, so both models omit the same declarations and agree. The parser is a
+  discovered system LLVM, probe-verified before use; see `produce/toolchain.py`.
 - **Where does the reviewer actually read this?** CLI is right for v0 and probably wrong as the
   product. The JSON-first contract defers the decision without prejudging it.
