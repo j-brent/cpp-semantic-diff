@@ -20,7 +20,7 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The tool refuses to run without a libclang that can reach the compiler's builtin
       # headers, so CI has to install the -dev package that carries them. Installing only
@@ -31,7 +31,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libclang1-18 libclang-common-18-dev llvm-18
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v9
         with:
           enable-cache: true
 
