@@ -16,7 +16,8 @@ questions matter. This document establishes *how* the system answers them: the p
 model, the identity scheme that everything else depends on, and the performance design that decides
 whether the tool is usable at all.
 
-Status: draft, pre-implementation. Section 12 marks what v0 actually builds.
+Status: draft. Section 12 marks what v0 actually builds. This document is the design and stays
+ahead of the code; what is *implemented* is tracked in [`STATUS.md`](../../STATUS.md), not here.
 
 ---
 
@@ -47,9 +48,12 @@ product succeeds or fails. Get it wrong and the output is worse than `git diff`,
 wrong with authority. Section 5 is the most important section here.
 
 **Cost is doubled by default, and that is unaffordable.** Measurements from the CodeAtlas research
-(LLVM 21.1.8, this machine): FTXUI's 76 TUs took 137 s to parse through Python libclang bindings.
-Naively doubling that per review is not a product. Section 9 makes the marginal cost proportional
-to *what the diff touched*, not to repository size.
+(LLVM 21.1.8): FTXUI's 76 TUs took 137 s to parse through Python libclang bindings. Measured again
+here against `fmt` (LLVM 18, WSL): 1.02 s per TU with the traversal pruned, so a full model is 51 s
+per side and a review pays that twice. The split is parse 68 % / extract 32 % — the cost is the
+*parser*, not the Python binding layer, which means faster traversal cannot rescue it and only
+avoided work can. Section 9 makes the marginal cost proportional to *what the diff touched*, not to
+repository size.
 
 **Absence of a second point is fatal, not degrading.** A shallow clone, a base commit that never
 built, a fixture with no history — these do not reduce output quality, they eliminate it. The
@@ -117,9 +121,10 @@ degradation path (§11). Two consequences:
 - It requires **configure, not a full build** — `cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
   takes seconds where a build takes minutes. v0 configures both worktrees.
 - **The tool chooses the generator.** Only Ninja and the Makefile generators emit a compile
-  database; on Windows CMake defaults to Visual Studio, which configures successfully and emits
-  nothing. Leaving the choice to CMake turns a hard precondition into a silent one, so configure
-  selects Ninja unless the caller passes an explicit `-G`.
+  database. The others — Visual Studio, Xcode — configure *successfully* and emit nothing, so
+  leaving the choice to CMake turns a hard precondition into a silent one. Configure selects Ninja
+  unless the caller passes an explicit `-G`, and discards a cached build tree whose generator
+  cannot emit one.
 - **Repositories with generated sources need more than configure.** The CodeAtlas measurements
   found `clang-scan-deps` failing on 119 of opencv's 1,292 TUs (9.2 %), every one on a
   `opencl_kernels_*.hpp` that CMake emits during the build. Where this happens the acquire stage
@@ -425,7 +430,7 @@ renames hurt* before building the machinery. That measurement is a v0 deliverabl
 | Concern | Choice | Rationale |
 |---|---|---|
 | IR types, validation, JSON Schema | **pydantic v2** | schema generated from types, not maintained beside them |
-| C++ parsing | **libclang Python bindings**, matched to LLVM 21.1.8 | full control over extraction; USRs free; clangd needs O(N) round-trips and keeps a private RIFF index |
+| C++ parsing | **libclang Python bindings** over a **discovered system LLVM ≥ 16** | full control over extraction; USRs free; clangd needs O(N) round-trips and keeps a private RIFF index. The bindings come from the wheel, the library does not — see below |
 | Graph algorithms | **networkx** | sufficient at fixture scale; `rustworkx` is the drop-in escape hatch if opencv-scale hurts |
 | Git | **subprocess `git`** | `git worktree add` is exactly the primitive needed; fewer dependencies than pygit2 |
 | CLI | **typer** | |
@@ -434,36 +439,50 @@ renames hurt* before building the machinery. That measurement is a v0 deliverabl
 
 Python 3.12+.
 
+**The parser is a precondition, not a dependency.** A libclang that cannot reach the compiler's
+builtin headers does not fail — it returns a *truncated* AST and raises nothing, and two truncated
+models omit the same declarations and agree with each other perfectly. That is §11's failure mode
+with no symptom, so the parser gets the §11 treatment: the library is discovered on the system
+(never the one bundled in the `libclang` wheel, which ships without builtin headers), probe-parsed
+against `<stddef.h>` and `<stdarg.h>` before any model is built, and refused outright if the probe
+is not clean. Per-TU fatal diagnostics are checked for the same reason at a finer grain. Its release
+triple identifies the producer and is a component of every cache key, so a model built by a
+different parser is a different model.
+
 ### Package layout
+
+Present tense is what exists; the rest is planned.
 
 ```
 cpp_semantic_diff/
-  model/       IR types, schema
-  producers/   libclang · cmake file-api · git
+  model/       IR types, schema                        ✓
+  acquire/     git revisions · worktrees · compile db  ✓
+  produce/     toolchain ✓ · libclang extraction · per-TU cache
   identity/    tiered matching
   delta/       events, cause rules
   evidence/    tool adapters                (post-v0)
   rank/        blast radius, scoring
   render/      json · terminal · html
-  cache/       per-TU store, invalidation
-  cli.py
+  errors.py    the precondition taxonomy (§11)         ✓
+  cli.py                                               ✓
 ```
+
+`acquire` and `produce` are stages of the pipeline (§3) and named for them; the earlier draft called
+the latter `producers` and grouped git with it, which put the two-point machinery inside a
+single-point stage.
 
 ---
 
 ## 13 · Open questions
 
-Resolved and moved to §3.1: compile-database requirement at both revs, and the
-base-does-not-build case. Remaining:
+Resolved and moved into the body: the compile-database requirement at both revs and the
+base-does-not-build case (§3.1); which libclang, and proving it is complete (§12, and it was not an
+academic question — the bundled library was silently truncating every AST). Remaining:
 
 - **Generated sources.** §3.1 states the problem but not the policy. Configure-only is the v0
   design; the threshold at which a repository needs a partial build to be analyzable at all is
   unmeasured, and `fmt`/`spdlog` will not reveal it.
 - **Threshold tuning for tier 4.** Git's `-M` has one knob and decades of tuning. Assume this needs
   per-repository calibration and design the knob in early.
-- **Which libclang, and proving it is complete.** Resolved 2026-08-01, recorded here because the
-  failure is not obvious: a libclang without the compiler's builtin headers returns a *truncated*
-  AST and raises nothing, so both models omit the same declarations and agree. The parser is a
-  discovered system LLVM, probe-verified before use; see `produce/toolchain.py`.
 - **Where does the reviewer actually read this?** CLI is right for v0 and probably wrong as the
   product. The JSON-first contract defers the decision without prejudging it.

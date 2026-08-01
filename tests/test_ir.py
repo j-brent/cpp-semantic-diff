@@ -170,11 +170,14 @@ class TestCompileDatabase:
         assert entry.file == Path("/build") / "a.cpp"
         assert entry.arguments == ["clang++", "-c", "a.cpp"]
 
-    def test_posix_rooted_paths_are_not_rejoined_on_windows(self, tmp_path: Path) -> None:
-        """A Linux-generated database read on Windows must not have its paths mangled.
+    def test_rooted_paths_survive_a_foreign_host(self, tmp_path: Path) -> None:
+        """A database is routinely read somewhere other than where it was written.
 
-        `Path("/src/a.cpp").is_absolute()` is False on Windows, so a naive absoluteness
-        check would treat every entry as relative.
+        Committed to a repo, copied off a build machine, produced in a container.
+        `Path.is_absolute()` answers only for the running platform -- a POSIX-rooted entry
+        read on Windows reads as relative and gets joined onto the build directory,
+        silently producing a path to nothing. The absoluteness test must be
+        flavour-agnostic even though the tool itself targets Linux.
         """
         db_path = tmp_path / "compile_commands.json"
         db_path.write_text(
@@ -205,8 +208,9 @@ class TestCompileDatabase:
 class TestGeneratorSelection:
     """ARCH-001 §3.1 -- configure must produce a compile database, not merely succeed.
 
-    On Windows CMake defaults to a Visual Studio generator, which configures fine and
-    emits nothing. Leaving the choice to CMake is a silent failure.
+    Only Ninja and the Makefile generators emit one. The others -- Visual Studio, Xcode --
+    configure successfully and emit nothing, which turns a hard precondition into a silent
+    one. Leaving the choice to CMake is the failure; the tool has to pick.
     """
 
     def test_picks_ninja_when_no_generator_given(self) -> None:
