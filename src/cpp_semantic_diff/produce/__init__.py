@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from cpp_semantic_diff.produce.extract import TuExtract, extract
 from cpp_semantic_diff.produce.toolchain import (
     Toolchain,
     candidate_libraries,
@@ -11,7 +12,9 @@ from cpp_semantic_diff.produce.toolchain import (
 
 __all__ = [
     "Toolchain",
+    "TuExtract",
     "candidate_libraries",
+    "extract",
     "fatal_diagnostics",
     "load",
 ]

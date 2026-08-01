@@ -14,13 +14,13 @@ Setup, requirements and the commands that work today are in [`README.md`](README
 Eight stages (ARCH §3). Two and a half exist.
 
 - [x] **acquire** — two revs → two worktrees + compile databases
-- [ ] **produce** — worktree + compile db → `Model` ← *next, see §3*
+- [ ] **produce** — worktree + compile db → `Model` ← *in progress, see §3*
   - [x] toolchain: discover a system libclang and prove it before use
-  - [ ] cursor traversal and node extraction
-  - [ ] USR dedup
-  - [ ] edges: `contains`, `calls`, `inherits`, `overrides`
+  - [x] `extract.py`: one TU → a partial model. Traversal, the five node kinds, all four
+        edge kinds, USR dedup, `symbol`, `body_hash`, per-TU failure recorded not raised
+  - [ ] builder: merge partials into one `Model`, resolve edges and template aliases,
+        fill `Completeness` (including `producer_version`)
   - [ ] per-TU cache keyed on content + headers + flags + producer version
-  - [ ] `Completeness` filled in honestly from real parse failures
 - [ ] **match** — two `Model`s → `Correspondence` (tier 1 only in v0)
 - [ ] **diff** — → `Event` list
 - [ ] **classify** — cause and cascade links
@@ -44,6 +44,10 @@ Eight stages (ARCH §3). Two and a half exist.
       `$CPPSD_LIBCLANG` → `llvm-config` (including versioned names) → `ldconfig -p` → directory
       patterns as a last resort; parses a probe TU including `<stddef.h>` and `<stdarg.h>` and
       refuses to run if it does not come back clean.
+- [x] `produce/extract.py` — one translation unit → a partial model, which is also the cache unit
+      (ARCH §9). Nodes keyed by USR; `contains` follows the semantic parent, so an out-of-line
+      definition belongs to its class rather than to the namespace it was written in; `overrides`
+      comes from clang rather than from matching names and signatures by hand.
 - [x] `errors.py` — the precondition taxonomy. ARCH §11: hard failures, never degraded output.
 - [x] `cli.py` — `cppsd version` · `doctor` · `plan` · `acquire`.
 
@@ -82,6 +86,22 @@ Producer spike, before any producer exists:
 This disproved the hypothesis that Python binding overhead dominates, and vindicated ARCH §9's
 cache-with-the-producer plan.
 
+**The real extractor, all 50 of `fmt`'s TUs at HEAD:**
+
+```
+125 s total,  2.5 s/TU      ← 2.4x the spike's 1.02 s/TU estimate
+134,366 nodes extracted  →  10,574 distinct     (12.7x, dedup working)
+224,571 edges extracted  →  28,470 distinct
+kinds:  method 6,467 · function 1,615 · class 1,362 · field 821 · struct 268 · namespace 35 · union 6
+edges:  calls 16,537 · contains 9,795 · overrides 1,227 · inherits 911
+```
+
+The estimate was low because the spike priced a *pruned traversal*, not the v0 scope: walking every
+function body for `calls` edges is work the spike never did. Split measured directly — parse ≈ 50 %,
+walk ≈ 45 %, body-hash tokenization only 3–19 %. So the 30 s warm budget still holds, but a cold
+full model is ~125 s per side rather than 51 s, and the cache carries more weight than it looked.
+`body_hash` is not the thing to cut if that ever needs cutting.
+
 ### Findings worth keeping
 
 - **Silent AST truncation.** The `libclang` PyPI wheel ships the native library without builtin
@@ -95,16 +115,43 @@ cache-with-the-producer plan.
   the good discovery path silently never fired and hardcoded globs did all the work. `ldconfig -p`
   reports `/lib/x86_64-linux-gnu/libclang-18.so.18` — a directory and suffix no glob had.
   Distribution-specific advice belongs in error text, labelled; never in logic.
+- **Nothing calls a template.** A call resolves to an *instantiation*, whose USR belongs to no
+  declaration anyone wrote — 10,158 of fmt's call edges, roughly a third of the graph, pointed at
+  entities that could never be nodes. `clang_getSpecializedCursorTemplate` maps them back, but it
+  cannot be applied where it is discovered: an *explicit* specialization is hand-written code with
+  its own identity (173 of them in fmt) and collapsing it into the primary template would hide real
+  changes. The extractor records the mapping; the builder, which knows the merged node set, applies
+  it only where the instantiation is not itself a node.
+- **libclang echoes back relative paths.** A header reached through a relative `-I` comes back
+  relative, and resolving that against the *process* working directory puts it outside the
+  repository — dropping every declaration in it, with no diagnostic. Caught by a test that used a
+  relative include on purpose; `-working-directory` alone was not enough.
 - **The producer id must survive repackaging.** `libclang Ubuntu clang version 18.1.3 (1ubuntu1)`
   as a cache-key component would invalidate every cached model when a distro rebuilds the package.
   The id is the release triple: `libclang 18.1.3`.
 
 ---
 
-## 3 · Next: the producer
+## 3 · Next: finish the producer
 
-Turn a `Checkout` into a `Model`. ARCH §4 and §9 together, and the cache ships **with** it, not
-after.
+Extraction works per TU. What is left is the **builder** — merge the partials into one `Model` —
+and then the cache, which ships **with** the producer, not after.
+
+The builder is the only place that knows the whole picture, so three things belong there and
+nowhere else:
+
+1. **Resolve edges against the merged node set.** An edge whose endpoint no TU declared is dropped
+   and *counted*, never silently discarded.
+2. **Apply the template aliases**, and only where the instantiation is not itself a node.
+3. **Fill `Completeness`** — `producer_version` from `Toolchain.id`, every failed TU with its
+   reason, and the unresolved-edge counts as notes.
+
+Measured on fmt so the builder has a target: after aliasing, 5,113 of 28,470 edges still have an
+endpoint outside the model. 3,361 are genuinely external (`std::`, libc, compiler builtins) and
+correctly dropped. The rest are **calls to implicit special members** — copy/move constructors,
+implicit destructors — which no one declared, so they can never be nodes. Synthesizing nodes for
+them would add half a dozen phantom entities per class; the honest answer is to report the count,
+not to invent the entity.
 
 **Settled. Do not relitigate:**
 

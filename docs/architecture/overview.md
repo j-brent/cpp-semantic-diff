@@ -49,10 +49,10 @@ wrong with authority. Section 5 is the most important section here.
 
 **Cost is doubled by default, and that is unaffordable.** Measurements from the CodeAtlas research
 (LLVM 21.1.8): FTXUI's 76 TUs took 137 s to parse through Python libclang bindings. Measured again
-here against `fmt` (LLVM 18, WSL): 1.02 s per TU with the traversal pruned, so a full model is 51 s
-per side and a review pays that twice. The split is parse 68 % / extract 32 % — the cost is the
-*parser*, not the Python binding layer, which means faster traversal cannot rescue it and only
-avoided work can. Section 9 makes the marginal cost proportional to *what the diff touched*, not to
+here with the real extractor against `fmt` (LLVM 18, WSL): **2.5 s per TU**, so a full model is
+~125 s per side and a review pays that twice. Roughly half is clang parsing and half is walking the
+AST; the cost is the *work itself*, not the Python binding layer, which means only avoided work can
+rescue it. Section 9 makes the marginal cost proportional to *what the diff touched*, not to
 repository size.
 
 **Absence of a second point is fatal, not degrading.** A shallow clone, a base commit that never
