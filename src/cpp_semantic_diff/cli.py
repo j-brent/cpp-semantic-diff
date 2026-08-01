@@ -47,6 +47,39 @@ def version() -> None:
 
 
 @app.command()
+def doctor() -> None:
+    """Check that this host can produce trustworthy models.
+
+    Worth its own command because the failure it catches is invisible at runtime: a
+    libclang without builtin headers returns truncated ASTs rather than raising, and two
+    truncated models agree with each other perfectly (ARCH-001 §11).
+    """
+    from cpp_semantic_diff.produce import candidate_libraries, load
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_column(style="dim")
+    table.add_column()
+
+    try:
+        tc = load()
+    except PreconditionError as error:
+        found = candidate_libraries()
+        table.add_row("libclang", "[red]unusable[/]")
+        table.add_row("candidates", str(len(found)))
+        console.print(table)
+        _fail(error)
+        return
+
+    table.add_row("libclang", str(tc.library))
+    table.add_row("version", tc.version)
+    if tc.resource_dir:
+        table.add_row("resource dir", f"{tc.resource_dir} [dim](CPPSD_RESOURCE_DIR)[/]")
+    table.add_row("builtin headers", "[green]parsed clean[/]")
+    table.add_row("producer id", tc.id)
+    console.print(table)
+
+
+@app.command()
 def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     """Resolve what would be analyzed, without analyzing it.
 

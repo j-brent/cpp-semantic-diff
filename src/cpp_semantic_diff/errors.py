@@ -73,6 +73,42 @@ class ConfigureError(PreconditionError):
         )
 
 
+class ClangToolchainError(PreconditionError):
+    """No libclang that can be trusted to parse completely (ARCH-001 §11, §12).
+
+    Terminal by design. The alternative is a parser that returns truncated ASTs without
+    raising, which yields two models that agree on the same missing declarations -- an
+    analysis that is confidently, invisibly wrong.
+    """
+
+    def __init__(
+        self,
+        detail: str,
+        *,
+        searched: list[str] | None = None,
+        hint: str | None = None,
+    ) -> None:
+        parts = [detail]
+        if searched:
+            parts.append("Searched:\n" + "\n".join(f"  {s}" for s in searched))
+        parts.append(
+            hint
+            or "Install a system LLVM, e.g.\n"
+            "  sudo apt install libclang1-18 libclang-common-18-dev\n"
+            "or set CPPSD_LIBCLANG to a libclang shared library."
+        )
+        super().__init__("\n".join(parts))
+
+
+class TranslationUnitError(SemanticDiffError):
+    """One TU failed to parse. Recorded in `Completeness`, not fatal on its own."""
+
+    def __init__(self, path: str, detail: str) -> None:
+        self.path = path
+        self.detail = detail
+        super().__init__(f"{path}: {detail}")
+
+
 class GitError(SemanticDiffError):
     def __init__(self, argv: list[str], code: int, stderr: str) -> None:
         self.argv = argv

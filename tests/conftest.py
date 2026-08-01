@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
-FIXTURE_ROOT = Path("C:/dev/cpp-demo-repos")
+#: Real C++ repositories used for measurement and end-to-end tests. Full history is
+#: required -- a shallow clone has no second point and the tool rejects it by design.
+FIXTURE_ROOT = Path(os.environ.get("CPPSD_FIXTURE_ROOT", Path.home() / "fixtures"))
 
 
 def git(repo: Path, *args: str) -> str:

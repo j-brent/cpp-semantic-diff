@@ -12,6 +12,10 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "networkx>=3.3",
+    # For the `clang.cindex` Python bindings only. The native libclang.so this wheel
+    # bundles is deliberately NOT used: it ships without the compiler's builtin headers,
+    # so it returns truncated ASTs without raising. produce/toolchain.py loads a system
+    # libclang instead and proves it can parse stddef.h before trusting it.
     "libclang>=18.1",
 ]
 
@@ -42,5 +46,5 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "fixtures: requires the C++ fixture repos in C:/dev/cpp-demo-repos",
+    "fixtures: requires the C++ fixture repos ($CPPSD_FIXTURE_ROOT, default ~/fixtures)",
 ]
