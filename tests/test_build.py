@@ -244,22 +244,79 @@ class TestUnresolvableEndpoints:
         """A model is of *this* repository, so `printf` can never be a node. Dropping is
         right and inventing a node for it would be worse -- but a silent drop turns "we do
         not model libc" into "nothing here calls libc", which is ARCH-001 §11's failure
-        mode. The count is the difference."""
+        mode. The count is the difference.
+
+        **The premise changed and the assertion with it.** The count used to arrive as an
+        English sentence in `Completeness.notes`, which meant a consumer could only get at
+        it by matching on prose, and ARCH-001 §10 makes the JSON the product. It is now two
+        integers, so the test asks for the numbers rather than for the word "dropped".
+        """
         model = build(
             tmp_path,
             toolchain,
-            {"a.cpp": '#include <stdio.h>\nint use() { return printf("hi"); }\n'},
+            {
+                "a.cpp": "#include <stdio.h>\n"
+                "namespace app {\n"
+                "int helper() { return 1; }\n"
+                'int use() { return printf("hi") + helper(); }\n'
+                "}\n"
+            },
             "a.cpp",
         )
+        c = model.completeness
         assert all(e.src in model.nodes and e.dst in model.nodes for e in model.edges)
-        assert any("dropped" in note for note in model.completeness.notes), model.completeness.notes
+        assert c.edges_dropped > 0 and not c.edges_closed
+        # The denominator is the population the numerator came out of: kept plus dropped.
+        # A ratio over the kept edges alone would report >100 % on a model that dropped
+        # more than it kept, which is exactly the case a reader would most need to trust.
+        assert c.edges_total == c.edges_dropped + len(model.edges)
+        assert 0.0 < c.edge_residue < 1.0
+
+    def test_the_count_is_of_distinct_edges_on_both_sides_of_the_ratio(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Two calls to `printf` from two places are two distinct edges; two calls from one
+        function are one edge with two locations (ARCH-001 §4.2). Counting arrivals instead
+        would report a loss that no denominator in the model matches."""
+        model = build(
+            tmp_path,
+            toolchain,
+            {
+                "a.cpp": "#include <stdio.h>\n"
+                'int a() { return printf("hi") + printf("again"); }\n'
+                'int b() { return printf("hi"); }\n'
+            },
+            "a.cpp",
+        )
+        assert model.completeness.edges_dropped == 2  # a -> printf, b -> printf
+
+    def test_a_repository_that_calls_nothing_outside_itself_reports_a_closed_graph(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The other end of the scale, and the reason the residue is a *number* rather than
+        a flag: `edges_closed` must be able to be True, or a consumer cannot distinguish
+        "20 % of the graph leads outside" from "this is simply what models look like"."""
+        model = build(
+            tmp_path,
+            toolchain,
+            {
+                "a.cpp": "namespace app {\n"
+                "int helper() { return 1; }\n"
+                "int use() { return helper(); }\n"
+                "}\n"
+            },
+            "a.cpp",
+        )
+        assert model.completeness.edges_closed
+        assert model.completeness.edges_dropped == 0
+        assert model.completeness.edge_residue == 0.0
 
 
 class TestCompleteness:
     def test_the_producer_that_built_the_model_is_recorded(
         self, tmp_path: Path, toolchain: Toolchain
     ) -> None:
-        """A model built by a different parser is a different model (ARCH-001 §9, §12), so
+        """A model built by a different parser is a different model (ARCH-001 §9, §13), so
         this is a cache-key component before it is a report field. Unset, a cached model
         from LLVM 16 gets compared against a fresh one from LLVM 20 and the version
         difference reads as source changes."""

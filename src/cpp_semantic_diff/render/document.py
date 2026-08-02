@@ -50,7 +50,14 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #: Additive fields do not bump it; a changed meaning, a removed field or a changed
 #: unit does. A document whose schema version a consumer does not recognise must be
 #: refused rather than read optimistically -- that is the whole reason the field exists.
-SCHEMA_VERSION = "1.0"
+#:
+#: 1.0 -> 1.1: the dropped-edge count moved out of `completeness.*.notes`, where it was an
+#: English sentence, into `edges_total`/`edges_dropped`. The new fields are additive, but the
+#: prose leaving `notes` is not: a 1.0 consumer that scraped it would now find nothing there
+#: and report a model that lost a fifth of its edges as having lost none -- §11's failure
+#: exactly, and the reason this is a bump rather than an addition. `EdgeAttrChanged` also
+#: joins the event kinds in this version.
+SCHEMA_VERSION = "1.1"
 
 #: ARCH-001 §11: "Two systematic limits get stated in the output itself, every time."
 #: They are data on the document rather than a line in one view, because "every time"
@@ -77,15 +84,25 @@ class TuFailure(BaseModel):
 class CompletenessReport(BaseModel):
     """One side's `Completeness` (ARCH-001 §4.4), flattened for a consumer.
 
-    **`tus_complete` is named for what it counts, and it counts one thing.** The IR's
-    `Completeness.is_complete` is true when every attempted TU parsed -- and nothing else.
-    On real fmt the builder drops ~5,113 of 28,470 edges per side because an endpoint is
-    not declared in the repository, and `is_complete` is still `True`; the only record of
-    that loss is prose in `Completeness.notes`. So a banner driven by `tus_complete` alone
-    would print "complete" over a model that lost a fifth of its edges.
+    **The two kinds of incompleteness are carried separately, because they mean different
+    things and warrant different reactions.**
 
-    `notes` is therefore not decoration and is not a log. It is the only channel carrying
-    that fact, so it is surfaced verbatim, at the top, by every view -- see `warnings`.
+    *Coverage* -- `tus_complete` -- is sources the producer could not read. Entities that
+    exist read as absent, which is §11's failure exactly, so it drives the banner and it
+    taints `Confidence.models_complete` on every event.
+
+    *Boundary* -- `edges_dropped` of `edges_total` -- is relations whose endpoint no
+    declaration in the repository owns: `std::`, libc, implicit special members. It is
+    ~20 % of fmt's distinct edges on a completely healthy run, so it is **stated on every
+    run and alarming on none**: an alarm that is always on is one nobody reads, and the
+    reader who needs to know how much of the graph is missing needs the number, not an
+    adjective. There is deliberately no threshold at which it becomes a warning -- a knob
+    with no calibration data behind it (STATUS §5) would be a guess presented as a policy.
+    The percentage is printed instead, so a residue of 90 % reads as 90 %.
+
+    Both are numbers a consumer can quote. That is the point: this record used to carry the
+    edge loss only as an English sentence in `notes`, which meant every view either parsed
+    prose or silently claimed a completeness the model did not have.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -100,6 +117,16 @@ class CompletenessReport(BaseModel):
         description="TUs served from the per-TU cache (ARCH-001 §9). Not a completeness "
         "fact -- a cached partial is as complete as the parse that produced it -- but it "
         "is what makes a fast run legible instead of suspicious."
+    )
+
+    edges_total: int = Field(
+        default=0,
+        description="Distinct edges the builder considered on this side: kept plus dropped.",
+    )
+    edges_dropped: int = Field(
+        default=0,
+        description="Distinct edges dropped because an endpoint is not declared in this "
+        "repository. The model's boundary, quantified -- see the class docstring.",
     )
 
     build_available: bool = Field(
@@ -117,8 +144,9 @@ class CompletenessReport(BaseModel):
     failures: list[TuFailure] = Field(default_factory=list)
     notes: list[str] = Field(
         default_factory=list,
-        description="`Completeness.notes` verbatim. Carries the unresolved-edge counts, "
-        "which no boolean on this record covers.",
+        description="`Completeness.notes` verbatim: what the builder had to say that has "
+        "no field of its own. No longer the channel for the edge loss, which is two "
+        "integers above.",
     )
 
     @classmethod
@@ -132,6 +160,8 @@ class CompletenessReport(BaseModel):
             tus_parsed=completeness.parsed,
             tus_failed=completeness.failed,
             tus_cached=sum(1 for t in completeness.tus if t.cache_hit),
+            edges_total=completeness.edges_total,
+            edges_dropped=completeness.edges_dropped,
             build_available=completeness.build_available,
             producer_version=completeness.producer_version,
             producers=list(completeness.producers),
@@ -145,11 +175,42 @@ class CompletenessReport(BaseModel):
         )
 
     @property
-    def warnings(self) -> list[str]:
-        """What must appear above the events on this side (ARCH-001 §11).
+    def edges_closed(self) -> bool:
+        """Whether the graph on this side is closed over its own nodes. `Completeness`
+        owns the definition; this record only carries the counts it is computed from."""
+        return self.edges_dropped == 0
 
-        Both sources, never one: the parse shortfall that `tus_complete` sees, and the
-        notes that carry everything it does not.
+    @property
+    def edge_residue(self) -> float:
+        return (self.edges_dropped / self.edges_total) if self.edges_total else 0.0
+
+    @property
+    def boundary(self) -> str | None:
+        """The boundary sentence, or None when nothing was dropped (ARCH-001 §11).
+
+        Rendered here rather than in a view for the same reason `summary.compression` is:
+        every consumer must state the same fact in the same words, and a sentence a view
+        composes is one a view can quietly soften. Not part of `warnings` -- it is stated
+        whether or not anything is wrong.
+        """
+        if self.edges_closed:
+            return None
+        return (
+            f"{self.edges_dropped:,} of {self.edges_total:,} distinct edges "
+            f"({100.0 * self.edge_residue:.1f}%) lead outside the model: an endpoint is "
+            f"declared nowhere in this repository (external declarations, implicit special "
+            f"members). Expected, and a lower bound on the call graph, not a defect."
+        )
+
+    @property
+    def warnings(self) -> list[str]:
+        """What must appear above the events on this side (ARCH-001 §11.2).
+
+        Coverage only, plus whatever the builder put in `notes`. The boundary residue is
+        *not* here: it is on every real run, and a caveat that fires every time trains the
+        reader to skip the block that also carries the failed TUs. It is stated by
+        `boundary` instead, unconditionally, which is a stronger guarantee than a warning
+        the reader has learned to ignore.
         """
         out: list[str] = []
         if self.tus_total == 0:
@@ -187,11 +248,30 @@ class CompletenessBlock(BaseModel):
         ]
 
     @property
-    def degraded(self) -> bool:
-        """Whether §11's "any output built on an incomplete model must say so" applies.
+    def boundaries(self) -> list[tuple[Side, str]]:
+        """Each side's boundary sentence, where it has one. Stated on every run.
 
-        Deliberately **not** `base.tus_complete and head.tus_complete`. That boolean counts
-        parse success only, and the dropped-edge loss it does not see arrives as a note.
+        Separate from `warnings` on purpose: this is how much of the graph lies outside
+        the repository, which is a property of what was analyzed rather than of how well
+        it went. A view prints both blocks; only `warnings` decides whether the run is
+        announced as degraded.
+        """
+        return [
+            (side, sentence)
+            for side, report in ((Side.BASE, self.base), (Side.HEAD, self.head))
+            if (sentence := report.boundary) is not None
+        ]
+
+    @property
+    def degraded(self) -> bool:
+        """Whether §11.2's "any output built on an incomplete model must say so" applies.
+
+        **Coverage, not boundary.** `tus_complete` on both sides plus anything either
+        builder recorded in `notes`. The dropped-edge residue is excluded because it is
+        present on every real repository -- see `CompletenessReport` -- and is reported
+        unconditionally through `boundaries` instead of intermittently through here.
+        Reading it as degradation made every fmt and spdlog run announce itself as
+        incomplete, which is how a §11 signal stops being read at all.
         """
         return bool(self.warnings)
 
@@ -227,7 +307,7 @@ class EntitySummary(BaseModel):
 class Finding(BaseModel):
     """ARCH-001 §8's uniform adapter output: evidence attached to a node.
 
-    Empty on every v0 document -- §12 defers the evidence layer. It is in the schema
+    Empty on every v0 document -- §13 defers the evidence layer. It is in the schema
     because §10 puts it there and because the join key ships in v0: a consumer written
     against a document with no `findings` key would need changing rather than extending
     the day the first adapter lands.

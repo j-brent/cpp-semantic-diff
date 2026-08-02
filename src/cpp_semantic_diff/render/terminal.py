@@ -26,9 +26,8 @@ from rich.console import Console
 from rich.text import Text
 
 from cpp_semantic_diff.model import EventId, Side
-from cpp_semantic_diff.rank import HIGH_RISK
 from cpp_semantic_diff.render.collapse import Collapsed, CollapseNode, collapse
-from cpp_semantic_diff.render.document import DiffDocument
+from cpp_semantic_diff.render.document import CompletenessBlock, DiffDocument
 
 #: Top-level events shown before the view stops and says how many it stopped at. A page a
 #: reviewer will not read is the problem the ranking exists to solve, so truncating is the
@@ -70,11 +69,18 @@ def _completeness(document: DiffDocument, console: Console) -> None:
     """ARCH-001 §11.2: "any output built on an incomplete model states what was missing, at
     the top, not in a log."
 
-    Driven by `CompletenessBlock.degraded`, which is deliberately not `is_complete` on the
-    two records. `is_complete` counts TU parse success and nothing else; on real fmt the
-    builder drops ~5,113 of 28,470 edges per side and `is_complete` stays True, with the
-    only record being a note. Both channels are read here, and the notes are printed
-    verbatim rather than summarized -- a summary of a caveat is a smaller caveat.
+    Two blocks, because there are two kinds of missing and only one of them is news.
+
+    **Boundary** -- how many distinct edges lead outside the repository -- prints on every
+    run, degraded or not, from `CompletenessReport.edges_dropped` and `edges_total`. It is
+    ~20 % of fmt's graph when everything works, so it is a standing fact about what the
+    model can see. This view no longer reads it out of `Completeness.notes`: the number
+    lives in the document (§10) and every consumer gets it as a number.
+
+    **Coverage** -- `CompletenessBlock.degraded` -- is the yellow banner, and it fires only
+    when something actually went wrong: a TU that would not parse, or a note the builder
+    chose to record. Warnings print verbatim rather than summarized; a summary of a caveat
+    is a smaller caveat.
     """
     block = document.completeness
     parsed = (
@@ -85,6 +91,7 @@ def _completeness(document: DiffDocument, console: Console) -> None:
 
     if not block.degraded:
         console.print(f"[dim]{parsed} · both sides parsed clean[/]")
+        _boundary(block, console)
         return
 
     console.print()
@@ -99,6 +106,18 @@ def _completeness(document: DiffDocument, console: Console) -> None:
         if len(report.failures) > 5:
             console.print(f"  [dim]{report.side.value:4} … {len(report.failures) - 5} more[/]")
     console.print(f"  [dim]{parsed}[/]")
+    _boundary(block, console)
+
+
+def _boundary(block: CompletenessBlock, console: Console) -> None:
+    """Where the modelled world ends, in numbers, on every run (ARCH-001 §11).
+
+    Dim rather than yellow: this is the standing scope of a static model of one repository,
+    not a fault. The percentage is what makes it readable -- 5,113 dropped edges is routine
+    against 26,071 and a catastrophe against 6,000, and only the ratio distinguishes them.
+    """
+    for side, sentence in block.boundaries:
+        console.print(f"  [dim]{side.value:4} {sentence}[/]")
 
 
 # -- 2 · the metric the project is pointed at --------------------------------------------
@@ -198,7 +217,13 @@ def _event(document: DiffDocument, node: CollapseNode, console: Console, *, dept
     indent = "  " + "   " * depth
 
     total = f"{score.total:.2f}" if score else "  — "
-    marker = "[red]●[/]" if score and score.total >= HIGH_RISK else "[dim]·[/]"
+    # `is_high_risk`, never `total >= HIGH_RISK`. They are different questions: `total`
+    # includes uncertainty so that a low-confidence event sorts *up* (ARCH-001 §7), while
+    # the high-risk verdict deliberately excludes it -- otherwise, under tier-1-only
+    # identity where every add and remove is unmatched residue, the marker would fire on
+    # novelty alone. Recomputing the threshold here is how the dots came to disagree with
+    # the count in `summary`, which is the number the reader is being asked to trust.
+    marker = "[red]●[/]" if score and score.is_high_risk else "[dim]·[/]"
     glyph = "" if depth == 0 else "[dim]└ [/]"
 
     console.print(
@@ -267,7 +292,7 @@ def _residue(document: DiffDocument, console: Console) -> None:
     r = document.summary.residue
     tiers = ", ".join(t.value for t in r.tiers_run) or "none"
     console.print()
-    console.print(f"[dim]identity: tier {tiers} only (ARCH-001 §12, STATUS §6)[/]")
+    console.print(f"[dim]identity: tier {tiers} only (ARCH-001 §13, STATUS §6)[/]")
     console.print(
         f"  [dim]{r.matched:,} matched · {r.unmatched_base:,} base / {r.unmatched_head:,} "
         f"head unmatched — a rename reads here as a removal plus an addition[/]"

@@ -84,7 +84,7 @@ def build_document(
         # a document that shared its list with the caller's would let a later mutation
         # rewrite an already-serialized product.
         events=list(events),
-        findings=[],  # §8 is deferred (§12); the key exists so consumers do not change.
+        findings=[],  # §8 is deferred (§13); the key exists so consumers do not change.
         ranking=ranking.order,
         scores={s.event_id: s for s in ranking.scores},
         components=list(ranking.components),

@@ -18,6 +18,7 @@ import pytest
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.match import Correspondence, Match, match_models
 from cpp_semantic_diff.model import (
+    UNREACHABLE_IN_V0,
     V0_KINDS,
     Completeness,
     Edge,
@@ -131,7 +132,7 @@ class TestNothingChangedMeansNoEvents:
 
 
 class TestRenamesLookBadOnPurpose:
-    """STATUS §6 and ARCH-001 §12: v0 ships tier 1 only and measures the damage.
+    """STATUS §6 and ARCH-001 §13: v0 ships tier 1 only and measures the damage.
 
     This pins the decision at the stage most likely to soften it. A name-based fallback
     here would make the output look better and destroy the measurement that decides whether
@@ -287,7 +288,7 @@ class TestABodyChangeIsNotAnAttributeChange:
 
     def test_a_declaration_gaining_a_definition_is_not_a_body_change(self) -> None:
         """No body existed, so nothing inside it changed. It is a `defines`-edge fact in
-        §4.2's vocabulary and §12 keeps that edge kind out of v0 -- and from the models
+        §4.2's vocabulary and §13 keeps that edge kind out of v0 -- and from the models
         alone it is indistinguishable from the TU holding the definition having failed to
         parse on one side, which §11 forbids reporting as a finding."""
         base = model("a", node(F, body_hash=None))
@@ -397,6 +398,126 @@ class TestEdgesAreMatchedThroughTheCorrespondence:
         ]
 
 
+class TestAnEdgeAttributeChangeIsAChange:
+    """ARCH-001 §4.2 gives edges `attrs`; §6.1's rule is that a new signal becomes a new
+    kind. `EdgeAttrChanged` is where those two meet.
+
+    The case that matters is `access` on an `inherits` edge. A base class going public ->
+    private is a breaking change in C++ -- every conversion from derived to base outside the
+    class stops compiling -- and it is expressible *nowhere else* in the closed set: both
+    classes are unchanged, so no node event fires, and the edge is present on both sides
+    with the same kind, so no add, remove or kind change fires either. Before this kind
+    existed the diff stage matched the edge, found it equal on everything it looked at, and
+    said nothing.
+    """
+
+    BASE_CLASS = NodeId("c:@S@Base")
+    DERIVED = NodeId("c:@S@Derived")
+
+    def sides(self, before: str, after: str) -> tuple[Model, Model]:
+        both = (
+            node(self.BASE_CLASS, name="Base", kind=NodeKind.CLASS),
+            node(self.DERIVED, name="Derived", kind=NodeKind.CLASS),
+        )
+        return (
+            model(
+                "a",
+                *both,
+                edges=[
+                    calls(
+                        self.DERIVED,
+                        self.BASE_CLASS,
+                        kind=EdgeKind.INHERITS,
+                        attrs={"access": before},
+                    )
+                ],
+            ),
+            model(
+                "b",
+                *both,
+                edges=[
+                    calls(
+                        self.DERIVED,
+                        self.BASE_CLASS,
+                        kind=EdgeKind.INHERITS,
+                        attrs={"access": after},
+                    )
+                ],
+            ),
+        )
+
+    def test_a_base_class_going_private_is_reported(self) -> None:
+        base, head = self.sides("public", "private")
+        event = only(diff(base, head), EventKind.EDGE_ATTR_CHANGED)
+        assert event.payload == {"attr": "access", "old": "public", "new": "private"}
+        assert event.subject == f"{self.DERIVED}|inherits|{self.BASE_CLASS}"
+
+    def test_an_unchanged_attribute_is_silent(self) -> None:
+        base, head = self.sides("public", "public")
+        assert diff(base, head) == []
+
+    def test_the_event_points_at_both_sides(self) -> None:
+        """§6.2: the reviewer has to reach the old attribute as well as the new one."""
+        base, head = self.sides("public", "private")
+        event = only(diff(base, head), EventKind.EDGE_ATTR_CHANGED)
+        assert {h.side for h in event.provenance} == {Side.BASE, Side.HEAD}
+
+    def test_the_comparison_is_the_one_nodes_already_use(self) -> None:
+        """The rule is shared with `diff/nodes.py` (`diff/attrs.py`), and these are the two
+        properties that a second, subtly different implementation would drop in silence: an
+        attribute present on one side only, and a value that changed type where `False == 0`
+        would have compared equal."""
+        appeared = model(
+            "a", node(F), node(G, name="g"), edges=[calls(F, G, attrs={"virtual": False})]
+        )
+        vanished = model("b", node(F), node(G, name="g"), edges=[calls(F, G)])
+        assert only(diff(appeared, vanished), EventKind.EDGE_ATTR_CHANGED).payload == {
+            "attr": "virtual",
+            "old": False,
+            "new": None,
+        }
+
+        flipped = model("b", node(F), node(G, name="g"), edges=[calls(F, G, attrs={"virtual": 0})])
+        assert only(diff(appeared, flipped), EventKind.EDGE_ATTR_CHANGED).payload["new"] == 0
+
+    def test_two_changed_attributes_on_one_edge_are_two_events(self) -> None:
+        """One event per attribute, each naming its own -- the same shape §6.1 gives
+        `NodeAttrChanged`, so rank and render need no second presentation."""
+        both = (node(F), node(G, name="g"))
+        base = model("a", *both, edges=[calls(F, G, attrs={"virtual": False, "access": "public"})])
+        head = model("b", *both, edges=[calls(F, G, attrs={"virtual": True, "access": "private"})])
+        assert {e.payload["attr"] for e in diff(base, head)} == {"virtual", "access"}
+
+    def test_an_added_edge_does_not_also_report_its_attributes(self) -> None:
+        """The attributes of an edge that did not exist before are not a change to them.
+        Emitting both would double-count one change and give classify two events to link."""
+        base = model("a", node(F), node(G, name="g"))
+        head = model("b", node(F), node(G, name="g"), edges=[calls(F, G, attrs={"virtual": True})])
+        assert kinds(diff(base, head)) == ["EdgeAdded"]
+
+    def test_it_travels_through_the_correspondence_like_every_other_edge_event(self) -> None:
+        """The endpoints are compared as entities, not as ids (see the class above). An
+        attribute change on an edge between two *renamed* classes is still one event."""
+        base = model(
+            "a",
+            node("c:@S@A", name="A", kind=NodeKind.CLASS),
+            node("c:@S@B", name="B", kind=NodeKind.CLASS),
+            edges=[calls("c:@S@B", "c:@S@A", kind=EdgeKind.INHERITS, attrs={"access": "public"})],
+        )
+        head = model(
+            "b",
+            node("c:@S@X", name="X", kind=NodeKind.CLASS),
+            node("c:@S@Y", name="Y", kind=NodeKind.CLASS),
+            edges=[calls("c:@S@Y", "c:@S@X", kind=EdgeKind.INHERITS, attrs={"access": "private"})],
+        )
+        corr = paired(
+            base, head, ("c:@S@A", "c:@S@X"), ("c:@S@B", "c:@S@Y"), tier=MatchTier.STRUCTURAL
+        )
+        events = diff(base, head, corr)
+        assert kinds(events) == ["EdgeAttrChanged", "NodeRenamed", "NodeRenamed"]
+        assert only(events, EventKind.EDGE_ATTR_CHANGED).confidence.tier is MatchTier.STRUCTURAL
+
+
 class TestTheEventSetIsComplete:
     """ARCH-001 §6.3 and STATUS §6: cascade collapse happens at render, never at diff.
 
@@ -425,25 +546,42 @@ class TestTheEventSetIsComplete:
         assert events and all(e.caused_by is None for e in events)
 
     def test_a_v0_delta_stays_inside_the_v0_event_set(self) -> None:
-        """ARCH-001 §12. Under tier-1 identity a matched pair agrees on name and on
+        """ARCH-001 §13. Under tier-1 identity a matched pair agrees on name and on
         enclosing scope by construction -- the USR encodes both -- so no amount of real
         input produces `NodeRenamed` or `NodeMoved`, and `EdgeRetargeted` is refused
         outright. If this fails, either a later tier landed or something here started
-        inferring identity. (`EdgeKindChanged` is the one §6.1 kind outside `V0_KINDS` that
-        tier-1 input can still reach; see the edge tests.)"""
+        inferring identity.
+
+        **`V0_KINDS` was widened, so this asserts the exclusion directly as well.** The
+        constant used to name edge add/remove only, which left `EdgeKindChanged` -- reachable
+        on tier-1 input, and now `EdgeAttrChanged` with it -- outside a set this test claimed
+        the delta stayed inside. The subset check was passing against a set with room to
+        spare. Naming what must *not* appear keeps the test meaningful after the widening,
+        and the input below now reaches both of the newly-named kinds so the set is not
+        merely a superset.
+        """
+        both = (node(C, name="C", kind=NodeKind.CLASS),)
         base = model(
             "a",
             node(F, attrs={"virtual": False}, body_hash="aaa"),
             node(G, name="g"),
-            edges=[calls(F, G)],
+            *both,
+            edges=[calls(F, G), calls(F, C, attrs={"virtual": False})],
         )
         head = model(
             "b",
             node(F, attrs={"virtual": True}, body_hash="bbb"),
-            node(C, name="C", kind=NodeKind.CLASS),
-            edges=[calls(F, C)],
+            node(G, name="g"),
+            *both,
+            edges=[
+                calls(F, G, kind=EdgeKind.OVERRIDES),
+                calls(F, C, attrs={"virtual": True}),
+            ],
         )
-        assert {e.kind for e in diff(base, head)} <= V0_KINDS
+        produced = {e.kind for e in diff(base, head)}
+        assert produced <= V0_KINDS
+        assert not produced & UNREACHABLE_IN_V0
+        assert {EventKind.EDGE_KIND_CHANGED, EventKind.EDGE_ATTR_CHANGED} <= produced
 
 
 class TestConfidenceIsNeverLaundered:

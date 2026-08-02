@@ -181,16 +181,58 @@ class Completeness(BaseModel):
 
     Not diagnostics. This is load-bearing input to confidence, and any output built on an
     incomplete model must say so at the top rather than in a log.
+
+    **A model is incomplete in two unrelated ways, and conflating them is a mistake in
+    either direction.**
+
+    *Coverage* is what `is_complete` measures: sources the model set out to read and could
+    not. A TU that failed to parse takes its declarations with it, so an entity that is
+    genuinely present reads as absent -- ARCH-001 §11's "absence of evidence into apparent
+    evidence of absence", exactly. It taints every claim on that side, including claims
+    about entities in the TUs that did parse, because what is missing may be what would
+    have contradicted them.
+
+    *Boundary* is what `edges_closed` measures: relations whose endpoint no declaration in
+    this repository owns, dropped by the builder because they cannot be nodes. Calls into
+    `std::`, into libc, and into implicit special members nobody wrote -- roughly half of
+    fmt's 5,113-edge residue is the first two. This is not a hole in coverage; it is where
+    the modelled world ends, and with full coverage every dropped edge points outside it by
+    construction. It is *expected*, it is large (~20 % of fmt's distinct edges), and it must
+    be stated as a number on every run rather than raised as an alarm on every run -- an
+    alarm that never turns off is one nobody reads.
+
+    Both are carried as counts rather than as prose, because a consumer has to be able to
+    state the fact numerically. ARCH-001 §10 makes the JSON the product, and a sentence in
+    `notes` is a fact only a human who reads English can extract.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     tus_total: int = 0
     tus: list[TuResult] = Field(default_factory=list)
+
+    edges_total: int = Field(
+        default=0,
+        description="Distinct edges the builder considered: resolved plus dropped. Distinct, "
+        "not arrivals -- fmt yields 224,401 arrivals for 26,071 distinct edges, and a ratio "
+        "over arrivals would measure how often headers are re-included.",
+    )
+    edges_dropped: int = Field(
+        default=0,
+        description="Distinct edges dropped because an endpoint resolves to no declared "
+        "node (ARCH-001 §11). The boundary of the model, quantified -- see the class "
+        "docstring on why this is not the same kind of incompleteness as a failed TU.",
+    )
+
     build_available: bool = False
     producers: list[str] = Field(default_factory=list)
     producer_version: str = ""
-    notes: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(
+        default_factory=list,
+        description="Anything the builder wants to say that has no field of its own. Not "
+        "the channel for a measured quantity: a count that lives only here is unparseable "
+        "by every consumer that is not a human (ARCH-001 §10).",
+    )
 
     @property
     def parsed(self) -> int:
@@ -202,15 +244,57 @@ class Completeness(BaseModel):
 
     @property
     def is_complete(self) -> bool:
+        """**Source coverage, and nothing else** -- every TU attempted was parsed.
+
+        Deliberately not widened to include `edges_closed`. Boundary residue is present on
+        every real repository, so folding it in here would make `is_complete` False on
+        every run and `Confidence.models_complete` False on every event, which turns the
+        one flag rank (§7) uses to promote uncertain events into a constant. The residue is
+        reported by its own numbers instead; the name of this one says what it counts.
+        """
         return self.tus_total > 0 and self.parsed == self.tus_total
 
+    @property
+    def edges_resolved(self) -> int:
+        return self.edges_total - self.edges_dropped
+
+    @property
+    def edges_closed(self) -> bool:
+        """Whether every edge the builder saw landed on two declared nodes.
+
+        True on a repository that calls nothing it does not declare -- a fixture, in
+        practice. False on all of fmt, spdlog and anything that includes a standard header,
+        which is why this is a *fact to state*, not a *warning to raise*.
+        """
+        return self.edges_dropped == 0
+
+    @property
+    def edge_residue(self) -> float:
+        """Dropped share of the distinct edges, 0.0 when nothing was considered.
+
+        A ratio rather than a count because the count alone is unreadable: 5,113 dropped
+        edges is a catastrophe against a graph of 6,000 and the ordinary cost of doing
+        business against a graph of 26,071.
+        """
+        return (self.edges_dropped / self.edges_total) if self.edges_total else 0.0
+
     def summary(self) -> str:
+        """One line stating both kinds of incompleteness, numerically (ARCH-001 §11)."""
         if self.tus_total == 0:
-            return "no translation units analyzed"
-        if self.is_complete:
-            return f"{self.parsed}/{self.tus_total} TUs parsed"
-        pct = 100.0 * self.failed / self.tus_total
-        return f"{self.parsed}/{self.tus_total} TUs parsed, {self.failed} failed ({pct:.1f}%)"
+            coverage = "no translation units analyzed"
+        elif self.is_complete:
+            coverage = f"{self.parsed}/{self.tus_total} TUs parsed"
+        else:
+            pct = 100.0 * self.failed / self.tus_total
+            coverage = (
+                f"{self.parsed}/{self.tus_total} TUs parsed, {self.failed} failed ({pct:.1f}%)"
+            )
+        if self.edges_closed:
+            return coverage
+        return (
+            f"{coverage}; {self.edges_dropped:,}/{self.edges_total:,} edges "
+            f"({100.0 * self.edge_residue:.1f}%) lead outside the model"
+        )
 
 
 class Model(BaseModel):

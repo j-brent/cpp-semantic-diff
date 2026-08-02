@@ -50,6 +50,16 @@ class EventKind(StrEnum):
     EDGE_REMOVED = "EdgeRemoved"
     EDGE_RETARGETED = "EdgeRetargeted"
     EDGE_KIND_CHANGED = "EdgeKindChanged"
+    #: Not in §6.1's list, and added under §6.1's own rule that "new signals become new
+    #: event kinds, never free-text". §4.2 gives edges `attrs` and the producer fills them:
+    #: `access` on `inherits`, `virtual` on `calls`. A base class going public -> private
+    #: between two otherwise unchanged classes is a breaking change in C++, and without this
+    #: kind the delta is silent about it -- the edge matches on both sides, so add/remove
+    #: cannot express it either. The asymmetry argument §6.1 makes for `EdgeKindChanged`
+    #: covers this exactly: the endpoints are identity and belong to the matcher, the attrs
+    #: are diffable state. ARCH-001 §6.1's prose still lists four edge kinds and needs the
+    #: fifth written into it.
+    EDGE_ATTR_CHANGED = "EdgeAttrChanged"
 
     # Derived -- computed from both models plus graph algorithms, not read off either.
     BECAME_UNREACHABLE = "BecameUnreachable"
@@ -77,14 +87,28 @@ EDGE_KINDS: frozenset[EventKind] = frozenset(
         EventKind.EDGE_REMOVED,
         EventKind.EDGE_RETARGETED,
         EventKind.EDGE_KIND_CHANGED,
+        EventKind.EDGE_ATTR_CHANGED,
     }
 )
 
 DERIVED_KINDS: frozenset[EventKind] = frozenset(EventKind) - NODE_KINDS - EDGE_KINDS
 
-#: What v0 emits (ARCH-001 §12): node add/remove/attr/body and edge add/remove. The rest of
-#: the set is declared here because the schema is the contract the whole pipeline is written
-#: against; declaring it late would mean rewriting consumers rather than extending them.
+#: What v0 actually emits. ARCH-001 §13 lists "node add/remove/attr/body and edge
+#: add/remove", but that list was written against the four edge kinds of §6.1 and understates
+#: the stage: `EdgeKindChanged` and `EdgeAttrChanged` are both reachable on tier-1 input.
+#: The reason is one argument applied twice (§6.1, `diff/edges.py`) -- an edge's endpoints
+#: are identity and belong to the matcher, while its kind and its attrs are diffable state,
+#: so between two entities tier 1 has already paired, a relation that changed kind or
+#: changed `access` needs no new identity claim from this stage. Understating this made the
+#: constant a *floor* on what v0 emits rather than the description it is read as, and the
+#: test that asserts a v0 delta stays inside it was passing for the wrong reason.
+#:
+#: What stays out is what v0 genuinely cannot reach: `NodeRenamed` and `NodeMoved` need a
+#: tier past 1 (the USR encodes name and scope, so a matched pair agrees on both by
+#: construction), `EdgeRetargeted` is refused outright (§6.1), and the derived kinds are
+#: deferred by §13. The rest of the set is still declared in `EventKind` because the schema
+#: is the contract the whole pipeline is written against; declaring it late would mean
+#: rewriting consumers rather than extending them.
 V0_KINDS: frozenset[EventKind] = frozenset(
     {
         EventKind.NODE_ADDED,
@@ -93,13 +117,20 @@ V0_KINDS: frozenset[EventKind] = frozenset(
         EventKind.NODE_BODY_CHANGED,
         EventKind.EDGE_ADDED,
         EventKind.EDGE_REMOVED,
+        EventKind.EDGE_KIND_CHANGED,
+        EventKind.EDGE_ATTR_CHANGED,
     }
 )
+
+#: The other half of what `V0_KINDS` says, stated positively so a test can assert it: kinds
+#: no amount of real v0 input can produce. A delta containing one of these means a later
+#: tier landed, or that some stage started inferring identity on its own (STATUS §6).
+UNREACHABLE_IN_V0: frozenset[EventKind] = frozenset(EventKind) - V0_KINDS
 
 #: Payload keys a kind must carry, for the kinds ARCH-001 §6.1 names or directly implies.
 #: This is a floor, not a ceiling: a kind may carry more, but a consumer switching on the
 #: kind can rely on these being present. The derived kinds carry no requirement because
-#: their payloads are not designed yet (§12 puts them out of v0) -- an empty entry here
+#: their payloads are not designed yet (§13 puts them out of v0) -- an empty entry here
 #: means "undesigned", and adding a kind without adding an entry is a deliberate choice
 #: rather than an oversight, which is why every kind appears.
 REQUIRED_PAYLOAD: dict[EventKind, frozenset[str]] = {
@@ -113,6 +144,10 @@ REQUIRED_PAYLOAD: dict[EventKind, frozenset[str]] = {
     EventKind.EDGE_REMOVED: frozenset(),
     EventKind.EDGE_RETARGETED: frozenset({"old_dst", "new_dst"}),
     EventKind.EDGE_KIND_CHANGED: frozenset({"old_kind", "new_kind"}),
+    # The same three keys as `NodeAttrChanged`, deliberately: it is the same mechanical
+    # attribute diff (§4.3) over `Edge.attrs` instead of `Node.attrs`, and a consumer that
+    # can read one should not have to learn a second shape to read the other.
+    EventKind.EDGE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
     EventKind.BECAME_UNREACHABLE: frozenset(),
     EventKind.BECAME_REACHABLE: frozenset(),
     EventKind.CYCLE_INTRODUCED: frozenset(),
@@ -169,17 +204,33 @@ class Confidence(BaseModel):
 
     tier: MatchTier | None = Field(
         description="The tier that matched the subject, or None when it was unmatched "
-        "residue. In v0 only tier 1 runs (ARCH-001 §12), so None also covers every rename "
+        "residue. In v0 only tier 1 runs (ARCH-001 §13), so None also covers every rename "
         "-- which is what makes the rename damage measurable rather than invisible.",
     )
     models_complete: bool = Field(
-        description="Both models parsed every TU they attempted. What was missing lives in "
-        "the per-side `Completeness` records (ARCH-001 §4.4); this is only the flag that "
-        "tells a consumer it has to say so.",
+        description="Both models parsed every TU they attempted -- **source coverage, and "
+        "only that**. What was missing lives in the per-side `Completeness` records "
+        "(ARCH-001 §4.4), including the count of edges that lead outside the repository, "
+        "which this flag deliberately does not reflect; this is only the flag that tells a "
+        "consumer it has to say so.",
     )
 
     @classmethod
     def derive(cls, tier: MatchTier | None, base: Completeness, head: Completeness) -> Confidence:
+        """Coverage on both sides, because an event rests on both models (ARCH-001 §11).
+
+        `Completeness` measures two unrelated kinds of incompleteness and only one of them
+        belongs here. A TU that failed to parse can make an entity that exists read as
+        absent, so it taints every claim on that side -- including claims about entities in
+        the TUs that *did* parse, since what is missing may be what would have contradicted
+        them. Dropped edges are the other kind: with full coverage, an endpoint that
+        resolves to no declared node is outside the repository by construction (`std::`,
+        libc, implicit special members), which is the model's domain boundary rather than a
+        hole in it. Folding that in would set this flag False on every event of every real
+        run, and rank (§7) uses it to promote the events it is least sure about -- a flag
+        that is always on promotes nothing. The residue is reported by its own numbers on
+        `Completeness` and by `render.CompletenessReport.boundary`.
+        """
         return cls(tier=tier, models_complete=base.is_complete and head.is_complete)
 
 
@@ -202,9 +253,24 @@ def _derive_id(kind: EventKind, subject: str, payload: dict[str, AttrValue]) -> 
 
 
 class Event(BaseModel):
-    """ARCH-001 §6.2. The fields are exactly the seven named there."""
+    """ARCH-001 §6.2. The fields are exactly the seven named there.
 
-    model_config = ConfigDict(extra="forbid")
+    **Frozen**, like `Match`, `Hunk` and `Confidence`. ARCH-001 §3 specifies every stage as
+    a pure function of the previous one, and a mutable event makes that a convention rather
+    than a fact: any stage that returns its input list -- which is the obvious
+    implementation of a stage that changes nothing -- hands two owners the same objects, and
+    a later write edits an earlier stage's output retroactively. `classify` already defends
+    itself by copying every event; freezing means the next stage does not have to remember
+    to, and `render.DiffDocument.by_id` no longer indexes something that can change under it.
+
+    The way to produce a modified event is `model_copy(update=...)`, which is what classify
+    does to set `caused_by`. That is *not* a workaround: it also skips re-validation, which
+    is exactly right here, because re-running the validator below would leave the derived
+    `id` alone (it is already set) but would otherwise be a second chance to renumber an
+    event other events already point at.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: EventId = Field(
         default=EventId(""),
@@ -258,7 +324,13 @@ class Event(BaseModel):
                 f"{self.kind.value} requires payload keys {sorted(missing)} (ARCH-001 §6.1)"
             )
         if not self.id:
-            self.id = _derive_id(self.kind, self.subject, self.payload)
+            # `object.__setattr__` because the model is frozen and ordinary assignment
+            # raises. Writing a *derived* field during construction is the one write a
+            # frozen model must still allow: the alternative is to make callers compute the
+            # id themselves, which puts the identity rule (`_derive_id`) in every producer
+            # of an event instead of in the type that defines it. Nothing after
+            # construction writes here -- every later change goes through `model_copy`.
+            object.__setattr__(self, "id", _derive_id(self.kind, self.subject, self.payload))
         return self
 
     @property

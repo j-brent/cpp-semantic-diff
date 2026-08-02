@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from cpp_semantic_diff.diff.attrs import changed_attrs
 from cpp_semantic_diff.diff.context import DiffContext, node_hunks
 from cpp_semantic_diff.match import Correspondence, Match
 from cpp_semantic_diff.model import (
@@ -105,16 +106,12 @@ def _changes(
     if base.name != head.name:
         yield event(EventKind.NODE_RENAMED, old_name=base.name, new_name=head.name)
 
-    # One event per attribute, each naming the attribute it is about (§6.1). The union of
-    # the two key sets, not the intersection: an attribute that appears or disappears is a
-    # real change -- `virtual` dropped from a method reads exactly like `virtual` set to
-    # false -- and an intersection would lose it silently. Sorted so the event list is a
-    # function of the two models and not of dict insertion order.
-    for attr in sorted(base.attrs.keys() | head.attrs.keys()):
-        old = base.attrs.get(attr)
-        new = head.attrs.get(attr)
-        if not _same_value(old, new):
-            yield event(EventKind.NODE_ATTR_CHANGED, attr=attr, old=old, new=new)
+    # One event per attribute, each naming the attribute it is about (§6.1). The rule --
+    # union of the key sets, compared with the type -- is `attrs.changed_attrs`, shared with
+    # the edge half so that `NodeAttrChanged` and `EdgeAttrChanged` cannot come to mean
+    # different things.
+    for attr, old, new in changed_attrs(base.attrs, head.attrs):
+        yield event(EventKind.NODE_ATTR_CHANGED, attr=attr, old=old, new=new)
 
     # ARCH-001 §4.1: `body_hash` is deliberately not an attribute, so a differing body is
     # never a `NodeAttrChanged`. An attribute change has a specific known meaning; a body
@@ -125,7 +122,7 @@ def _changes(
         yield event(EventKind.NODE_BODY_CHANGED)
     # A hash on one side and None on the other is *not* a body change and gets no event.
     # It says a definition appeared or disappeared while the declaration stayed -- a
-    # `defines`/`declares` edge fact in ARCH-001 §4.2's vocabulary, and §12 keeps both
+    # `defines`/`declares` edge fact in ARCH-001 §4.2's vocabulary, and §13 keeps both
     # edge kinds out of v0, so the closed event set has no way to say it. Reporting it as
     # a body change would claim something inside changed when there was nothing inside
     # before. It is also indistinguishable, from the models alone, from a completeness
@@ -147,15 +144,3 @@ def _parent_changed(
     if old_parent is None or new_parent is None:
         return (old_parent is None) != (new_parent is None)
     return corr.head_for(old_parent) != new_parent
-
-
-def _same_value(old: AttrValue, new: AttrValue) -> bool:
-    """Attribute equality, with the type. `False == 0` in Python.
-
-    A producer that flips an attribute's type is a change to the model, and comparing by
-    `==` alone would swallow exactly the cases that are hardest to spot afterwards. An
-    attribute that is absent on one side and explicitly None on the other compares equal
-    and yields no event: the IR admits None as a value (§4.3) and gives no way to tell the
-    two apart, so distinguishing them here would be inventing a difference.
-    """
-    return type(old) is type(new) and old == new

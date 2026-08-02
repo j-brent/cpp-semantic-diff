@@ -1,4 +1,5 @@
-"""Edge events (ARCH-001 §6.1): added, removed, kind changed -- and why not retargeted.
+"""Edge events (ARCH-001 §6.1): added, removed, kind changed, attr changed -- and why not
+retargeted.
 
 **An edge has no identity of its own.** It is its two endpoints and its kind: the IR says
 so directly, since `Edge.id` is `src|kind|dst`. Its endpoints are node ids, and what a node
@@ -28,6 +29,15 @@ correspondence. Consistent with `V0_KINDS`, which excludes it.
 identity. Between two entities the matcher has already paired, a relation that was `calls`
 and is now `overrides` needs no new identity claim -- only the check that the pairing is
 unambiguous, which is the same collision rule tier 1 applies to its own key.
+
+`EdgeAttrChanged` is the same argument with the identity question removed entirely. Where
+`EdgeKindChanged` pairs two *residual* edges and has to justify the pairing, this fires on
+an edge whose whole key -- both endpoints and the kind -- is equal on the two sides, and
+reports the one thing left: `Edge.attrs` (§4.2). Without it, `access` going public ->
+private on an `inherits` edge between two unchanged classes is invisible in the delta,
+because every other edge event is about an edge appearing, disappearing or changing kind,
+and this edge does none of those. §6.1's own rule -- new signals become new event kinds --
+is what makes that a kind rather than a note.
 """
 
 from __future__ import annotations
@@ -35,6 +45,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterator
 
+from cpp_semantic_diff.diff.attrs import changed_attrs
 from cpp_semantic_diff.diff.context import DiffContext, edge_hunks
 from cpp_semantic_diff.model import (
     Edge,
@@ -77,8 +88,15 @@ def edge_events(ctx: DiffContext) -> Iterator[Event]:
         head_side[(edge.src, edge.kind, edge.dst)] = edge
 
     # Present on both sides in head coordinates: the same relation between the same two
-    # entities. No event -- including when the two differ in `locations`, which is
-    # provenance (§4.2), or in `attrs`, for which §6.1's closed set has no event at all.
+    # entities. The edge itself produces no event -- including when the two differ in
+    # `locations`, which is provenance (§4.2) -- but its *attributes* can still differ, and
+    # that is a change with nowhere else to surface: the edge matches, so neither add nor
+    # remove fires, and the kind is equal, so `EdgeKindChanged` does not either.
+    for key, head_edge in head_side.items():
+        base_edge = base_side.get(key)
+        if base_edge is not None:
+            yield from _attr_changes(ctx, base_edge, head_edge)
+
     base_residue = {k: e for k, e in base_side.items() if k not in head_side}
     head_residue = {k: e for k, e in head_side.items() if k not in base_side}
 
@@ -97,6 +115,37 @@ def edge_events(ctx: DiffContext) -> Iterator[Event]:
         yield _removed(ctx, edge)
     for edge in head_residue.values():
         yield _added(ctx, edge)
+
+
+def _attr_changes(ctx: DiffContext, old: Edge, new: Edge) -> Iterator[Event]:
+    """`EdgeAttrChanged` for an edge that is on both sides with different attributes.
+
+    The one edge event that needs no identity reasoning at all: the key matched, so the
+    matcher has already paired both endpoints and the kind is equal. What is left is
+    diffable state on a relation both models agree exists -- §4.2's `attrs`, which the
+    producer fills with `access` on `inherits` and `virtual` on `calls`. A base class going
+    public -> private between two otherwise unchanged classes is a breaking change in C++,
+    and it lives *only* here: nothing about either class changes, and the `inherits` edge
+    itself is present on both sides.
+
+    The comparison is `attrs.changed_attrs`, the same rule `diff/nodes.py` applies to
+    `Node.attrs` -- union of the key sets, compared with the type. Sharing it is not tidying:
+    an edge attribute that disappears, and a producer that flips `virtual` from `False` to
+    `0`, are both changes that a second, subtly different implementation would drop in
+    silence.
+
+    Subject and provenance follow `EdgeKindChanged`: head coordinates for the subject, both
+    sides' call sites for the hunks, since a reviewer needs to reach the old attribute as
+    well as the new one (§6.2).
+    """
+    for attr, old_value, new_value in changed_attrs(old.attrs, new.attrs):
+        yield Event(
+            kind=EventKind.EDGE_ATTR_CHANGED,
+            subject=new.id,
+            payload={"attr": attr, "old": old_value, "new": new_value},
+            provenance=edge_hunks((Side.BASE, old), (Side.HEAD, new)),
+            confidence=ctx.confidence(_tier(ctx, new, Side.HEAD)),
+        )
 
 
 def _unambiguous_pairs(

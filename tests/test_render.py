@@ -239,8 +239,11 @@ class TestNothingIsHiddenWithoutACause:
         which is exactly why it must not be trusted. Burying the event under a cause that
         is not there would make it invisible in every view at once.
         """
-        orphan = event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE)
-        orphan.caused_by = EventId("NodeRemoved:deadbeef")
+        # `model_copy`, because `Event` is frozen (ARCH-001 §3): the way to get a modified
+        # event is to make one, which is also what classify does to set this same field.
+        orphan = event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE).model_copy(
+            update={"caused_by": EventId("NodeRemoved:deadbeef")}
+        )
         doc = self._doc([orphan])
 
         tree = collapse(doc)
@@ -253,9 +256,13 @@ class TestNothingIsHiddenWithoutACause:
         A cycle is precisely the case where "which of these is the cause" has no answer, so
         §6.3 says show -- and showing both is the only reading that loses nothing.
         """
-        a = event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE)
-        b = event(EventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE)
-        a.caused_by, b.caused_by = b.id, a.id
+        first = event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE)
+        second = event(EventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE)
+        # Frozen events, so the cycle is built by copying rather than by assignment. The
+        # ids are unchanged by the copy -- they exclude `caused_by` on purpose -- which is
+        # what makes each of these still point at the other.
+        a = first.model_copy(update={"caused_by": second.id})
+        b = second.model_copy(update={"caused_by": first.id})
         doc = self._doc([a, b])
 
         tree = collapse(doc)
@@ -434,23 +441,108 @@ class TestIncompletenessIsVisible:
         assert out.index("incomplete") < out.index("NodeRemoved")
 
     def test_a_note_alone_is_enough_to_warn(self) -> None:
-        """**The gap this test exists for.** `Completeness.is_complete` counts TU parse
-        success *only*. On real fmt the builder drops ~5,113 of 28,470 edges per side and
-        `is_complete` is still True -- the only record is prose in `notes`. A banner driven
-        by that boolean would print "complete" over a model that lost a fifth of its edges.
-        """
-        lossy = Completeness(
+        """A note is the builder's channel for anything with no field of its own -- a cache
+        that invalidated everything, entries that were not C++. `tus_complete` cannot see
+        any of it, so the banner must not be driven by that boolean alone."""
+        noted = Completeness(
             tus_total=1,
             tus=[TuResult(path="src/a.cpp", status=TuStatus.PARSED)],
-            notes=["5113 of 28470 distinct edges dropped: an endpoint is not declared here"],
+            notes=["7 of 8 cached translation units were invalidated and reparsed"],
             producer_version="libclang 18.1.3",
         )
-        assert lossy.is_complete, "the gap being defended against must still exist"
+        assert noted.is_complete, "the gap being defended against must still exist"
 
-        doc = self._doc(lossy, lossy)
+        doc = self._doc(noted, noted)
         assert doc.completeness.base.tus_complete
         assert doc.completeness.degraded, "tus_complete alone must not decide the banner"
-        assert "5113 of 28470 distinct edges dropped" in draw(doc)
+        assert "invalidated and reparsed" in draw(doc)
+
+
+class TestTheGraphBoundaryIsStatedNumerically:
+    """**The gap this class exists for**, and the shape of the fix.
+
+    `Completeness.is_complete` counts TU parse success *only*. On real fmt the builder drops
+    5,113 of 26,071 distinct edges per side -- an endpoint that no declaration in the
+    repository owns -- and `is_complete` is still True. That loss used to reach the output as
+    one English sentence in `Completeness.notes`, which meant two things at once: a consumer
+    could report it only by matching on prose (ARCH-001 §10 makes the JSON the product), and
+    the terminal announced *every* fmt and spdlog run as "this model is incomplete", which is
+    how a §11 signal stops being read.
+
+    So it is carried as two integers and stated on every run, and it does not raise the
+    coverage alarm. The distinction is the claim: a failed TU hides something that is there;
+    a dropped edge points at something that was never in scope.
+    """
+
+    def _doc(self, base_c: Completeness, head_c: Completeness) -> DiffDocument:
+        f = node("c:@F@f#", name="f")
+        return pipeline(model("a", f, completeness=base_c), model("b", completeness=head_c))
+
+    @staticmethod
+    def _lossy(total: int = 26_071, dropped: int = 5_113) -> Completeness:
+        return Completeness(
+            tus_total=1,
+            tus=[TuResult(path="src/a.cpp", status=TuStatus.PARSED)],
+            edges_total=total,
+            edges_dropped=dropped,
+            producer_version="libclang 18.1.3",
+        )
+
+    def test_the_numbers_reach_the_document(self) -> None:
+        """The property that makes every other consumer possible: a view, an HTML report or
+        a PR annotation can state the fact arithmetically without re-reading a model."""
+        report = self._doc(self._lossy(), self._lossy()).completeness.base
+        assert (report.edges_total, report.edges_dropped) == (26_071, 5_113)
+        assert not report.edges_closed
+        assert 0.19 < report.edge_residue < 0.20
+
+    def test_a_model_that_lost_a_fifth_of_its_edges_says_so_on_screen(self) -> None:
+        out = draw(self._doc(self._lossy(), self._lossy()))
+        assert "5,113 of 26,071" in out and "19.6%" in out
+
+    def test_it_is_stated_on_a_run_that_is_otherwise_clean(self) -> None:
+        """The half that a warning-shaped design gets wrong. Nothing failed here, so there
+        is no banner -- and the reader still has to be told that a fifth of the call graph
+        leads somewhere the model cannot see."""
+        doc = self._doc(self._lossy(), self._lossy())
+        assert not doc.completeness.degraded, "boundary residue is not a coverage failure"
+        assert doc.completeness.boundaries, "and it must still be stated"
+        assert "19.6%" in draw(doc)
+
+    def test_it_does_not_drown_the_signal_that_something_went_wrong(self) -> None:
+        """Every real repository calls `std::` something, so a residue-driven banner would
+        fire on every run and the reader would learn to skip the block that also carries the
+        TU that failed to parse."""
+        assert not self._doc(self._lossy(), self._lossy()).completeness.degraded
+        assert self._doc(incomplete(), self._lossy()).completeness.degraded
+
+    def test_a_closed_graph_says_nothing(self) -> None:
+        """No sentence when there is nothing to report -- otherwise the line is furniture
+        and stops being read, which is the same failure one level down."""
+        clean = Completeness(
+            tus_total=1,
+            tus=[TuResult(path="src/a.cpp", status=TuStatus.PARSED)],
+            edges_total=12,
+            edges_dropped=0,
+        )
+        doc = self._doc(clean, clean)
+        assert doc.completeness.base.boundary is None
+        assert doc.completeness.boundaries == []
+
+    def test_the_percentage_is_what_makes_the_count_readable(self) -> None:
+        """5,113 dropped is routine against 26,071 and a catastrophe against 6,000. There is
+        deliberately no threshold at which this becomes a warning -- STATUS §5 says a
+        threshold with no calibration behind it is a guess presented as a policy -- so the
+        ratio has to carry that judgement to the reader instead."""
+        out = draw(self._doc(self._lossy(total=6_000, dropped=5_113), self._lossy()))
+        assert "85.2%" in out
+
+    def test_it_survives_the_json_round_trip(self) -> None:
+        """§10: a consumer reading the document off disk gets what the pipeline built."""
+        doc = self._doc(self._lossy(), self._lossy())
+        again = DiffDocument.from_json(doc.to_json())
+        assert again.completeness.base.edges_dropped == 5_113
+        assert again.completeness.boundaries == doc.completeness.boundaries
 
     def test_a_clean_model_still_states_the_systematic_limits(self) -> None:
         """§11: two limits "get stated in the output itself, every time" -- and the output
@@ -532,7 +624,7 @@ class TestTheDocumentIsTheContract:
         assert first.model_dump(exclude={"meta"}) == second.model_dump(exclude={"meta"})
 
     def test_findings_is_present_and_empty_in_v0(self) -> None:
-        """§8 is deferred (§12); the key exists so that a consumer written today extends
+        """§8 is deferred (§13); the key exists so that a consumer written today extends
         rather than changes the day the first adapter lands."""
         doc = pipeline(model("a"), model("b"))
         assert doc.findings == []

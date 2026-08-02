@@ -18,7 +18,9 @@ because an *explicit* specialization is hand-written code with its own identity 
 not be collapsed into its primary template.
 
 **Fill `Completeness` honestly.** One `TuResult` per TU including the ones that failed, the
-producer that ran, and the count of what could not be resolved (ARCH-001 §4.4, §11).
+producer that ran, and the count of what could not be resolved (ARCH-001 §4.4, §11). The
+last of those is `edges_total`/`edges_dropped` -- two integers rather than a sentence,
+because §10 makes the JSON the product and a consumer cannot act on prose.
 
 Parsing dominates -- 68 % of extraction time, and a cold fmt model is ~125 s per side -- so
 the parse loop and the assembly are separate functions. `assemble` consumes an *iterable of
@@ -147,8 +149,10 @@ def assemble(
         pending.extend(tu.edges.values())
 
     # Distinct dropped edges, not dropped arrivals. fmt yields 224,401 arrivals for 26,071
-    # distinct edges, and a note counting arrivals would report a five-figure loss against
-    # a five-figure graph while both numbers mean something the other does not.
+    # distinct edges, and a count of arrivals would report a five-figure loss against a
+    # five-figure graph while both numbers mean something the other does not. The
+    # denominator this pairs with is `len(unresolved) + len(edges)`, so the ratio
+    # `Completeness.edge_residue` is over the same population on both sides of the bar.
     unresolved: set[str] = set()
 
     for edge in pending:
@@ -173,25 +177,21 @@ def assemble(
     completeness = Completeness(
         tus_total=len(results),
         tus=results,
+        # Counted, not narrated. The drop is real and large -- 5,113 of fmt's 26,071
+        # distinct edges -- and it used to reach the output as one English sentence in
+        # `notes`, which made every consumer either parse prose or claim a completeness it
+        # did not have (ARCH-001 §10, §11). These two integers are the whole fact; whether
+        # it is alarming is `Completeness.edges_closed`'s question and not this module's.
+        edges_total=len(unresolved) + len(edges),
+        edges_dropped=len(unresolved),
         build_available=build_available,
         # `producers` names what ran, `producer_version` is the cache-key component
-        # (ARCH-001 §9, §12). Both are the release triple rather than the library's own
+        # (ARCH-001 §9, §13). Both are the release triple rather than the library's own
         # version string, so a distro rebuild that changes nothing observable does not read
         # as a different producer.
         producers=[toolchain.id],
         producer_version=toolchain.id,
-        notes=[
-            *notes,
-            *(
-                [
-                    f"{len(unresolved)} of {len(unresolved) + len(edges)} distinct edges "
-                    f"dropped: an endpoint is not declared in this repository (external "
-                    f"declarations, implicit special members)"
-                ]
-                if unresolved
-                else []
-            ),
-        ],
+        notes=list(notes),
     )
 
     # Sorted so that the model is a function of its content and not of the order the

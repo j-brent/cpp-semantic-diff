@@ -15,10 +15,13 @@ from cpp_semantic_diff.model import (
     DERIVED_KINDS,
     EDGE_KINDS,
     NODE_KINDS,
+    REQUIRED_PAYLOAD,
+    UNREACHABLE_IN_V0,
     V0_KINDS,
     Completeness,
     Confidence,
     Event,
+    EventId,
     EventKind,
     Hunk,
     Location,
@@ -48,6 +51,17 @@ class TestTheSetIsClosed:
     """
 
     def test_kinds_are_exactly_the_ones_arch_names(self) -> None:
+        """ARCH-001 §6.1's list, plus `EdgeAttrChanged`.
+
+        **The addition is the point of this test, not an exception to it.** §6.1's rule is
+        that a new signal becomes a new *kind*; §4.2 gives edges `attrs` and the producer
+        writes `access` on `inherits` and `virtual` on `calls`; so a base class going
+        public -> private between two unchanged classes was a real C++ breaking change with
+        no kind to carry it, and the diff stage dropped it in silence. Extending the set is
+        the sanctioned move and updating this list is how it stays deliberate.
+
+        §6.1's prose still names four edge kinds and needs the fifth written into it.
+        """
         assert {k.value for k in EventKind} == {
             "NodeAdded",
             "NodeRemoved",
@@ -59,6 +73,7 @@ class TestTheSetIsClosed:
             "EdgeRemoved",
             "EdgeRetargeted",
             "EdgeKindChanged",
+            "EdgeAttrChanged",
             "BecameUnreachable",
             "BecameReachable",
             "CycleIntroduced",
@@ -72,10 +87,54 @@ class TestTheSetIsClosed:
         assert not NODE_KINDS & EDGE_KINDS & DERIVED_KINDS
 
     def test_v0_emits_a_subset_and_nothing_derived(self) -> None:
-        """ARCH-001 §12 -- derived events are out of v0, but their kinds exist so consumers
+        """ARCH-001 §13 -- derived events are out of v0, but their kinds exist so consumers
         are extended rather than rewritten when they land."""
         assert set(EventKind) > V0_KINDS
         assert not V0_KINDS & DERIVED_KINDS
+
+    def test_v0_excludes_exactly_what_v0_cannot_reach(self) -> None:
+        """`V0_KINDS` is read as a description of the stage, so it has to be one.
+
+        It used to name edge add/remove only, following §13's prose, while the diff stage
+        legitimately reached `EdgeKindChanged` on tier-1 input -- the endpoints are identity
+        and belong to the matcher, the kind is diffable state (§6.1). `EdgeAttrChanged`
+        arrives the same way. Understated, the constant made `<= V0_KINDS` assertions pass
+        for the wrong reason: they were checking against a set with room to spare.
+
+        What remains outside is what v0 genuinely cannot produce, and each exclusion has a
+        different reason: renames and moves need a tier past 1 (the USR encodes name and
+        scope, so a matched pair agrees on both), `EdgeRetargeted` is refused outright, and
+        the derived kinds are deferred.
+        """
+        assert {
+            EventKind.NODE_RENAMED,
+            EventKind.NODE_MOVED,
+            EventKind.EDGE_RETARGETED,
+            *DERIVED_KINDS,
+        } == UNREACHABLE_IN_V0
+        assert not V0_KINDS & UNREACHABLE_IN_V0
+        assert set(EventKind) == V0_KINDS | UNREACHABLE_IN_V0
+
+    def test_an_edge_attribute_change_has_a_kind_of_its_own(self) -> None:
+        """ARCH-001 §6.1: new signals become new event kinds, never free text.
+
+        `access` on an `inherits` edge going public -> private is a breaking change in C++
+        and is *only* expressible this way: both classes are unchanged and the edge is on
+        both sides, so no add, remove or kind change can carry it.
+        """
+        assert EventKind.EDGE_ATTR_CHANGED in EDGE_KINDS
+        assert EventKind.EDGE_ATTR_CHANGED in V0_KINDS
+
+    def test_an_edge_attribute_change_carries_the_same_payload_as_a_node_one(self) -> None:
+        """It is the same mechanical attribute diff (§4.3) over a different `attrs` dict. A
+        consumer that can read one must not have to learn a second shape for the other."""
+        assert (
+            REQUIRED_PAYLOAD[EventKind.EDGE_ATTR_CHANGED]
+            == REQUIRED_PAYLOAD[EventKind.NODE_ATTR_CHANGED]
+            == frozenset({"attr", "old", "new"})
+        )
+        with pytest.raises(ValidationError, match="requires payload keys"):
+            event(EventKind.EDGE_ATTR_CHANGED, payload={"attr": "access", "old": "public"})
 
     def test_there_is_no_catch_all_kind(self) -> None:
         assert not {k for k in EventKind if k.name in {"OTHER", "CUSTOM", "UNKNOWN"}}
@@ -162,6 +221,47 @@ class TestIdentityOfAnEvent:
         assert Event.model_validate_json(e.model_dump_json()).id == e.id
 
 
+class TestAnEventIsImmutable:
+    """ARCH-001 §3: every stage is a pure function of the previous stage's output.
+
+    A mutable event makes that a convention rather than a fact. The obvious implementation
+    of a stage that changes nothing is to return the list it was given -- and then two
+    owners hold the same objects, and a write in the later one edits the earlier one's
+    output after the fact, with no diagnostic anywhere. `Match`, `Hunk` and `Confidence`
+    were already frozen; this is the one that was not.
+    """
+
+    def test_a_field_cannot_be_written_after_construction(self) -> None:
+        with pytest.raises(ValidationError, match="frozen"):
+            attr_changed().caused_by = EventId("NodeRemoved:deadbeef")
+
+    def test_a_cause_is_added_by_copying_and_the_original_is_untouched(self) -> None:
+        """What `classify` does (ARCH-001 §6.3), and the reason freezing costs nothing:
+        `model_copy(update=...)` is the supported way to produce the changed event."""
+        original = attr_changed()
+        cause = event(EventKind.NODE_REMOVED, subject="c:@F@gone#")
+        linked = original.model_copy(update={"caused_by": cause.id})
+
+        assert linked.caused_by == cause.id
+        assert original.caused_by is None
+        # The id is derived from kind, subject and payload and excludes `caused_by`, so
+        # linking must not renumber an event other events already point at.
+        assert linked.id == original.id
+
+    def test_two_stages_holding_one_list_cannot_edit_each_other(self) -> None:
+        """The failure freezing prevents, written as the scenario rather than the mechanism.
+
+        `stage_two` here is any stage that returns its input -- which is what a stage with
+        nothing to say looks like -- and the write it attempts would otherwise land in the
+        list `stage_one` already returned.
+        """
+        produced = [attr_changed()]
+        passed_through = list(produced)
+        with pytest.raises(ValidationError, match="frozen"):
+            passed_through[0].payload = {}  # type: ignore[misc]
+        assert produced[0].payload == {"attr": "virtual", "old": False, "new": True}
+
+
 class TestConfidenceIsAlwaysStated:
     """ARCH-001 §11: a tool that silently degrades converts absence of evidence into
     apparent evidence of absence."""
@@ -181,7 +281,7 @@ class TestConfidenceIsAlwaysStated:
 
     def test_an_unmatched_subject_has_no_tier(self) -> None:
         """Add and remove events have no pair. In v0 that also covers every rename
-        (§12) -- stating None is how the damage stays visible."""
+        (§13) -- stating None is how the damage stays visible."""
         e = Event(
             kind=EventKind.NODE_ADDED,
             subject="c:@F@new#",

@@ -113,6 +113,74 @@ class TestFingerprint:
         assert a.fingerprint() == b.fingerprint()
 
 
+class TestTheTwoKindsOfIncompletenessAreDistinguished:
+    """ARCH-001 §4.4 and §11. The claim: a model can be missing things in two ways that
+    mean different things, and a record that reports one number for both is a record that
+    either cries wolf on every run or hides a fifth of the graph.
+
+    *Coverage* is a source the producer could not read: a real entity reads as absent, which
+    is §11's failure exactly. *Boundary* is a relation to something the repository never
+    declares -- `std::`, libc, implicit special members -- which is where the modelled world
+    ends and is present on every real repository.
+    """
+
+    @staticmethod
+    def _parsed(n: int = 1) -> Completeness:
+        return Completeness(
+            tus_total=n, tus=[TuResult(path=f"{i}.cpp", status=TuStatus.PARSED) for i in range(n)]
+        )
+
+    def test_dropped_edges_are_numbers_a_consumer_can_state(self) -> None:
+        """**The regression this whole field exists for.** The count used to live only as
+        prose in `notes`, so a consumer could report the fact only by parsing English --
+        and ARCH-001 §10 makes the JSON the product."""
+        c = self._parsed().model_copy(update={"edges_total": 26_071, "edges_dropped": 5_113})
+        assert (c.edges_dropped, c.edges_total, c.edges_resolved) == (5_113, 26_071, 20_958)
+        assert not c.edges_closed
+        assert 0.19 < c.edge_residue < 0.20
+
+    def test_a_lost_fifth_of_the_graph_is_not_a_coverage_failure(self) -> None:
+        """The judgement this design turns on. Every TU parsed, so nothing the model set
+        out to read is missing; the residue points outside the repository by construction.
+        Folding it into `is_complete` would make that flag False on every real run and
+        `Confidence.models_complete` False on every event, which turns the signal rank uses
+        to promote uncertain events into a constant."""
+        c = self._parsed().model_copy(update={"edges_total": 26_071, "edges_dropped": 5_113})
+        assert c.is_complete
+        assert not c.edges_closed
+
+    def test_a_failed_tu_is_a_coverage_failure_even_with_a_closed_graph(self) -> None:
+        """And the converse, so neither property is quietly standing in for the other."""
+        c = Completeness(
+            tus_total=2,
+            tus=[
+                TuResult(path="a.cpp", status=TuStatus.PARSED),
+                TuResult(path="b.cpp", status=TuStatus.FAILED, detail="stddef.h not found"),
+            ],
+        )
+        assert not c.is_complete
+        assert c.edges_closed
+
+    def test_a_closed_graph_is_reachable(self) -> None:
+        """`edges_closed` has to be able to be True or the distinction is decoration: a
+        consumer could not tell "20 % leads outside" from "models are simply like this"."""
+        c = self._parsed().model_copy(update={"edges_total": 12, "edges_dropped": 0})
+        assert c.edges_closed and c.edge_residue == 0.0
+
+    def test_a_model_that_considered_no_edges_reports_no_residue(self) -> None:
+        """Zero over zero is 0.0 and not a crash, because a header-only fixture with no
+        calls is a legitimate model and the ratio is read on every run."""
+        assert self._parsed().edge_residue == 0.0
+
+    def test_the_summary_states_both_numerically(self) -> None:
+        """§11's "state what was missing" means numbers. An adjective is not a measurement,
+        and 5,113 dropped edges is routine against 26,071 and a catastrophe against 6,000."""
+        c = self._parsed().model_copy(update={"edges_total": 26_071, "edges_dropped": 5_113})
+        summary = c.summary()
+        assert "1/1 TUs parsed" in summary
+        assert "5,113/26,071" in summary and "19.6%" in summary
+
+
 class TestCompleteness:
     def test_reports_shortfall(self) -> None:
         c = Completeness(
