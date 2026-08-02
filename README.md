@@ -119,6 +119,7 @@ Read the first two before writing code.
 | [`docs/architecture/overview.md`](docs/architecture/overview.md) | **ARCH-001.** Pipeline, IR, identity, delta events, ranking, caching, performance budget. Code comments cite its section numbers; keep doing that. |
 | [`docs/research/cpp-analysis-tool-landscape.md`](docs/research/cpp-analysis-tool-landscape.md) | **RESEARCH-001.** Inventory of C++ analysis tooling across source, IR, object and binary levels. The supply side; reference material for the evidence layer. |
 | [`STATUS.md`](STATUS.md) | What is built, what is next, and the decisions already settled — with the reason for each, so you can tell whether it still holds. |
+| [`HANDOVER.md`](HANDOVER.md) | Session snapshot: what was tried and **rejected**, with the measurement that killed it, and where to start. Delete it when it goes stale. |
 
 ## Relationship to CodeAtlas C++
 

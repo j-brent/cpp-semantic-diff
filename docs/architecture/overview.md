@@ -251,7 +251,16 @@ A closed, typed set. New signals become new event kinds, never free-text.
 **Node** — `NodeAdded` · `NodeRemoved` · `NodeMoved` (parent changed) · `NodeRenamed` ·
 `NodeAttrChanged(attr, old, new)` · `NodeBodyChanged`
 
-**Edge** — `EdgeAdded` · `EdgeRemoved` · `EdgeRetargeted` · `EdgeKindChanged`
+**Edge** — `EdgeAdded` · `EdgeRemoved` · `EdgeRetargeted` · `EdgeKindChanged` ·
+`EdgeAttrChanged(attr, old, new)`
+
+`EdgeAttrChanged` was added after v0 shipped without it, under this section's own rule that new
+signals become new kinds. §4.2 gives edges `attrs` and the producer populates them — `access` on
+`inherits`, virtual/direct on `calls` — so a base class going **public → private** between two
+otherwise unchanged classes was a real C++ breaking change with no event to carry it. Worth
+knowing before relying on it: it fires correctly but is *rare* on real repositories. Neither
+fixture produced one across 300 commits, because both edge attributes tend to co-occur with edits
+that change a USR, and the entities are then reported as removed and added instead.
 
 `EdgeRetargeted` is **refused, not deferred**. An edge has no identity of its own — its id *is*
 `src|kind|dst` (§4.2) — so "this edge was retargeted from B to C" is a claim that B and C are the
@@ -467,8 +476,7 @@ CI gate, and a user's bug report cannot be reproduced.
 
 ### 12.1 Toolchain identity
 
-Identity is the full set of inputs that can change an AST. Today `Toolchain.id` is the libclang
-release triple alone, which identifies the parser but not the parse. The determinants are:
+Identity is the full set of inputs that can change an AST. The determinants are:
 
 | Component | Why it changes the model |
 |---|---|
@@ -480,9 +488,25 @@ release triple alone, which identifies the parser but not the parse. The determi
 | include-path environment | `CPATH`, `CPLUS_INCLUDE_PATH` silently rewrite the search order |
 
 **Anything that can change the AST without changing the identity is a cache-correctness bug**, not
-a documentation gap, because §9 keys the per-TU cache on this value. Two hosts agreeing on
-`libclang 18.1.3` and differing in libstdc++ write different partial models under the same key —
-reachable the moment a cache is shared, which §9 explicitly recommends for the base.
+a documentation gap, because §9 keys the per-TU cache on this value.
+
+But the identity is not the whole key, and that distinction turned out to matter more than the
+list. §9's key also content-hashes every member of the include closure, and the closure contains
+the system headers: a translation unit including `<string>`, `<cstddef>` and `<stdarg.h>` yields
+151 files, 68 of them libstdc++ and 14 of them clang's own builtin headers. **So the standard
+library and the resource directory are already keyed by content** — two hosts agreeing on
+`libclang 18.1.3` and differing in libstdc++ read different bytes and miss, correctly. The same
+holds for `CPATH`-style search-order changes, which resolve to different files and so change the
+closure.
+
+What content-hashing cannot see is the **target triple**: identical headers under a different
+target yield different `__x86_64__`-conditional declarations and different `sizeof`, with
+byte-identical digests. That is the one determinant the identity has to carry itself, and it is
+read from the verified library's own probe translation unit rather than from a sibling binary.
+
+The lesson generalizes: before adding a component to an identity, establish which hazard the
+*whole* key already covers. Every redundant component costs a mass invalidation to defend against
+something already defended.
 
 ### 12.2 The invariant is checked, not assumed
 
@@ -529,14 +553,25 @@ is non-reproducible on one machine, let alone across two.
 The smallest slice that tests the thesis end to end.
 
 **In:** namespace / class / function / method / field nodes · `contains`, `calls`, `inherits`,
-`overrides` edges · **tier-1 identity only** · node add/remove/attr/body and edge add/remove
-events · JSON + terminal output · the compression metric · fixtures `fmt` and `spdlog`.
+`overrides` edges · **tier-1 identity only** · node add/remove/attr/body and edge
+add/remove/kind/attr events · JSON + terminal output · the compression metric · fixtures `fmt` and
+`spdlog`.
 
-**Out, deliberately:** rename detection (tiers 2–4), cascade collapse, evidence adapters, derived
-events, HTML, blast radius.
+**Out, deliberately:** rename detection (tiers 2–4), evidence adapters, derived events, HTML.
+
+Two things listed here as "out" in the original draft shipped anyway, and the reason is the same in
+both cases: they were cheaper *inside* the stage that needed them than as a later bolt-on.
+**Cascade collapse** is in `render` (§6.3) — without it a deleted class reads as one event per
+member plus one per edge, which is most of the volume. **Blast radius** is in `rank` (§7) rather
+than in `enrich`, because it is rank's first input and computing it from the head model needs no
+external tool; §3's table still lists it under `enrich`, which is where the *evidence* adapters
+will attach.
 
 Tiers 2–4 are excluded on purpose: RESEARCH-002 §7 step 4 says ship tier-1 and *measure how badly
-renames hurt* before building the machinery. That measurement is a v0 deliverable.
+renames hurt* before building the machinery. That measurement is a v0 deliverable, and it is now
+in — see [`STATUS.md`](../../STATUS.md) §3. The answer was that on `fmt` and `spdlog` the upper
+bound on events tiers 2–4 could remove is 3, 5 and 1. That is an argument against building them
+next, which is what asking the question early was for.
 
 ### Technology
 

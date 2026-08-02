@@ -36,12 +36,12 @@ Eight stages (ARCH §3). **Seven exist; `enrich` is deferred post-v0 by design.*
 ## 2 · The measurement this project exists to take
 
 ```
-fmt    HEAD~12    179 lines changed  →  16 semantic events, 4 high-risk
+fmt    HEAD~12    179 lines changed  →  16 semantic events, 2 high-risk
                   7 top-level, 9 nested under a cause · 5 components
-fmt    HEAD~100   3,178 lines changed → 335 semantic events
-                  56 top-level, 279 nested · 12 components
-spdlog HEAD~30    1,708 lines changed → 32 semantic events
-                  24 top-level, 8 nested · 15 components
+fmt    HEAD~100   3,178 lines changed → 335 semantic events, 17 high-risk
+                  56 top-level, 279 nested · 30 components
+spdlog HEAD~30    1,708 lines changed → 32 semantic events, 5 high-risk
+                  24 top-level, 8 nested · 18 components
 spdlog HEAD~5     35 lines changed   →  0 semantic events
 ```
 
@@ -149,22 +149,13 @@ synthetic fixtures.
 
 Found by running the pipeline on real code. Ranked by how badly each corrupts the product's claim.
 
-- [ ] **Consequences outrank their causes.** `_blast_radius` takes the larger of an edge's two
-      endpoints, so a new call into a popular utility inherits the utility's fan-in. On fmt
-      `HEAD~100`, `NodeAdded vprintln` scores 0.70 while ten `EdgeAdded` nested *under* it score up
-      to 0.84. Ranking order is the product's core claim, so this matters more than it looks.
-- [ ] **`high_risk_count` does not discriminate** — 40 % of events on fmt `HEAD~100`. Structural,
-      not a tuning accident: in v0 every add/remove is unmatched residue, so uncertainty is pinned
-      at 1.0 and a public `NodeAdded` clears the 0.6 threshold with *zero* blast radius. It
-      currently measures "public and new".
-- [ ] **Decomposition collapses on large diffs** — 78 % of events in one component on fmt
-      `HEAD~100`. `calls` edges connect most of a header-only library.
-- [ ] **`Completeness.is_complete` counts TU parses only.** fmt drops ~5,113 of 26,071 distinct
-      edges per side and `is_complete` still returns `True`, so `Confidence.models_complete` is
-      `True` on every event in a model that discarded a fifth of its graph. The only record is prose
-      in `notes`, which no consumer can state numerically.
-- [ ] **No `EdgeAttrChanged` event kind.** `inherits` going public → private between two otherwise
-      unchanged classes is invisible in the delta — a real C++ breaking change, silently dropped.
+Closed this session, kept because the *reason* each was invisible is the reusable part: three
+ranking defects that were one attribution bug (an edge event was treated as belonging to both its
+endpoints, so a new call inherited its callee's fan-in — inversions 174→0, high-risk 40 %→5 %,
+largest component 78 %→18 %); `Completeness` unable to state incompleteness numerically; the
+missing `EdgeAttrChanged`; and a toolchain identity that named the parser but not the parse. Every
+one was invisible on synthetic fixtures and obvious on the first real run.
+
 - [ ] **`match_models(renames=...)` is never fed.** ARCH §5 requires file renames resolved from git
       *before* matching; `acquire` exposes only `changed_files` (`--name-only`), which cannot carry
       them. Needs an `acquire` API.
@@ -173,10 +164,24 @@ Found by running the pipeline on real code. Ranked by how badly each corrupts th
       internal-linkage entities already embed the file name.
 - [ ] **`EdgeAdded`/`EdgeRemoved` between two surviving nodes is not collapsible** by any current
       cause rule, and is the bulk of the remaining top-level noise.
+- [ ] **Exposure takes the max over both edge endpoints** while blast radius and decomposition now
+      take the source. Contained by the cause bound today, but an `EdgeAdded` from test code into
+      public API with *no* cause link is still scored as public. Decide it deliberately.
+- [ ] **No cause rule links `NodeAttrChanged(virtual)` to the `EdgeAttrChanged` on every call edge
+      into it.** A method gaining `virtual` with N callers is N+1 top-level events.
+- [ ] **`merge_edge` merges edge attrs with `setdefault`** — the first partial to arrive wins, so an
+      edge attribute that differs between TUs is silently taken from whichever TU parsed first.
 - [ ] Self-edges appear in real models (`is_named_arg -> is_named_arg`). Producer-side.
+- [ ] **Superseded cache identities are never reclaimed.** `_evict` trims within one identity
+      directory only, so every producer change orphans the previous generation — ~109 MB after
+      today's. Needs a `cppsd cache gc` or an age sweep.
+- [ ] `CPPSD_RESOURCE_DIR` is keyed by path, not content: `clang-scan-deps` runs the compile-database
+      command without our `-resource-dir`, so the closure reports the *default* resource dir's
+      headers. Changing the directory invalidates; changing its contents does not. Escape-hatch only.
 - [ ] Worker startup is ~0.6 s each, of which the probe is 24 ms — the rest is
       `candidate_libraries()` re-running `llvm-config`/`ldconfig` that the parent already ran.
-      Wants a `Toolchain.adopt(library, expected_id)`.
+      Wants a `Toolchain.adopt(library, expected_id)`. The same cost makes `tests/test_toolchain.py`
+      take 140 s of the suite's ~100 s wall — one fix covers both.
 - [ ] `cli.py` has no `--workers` flag, though `build_model(workers=...)` and `$CPPSD_WORKERS` are
       live.
 - [ ] `cache.notes()` quotes a stale per-TU cost (~2.6 s; now ~1.5–2.0 s serial, ~0.5 s parallel).
@@ -225,6 +230,8 @@ Found by running the pipeline on real code. Ranked by how badly each corrupts th
 | The cache unit is the TU, not the commit | Per-commit caching means the first review against any new base pays full price, and the base is what every review shares. |
 | Declining to cache beats a weaker key | A missing or version-mismatched `clang-scan-deps` disables the cache whole. Declining to cache is slow; a stale hit is wrong. |
 | The cache key covers the extraction code, not just libclang | `extract.py` decides what becomes a node; change it and the same inputs yield a different partial. Hashed rather than a hand-bumped constant, because forgetting a constant fails toward serving stale entries. |
+| Toolchain identity carries the target triple, never a host path | It is the one AST determinant the closure's content hashing cannot see. A path would break §12.2, which makes the identity a value two hosts *compare* — equivalent machines would hard-fail. |
+| Check what the whole key already covers before widening an identity | The stdlib and builtin headers turned out to be content-keyed via the include closure. Every redundant key component costs a mass invalidation to defend against a defended hazard. |
 | Workers use `spawn`, not `fork` | A forked child inherits the parent's verified libclang, so the toolchain guarantee would hold *by accident of start method* and stop holding silently if that default changed. |
 | Low confidence ranks **up** | Uncertainty is a reason for a human to look, not a reason to hide (ARCH §7). Guarded by mutation-tested cases. |
 
