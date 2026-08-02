@@ -10,6 +10,11 @@ from cpp_semantic_diff.produce.cache import (
     include_closures,
 )
 from cpp_semantic_diff.produce.extract import TuExtract, extract
+from cpp_semantic_diff.produce.parallel import (
+    default_workers,
+    parallel_extracts,
+    worker_count,
+)
 from cpp_semantic_diff.produce.toolchain import (
     Toolchain,
     candidate_libraries,
@@ -25,10 +30,13 @@ __all__ = [
     "assemble",
     "build_model",
     "candidate_libraries",
+    "default_workers",
     "extract",
     "fatal_diagnostics",
     "find_scanner",
     "include_closures",
     "load",
+    "parallel_extracts",
     "tu_extracts",
+    "worker_count",
 ]

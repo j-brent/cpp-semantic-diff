@@ -24,8 +24,15 @@ Parsing dominates -- 68 % of extraction time, and a cold fmt model is ~125 s per
 the parse loop and the assembly are separate functions. `assemble` consumes an *iterable of
 partials* and never touches libclang or the disk, which is the seam the per-TU cache
 (ARCH-001 §9) plugs into: `TuCache.extracts` is a different producer of the same
-`Iterable[TuExtract]`, and nothing below this line knows which one ran. A process pool is
-the other thing that fits there, and does not exist yet.
+`Iterable[TuExtract]`, and nothing below this line knows which one ran.
+
+`parallel.parallel_extracts` is the third producer through that same seam, and the one that
+closes the budget. The cache removes the TUs that did not change; what remains is the
+invalidated set, which is serial libclang time and nothing else -- a warm fmt review that
+touched 20 sources reparsed 24 TUs and took 55 s against a 30 s budget, with seven of eight
+cores idle. Over eight workers the same build is 19 s. Which producer runs is decided here
+and is invisible below: `assemble` sorts, and the partials arrive in compile-database order
+whatever parsed them, so the model is the same one either way.
 """
 
 from __future__ import annotations
@@ -51,6 +58,7 @@ from cpp_semantic_diff.produce.extract import (
     merge_edge,
     merge_node,
 )
+from cpp_semantic_diff.produce.parallel import parallel_extracts, worker_count
 from cpp_semantic_diff.produce.toolchain import Toolchain
 
 
@@ -216,6 +224,7 @@ def build_model(
     toolchain: Toolchain,
     index: ci.Index | None = None,
     cache: TuCache | bool = True,
+    workers: int | None = None,
 ) -> Model:
     """The model of one revision, from a materialized checkout and a verified parser.
 
@@ -231,6 +240,13 @@ def build_model(
     is ~117 s for fmt against a 30 s budget, so a producer without one is a producer that
     misses its only stated performance requirement. `cache=False` forces every TU to be
     parsed, which is what a measurement of the cold path needs.
+
+    `workers` defaults to what the machine can run (`$CPPSD_WORKERS` overrides it, and 1 is
+    the serial path this function had before). The cache decides *what* gets parsed; the
+    workers decide how fast the remainder goes, and neither is much use without the other:
+    parallel parsing of a fully warm build has nothing to parse, and a cached build with 20
+    invalidated TUs is 20 serial parses. `index` applies to the serial path only -- a
+    worker's `Index` belongs to the process that owns it.
     """
     entries = checkout.cpp_entries
     notes: list[str] = []
@@ -246,10 +262,27 @@ def build_model(
         )
 
     tu_cache = TuCache.open(checkout, toolchain=toolchain) if cache is True else (cache or None)
-    if tu_cache is None:
-        partials = tu_extracts(entries, root=checkout.path, toolchain=toolchain, index=index)
+
+    # One worker is the serial loop, not a pool of one: no spawn, no pickling, no second
+    # `Index`. It is the path every measurement is compared against and the answer to a
+    # host where processes are expensive or memory is short (ARCH-001 §11).
+    count = worker_count(workers, tasks=len(entries))
+    if count == 1:
+        partials: Iterable[TuExtract] = (
+            tu_extracts(entries, root=checkout.path, toolchain=toolchain, index=index)
+            if tu_cache is None
+            else tu_cache.extracts(entries, index=index)
+        )
     else:
-        partials = _noting(tu_cache, tu_cache.extracts(entries, index=index), notes)
+        partials = parallel_extracts(
+            entries,
+            root=checkout.path,
+            toolchain=toolchain,
+            cache=tu_cache,
+            workers=count,
+        )
+    if tu_cache is not None:
+        partials = _noting(tu_cache, partials, notes)
 
     return assemble(
         checkout.rev,
