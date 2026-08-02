@@ -1,0 +1,157 @@
+"""Edge events (ARCH-001 §6.1): added, removed, kind changed -- and why not retargeted.
+
+**An edge has no identity of its own.** It is its two endpoints and its kind: the IR says
+so directly, since `Edge.id` is `src|kind|dst`. Its endpoints are node ids, and what a node
+id at base means at head is the one question the match stage exists to answer. So the first
+thing this module does is rewrite every base edge into head coordinates through the
+correspondence. Comparing raw ids instead would report every edge on every renamed node as
+removed and re-added -- and once tiers 2-4 land, a single renamed function would produce
+hundreds of edge events where the correct answer is none.
+
+That has a consequence worth stating, because it contradicts a rule ARCH-001 §6.3 gives as
+an example: "`NodeRenamed(F)` causes every `EdgeRetargeted` whose endpoint is F". That rule
+presumes edges keyed on raw ids, where a rename really does move 200 edges. Under
+correspondence-mapped endpoints those 200 events never exist rather than being collapsed
+under a cause, which is the better answer to the same problem -- but the cause rule in §6.3
+is then describing something this stage cannot emit.
+
+**`EdgeRetargeted` is not emitted, and not because it is unimplemented.** It would mean:
+this base edge and that head edge are the same edge, whose destination changed from B to C.
+With no identity of its own, an edge can only be the same edge if its endpoints are the
+same entities -- and the match stage, which owns that judgement and is one-to-one (§5), has
+already said B corresponds to B'. Claiming B "became" C is a node-identity claim the
+matcher declined to make, made here instead, on weaker evidence. It surfaces as
+`EdgeRemoved` plus `EdgeAdded`, which is the same information without the invented
+correspondence. Consistent with `V0_KINDS`, which excludes it.
+
+`EdgeKindChanged` *is* emitted, and the asymmetry is the point: the kind is state, not
+identity. Between two entities the matcher has already paired, a relation that was `calls`
+and is now `overrides` needs no new identity claim -- only the check that the pairing is
+unambiguous, which is the same collision rule tier 1 applies to its own key.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from collections.abc import Iterator
+
+from cpp_semantic_diff.diff.context import DiffContext, edge_hunks
+from cpp_semantic_diff.model import (
+    Edge,
+    EdgeKind,
+    Event,
+    EventKind,
+    MatchTier,
+    NodeId,
+    Side,
+)
+
+#: An edge in head coordinates. Deliberately the whole of `Edge.id` -- see the module
+#: docstring on why nothing weaker is a defensible edge identity.
+type EdgeKey = tuple[NodeId, EdgeKind, NodeId]
+
+
+def edge_events(ctx: DiffContext) -> Iterator[Event]:
+    corr = ctx.correspondence
+    base_side: dict[EdgeKey, Edge] = {}
+    head_side: dict[EdgeKey, Edge] = {}
+
+    for edge in ctx.base.edges:
+        src = corr.head_for(edge.src)
+        dst = corr.head_for(edge.dst)
+        if src is None or dst is None:
+            # An endpoint no tier claimed. The edge cannot be expressed at head because one
+            # of the things it relates is not there, so it is removed -- and it is emitted
+            # rather than folded into the `NodeRemoved` for that endpoint. ARCH-001 §6.3:
+            # the event set is complete and collapse happens at render; a consequence is
+            # linked to its cause by classify, never dropped here.
+            yield _removed(ctx, edge)
+            continue
+        # One-to-one matching (§5) means two base edges can never translate onto one key.
+        base_side[(src, edge.kind, dst)] = edge
+
+    for edge in ctx.head.edges:
+        if corr.base_for(edge.src) is None or corr.base_for(edge.dst) is None:
+            yield _added(ctx, edge)
+            continue
+        head_side[(edge.src, edge.kind, edge.dst)] = edge
+
+    # Present on both sides in head coordinates: the same relation between the same two
+    # entities. No event -- including when the two differ in `locations`, which is
+    # provenance (§4.2), or in `attrs`, for which §6.1's closed set has no event at all.
+    base_residue = {k: e for k, e in base_side.items() if k not in head_side}
+    head_residue = {k: e for k, e in head_side.items() if k not in base_side}
+
+    for base_key, head_key in _unambiguous_pairs(base_residue, head_residue):
+        old = base_residue.pop(base_key)
+        new = head_residue.pop(head_key)
+        yield Event(
+            kind=EventKind.EDGE_KIND_CHANGED,
+            subject=new.id,
+            payload={"old_kind": old.kind.value, "new_kind": new.kind.value},
+            provenance=edge_hunks((Side.BASE, old), (Side.HEAD, new)),
+            confidence=ctx.confidence(_tier(ctx, new, Side.HEAD)),
+        )
+
+    for edge in base_residue.values():
+        yield _removed(ctx, edge)
+    for edge in head_residue.values():
+        yield _added(ctx, edge)
+
+
+def _unambiguous_pairs(
+    base_residue: dict[EdgeKey, Edge], head_residue: dict[EdgeKey, Edge]
+) -> list[tuple[EdgeKey, EdgeKey]]:
+    """Residual edges that pair up on their endpoints alone, with nothing else in the way.
+
+    Keyed on (src, dst) in head coordinates. A pair claimed by two residual edges on either
+    side is left alone -- the same rule tier 1 applies to a colliding USR
+    (`match.declared._index`): a key two entities share identifies neither, and picking one
+    is a coin flip presented as a fact. Those fall through to remove plus add.
+
+    The residues are disjoint by construction, so a pair that survives here differs in the
+    only component left: the kind.
+    """
+    by_pair: dict[tuple[NodeId, NodeId], tuple[list[EdgeKey], list[EdgeKey]]] = defaultdict(
+        lambda: ([], [])
+    )
+    for key in base_residue:
+        by_pair[(key[0], key[2])][0].append(key)
+    for key in head_residue:
+        by_pair[(key[0], key[2])][1].append(key)
+
+    return [(old[0], new[0]) for old, new in by_pair.values() if len(old) == 1 and len(new) == 1]
+
+
+def _removed(ctx: DiffContext, edge: Edge) -> Event:
+    # Base coordinates: the edge does not exist at head. Same rule as `NodeRemoved`.
+    return Event(
+        kind=EventKind.EDGE_REMOVED,
+        subject=edge.id,
+        provenance=edge_hunks((Side.BASE, edge)),
+        confidence=ctx.confidence(_tier(ctx, edge, Side.BASE)),
+    )
+
+
+def _added(ctx: DiffContext, edge: Edge) -> Event:
+    return Event(
+        kind=EventKind.EDGE_ADDED,
+        subject=edge.id,
+        provenance=edge_hunks((Side.HEAD, edge)),
+        confidence=ctx.confidence(_tier(ctx, edge, Side.HEAD)),
+    )
+
+
+def _tier(ctx: DiffContext, edge: Edge, side: Side) -> MatchTier | None:
+    """The tier an edge event rests on: the weaker of its two endpoints' matches.
+
+    An edge is a claim about two entities, so it is no more confident than the less
+    confident of the two identifications -- and if either endpoint was never matched, there
+    is no tier, which is what makes an add or a remove report itself as untiered rather
+    than borrowing the certainty of the endpoint that *was* matched (§11).
+    """
+    corr = ctx.correspondence
+    index = corr.by_base if side is Side.BASE else corr.by_head
+    return ctx.weakest(
+        *(m.tier if (m := index.get(node_id)) else None for node_id in (edge.src, edge.dst))
+    )
