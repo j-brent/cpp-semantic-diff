@@ -7,18 +7,20 @@ each parses a few lines of C++ with no includes.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 
 from cpp_semantic_diff.acquire.workspace import CompileEntry
 from cpp_semantic_diff.errors import PreconditionError
-from cpp_semantic_diff.model.ir import EdgeKind, NodeKind
+from cpp_semantic_diff.model.ir import EdgeKind, Model, Node, NodeId, NodeKind
 from cpp_semantic_diff.produce.extract import (
     DROPPED_FLAGS,
     TuExtract,
     body_hash,
     extract,
+    merge_node,
     parse_arguments,
 )
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
@@ -48,12 +50,34 @@ def run(tmp_path: Path, toolchain: Toolchain, sources: dict[str, str]) -> TuExtr
     return extract(build(tmp_path, sources), root=tmp_path, toolchain=toolchain)
 
 
+def run_each(
+    tmp_path: Path, toolchain: Toolchain, sources: dict[str, str], *mains: str
+) -> list[TuExtract]:
+    """One partial per translation unit, over one set of sources -- the shape every claim
+    about merging or about what a TU can see needs, since the disagreement is *between*
+    them."""
+    return [
+        extract(build(tmp_path, sources, main=main), root=tmp_path, toolchain=toolchain)
+        for main in mains
+    ]
+
+
 def named(result: TuExtract, qualified: str):
     matches = [n for n in result.nodes.values() if n.qualified_name == qualified]
     assert matches, (
         f"{qualified} not extracted; have {sorted(n.qualified_name for n in result.nodes.values())}"
     )
     return matches[0]
+
+
+#: A resolved SHA, so that a partial can be wrapped in a `Model` and fingerprinted without
+#: pretending a ref is a revision.
+REV = "9f4d6c2e1b8a7d5c3e0f2a1b4c6d8e0f13579bdf"
+
+
+def as_model(result: TuExtract) -> Model:
+    """The partial as a `Model`, for `fingerprint()` -- the cheap whole-model check."""
+    return Model(rev=REV, nodes=result.nodes, edges=list(result.edges.values()))
 
 
 def edge_pairs(result: TuExtract, kind: EdgeKind) -> set[tuple[str, str]]:
@@ -163,6 +187,220 @@ class TestIdentity:
         invalidates every cached model, so it ships from v0."""
         result = run(tmp_path, toolchain, {"a.cpp": "namespace app { int helper(int v); }"})
         assert named(result, "app::helper").symbol == "_ZN3app6helperEi"
+
+
+#: Two unnamed entities and a named neighbour. Clang spells the unnamed ones with the source
+#: location that tells them apart -- `(anonymous union at <absolute path>:5:3)` -- and the
+#: field inside is named through its parent, so one leak reaches several nodes.
+ANONYMOUS = {
+    "a.cpp": """
+    namespace app {
+    struct Widget {
+      union { int as_int; float as_float; };
+      struct { int width; int height; } extent;
+      int plain;
+    };
+    }
+    """
+}
+
+
+class TestNamesAreHostIndependent:
+    """A name that carries where it was parsed is not a name. ARCH-001 §10 makes the model
+    the product, and a worktree is named after the commit SHA (`acquire/workspace.py`), so a
+    leaked spelling puts the host's directory layout *and* the revision under analysis into
+    the model -- differing between any two revisions, on every run, for entities nobody
+    touched."""
+
+    def test_an_unnamed_entity_carries_no_path_line_or_column(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        result = run(tmp_path, toolchain, ANONYMOUS)
+        assert result.ok
+        union = named(result, "app::Widget::(anonymous union)")
+        assert union.kind is NodeKind.UNION
+
+        for node in result.nodes.values():
+            for text in (node.name, node.qualified_name):
+                assert str(tmp_path) not in text, text
+                assert "/" not in text, text
+                assert not re.search(r":\d+:\d+", text), text
+
+    def test_a_member_of_an_unnamed_entity_is_named_through_it(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The member has a perfectly good name of its own; it inherits the leak from its
+        parent. On fmt 28 of the 32 affected nodes were fields, not the records."""
+        result = run(tmp_path, toolchain, ANONYMOUS)
+        field = named(result, "app::Widget::(anonymous union)::as_int")
+        assert field.kind is NodeKind.FIELD
+
+    def test_a_type_spelled_from_an_unnamed_record_carries_no_path_either(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """`attrs` and `signature` are diffable state, and an unnamed record's *type* is
+        spelled with the same location as its name."""
+        result = run(tmp_path, toolchain, ANONYMOUS)
+        for node in result.nodes.values():
+            texts = [node.signature or "", *(v for v in node.attrs.values() if isinstance(v, str))]
+            for text in texts:
+                assert str(tmp_path) not in text, (node.qualified_name, text)
+                assert " at " not in text, (node.qualified_name, text)
+
+    def test_the_same_source_at_two_worktrees_gives_the_same_model(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The claim the leak actually breaks, and the one no output would reveal: worktrees
+        are keyed by SHA, so base and head differ in nothing but their path. Anything that
+        path reaches is a difference reported on every comparison of any two revisions."""
+        base, head = tmp_path / "bcaa44d05579", tmp_path / "e2243a6a7f4a"
+        base.mkdir()
+        head.mkdir()
+
+        left = run(base, toolchain, ANONYMOUS)
+        right = run(head, toolchain, ANONYMOUS)
+
+        assert {n.id: n.qualified_name for n in left.nodes.values()} == {
+            n.id: n.qualified_name for n in right.nodes.values()
+        }
+        assert as_model(left).fingerprint() == as_model(right).fingerprint()
+
+
+#: One header, two TUs: one sees only the declarations, the other defines them. Every
+#: cross-TU disagreement fmt showed has this shape.
+SPLIT = {
+    "lib.h": "#pragma once\nnamespace app { struct S { ~S(); int size() const; int x; }; }\n",
+    "a.cpp": '#include "lib.h"\nint from_a() { return 0; }\n',
+    "b.cpp": '#include "lib.h"\nnamespace app { S::~S() {} int S::size() const { return x; } }\n',
+}
+
+
+class TestMergingObservationsOfOneEntity:
+    """Every header is reparsed once per TU that includes it, and the observations disagree
+    -- 429 of fmt's 4,778 multi-TU entities. The merge decides what the model says, so it
+    has to be a rule and not an accident of arrival order (ARCH-001 §5, §9)."""
+
+    def observations(self, tmp_path: Path, toolchain: Toolchain) -> list[TuExtract]:
+        return run_each(tmp_path, toolchain, SPLIT, "a.cpp", "b.cpp")
+
+    @staticmethod
+    def merged(partials: list[TuExtract]) -> dict[NodeId, Node]:
+        nodes: dict[NodeId, Node] = {}
+        for partial in partials:
+            for node in partial.nodes.values():
+                merge_node(nodes, node.model_copy(deep=True))
+        return nodes
+
+    def test_the_result_does_not_depend_on_the_order_the_observations_arrived(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Otherwise the model is a function of compile-database order, and two revisions
+        differing only in a CMake reorder diff non-empty."""
+        partials = self.observations(tmp_path, toolchain)
+        assert all(p.ok for p in partials)
+        assert self.merged(partials) == self.merged(list(reversed(partials)))
+
+    def test_a_merged_node_is_one_observation_whole(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Taking the body from one TU and an attribute from another describes a state that
+        exists in no translation unit and in no source file -- and the diff would report on
+        it as if it did."""
+        partials = self.observations(tmp_path, toolchain)
+        merged = self.merged(partials)
+        for node_id, node in merged.items():
+            seen = [p.nodes[node_id] for p in partials if node_id in p.nodes]
+            assert any(node == observation for observation in seen), (
+                f"{node.qualified_name} matches no translation unit's view of it"
+            )
+
+    def test_the_definition_still_wins(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        """The rule that was already there, restated because the merge changed underneath
+        it: the surviving node carries the body and points at the definition."""
+        merged = self.merged(self.observations(tmp_path, toolchain))
+        size = next(n for n in merged.values() if n.qualified_name == "app::S::size")
+        assert size.body_hash is not None
+        assert size.location is not None and size.location.file == "b.cpp"
+
+
+#: A destructor declared in a header and defined in one of the two TUs that include it.
+LAZY = {
+    "lib.h": "#pragma once\nstruct Res { ~Res(); int x; };\n",
+    "a.cpp": '#include "lib.h"\nint untouched() { return 0; }\n',
+    "b.cpp": '#include "lib.h"\nRes::~Res() {}\n',
+}
+
+
+class TestExceptionSpecifications:
+    """Clang computes an implicit exception specification lazily, so what a TU reports
+    depends on whether that TU ever used the function. `signature` is tier-1 identity input
+    (ARCH-001 §5); anything in it that varies with the *observer* breaks identity."""
+
+    def sides(self, tmp_path: Path, toolchain: Toolchain) -> list[TuExtract]:
+        """`a.cpp` never uses the destructor, `b.cpp` defines it. Same header, same
+        entity, and clang computes the specification only where it was needed."""
+        return run_each(tmp_path, toolchain, LAZY, "a.cpp", "b.cpp")
+
+    def test_the_two_translation_units_really_do_disagree(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The premise. Without it the test below proves nothing: the TU that defines the
+        destructor computes its specification, the TU that only includes the header does
+        not, and `None` is this model's word for 'not determined here'."""
+        unused, used = self.sides(tmp_path, toolchain)
+        assert named(used, "Res::~Res").attrs["exception_spec"] == "basic_noexcept"
+        assert named(unused, "Res::~Res").attrs["exception_spec"] is None
+
+    def test_the_signature_is_the_same_from_both(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Which TUs are in the compile database is not a property of the code. If it
+        reaches the signature, adding one test file makes an untouched destructor read as
+        delete + add."""
+        unused, used = self.sides(tmp_path, toolchain)
+        signature = named(used, "Res::~Res").signature
+        assert signature == named(unused, "Res::~Res").signature
+        assert "noexcept" not in (signature or "")
+
+    def test_unevaluated_never_reaches_the_model(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """It is not a state of the entity -- it says the compiler had no reason to look.
+        ARCH-001 §4 admits identity, diffable state and provenance; this is none of them."""
+        for side in self.sides(tmp_path, toolchain):
+            assert "unevaluated" not in {n.attrs.get("exception_spec") for n in side.nodes.values()}
+
+    def test_adding_noexcept_is_an_attribute_change_not_a_new_entity(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The other half of the same decision. The USR does not encode the specification,
+        so tier 1 matches across the edit; carrying it in the signature too would have made
+        the match report a delete and an add of the same function."""
+        plain = run(tmp_path, toolchain, {"a.cpp": "void f();"})
+        marked = run(tmp_path, toolchain, {"a.cpp": "void f() noexcept;"})
+        before, after = named(plain, "f"), named(marked, "f")
+        assert before.id == after.id
+        assert before.signature == after.signature
+        assert before.attrs["exception_spec"] != after.attrs["exception_spec"]
+
+
+class TestRepositoryRelativePaths:
+    def test_the_root_decides_what_relative_means(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The same file, the same spelling, two roots, two answers -- and both in one
+        process, because `_relative` is memoized and a memo keyed on less than it is asked
+        would hand one revision the other revision's answer (ARCH-001 §9)."""
+        inner = tmp_path / "project"
+        inner.mkdir()
+        entry = build(inner, {"a.cpp": "int f() { return 0; }"})
+
+        deep = extract(entry, root=inner, toolchain=toolchain)
+        wide = extract(entry, root=tmp_path, toolchain=toolchain)
+
+        assert named(deep, "f").location is not None
+        assert named(deep, "f").location.file == "a.cpp"  # type: ignore[union-attr]
+        assert named(wide, "f").location.file == "project/a.cpp"  # type: ignore[union-attr]
 
 
 class TestBodyHash:
@@ -321,6 +559,38 @@ class TestTemplates:
         holders = [n for n in result.nodes.values() if n.name == "Holder"]
         assert len(holders) == 2
         assert len({n.id for n in holders}) == 2
+
+    def test_a_templated_record_keeps_the_tag_it_was_written_with(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Clang files every templated record under one cursor kind, so reading `class` off
+        it reports `template <typename T> struct X` as a class. Kind is not identity and no
+        diff is corrupted, but one qualified name then appears as two kinds -- fmt's
+        `formatter` split 54 class / 43 struct -- which corrupts rendering and every
+        kind-keyed rule downstream."""
+        result = run(
+            tmp_path,
+            toolchain,
+            {
+                "a.cpp": """
+                template <typename T> struct Holder { T value; };
+                template <typename T> struct Holder<T*> { T* value; };
+                template <> struct Holder<char> { char value; };
+                template <typename T> class Keeper { public: T value; };
+                template <typename T> union Either { T value; int tag; };
+                """
+            },
+        )
+        assert result.ok
+
+        def kinds(name: str) -> set[NodeKind]:
+            return {n.kind for n in result.nodes.values() if n.qualified_name == name}
+
+        # One qualified name, one kind -- including the partial and full specializations,
+        # which are separate entities written with the same tag.
+        assert kinds("Holder") == {NodeKind.STRUCT}
+        assert kinds("Keeper") == {NodeKind.CLASS}
+        assert kinds("Either") == {NodeKind.UNION}
 
 
 class TestFailureIsRecordedNotRaised:

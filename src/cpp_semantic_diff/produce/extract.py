@@ -25,7 +25,10 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 import clang.cindex as ci
@@ -53,6 +56,9 @@ from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 #: instantiations need separate identity (ARCH-001 §5), and this gets that for free: only
 #: *declared* templates appear as cursors, so implicit instantiations never enter the model
 #: and cannot produce instantiation-only deltas.
+#:
+#: The record kinds here are the *default* for a templated record; `_node_kind` refines them
+#: from the tag clang actually parsed, because CLASS_TEMPLATE covers `struct` too.
 MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.NAMESPACE: NodeKind.NAMESPACE,
     ci.CursorKind.CLASS_DECL: NodeKind.CLASS,
@@ -93,6 +99,23 @@ CALLABLE_KINDS = frozenset(
         ci.CursorKind.CONVERSION_FUNCTION,
     }
 )
+
+#: Cursor kinds that stand for a templated record. Clang files `template <...> struct X`
+#: under CLASS_TEMPLATE just as it does `class`, so the cursor kind alone cannot say which
+#: tag was written and the node kind has to be asked for separately.
+TEMPLATED_RECORD_KINDS = frozenset(
+    {
+        ci.CursorKind.CLASS_TEMPLATE,
+        ci.CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
+    }
+)
+
+#: The tag a templated record was written with, as a node kind.
+TAG_KINDS: dict[ci.CursorKind, NodeKind] = {
+    ci.CursorKind.STRUCT_DECL: NodeKind.STRUCT,
+    ci.CursorKind.CLASS_DECL: NodeKind.CLASS,
+    ci.CursorKind.UNION_DECL: NodeKind.UNION,
+}
 
 #: Function bodies are deliberately *not* skipped. `calls` edges and `body_hash` both need
 #: them, and the spike measured bodies at 61 % of parse time for only 2 % of the USRs --
@@ -190,6 +213,92 @@ def overridden_usrs(cursor: ci.Cursor) -> list[str]:
     return _overridden_cursors(cursor)
 
 
+class _TemplateTag:
+    """`clang_getTemplateCursorKind`, which the Python bindings do not wrap.
+
+    The tag a templated record was written with is not recoverable from the cursor kind:
+    CLASS_TEMPLATE covers `class`, `struct` and `union` alike. Reading `class` off it split
+    fmt's `formatter` 54 class / 43 struct under one qualified name -- full specializations
+    are STRUCT_DECL cursors and read as structs, while the primary template and every
+    partial specialization read as classes. Asking clang costs one call and settles it: 95
+    struct and the 2 specializations fmt really does write `class`, and 21 fmt qualified
+    names that were both a class and a struct come down to that one.
+    """
+
+    def __init__(self) -> None:
+        self._get = ci.conf.lib.clang_getTemplateCursorKind
+        self._get.argtypes = [ci.Cursor]
+        self._get.restype = ctypes.c_uint
+
+    def __call__(self, cursor: ci.Cursor) -> ci.CursorKind | None:
+        try:
+            return ci.CursorKind.from_id(self._get(cursor))
+        # `CXCursor_NoDeclFound` for a cursor that is not a template, and any id this
+        # binding release does not know. Neither is a reason to refuse the node.
+        except ValueError:
+            return None
+
+
+_template_tag: _TemplateTag | None = None
+
+
+def template_tag_kind(cursor: ci.Cursor) -> ci.CursorKind | None:
+    global _template_tag
+    if _template_tag is None:
+        _template_tag = _TemplateTag()
+    return _template_tag(cursor)
+
+
+def _node_kind(cursor: ci.Cursor) -> NodeKind | None:
+    """The modelled kind of a cursor, or None if v0 does not model it.
+
+    Kind is not identity -- the USR is -- so getting this wrong corrupts no diff. It does
+    corrupt rendering and every kind-keyed rule downstream, and "21 qualified names are both
+    a class and a struct" is the kind of inconsistency that gets read as a matching bug.
+    """
+    kind = MODELLED_KINDS.get(cursor.kind)
+    if kind is not None and cursor.kind in TEMPLATED_RECORD_KINDS:
+        return TAG_KINDS.get(template_tag_kind(cursor), kind)
+    return kind
+
+
+#: Clang spells an unnamed entity with the source location that distinguishes it:
+#: `(anonymous union at /abs/path/include/fmt/base.h:2148:3)`. Worktrees are named after the
+#: commit SHA (`acquire/workspace.py`), so copying that spelling into the model writes both
+#: the host's directory layout and the revision under analysis into `name` and
+#: `qualified_name` -- and into the qualified name of every member nested inside. On fmt
+#: that was 32 nodes by name, on spdlog 22, whose only difference between two revisions was
+#: the path they were parsed from: an unconditional false-positive floor under every
+#: comparison, a host-specific path in what ARCH-001 §10 calls the product, and a per-TU
+#: cache entry (§9) that no second machine or second revision could ever reuse.
+#:
+#: The location is dropped rather than replaced with something stabler. Naming an unnamed
+#: entity is not this field's job: the USR is intact and unaffected (`...@Ua`), so tier 1
+#: still identifies it, and ARCH-001 §5 reserves tier 3 -- (parent, kind, ordinal) -- for
+#: exactly the entities that have no name. A line and column would also move on any edit
+#: above the record, which is the same false positive one machine further in.
+_ANONYMOUS_AT = re.compile(r"\((anonymous|unnamed|lambda)(?: (\w+))? at .*?:\d+:\d+\)")
+
+
+def _stable_spelling(spelling: str) -> str:
+    """A clang spelling with any embedded source location removed."""
+    # Guard the regex rather than the substitution: this runs once per cursor and again per
+    # ancestor while building a qualified name, and essentially nothing matches.
+    if " at " not in spelling:
+        return spelling
+    return _ANONYMOUS_AT.sub(lambda m: f"({m[1]} {m[2]})" if m[2] else f"({m[1]})", spelling)
+
+
+def _canonical_spelling(type_: ci.Type) -> str:
+    """A canonical type spelling, free of the host paths an unnamed type would carry.
+
+    A field of unnamed struct type spells its type `struct (unnamed struct at /abs/path...)`,
+    so the leak reaches `attrs["type"]`, `attrs["return_type"]` and `signature` as well as
+    the names.
+    """
+    return _stable_spelling(type_.get_canonical().spelling)
+
+
 def parse_arguments(entry: CompileEntry, toolchain: Toolchain) -> list[str]:
     """Turn a compile-database entry into libclang arguments.
 
@@ -215,6 +324,15 @@ def parse_arguments(entry: CompileEntry, toolchain: Toolchain) -> list[str]:
     return toolchain.parse_args(args)
 
 
+#: One entry per distinct (spelling, root, build directory). A translation unit asks about
+#: the same few hundred files thousands of times: three real fmt TUs together answered
+#: 14,981 questions about 208 distinct paths. Bounded rather than unbounded because a
+#: long-lived producer would otherwise accumulate an entry per file per revision it ever
+#: saw, and nothing here needs a hit rate better than one TU's worth of working set.
+_RELATIVE_CACHE = 8192
+
+
+@lru_cache(maxsize=_RELATIVE_CACHE)
 def _relative(path: str, root: Path, base: Path) -> str | None:
     """Repository-relative path, or None if the file is outside the tree under analysis.
 
@@ -223,6 +341,13 @@ def _relative(path: str, root: Path, base: Path) -> str | None:
     comes back relative -- and resolving that against the *process* working directory
     silently places it outside the repository, dropping every declaration in it from the
     model without a single diagnostic.
+
+    Memoized because `resolve()` is a realpath walk of a long absolute path, once per
+    *visited cursor*: measured at 20-32 % of extraction wall time on real fmt TUs, against a
+    30 s budget for 20 TUs (ARCH-001 §9). The key is all three arguments, not the path: the
+    same spelling means a different file under a different `base`, and base and head
+    worktrees differ in nothing *but* `root`, so a memo keyed on the path alone would answer
+    one revision's question with the other revision's answer.
     """
     candidate = Path(path)
     if not candidate.is_absolute():
@@ -279,6 +404,28 @@ def _access(cursor: ci.Cursor) -> str | None:
     return str(access.name).lower()
 
 
+def _exception_spec(cursor: ci.Cursor) -> str | None:
+    """The exception specification kind, or None where this TU never determined one.
+
+    The spec kind, not a `noexcept: bool`. Collapsing it loses the distinction between
+    `noexcept` and `noexcept(false)` -- both are COMPUTED/BASIC specs, and one of them still
+    throws. `none -> basic_noexcept` diffs just as mechanically and does not claim something
+    untrue.
+
+    UNEVALUATED is folded into None because it is not a state of the entity: clang computes
+    an implicit exception specification lazily, so it means only that this translation unit
+    never odr-used the function. Publishing it as a value would make `unevaluated ->
+    basic_noexcept` a reportable attribute change caused by adding a test file, and
+    ARCH-001 §4 admits only identity, diffable state and provenance -- an artefact of when
+    the compiler happened to look is none of the three. None already means "not determined",
+    and `merge_node` prefers the observation that determined more.
+    """
+    spec = cursor.exception_specification_kind
+    if spec is None or spec is ci.ExceptionSpecificationKind.UNEVALUATED:
+        return None
+    return str(spec.name).lower()
+
+
 def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
     """Flat, always-present-per-kind scalars (ARCH-001 §4.3).
 
@@ -291,16 +438,11 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["access"] = access
 
     if kind in (NodeKind.FUNCTION, NodeKind.METHOD):
-        attrs["return_type"] = cursor.result_type.get_canonical().spelling
+        attrs["return_type"] = _canonical_spelling(cursor.result_type)
         attrs["template"] = cursor.kind is ci.CursorKind.FUNCTION_TEMPLATE
         attrs["deleted"] = cursor.is_deleted_method()
         attrs["defaulted"] = cursor.is_default_method()
-        # The spec kind, not a `noexcept: bool`. Collapsing it loses the distinction
-        # between `noexcept` and `noexcept(false)` -- both are COMPUTED/BASIC specs, and
-        # one of them still throws. `none -> basic_noexcept` diffs just as mechanically
-        # and does not claim something untrue.
-        spec = cursor.exception_specification_kind
-        attrs["exception_spec"] = str(spec.name).lower() if spec is not None else None
+        attrs["exception_spec"] = _exception_spec(cursor)
     if kind is NodeKind.METHOD:
         attrs["static"] = cursor.is_static_method()
         attrs["virtual"] = cursor.is_virtual_method()
@@ -308,7 +450,7 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["const"] = cursor.is_const_method()
         attrs["explicit"] = cursor.is_explicit_method()
     if kind is NodeKind.FIELD:
-        attrs["type"] = cursor.type.get_canonical().spelling
+        attrs["type"] = _canonical_spelling(cursor.type)
         attrs["mutable"] = cursor.is_mutable_field()
         if cursor.is_bitfield():
             attrs["bitfield_width"] = cursor.get_bitfield_width()
@@ -321,24 +463,155 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
     return attrs
 
 
+#: The exception specification, which a canonical function type spells last: ` noexcept`,
+#: ` noexcept(<expr>)` for a dependent one, or ` throw(...)`. Anchored at the end so that a
+#: parameter of function-pointer type -- `void (void (*)() noexcept)` -- keeps its own.
+_EXCEPTION_SPEC = re.compile(r"\s+(?:noexcept|throw)\s*(?:\(.*\))?$")
+
+
 def _signature(cursor: ci.Cursor, kind: NodeKind) -> str | None:
     """Canonical type spelling: typedefs resolved, qualifiers explicit (ARCH-001 §4.1).
 
     Tier-1 identity cannot distinguish overloads without it. The canonical form is what
     makes `size_t` and `unsigned long` the same signature, so an unrelated typedef change
     does not read as a signature change.
+
+    The exception specification is stripped, and this is the load-bearing part. Clang
+    computes an *implicit* specification lazily, so a special member that a TU never
+    odr-uses comes back UNEVALUATED and its canonical type has no `noexcept` where the same
+    entity, seen from a TU that did use it, spells one. Measured on fmt,
+    `fmt::v12::ostream::~ostream` is `void () noexcept` from `src/os.cc` and `void ()` from
+    `test/gtest-extra.cc`. Signature is tier-1 identity input (ARCH-001 §5), so leaving that
+    in makes an untouched destructor read as delete + add the moment a test file is added or
+    CMake reorders the database -- a difference in the *observers*, reported as a difference
+    in the code.
+
+    Stripped from every signature rather than only the unevaluated ones, because normalizing
+    one side of a disagreement leaves the other side still spelling `noexcept`, and any rule
+    that enumerates which functions get a lazy specification is a rule that goes quietly
+    stale against the next clang. Nothing is lost: `attrs["exception_spec"]` carries the
+    specification as diffable state, where a function that gains `noexcept` is the same
+    entity with a changed attribute -- which is what it is -- rather than a different one.
     """
     if kind not in (NodeKind.FUNCTION, NodeKind.METHOD):
         return None
-    return cursor.type.get_canonical().spelling or None
+    return _EXCEPTION_SPEC.sub("", _canonical_spelling(cursor.type)) or None
+
+
+def _observation_rank(node: Node) -> tuple[object, ...]:
+    """A total order over the ways one entity can be observed. Highest wins.
+
+    Three components, in order:
+
+    1. **A definition outranks a declaration.** It carries the body, and its location is
+       where a reviewer wants to be sent (ARCH-001 §5).
+    2. **Knowing outranks not knowing.** Whether a TU determined a given fact about an
+       entity depends on what that TU needed -- clang leaves an unused special member's
+       exception specification uncomputed, so one TU reports it and another reports None.
+       Preferring the observation that determined more never discards a fact for a blank.
+    3. **The content itself**, as a tie-break. It has to cover every field, because `max`
+       over equal keys returns whichever it saw first, and "whichever it saw first" is the
+       compile-database order this function exists to be independent of.
+    """
+    known = sum(
+        value is not None
+        for value in (node.signature, node.symbol, node.location, node.tu, *node.attrs.values())
+    )
+    return (
+        node.body_hash is not None,
+        known,
+        node.name,
+        node.qualified_name,
+        node.signature or "",
+        node.symbol or "",
+        node.body_hash or "",
+        node.tu or "",
+        tuple(sorted((key, repr(value)) for key, value in node.attrs.items())),
+        (node.location.file, node.location.line) if node.location else ("", 0),
+    )
+
+
+def merge_node(nodes: dict[NodeId, Node], node: Node) -> None:
+    """Merge by USR. A declaration and its definition are one entity.
+
+    The merged node is *one* of the observations, whole -- never a field from each. A node
+    assembled field by field can describe a state that exists in no translation unit and in
+    no source file: one TU's signature beside another TU's `exception_spec`, which is a
+    contradiction the diff would faithfully report on. So the rule is to rank the
+    observations and keep the winner entire (`_observation_rank`), which also makes the
+    result independent of the order the observations arrive in -- `max` over a total order
+    is commutative and associative, and a model that depended on compile-database order
+    would diff non-empty against itself after a CMake reorder (ARCH-001 §9).
+
+    Module-level, and not a method, because the rule has to be *one* rule. Within a TU a
+    header is seen once per include path; across TUs it is seen once per TU, and the second
+    case is the same merge as the first at a different scale. The builder calls this rather
+    than reimplementing it, so a change to what "definitions win" means cannot apply to one
+    scale and not the other.
+
+    Nothing handed in is mutated, and nothing handed in is stored by reference once a merge
+    has happened -- a partial model may come from the cache, and a cache entry silently
+    rewritten by the build that read it is the confidently-wrong output ARCH-001 §9 names as
+    the worst failure available here.
+    """
+    existing = nodes.get(node.id)
+    if existing is None:
+        nodes[node.id] = node
+        return
+    # The overwhelmingly common case, and the reason ranking is affordable: the same header
+    # declaration seen again through another include path or another TU. fmt collapses
+    # 134,366 arrivals into 10,574 entities, of which 4,778 are seen by more than one TU and
+    # only 435 are seen differently.
+    if existing == node:
+        return
+    if _observation_rank(node) > _observation_rank(existing):
+        nodes[node.id] = node.model_copy(deep=True)
+
+
+def merge_edge(
+    edges: dict[str, Edge],
+    src: str,
+    dst: str,
+    kind: EdgeKind,
+    locations: Iterable[Location] = (),
+    attrs: dict[str, AttrValue] | None = None,
+) -> None:
+    """Merge by (src, kind, dst); a repeated call site is a location, not an edge.
+
+    Takes the parts rather than an `Edge` so that the object is built once per *distinct*
+    edge instead of once per arrival -- fmt extracts 224,571 arrivals for 28,470 edges --
+    and so that the merged graph never aliases a partial model's objects.
+
+    Attributes belong to the relation, not to the site (`virtual` is a property of the
+    callee, `access` of the base specifier), so a later arrival can only fill a gap, never
+    contradict what is already recorded.
+    """
+    # A self-edge is not a relation worth an event, and an empty USR is not an identity.
+    # Enforced here rather than at the call sites because the builder creates both cases
+    # by resolving two different instantiations of the same template onto it.
+    if not src or not dst or src == dst:
+        return
+    key = f"{src}|{kind.value}|{dst}"
+    edge = edges.get(key)
+    if edge is None:
+        edge = Edge(src=NodeId(src), dst=NodeId(dst), kind=kind, attrs=attrs or {})
+        edges[key] = edge
+    for location in locations:
+        if location not in edge.locations:
+            edge.locations.append(location)
+    for name, value in (attrs or {}).items():
+        edge.attrs.setdefault(name, value)
 
 
 def _qualified_name(cursor: ci.Cursor) -> str:
-    parts = [cursor.spelling]
+    # Every component is normalized, not just the cursor's own: a field of an anonymous
+    # union is named through the union, so the leak reaches members that have perfectly
+    # good names of their own -- 28 of fmt's 32 affected nodes were fields.
+    parts = [_stable_spelling(cursor.spelling)]
     parent = cursor.semantic_parent
     while parent is not None and parent.kind is not ci.CursorKind.TRANSLATION_UNIT:
         if parent.spelling:
-            parts.append(parent.spelling)
+            parts.append(_stable_spelling(parent.spelling))
         parent = parent.semantic_parent
     return "::".join(reversed(parts))
 
@@ -383,24 +656,7 @@ class _Extractor:
     # -- graph assembly -------------------------------------------------------
 
     def add_node(self, node: Node) -> None:
-        """Merge by USR. A declaration and its definition are one entity.
-
-        Definitions win: they carry the body, and their location is where a reviewer
-        wants to be sent. ARCH-001 §5 -- dedup is a correctness requirement, since every
-        header is reparsed once per TU.
-        """
-        existing = self.nodes.get(node.id)
-        if existing is None:
-            self.nodes[node.id] = node
-            return
-        if node.body_hash is not None and existing.body_hash is None:
-            merged = node.model_copy()
-            merged.attrs = {**existing.attrs, **node.attrs}
-            self.nodes[node.id] = merged
-        else:
-            existing.attrs.update(node.attrs)
-            if existing.symbol is None:
-                existing.symbol = node.symbol
+        merge_node(self.nodes, node)
 
     def add_edge(
         self,
@@ -410,16 +666,7 @@ class _Extractor:
         location: Location | None,
         **attrs: AttrValue,
     ) -> None:
-        """Merge by (src, kind, dst); a repeated call site is a location, not an edge."""
-        if not src or not dst or src == dst:
-            return
-        key = f"{src}|{kind.value}|{dst}"
-        edge = self.edges.get(key)
-        if edge is None:
-            edge = Edge(src=NodeId(src), dst=NodeId(dst), kind=kind, attrs=attrs)
-            self.edges[key] = edge
-        if location is not None and location not in edge.locations:
-            edge.locations.append(location)
+        merge_edge(self.edges, src, dst, kind, () if location is None else (location,), attrs)
 
     # -- traversal ------------------------------------------------------------
 
@@ -437,7 +684,7 @@ class _Extractor:
             self.visit_declaration(child)
 
     def visit_declaration(self, cursor: ci.Cursor) -> None:
-        kind = MODELLED_KINDS.get(cursor.kind)
+        kind = _node_kind(cursor)
         if kind is None:
             if cursor.kind in CONTAINER_KINDS:
                 self.visit(cursor)
@@ -451,7 +698,7 @@ class _Extractor:
             Node(
                 id=NodeId(usr),
                 kind=kind,
-                name=cursor.spelling,
+                name=_stable_spelling(cursor.spelling),
                 qualified_name=_qualified_name(cursor),
                 signature=_signature(cursor, kind),
                 symbol=_mangled(cursor),
