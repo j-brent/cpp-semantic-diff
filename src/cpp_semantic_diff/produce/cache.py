@@ -30,11 +30,20 @@ Each component defends against a specific way of being wrong:
   as the compile database wrote them. Keying on the raw command would let a flag the
   extractor strips (`-o`, `-Werror`) invalidate an entry that is still perfectly valid.
 - **Producer version**, which is two things, not one. `Toolchain.id` identifies the parser
-  -- the release triple rather than the distro's version string, precisely so a package
-  rebuild that changes nothing observable does not invalidate every entry. But libclang
-  only supplies the AST; `extract.py` decides what becomes a node and `ir.py` fixes the
-  shape it is stored in, so a digest of their source is keyed too. A model built by a
-  different producer is a different model, and the extractor is half the producer.
+  *and the parse* -- the release triple rather than the distro's version string, so a
+  package rebuild that changes nothing observable does not invalidate every entry, plus
+  the target triple, which the content digests below cannot see: the same headers under a
+  different target declare different things and hash the same (ARCH-001 §12.1). But
+  libclang only supplies the AST; `extract.py` decides what becomes a node and `ir.py`
+  fixes the shape it is stored in, so a digest of their source is keyed too. A model built
+  by a different producer is a different model, and the extractor is half the producer.
+
+The determinants §12.1 lists that are *not* named here are covered by content anyway, and
+naming them again would be a second place to keep one fact true. The include closure holds
+the standard library and clang's own builtin headers -- a TU including `<string>` and
+`<cstddef>` closes over 151 files, 68 of them libstdc++ and 14 of them in the resource
+directory -- so libstdc++ 12 versus 14, or a different resource directory's `stddef.h`,
+already changes the key by content rather than by path.
 
 **When the closure cannot be computed, nothing is cached.** `clang-scan-deps` is the only
 thing here that knows which headers a TU reads, and a key without them produces stale hits

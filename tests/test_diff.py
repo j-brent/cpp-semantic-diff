@@ -16,6 +16,7 @@ from __future__ import annotations
 import pytest
 
 from cpp_semantic_diff.diff import diff_models
+from cpp_semantic_diff.errors import PreconditionError, ToolchainMismatchError
 from cpp_semantic_diff.match import Correspondence, Match, match_models
 from cpp_semantic_diff.model import (
     UNREACHABLE_IN_V0,
@@ -705,6 +706,88 @@ class TestTheStageIsAPureFunction:
             diff_models(
                 model("a"), model("b"), Correspondence(unmatched_base=[NodeId("c:@F@ghost#")])
             )
+
+
+class TestOneToolchainOrNoDiff:
+    """ARCH-001 §12.2: `diff` refuses two models whose toolchain identity differs.
+
+    The failure this defends against is not a missed change, it is an *invented* one.
+    `std::string` gaining a member because the base was parsed against libstdc++ 12 and the
+    head against 14 arrives as a `NodeAdded` like any other, at full confidence,
+    indistinguishable in the output from a real change -- which §12.2 calls worse than
+    anything in §11 and why the response is refusal rather than a note.
+
+    Asserted at this boundary because this is the first stage holding both models: the
+    cache makes it true incidentally (a changed producer misses cache), but that is a
+    consequence of a caching decision rather than a guarantee, and `Correspondence` never
+    sees a model. It must hold for API callers and not only for `cli.py`, so it is tested
+    through `diff_models` directly.
+    """
+
+    def toolchain_model(self, rev: str, producer: str, *nodes: Node) -> Model:
+        return model(
+            rev,
+            *nodes,
+            completeness=Completeness(producers=[producer], producer_version=producer),
+        )
+
+    def test_two_models_from_one_toolchain_diff_normally(self) -> None:
+        same = "libclang 18.1.3 x86_64-pc-linux-gnu"
+        base = self.toolchain_model("a", same, node(F, body_hash="aaa"))
+        head = self.toolchain_model("b", same, node(F, body_hash="bbb"))
+        assert kinds(diff(base, head)) == ["NodeBodyChanged"]
+
+    def test_a_different_parser_is_refused(self) -> None:
+        base = self.toolchain_model("a", "libclang 18.1.3 x86_64-pc-linux-gnu", node(F))
+        head = self.toolchain_model("b", "libclang 19.1.0 x86_64-pc-linux-gnu", node(F))
+        with pytest.raises(ToolchainMismatchError):
+            diff(base, head)
+
+    def test_a_different_target_is_refused(self) -> None:
+        """The case the content digests cannot catch: same parser, same headers,
+        byte-identical on both hosts, different `sizeof` (ARCH-001 §12.1)."""
+        base = self.toolchain_model("a", "libclang 18.1.3 x86_64-pc-linux-gnu", node(F))
+        head = self.toolchain_model("b", "libclang 18.1.3 aarch64-unknown-linux-gnu", node(F))
+        with pytest.raises(ToolchainMismatchError):
+            diff(base, head)
+
+    def test_the_refusal_names_both_identities_and_what_differs(self) -> None:
+        """An error a user cannot act on is a §11 failure of its own: the whole reason
+        this is fatal is that the user has to go rebuild one of the two sides, and they
+        cannot do that without being told which one is wrong."""
+        base = self.toolchain_model("a", "libclang 18.1.3 x86_64-pc-linux-gnu", node(F))
+        head = self.toolchain_model("b", "libclang 18.1.3 aarch64-unknown-linux-gnu", node(F))
+        with pytest.raises(ToolchainMismatchError) as caught:
+            diff(base, head)
+        message = str(caught.value)
+        assert "x86_64-pc-linux-gnu" in message
+        assert "aarch64-unknown-linux-gnu" in message
+        assert "base" in message and "head" in message
+
+    def test_the_refusal_is_a_precondition_failure(self) -> None:
+        """§11 treatment, so `cli.py` renders it as one and nothing catches it to produce
+        a partial delta."""
+        assert issubclass(ToolchainMismatchError, PreconditionError)
+
+    def test_an_unrecorded_toolchain_does_not_read_as_agreement_with_a_recorded_one(
+        self,
+    ) -> None:
+        """A model that never said what built it has not said it matches."""
+        base = model("a", node(F))
+        head = self.toolchain_model("b", "libclang 18.1.3 x86_64-pc-linux-gnu", node(F))
+        with pytest.raises(ToolchainMismatchError):
+            diff(base, head)
+
+    def test_the_check_runs_before_any_event_is_built(self) -> None:
+        """A mismatch must not be reported as a delta with a warning attached: the events
+        it would produce are the fabricated ones, so none may be constructed at all."""
+        base = self.toolchain_model("a", "libclang 18.1.3 x86_64-pc-linux-gnu", node(F))
+        head = self.toolchain_model("b", "libclang 19.1.0 x86_64-pc-linux-gnu", node(G, name="g"))
+        with pytest.raises(ToolchainMismatchError):
+            # A correspondence built against neither model -- `_check_covers` would raise
+            # too. The toolchain check has to win, or the user is sent to debug the wrong
+            # thing.
+            diff_models(base, head, Correspondence())
 
 
 class TestTheDroppedEdgeAsymmetryIsInherited:

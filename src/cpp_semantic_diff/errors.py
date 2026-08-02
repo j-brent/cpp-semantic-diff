@@ -104,6 +104,36 @@ class ClangToolchainError(PreconditionError):
         super().__init__("\n".join(parts))
 
 
+class ToolchainMismatchError(PreconditionError):
+    """The two models were not produced by the same toolchain (ARCH-001 §12.2).
+
+    A two-point analysis subtracts one model from another. If the two were produced by
+    different parsers, different system headers or different target triples, the
+    subtraction yields events that describe the *environment* rather than the change --
+    `std::string` gaining a member because the base was parsed against libstdc++ 12 and the
+    head against 14 is a `NodeAdded` like any other, rendered with full confidence and
+    indistinguishable in the output from a real one.
+
+    That is worse than anything in §11, which is why it is refused rather than flagged:
+    §11's failures are missed changes, and this one is an invented change.
+    """
+
+    def __init__(self, base: str, head: str, *, differs: list[str]) -> None:
+        self.base = base
+        self.head = head
+        self.differs = differs
+        super().__init__(
+            "The two models were produced by different toolchains, so their difference "
+            "would describe the environment rather than the change (ARCH-001 §12.2).\n"
+            f"  base  {base or '<no toolchain recorded>'}\n"
+            f"  head  {head or '<no toolchain recorded>'}\n"
+            f"  disagreeing record(s): {', '.join(differs)}\n"
+            "Build both revisions in one run, or with one toolchain: an identity is the "
+            "libclang release triple and the target it parses for, and both sides must "
+            "agree before a delta between them means anything."
+        )
+
+
 class TranslationUnitError(SemanticDiffError):
     """One TU failed to parse. Recorded in `Completeness`, not fatal on its own."""
 

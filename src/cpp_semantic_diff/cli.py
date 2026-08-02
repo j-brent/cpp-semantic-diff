@@ -100,6 +100,10 @@ def doctor() -> None:
     if tc.resource_dir:
         table.add_row("resource dir", f"{tc.resource_dir} [dim](CPPSD_RESOURCE_DIR)[/]")
     table.add_row("builtin headers", "[green]parsed clean[/]")
+    # Printed as its own row, and yellow when absent, because an undetermined target is not
+    # an error on this host -- it is a reason not to share this host's cache with another
+    # (ARCH-001 §12.1). A condition that only matters elsewhere has to be visible here.
+    table.add_row("target", tc.target or "[yellow]undetermined -- do not share this cache[/]")
     table.add_row("producer id", tc.id)
     console.print(table)
 
@@ -260,7 +264,16 @@ def diff(
     timings.match = time.perf_counter() - t
 
     t = time.perf_counter()
-    events = diff_models(base_model, head_model, correspondence)
+    try:
+        events = diff_models(base_model, head_model, correspondence)
+    except PreconditionError as error:
+        # ARCH-001 §12.2's refusal reaches the user as the §11 treatment and not as a
+        # traceback. Unreachable from here today -- both models are built from the one
+        # `toolchain` resolved above -- but a precondition that is presented differently
+        # depending on which stage raised it is a presentation bug waiting for the first
+        # caller that can trip it.
+        _fail(error)
+        return
     timings.diff = time.perf_counter() - t
 
     t = time.perf_counter()

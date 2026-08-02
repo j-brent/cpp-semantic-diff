@@ -139,6 +139,13 @@ def draw(doc: DiffDocument, **kw) -> str:
     return buffer.getvalue()
 
 
+#: One toolchain for both sides of every comparison below. `diff` refuses two models whose
+#: producers disagree (ARCH-001 §12.2), and a side left blank beside a side that names a
+#: producer is a disagreement -- so the *coverage* asymmetry these tests are about has to be
+#: built on identity the two sides share, exactly as a real run does.
+PRODUCER = "libclang 18.1.3"
+
+
 def incomplete(reason: str = "3 TUs failed") -> Completeness:
     return Completeness(
         tus_total=2,
@@ -146,8 +153,13 @@ def incomplete(reason: str = "3 TUs failed") -> Completeness:
             TuResult(path="src/a.cpp", status=TuStatus.PARSED),
             TuResult(path="src/b.cpp", status=TuStatus.FAILED, detail=reason),
         ],
-        producer_version="libclang 18.1.3",
+        producer_version=PRODUCER,
     )
+
+
+def clean() -> Completeness:
+    """The other side of an `incomplete()` comparison: nothing missing, same producer."""
+    return Completeness(producer_version=PRODUCER)
 
 
 # -- 1 · the §6.3 invariant --------------------------------------------------------------
@@ -427,7 +439,7 @@ class TestIncompletenessIsVisible:
         )
 
     def test_a_failed_tu_is_warned_about_and_named(self) -> None:
-        doc = self._doc(incomplete("stddef.h not found"), Completeness())
+        doc = self._doc(incomplete("stddef.h not found"), clean())
         assert doc.completeness.degraded
         out = draw(doc)
         assert "incomplete" in out
@@ -436,7 +448,7 @@ class TestIncompletenessIsVisible:
     def test_the_warning_precedes_the_events(self) -> None:
         """Order is the whole of §11.2's claim: a reader who reaches the events first has
         already formed a belief the caveat then has to undo."""
-        doc = self._doc(incomplete(), Completeness())
+        doc = self._doc(incomplete(), clean())
         out = draw(doc)
         assert out.index("incomplete") < out.index("NodeRemoved")
 

@@ -294,6 +294,58 @@ class TestInvalidation:
         assert imposter.identity(entry) != cache.identity(entry)
         assert imposter.load(imposter.identity(entry), imposter.key(entry) or "") is None
 
+    def test_a_different_target_invalidates(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        """The determinant the content digests cannot see (ARCH-001 §12.1).
+
+        Every other input to the model that varies between two hosts is already keyed *by
+        content*: the include closure holds the standard library and clang's own builtin
+        headers, so libstdc++ 12 versus 14 changes the key without anyone naming it. The
+        target is the exception. The same headers under `x86_64` and `aarch64` declare
+        different things -- different `sizeof`, different `__x86_64__` branches -- and hash
+        byte-identically, so without the target in the identity the two hosts write two
+        different partials under one key. That is the shared base cache §9 recommends,
+        producing confidently wrong output.
+        """
+        checkout = project(tmp_path / "w", SHARED, ("a.cpp",))
+        _, cache = build(checkout, toolchain, tmp_path)
+        entry = checkout.cpp_entries[0]
+
+        elsewhere = TuCache(
+            root=checkout.path,
+            toolchain=replace(toolchain, target="s390x-ibm-linux-gnu"),
+            store=store(tmp_path),
+            closures=cache.closures,
+        )
+        assert elsewhere.identity(entry) != cache.identity(entry)
+        assert elsewhere.key(entry) != cache.key(entry)
+        assert elsewhere.load(elsewhere.identity(entry), elsewhere.key(entry) or "") is None
+
+    def test_repackaging_the_same_compiler_does_not_invalidate(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The property that made the identity the *release* triple, kept while widening it
+        (STATUS §5). A distro rebuild changes the version string and the install path and
+        nothing a parse can observe; keying on either would invalidate every cached model
+        on every host, for nothing.
+        """
+        checkout = project(tmp_path / "w", SHARED, ("a.cpp",))
+        _, cache = build(checkout, toolchain, tmp_path)
+        entry = checkout.cpp_entries[0]
+
+        rebuilt = TuCache(
+            root=checkout.path,
+            toolchain=replace(
+                toolchain,
+                version=f"Debian clang version {toolchain.release} (3+rebuild1)",
+                library=Path("/opt/rebuilt/lib/libclang.so.1"),
+            ),
+            store=store(tmp_path),
+            closures=cache.closures,
+        )
+        assert rebuilt.identity(entry) == cache.identity(entry)
+        assert rebuilt.key(entry) == cache.key(entry)
+        assert rebuilt.load(rebuilt.identity(entry), rebuilt.key(entry) or "") is not None
+
     def test_a_change_to_the_extraction_code_invalidates(
         self, tmp_path: Path, toolchain: Toolchain, monkeypatch: pytest.MonkeyPatch
     ) -> None:

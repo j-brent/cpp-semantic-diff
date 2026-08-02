@@ -22,6 +22,7 @@ unusable toolchain is a precondition failure (ARCH-001 §11).
 
 from __future__ import annotations
 
+import ctypes
 import os
 import re
 import shutil
@@ -69,6 +70,13 @@ struct cppsd_probe {
 """
 
 PROBE_ARGS = ("-x", "c++", "-std=c++17")
+
+#: Stands in for the target triple in `Toolchain.id` when the library will not report one.
+#: Recording the ignorance rather than omitting the component is the point: an identity
+#: that silently drops the target claims two hosts are interchangeable on the strength of a
+#: question nobody asked (ARCH-001 §11, §12.1). It cannot collide with a real triple, and
+#: `cppsd doctor` prints it, so the condition is visible before a cache is shared.
+UNDETERMINED_TARGET = "target-undetermined"
 
 #: `set_library_file` is process-global and rejects a second call once the library has
 #: been loaded, so the resolved toolchain is memoized rather than re-derived.
@@ -178,6 +186,69 @@ def library_version(config: ci.Config) -> str:
     return str(ci.conf.lib.clang_getCString(fn()))
 
 
+class _CXTargetInfoImpl(ctypes.Structure):
+    """Opaque to us, as it is to every C caller: only clang ever dereferences it."""
+
+
+_CXTargetInfo = ctypes.POINTER(_CXTargetInfoImpl)
+
+
+def library_target(tu: ci.TranslationUnit) -> str | None:
+    """The normalized target triple this library parsed *that TU* for, or None.
+
+    ARCH-001 §12.1 lists the target triple as a determinant of the AST second only to the
+    parser itself: it decides `sizeof`, alignment, and every `__x86_64__`-conditional
+    declaration in headers whose content is byte-identical across hosts. So the same
+    libclang release on two machines can write two different partials under one key.
+
+    Three ways to answer this and only one of them is sound.
+
+    *Enumerating architecture macros* -- probe for `__x86_64__`, then `__aarch64__`, ... --
+    is a hand-maintained list of the architectures that existed when it was written. It
+    goes stale silently against a newer clang, which is the exact shape of the exception
+    specification bug (STATUS §5): the fix there was to stop enumerating cases.
+
+    *Asking `llvm-config --host-target`* asks a sibling binary. `CPPSD_LIBCLANG` can point
+    at a library with no relationship to the `llvm-config` on PATH, and `find_scanner`
+    already establishes what to do about a tool that disagrees with the parser -- refuse
+    it, because it answers a different question. That would mean version-matching a second
+    binary to learn something the parser already knows, and `--host-target` is in any case
+    the *host* of the LLVM build, not the default target of this library.
+
+    *Asking the verified library*, which is what this does. `clang_getTranslationUnitTargetInfo`
+    has been in the stable C API since LLVM 8, far below `MINIMUM_MAJOR`; the Python
+    bindings simply do not wrap it, so it is called through the raw handle exactly as
+    `library_version` calls `clang_getClangVersion`. The answer comes from the same
+    library, the same load, and the same parse that the probe already proved clean.
+
+    Returns None rather than a guess if the symbol is absent or the call yields nothing --
+    a library that will not say what it targets has not told us it targets what we assume.
+    """
+    lib = ci.conf.lib
+    try:
+        get_info = lib.clang_getTranslationUnitTargetInfo
+        get_triple = lib.clang_TargetInfo_getTriple
+        dispose = lib.clang_TargetInfo_dispose
+    except AttributeError:  # pragma: no cover - present in every LLVM >= 8
+        return None
+
+    get_info.restype = _CXTargetInfo
+    get_info.argtypes = [ci.c_object_p]
+    get_triple.restype = ci._CXString
+    get_triple.argtypes = [_CXTargetInfo]
+    dispose.restype = None
+    dispose.argtypes = [_CXTargetInfo]
+
+    info = get_info(tu)
+    if not info:  # pragma: no cover - only on a TU that failed to load at all
+        return None
+    try:
+        triple = str(lib.clang_getCString(get_triple(info)))
+    finally:
+        dispose(info)
+    return triple or None
+
+
 def parse_release(version: str) -> str | None:
     """`18.1.3` out of `Ubuntu clang version 18.1.3 (1ubuntu1)`.
 
@@ -214,6 +285,8 @@ class Toolchain:
     version: str
     release: str
     resource_dir: Path | None = None
+    #: What the library reported for the probe parse, or None if it would not say.
+    target: str | None = None
 
     @property
     def major(self) -> int:
@@ -225,8 +298,30 @@ class Toolchain:
 
         A model built by a different parser is a different model, so this has to be
         stable, comparable, and specific enough to notice a version change.
+
+        Two components, for the two ARCH-001 §12.1 determinants that nothing else in the
+        key can see. The **release triple** identifies the parser -- and it is the release
+        rather than the library's own version string precisely so a distro rebuild that
+        changes nothing observable does not invalidate every cached model (STATUS §5). The
+        **target triple** identifies the parse: the same headers under a different target
+        yield different `sizeof`s and different conditional declarations with byte-identical
+        content digests, so without it two hosts write two models under one key.
+
+        The other four §12.1 determinants are covered by the key already and are
+        deliberately *not* repeated here. The standard library, the resource directory's
+        builtin headers, and anything `CPATH` drags in are content-hashed by
+        `TuCache.key()` as members of the `clang-scan-deps` include closure -- measured:
+        a TU including `<string>` and `<cstddef>` has a 151-file closure holding 68
+        libstdc++ headers and 14 out of clang's own resource directory. The extractor is
+        hashed by `_producer_code_digest`. A second, coarser statement of a fact the key
+        already holds by content adds no detection and one more thing to keep true.
+
+        `resource_dir` in particular must not appear here as a path. ARCH-001 §12.2 makes
+        this value something two *hosts* compare, and a path would make two genuinely
+        equivalent toolchains hard-fail on where their distribution puts things -- breaking
+        the shared base cache §9 recommends, which is the scenario §12.1 exists to protect.
         """
-        return f"libclang {self.release}"
+        return f"libclang {self.release} {self.target or UNDETERMINED_TARGET}"
 
     def parse_args(self, args: list[str]) -> list[str]:
         if self.resource_dir is None:
@@ -234,18 +329,23 @@ class Toolchain:
         return [*args, f"-resource-dir={self.resource_dir}"]
 
 
-def _probe(config: ci.Config, resource_dir: Path | None) -> list[str]:
-    """Parse a trivial builtin-dependent TU. Returns fatal diagnostics, empty if healthy."""
+def _probe(resource_dir: Path | None) -> ci.TranslationUnit:
+    """Parse a trivial builtin-dependent TU and hand the caller the result.
+
+    The TU rather than its diagnostics, because it answers two questions and only one of
+    them is "is this library usable": `library_target` reads the target off this same
+    parse, so the identity describes the library that was actually proved rather than one
+    interrogated separately afterwards.
+    """
     args = list(PROBE_ARGS)
     if resource_dir is not None:
         args.append(f"-resource-dir={resource_dir}")
     index = ci.Index.create()
-    tu = index.parse(
+    return index.parse(
         "cppsd_probe.cpp",
         args=args,
         unsaved_files=[("cppsd_probe.cpp", PROBE_SOURCE)],
     )
-    return fatal_diagnostics(tu)
 
 
 def load() -> Toolchain:
@@ -287,7 +387,8 @@ def load() -> Toolchain:
     override = os.environ.get("CPPSD_RESOURCE_DIR")
     resource_dir = Path(override) if override else None
 
-    if failures := _probe(config, resource_dir):
+    probe = _probe(resource_dir)
+    if failures := fatal_diagnostics(probe):
         raise ClangToolchainError(
             f"{library} ({version}) cannot parse the compiler's own builtin headers.\n"
             + "\n".join(f"  {f}" for f in failures[:3]),
@@ -299,10 +400,17 @@ def load() -> Toolchain:
             ),
         )
 
+    # An undeterminable target is *recorded*, not raised on. ARCH-001 §11 refuses rather
+    # than degrades, but the thing being refused there is a model that cannot be trusted,
+    # and a host whose libclang parses builtin headers cleanly produces a perfectly good
+    # model -- it just cannot prove to a second host that the two agree. Failing `doctor`
+    # for that would refuse work that is sound. So the identity says so out loud, which
+    # keeps it honest without making it fatal (ARCH-001 §12.1).
     _loaded = Toolchain(
         library=library,
         version=version,
         release=release,
         resource_dir=resource_dir,
+        target=library_target(probe),
     )
     return _loaded

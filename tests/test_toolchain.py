@@ -26,19 +26,59 @@ def test_release_rejects_unparseable() -> None:
     assert tc.parse_release("no version here") is None
 
 
+def toolchain(release: str = "18.1.3", **kw) -> tc.Toolchain:
+    defaults = {
+        "library": Path("/a"),
+        "version": f"clang version {release}",
+        "target": "x86_64-pc-linux-gnu",
+    }
+    return tc.Toolchain(release=release, **{**defaults, **kw})
+
+
 def test_producer_id_is_stable_across_repackaging() -> None:
-    """Two libclangs of the same release produce interchangeable models (ARCH-001 §9)."""
-    ubuntu = tc.Toolchain(
-        library=Path("/a"), version="Ubuntu clang 18.1.3 (1ubuntu1)", release="18.1.3"
-    )
-    debian = tc.Toolchain(library=Path("/b"), version="Debian clang 18.1.3 (3)", release="18.1.3")
-    assert ubuntu.id == debian.id == "libclang 18.1.3"
+    """Two libclangs of the same release produce interchangeable models (ARCH-001 §9).
+
+    The distro version string is deliberately not identity: a package rebuild that changes
+    nothing a parse can observe must not invalidate every cached model (STATUS §5).
+    """
+    ubuntu = toolchain(library=Path("/a"), version="Ubuntu clang 18.1.3 (1ubuntu1)")
+    debian = toolchain(library=Path("/b"), version="Debian clang 18.1.3 (3)")
+    assert ubuntu.id == debian.id
 
 
 def test_producer_id_changes_with_release() -> None:
-    old = tc.Toolchain(library=Path("/a"), version="clang 18.1.3", release="18.1.3")
-    new = tc.Toolchain(library=Path("/a"), version="clang 19.1.0", release="19.1.0")
-    assert old.id != new.id
+    assert toolchain("18.1.3").id != toolchain("19.1.0").id
+
+
+def test_producer_id_changes_with_target() -> None:
+    """ARCH-001 §12.1: the target decides `sizeof`, alignment and every
+    `__x86_64__`-conditional declaration, and it is the one determinant the content
+    digests cannot see -- the headers are byte-identical on both hosts."""
+    x86 = toolchain(target="x86_64-pc-linux-gnu")
+    arm = toolchain(target="aarch64-unknown-linux-gnu")
+    assert x86.id != arm.id
+
+
+def test_producer_id_says_so_when_the_target_is_unknown() -> None:
+    """Recorded, not omitted. An identity that silently drops the target claims two hosts
+    are interchangeable on the strength of a question nobody asked (ARCH-001 §11)."""
+    unknown = toolchain(target=None)
+    assert tc.UNDETERMINED_TARGET in unknown.id
+    assert unknown.id != toolchain(target="x86_64-pc-linux-gnu").id
+
+
+def test_producer_id_carries_no_host_paths() -> None:
+    """ARCH-001 §12.2 makes this a value two *hosts* compare, so a host-specific path in it
+    would hard-fail two machines with genuinely equivalent toolchains -- breaking the shared
+    base cache §9 recommends. The resource directory is covered by content instead: its
+    builtin headers are members of the include closure `TuCache.key()` hashes."""
+    here = toolchain(library=Path("/usr/lib/llvm-18/lib/libclang.so.1"), resource_dir=None)
+    there = toolchain(
+        library=Path("/opt/llvm/lib/libclang.so"),
+        resource_dir=Path("/opt/llvm/lib/clang/18"),
+    )
+    assert here.id == there.id
+    assert "/" not in here.id.removeprefix("libclang ")
 
 
 def test_toolchain_error_is_a_precondition() -> None:
@@ -165,3 +205,37 @@ def test_real_toolchain_parses_builtin_headers() -> None:
     loaded = tc.load()
     assert loaded.major >= tc.MINIMUM_MAJOR
     assert loaded.id.startswith("libclang ")
+
+
+@pytest.mark.fixtures
+def test_the_library_reports_its_own_target() -> None:
+    """The target comes from the verified library, not from a sibling binary or a list.
+
+    Deliberately not asserted to be *this host's* triple: pinning `x86_64-pc-linux-gnu`
+    would fail on any other machine, which is the opposite of the point. What is asserted
+    is that the library answered at all, and that the answer looks like a triple -- so a
+    regression to `UNDETERMINED_TARGET` on a host where the symbol is right there shows up
+    as a failure rather than as a quietly weaker cache key.
+
+    A list of architecture macros would pass this test today and go stale silently against
+    a newer clang, which is why the mechanism is a question put to the library (STATUS §5,
+    "the extractor hit exactly this shape of bug").
+    """
+    if not tc.candidate_libraries():
+        pytest.skip("no system libclang on this host")
+    loaded = tc.load()
+    assert loaded.target, "libclang exports clang_TargetInfo_getTriple in every LLVM >= 8"
+    assert loaded.target.count("-") >= 2, f"{loaded.target!r} is not a target triple"
+    assert loaded.id.endswith(loaded.target)
+
+
+@pytest.mark.fixtures
+def test_the_target_is_read_off_the_parse_that_was_verified() -> None:
+    """Same library, same load, same probe TU -- so the identity describes the toolchain
+    that was proved rather than one interrogated separately afterwards."""
+    if not tc.candidate_libraries():
+        pytest.skip("no system libclang on this host")
+    loaded = tc.load()
+    probe = tc._probe(loaded.resource_dir)
+    assert tc.fatal_diagnostics(probe) == []
+    assert tc.library_target(probe) == loaded.target
