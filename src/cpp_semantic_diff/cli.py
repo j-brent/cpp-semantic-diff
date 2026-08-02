@@ -1,11 +1,20 @@
 """Command line entry point.
 
-ARCH-001 §10: JSON is the product and the terminal is a consumer. Commands here render;
-they do not analyze.
+ARCH-001 §10: JSON is the product and the terminal is a consumer. This module is argument
+handling, orchestration and error reporting; it holds no presentation and no analysis.
+
+`cppsd diff` is the shape the rest should converge on: it runs the pipeline, hands the
+stage outputs to `render.build_document`, and then either prints that document or hands it
+to `render.render`. Not one number on the page is computed here. STATUS §4 flags the older
+commands' inline `rich` tables as the wrong shape for exactly this reason; migrating them is
+a separate change, and doing it inside the one that introduces `render` would make both
+harder to review.
 """
 
 from __future__ import annotations
 
+import time
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Annotated
 
@@ -17,6 +26,11 @@ from cpp_semantic_diff import __version__
 from cpp_semantic_diff.acquire import changed_files, diff_line_count, resolve_revs
 from cpp_semantic_diff.acquire.workspace import checkout
 from cpp_semantic_diff.errors import PreconditionError
+from cpp_semantic_diff.render import DEFAULT_LIMIT
+
+#: Suffixes counted as C++ for the summary's `cpp_files_changed`. A reporting figure only --
+#: what is actually modelled is whatever the compile database lists (`Checkout.cpp_entries`).
+CPP_SUFFIXES = frozenset({".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp", ".hh", ".hxx", ".inl"})
 
 app = typer.Typer(
     name="cppsd",
@@ -38,6 +52,17 @@ HeadOpt = Annotated[str, typer.Option("--head", "-h", help="Head ref.")]
 def _fail(error: PreconditionError) -> None:
     """Precondition failures are terminal and must be actionable (ARCH-001 §11)."""
     err_console.print(f"[bold red]cannot analyze[/]\n{error}")
+    raise typer.Exit(code=2)
+
+
+def _fail_message(detail: str) -> None:
+    """The same exit for a condition that eliminates the analysis without an exception.
+
+    ARCH-001 §11 is about the *condition*, not about how it was discovered: an empty
+    comparison has no second point, and printing an empty document for it would be degraded
+    output dressed as a result.
+    """
+    err_console.print(f"[bold red]cannot analyze[/]\n{detail}")
     raise typer.Exit(code=2)
 
 
@@ -94,7 +119,7 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
 
     files = changed_files(repo, revs)
     lines = diff_line_count(repo, revs)
-    cpp = [f for f in files if Path(f).suffix.lower() in {".cpp", ".cc", ".cxx", ".h", ".hpp"}]
+    cpp = [f for f in files if Path(f).suffix.lower() in CPP_SUFFIXES]
 
     table = Table(show_header=False, box=None, pad_edge=False)
     table.add_column(style="dim")
@@ -131,6 +156,148 @@ def acquire(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None
                 )
     except PreconditionError as error:
         _fail(error)
+
+
+@app.command()
+def diff(
+    repo: RepoArg,
+    base: BaseOpt = None,
+    head: HeadOpt = "HEAD",
+    as_json: Annotated[
+        bool,
+        typer.Option("--json", help="Write the JSON document to stdout instead of the view."),
+    ] = False,
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", "-o", help="Also write the JSON document here."),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Top-level events to show. 0 shows all."),
+    ] = DEFAULT_LIMIT,
+    expand: Annotated[
+        bool,
+        typer.Option("--expand", help="Show consequences at top level instead of under causes."),
+    ] = False,
+    no_cache: Annotated[
+        bool,
+        typer.Option("--no-cache", help="Reparse every TU. What a cold measurement needs."),
+    ] = False,
+) -> None:
+    """Diff the semantic models at two revisions -- the whole pipeline (ARCH-001 §3).
+
+    Produces the versioned JSON document of §10 and, by default, renders the terminal view
+    of it. The two are the same document: `--json` changes which consumer runs, never what
+    was analyzed.
+    """
+    from cpp_semantic_diff.classify import classify_events
+    from cpp_semantic_diff.diff import diff_models
+    from cpp_semantic_diff.match import match_models
+    from cpp_semantic_diff.produce import build_model, load
+    from cpp_semantic_diff.rank import rank_events
+    from cpp_semantic_diff.render import Timings, build_document, render
+
+    # Progress goes to stderr unconditionally, so `--json` gives a clean pipe on stdout and
+    # a run that takes two minutes still says what it is doing.
+    status = err_console
+    timings = Timings()
+    started = time.perf_counter()
+
+    try:
+        # The parser is a precondition, not a dependency (ARCH-001 §12). Verified before a
+        # worktree is materialized, so a host that cannot parse fails in a second rather
+        # than after a configure.
+        toolchain = load()
+
+        revs = resolve_revs(repo, base_ref=base, head_ref=head)
+        status.print(f"[dim]comparing[/] {revs.describe()}")
+        if revs.is_empty:
+            _fail_message(
+                f"{revs.head_ref} is the merge base of {revs.base_ref}; there is no second "
+                f"point to analyze.\nCheck out the branch under review, or pass --base."
+            )
+            return
+
+        files = changed_files(repo, revs)
+        lines = diff_line_count(repo, revs)
+
+        t = time.perf_counter()
+        # Both checkouts stay open for the whole run: `Checkout` owns the worktree the
+        # compile database's paths are relative to, and the models are built from it.
+        with ExitStack() as stack:
+            base_co = stack.enter_context(checkout(repo, revs.base_sha))
+            head_co = stack.enter_context(checkout(repo, revs.head_sha))
+            timings.acquire = time.perf_counter() - t
+
+            cache = not no_cache
+            models = {}
+            for label, co, slot in (
+                ("base", base_co, "produce_base"),
+                ("head", head_co, "produce_head"),
+            ):
+                status.print(f"[dim]building {label} model[/] {len(co.cpp_entries)} TUs")
+                t = time.perf_counter()
+                models[label] = build_model(co, toolchain=toolchain, cache=cache)
+                setattr(timings, slot, time.perf_counter() - t)
+            base_model, head_model = models["base"], models["head"]
+    except PreconditionError as error:
+        _fail(error)
+        return
+
+    # From here the pipeline is pure (ARCH-001 §3): four functions over what is already in
+    # memory, each the input of the next, none of them touching the disk.
+    t = time.perf_counter()
+    # `renames` is deliberately not passed, and this is a **known gap**, not a default.
+    # ARCH-001 §5 requires file renames to be resolved from git *before* matching, because
+    # USRs for internal-linkage and anonymous-namespace entities incorporate the file path
+    # and a file rename breaks tier 1 for every one of them. `match_models` takes the map;
+    # `acquire` exposes only `changed_files` (`git diff --name-only`), which cannot carry
+    # renames, so there is nothing here to pass. Until `acquire` grows one, a review that
+    # renames a file will over-report removals and additions in exactly that population --
+    # which the view names, as `internal_linkage_residue`, rather than letting it pass as
+    # ordinary churn. Inventing a rename map here would put an identity decision in the CLI.
+    correspondence = match_models(base_model, head_model)
+    timings.match = time.perf_counter() - t
+
+    t = time.perf_counter()
+    events = diff_models(base_model, head_model, correspondence)
+    timings.diff = time.perf_counter() - t
+
+    t = time.perf_counter()
+    events = classify_events(events, base_model, head_model, correspondence)
+    timings.classify = time.perf_counter() - t
+
+    t = time.perf_counter()
+    ranking = rank_events(events, base_model, head_model)
+    timings.rank = time.perf_counter() - t
+    timings.total = time.perf_counter() - started
+
+    document = build_document(
+        repo=repo.name,
+        revs=revs,
+        base=base_model,
+        head=head_model,
+        correspondence=correspondence,
+        events=events,
+        ranking=ranking,
+        lines_changed=lines,
+        files_changed=len(files),
+        cpp_files_changed=sum(1 for f in files if Path(f).suffix.lower() in CPP_SUFFIXES),
+        timings=timings,
+    )
+
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(document.to_json(), encoding="utf-8")
+        status.print(f"[dim]wrote[/] {out}")
+
+    if as_json:
+        # `print`, not `console.print`: rich would wrap and highlight the document, and a
+        # product piped into `jq` must be bytes rather than a rendering of bytes.
+        print(document.to_json())
+        return
+
+    render(document, console, collapse_cascades=not expand, limit=limit)
 
 
 if __name__ == "__main__":
