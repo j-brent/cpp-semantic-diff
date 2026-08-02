@@ -6,31 +6,58 @@ belong*: an unrelated fix, a drive-by refactor, a behaviour change smuggled insi
 PR -- and it costs one union-find over data the stage already has.
 
 Everything turns on **what connects two events**, because the wrong answer makes the signal
-a constant. Four rules, each earning its place:
+a constant. Before the rules, the thing they are stated over:
 
-1. **The same subject.** Two events about one entity are one change. This is the rule that
-   collects the six events a single edited method can produce.
+**Every event has exactly one home entity** -- `graph.subject_home`: the subject for a node
+event, the *source* for an edge event. This is the single decision the partition turned out
+to depend on. Counting an edge event as belonging to both of its endpoints made every new
+call into an untouched callee a connection between that callee's other callers, so unrelated
+changes were welded together through entities that never changed. Measured on fmt at
+`HEAD~100`: **260 of 335 events (78 %) in one component**, held together by bundled
+googletest -- 110 of the giant component's 312 connections ran between `test/` and
+`test/gtest`, because every new `TEST_F` body calls `testing::internal::AssertHelper` and
+overrides `testing::Test::TestBody`. Homing each event on one entity drops that to
+**60 of 335 (18 %) across 30 components**, and it is the same correction `score.py` makes
+for blast radius: an edge is written in its source's text, so the source is what changed.
+
+Two rules that look like plausible fixes were measured and are *not* here, because after
+the home rule neither buys anything: suppressing high-degree hub entities as connectors
+(any cap from 3 to 20: no change to the partition) and refusing connections through vendored
+code (no change). Both were fixes for a symptom of the attribution bug.
+
+Four rules, each earning its place:
+
+1. **The same home entity.** Two events about one entity are one change. This is the rule
+   that collects the six events a single edited method can produce.
 
 2. **A `caused_by` link.** A consequence belongs with its cause (§6.3). Taken as *data*:
    classify is a separate stage and may or may not have run, and a link pointing at an
    event that is not in the list is ignored rather than treated as an error -- this stage
    must not acquire an opinion about how the list was built.
 
-3. **A dependency edge between their subjects, in either model.** `calls`, `inherits`,
-   `overrides`, `uses` -- the relations of `graph.DEPENDENCY_EDGES` minus containment. If
-   the caller changed and the callee changed, that is one change, whichever direction the
-   edge points and whichever side of the diff it survives on. Both models are read because
-   an edge deleted by the change still testifies that the two entities were related when the
-   author started.
+3. **A dependency relation between two entities that both have events.** `calls`,
+   `inherits`, `overrides`, `uses` -- the relations of `graph.DEPENDENCY_EDGES` minus
+   containment, read off either model, plus the relation an edge event asserts in its own
+   subject. If the caller changed and the callee changed, that is one change, whichever
+   direction the edge points and whichever side of the diff it survives on. Both models are
+   read because an edge deleted by the change still testifies that the two entities were
+   related when the author started.
+
+   **Both** ends must have an event of their own, and that is the whole difference from the
+   version that collapsed. `EdgeAdded(f -> g)` still lands in the same unit as an event
+   about `f` and an event about `g` -- but when `g` has no event, `g` is not evidence about
+   anything, and two call sites into it are two changes.
 
 4. **A shared class-like container, or containment itself.** Two methods of one class are
    one change. **Containment through a namespace is not a connection** and this is the rule
    the whole partition depends on: everything in fmt is inside `namespace fmt`, so admitting
    namespaces would make every review exactly one component and turn the signal off while
-   leaving it looking as though it worked.
+   leaving it looking as though it worked. Stated over homes like the rest: reading it over
+   every entity an event *mentions* let one class re-import the bridging rule 1 had just
+   given up, which is how the giant component survived the first attempt at this fix.
 
 The result is a **lower bound on connectedness**, and it will improve without changes here.
-v0 emits no `uses-in-interface` edges (§12), so two functions coupled only through a shared
+v0 emits no `uses-in-interface` edges (§13), so two functions coupled only through a shared
 type look disconnected; the honest failure direction is over-splitting, which shows a
 reviewer two units where there was one, rather than under-splitting, which hides an
 unrelated change inside a large one.
@@ -43,7 +70,12 @@ from collections import defaultdict
 from pydantic import BaseModel, ConfigDict, Field
 
 from cpp_semantic_diff.model import EdgeKind, Event, EventId, Model, NodeId
-from cpp_semantic_diff.rank.graph import DEPENDENCY_EDGES, containers, subject_endpoints
+from cpp_semantic_diff.rank.graph import (
+    DEPENDENCY_EDGES,
+    containers,
+    subject_endpoints,
+    subject_home,
+)
 
 #: Rule 3's edge set: dependency minus containment. Containment is rule 4, which has the
 #: namespace exclusion the module docstring is about; folding the two together would lose it.
@@ -94,18 +126,24 @@ class _Union:
 
 
 def partition(events: list[Event], base: Model, head: Model) -> dict[EventId, EventId]:
-    """Event id -> the id of its component's representative. The four rules, in order."""
+    """Event id -> the id of its component's representative. The four rules, in order.
+
+    Order-independent by construction: `_Union.join` always roots a merged set at its
+    smallest id, so the representative of a set is the minimum id in it whatever sequence
+    the rules fired in. §10 makes the JSON the product, and a partition that reshuffled
+    would make every diff of the output meaningless.
+    """
     ids = [e.id for e in events]
     union = _Union(ids)
     by_id = {e.id: e for e in events}
 
-    # Rule 1: the same subject entity. An edge subject contributes both endpoints, which is
-    # what puts `EdgeAdded(f -> g)` in the same unit as an event about f and one about g.
-    by_node: dict[NodeId, list[EventId]] = defaultdict(list)
+    # Rule 1: one home entity per event (`graph.subject_home`), and events sharing it are
+    # one change. An edge event is homed on its source, never on both endpoints -- see the
+    # module docstring for the 78 %-in-one-component this cost.
+    at_home: dict[NodeId, list[EventId]] = defaultdict(list)
     for event in events:
-        for node_id in subject_endpoints(event.subject):
-            by_node[node_id].append(event.id)
-    for group in by_node.values():
+        at_home[subject_home(event.subject)].append(event.id)
+    for group in at_home.values():
         _join_all(union, group)
 
     # Rule 2: cause links, as data. A dangling link is ignored, not raised on.
@@ -113,14 +151,22 @@ def partition(events: list[Event], base: Model, head: Model) -> dict[EventId, Ev
         if event.caused_by is not None and event.caused_by in by_id:
             union.join(event.id, event.caused_by)
 
-    # Rule 3: a dependency edge relating two touched entities, on either side.
+    # Rule 3: a dependency relation between two entities that *both* have events. Asserted
+    # either by an edge event's own subject or by an edge in either model; the two are the
+    # same relation reaching this stage by different routes, so they are read the same way.
+    def connect(a: NodeId, b: NodeId) -> None:
+        left, right = at_home.get(a), at_home.get(b)
+        if left and right:
+            union.join(left[0], right[0])
+
+    for event in events:
+        endpoints = subject_endpoints(event.subject)
+        if len(endpoints) == 2:
+            connect(*endpoints)
     for model in (base, head):
         for edge in model.edges:
-            if edge.kind not in CONNECTING_EDGES:
-                continue
-            src, dst = by_node.get(edge.src), by_node.get(edge.dst)
-            if src and dst:
-                union.join(src[0], dst[0])
+            if edge.kind in CONNECTING_EDGES:
+                connect(edge.src, edge.dst)
 
     # Rule 4: containment, class-like containers only. Both directions matter: a member and
     # its class are one change, and two members of one class are one change even when the
@@ -128,12 +174,12 @@ def partition(events: list[Event], base: Model, head: Model) -> dict[EventId, Ev
     for model in (base, head):
         parents = containers(model, coupling_only=True)
         siblings: dict[NodeId, list[EventId]] = defaultdict(list)
-        for node_id, group in by_node.items():
+        for node_id, group in at_home.items():
             parent = parents.get(node_id)
             if parent is None:
                 continue
             siblings[parent].extend(group)
-            if owner := by_node.get(parent):
+            if owner := at_home.get(parent):
                 union.join(group[0], owner[0])
         for group in siblings.values():
             _join_all(union, group)

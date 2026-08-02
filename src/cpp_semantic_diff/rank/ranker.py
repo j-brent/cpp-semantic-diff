@@ -46,7 +46,13 @@ class Ranking(BaseModel):
 
     @property
     def high_risk_count(self) -> int:
-        """The `summary.high_risk_count` of §10; the threshold lives in `weights.py`."""
+        """The `summary.high_risk_count` of §10; the threshold lives in `weights.py`.
+
+        **What the number means, in one sentence:** the count of events whose measured
+        consequences -- blast radius, exposure and the kind of change -- clear the high-risk
+        threshold on their own, with the tool's uncertainty about the match kept out of the
+        count even though it is kept in the order (`RiskScore.is_high_risk`).
+        """
         return sum(1 for s in self.scores if s.is_high_risk)
 
     def score_for(self, event_id: EventId) -> RiskScore:
@@ -56,18 +62,97 @@ class Ranking(BaseModel):
         raise KeyError(f"no score for {event_id}")
 
 
+def _cause_depth(events: Sequence[Event]) -> dict[EventId, int]:
+    """How far down a cascade each event sits: 0 for a cause or an unlinked event.
+
+    Used only as a tie-break. `_bound_by_cause` can leave a consequence scoring *exactly*
+    what its cause scores, and at equal totals the id decides -- which would put the
+    consequence first half the time and undo the fix in the one place a reviewer sees it.
+    Depth says the obvious thing instead: at equal risk, read the cause before the thing it
+    caused.
+    """
+    cause_of = {e.id: e.caused_by for e in events if e.caused_by is not None}
+    known = {e.id for e in events}
+    depth: dict[EventId, int] = {}
+
+    def resolve(event_id: EventId, guard: frozenset[EventId]) -> int:
+        if event_id in depth:
+            return depth[event_id]
+        cause = cause_of.get(event_id)
+        # A link out of the list is ignored, not raised on -- the same rule `components.py`
+        # applies, and for the same reason: rank must hold no opinion about how the list was
+        # assembled. `guard` covers a cycle, which classify should not produce and which
+        # would otherwise recurse until the interpreter stopped.
+        result = (
+            0
+            if cause is None or cause not in known or cause in guard
+            else 1 + resolve(cause, guard | {event_id})
+        )
+        depth[event_id] = result
+        return result
+
+    for event in events:
+        resolve(event.id, frozenset({event.id}))
+    return depth
+
+
+def _bound_by_cause(scores: list[RiskScore], events: Sequence[Event]) -> list[RiskScore]:
+    """No consequence outscores its cause (ARCH-001 §6.3, §7).
+
+    §6.3 says a rename with 200 call-edge consequences is *one* event with 200
+    consequences, and RESEARCH-002 §4 says the ordering is the product's core claim. An
+    event classify has already labelled as a consequence therefore cannot be the reason a
+    reviewer starts reading: the cause is. Scoring is per-event by design (`score_event`
+    cannot see the list), so the relation is applied here, over the set.
+
+    A cap rather than a re-derivation, and both halves matter. The cap only ever moves a
+    score *down*, so it cannot manufacture importance; and it is recorded in `bounded_by`,
+    so a total that is no longer the sum of its own factors says which event explains it.
+
+    Taken as **data**, exactly as `components.py` takes it: `caused_by` may be unpopulated,
+    because classify is a separate stage that may not have run, and a link pointing outside
+    the list is ignored rather than raised on. Nothing here fires when `caused_by` is empty,
+    which is why `_blast_radius` had to be fixed independently rather than relying on this.
+    """
+    cause_of = {e.id: e.caused_by for e in events if e.caused_by is not None}
+    by_id = {s.event_id: s for s in scores}
+    bounded: dict[EventId, RiskScore] = {}
+
+    def resolve(event_id: EventId, guard: frozenset[EventId]) -> RiskScore:
+        if event_id in bounded:
+            return bounded[event_id]
+        score = by_id[event_id]
+        cause_id = cause_of.get(event_id)
+        if cause_id is not None and cause_id in by_id and cause_id not in guard:
+            cause = resolve(cause_id, guard | {event_id})
+            if cause.total < score.total or cause.impact < score.impact:
+                score = score.model_copy(
+                    update={
+                        "total": min(score.total, cause.total),
+                        "impact": min(score.impact, cause.impact),
+                        "bounded_by": cause_id,
+                    }
+                )
+        bounded[event_id] = score
+        return score
+
+    return [resolve(s.event_id, frozenset({s.event_id})) for s in scores]
+
+
 def rank_events(events: Sequence[Event], base: Model, head: Model) -> Ranking:
     """Order the delta by risk and partition it into independent changes.
 
-    Ties break on the event id, which is content-derived (`events.py`) and therefore stable
-    across runs. Sorting on the score alone would leave the order of equally-risky events --
-    the common case, since novelty and exposure are drawn from small tables -- decided by
-    whatever order the diff stage happened to emit them in.
+    Ties break on the cascade depth and then the event id, which is content-derived
+    (`events.py`) and therefore stable across runs. Sorting on the score alone would leave
+    the order of equally-risky events -- the common case, since novelty and exposure are
+    drawn from small tables -- decided by whatever order the diff stage happened to emit
+    them in.
     """
     ctx = ScoringContext.of(base, head)
-    scored = [score_event(event, ctx) for event in events]
+    scored = _bound_by_cause([score_event(event, ctx) for event in events], events)
 
-    scored.sort(key=lambda s: (-s.total, s.event_id))
+    depth = _cause_depth(events)
+    scored.sort(key=lambda s: (-s.total, depth[s.event_id], s.event_id))
     order = [s.event_id for s in scored]
     totals = {s.event_id: s.total for s in scored}
 

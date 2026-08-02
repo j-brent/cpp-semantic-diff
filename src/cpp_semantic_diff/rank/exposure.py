@@ -21,7 +21,7 @@ limitation and it is stated rather than hidden. The model carries `Node.location
 `Node.tu` is declared in the IR and the current producer never populates it, so it is not
 available to key on. The `target` node kind and `includes` edges in §4.2 -- which is what
 would let this be answered from the build system instead of from directory names -- are
-outside v0's extraction scope (§12). Directory convention is what is left.
+outside v0's extraction scope (§13). Directory convention is what is left.
 
 **Failure modes, plainly.**
 
@@ -37,7 +37,7 @@ outside v0's extraction scope (§12). Directory convention is what is left.
   dropped in at the top level -- is not detected at all and is scored as first-party.
 - *An entity declared in a public header and defined only in a `.cpp`* is INTERNAL unless a
   `contains` edge lifts it, because the model has no `declares`/`defines` edges to join the
-  two (§4.2, out of scope in §12). Header-only and template-heavy libraries are unaffected;
+  two (§4.2, out of scope in §13). Header-only and template-heavy libraries are unaffected;
   a classically split library under-ranks its own implementation files.
 - *Containment promotion runs through class-like containers only.* A namespace is reopened
   per file and the deduped node keeps one arbitrary location, so promoting through it would

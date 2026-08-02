@@ -13,13 +13,15 @@ Two properties are deliberate and worth preserving through any retune:
 **The factor weights sum to 1 and every factor value is normalized to [0, 1].** So a total
 is in [0, 1], comparable between runs and between repositories, and a threshold like
 `HIGH_RISK` means the same thing everywhere. `summary.high_risk_count` (§10) prints on every
-run; it cannot be a count against a scale that moves.
+run; it cannot be a count against a scale that moves. `IMPACT_FACTORS` is a subset of the
+weights rather than a second scale for the same reason -- it is rescaled by its own weight
+sum so that one threshold serves both.
 
 **Uncertainty is weighted lowest, and that is not a hedge.** ARCH-001 §7 is explicit that a
 low-confidence event ranks *up* -- uncertainty is a reason for a human to look. It is not a
 claim that uncertainty is the largest risk. Weighted at parity with blast radius it would
 put every unmatched leaf above every widely-called change, because in v0 (tier 1 only,
-§12) *every* add and remove is untiered. It belongs where it is: enough to break a tie
+§13) *every* add and remove is untiered. It belongs where it is: enough to break a tie
 toward looking, not enough to reorder the page.
 """
 
@@ -59,7 +61,30 @@ FACTOR_WEIGHTS: dict[str, float] = {
     "uncertainty": W_UNCERTAINTY,
 }
 
-#: Totals at or above this are what `summary.high_risk_count` (ARCH-001 §10) counts.
+#: The three factors that measure **the change**, as opposed to our knowledge of it. Every
+#: factor orders the page; only these three decide whether an event is counted as high risk
+#: (`RiskScore.is_high_risk`, which carries the argument).
+#:
+#: The reason is that a fixed threshold on a sum only means something if every term in the
+#: sum can discriminate, and in v0 one of them cannot. Tier-1-only identity (§13) makes
+#: *every* add and remove unmatched residue, so `UNCERTAINTY_BY_TIER[None]` applies to that
+#: whole population at once: not a measurement, a constant offset -- and at 0.15 it is
+#: exactly the offset that lifts a public addition with zero dependents from 0.4625 to
+#: 0.6125 and over the line. Measured on fmt at `HEAD~100`: 133 of 335 events (40 %)
+#: "high risk", 111 of them edge events. A number that says "40 % of this diff is
+#: dangerous" when it means "40 % of this diff is new" is worse than no number, and §10
+#: prints it on every run.
+IMPACT_FACTORS: frozenset[str] = frozenset({"blast_radius", "exposure", "novelty"})
+
+#: What `IMPACT_FACTORS` sums to, so the subtotal can be rescaled into [0, 1] and compared
+#: against the same `HIGH_RISK` as a total. Derived rather than written down: a retune that
+#: moves `W_UNCERTAINTY` must not silently move what "high risk" means.
+IMPACT_WEIGHT: float = sum(FACTOR_WEIGHTS[name] for name in IMPACT_FACTORS)
+
+#: Where `summary.high_risk_count` (ARCH-001 §10) draws its line -- on `RiskScore.impact`,
+#: not on `total`. Unchanged from the value the totals were calibrated against, because the
+#: defect was never this number: `impact` restores the property the number needs, which is
+#: that every term feeding it varies with the event.
 HIGH_RISK = 0.6
 
 # --------------------------------------------------------------------------------------
@@ -113,7 +138,7 @@ EXPOSURE_WEIGHT: dict[Exposure, float] = {
 #: weighting them like node events would let one edited function fill the page with its own
 #: call churn.
 #:
-#: The derived kinds (§6.1) are weighted high and none of them can fire in v0 (§12). They
+#: The derived kinds (§6.1) are weighted high and none of them can fire in v0 (§13). They
 #: are computed conclusions rather than observations: an event that says "this became
 #: unreachable" has already done the reasoning a reviewer would otherwise have to do.
 NOVELTY_BY_KIND: dict[EventKind, float] = {
@@ -128,6 +153,14 @@ NOVELTY_BY_KIND: dict[EventKind, float] = {
     EventKind.EDGE_ADDED: 0.35,
     EventKind.EDGE_RETARGETED: 0.50,
     EventKind.EDGE_KIND_CHANGED: 0.50,
+    # Above add/remove of an edge and level with `EdgeKindChanged`, for the reason
+    # `diff/edges.py` gives: between two entities whose identity is already settled, a
+    # relation that changed *state* is a specific semantic claim, where an edge that merely
+    # appeared is usually the shadow of a body change already in the list. Deliberately not
+    # refined by `NOVELTY_BY_ATTR`: that table is calibrated for entity attributes, and the
+    # edge attribute vocabulary is not settled yet -- reusing it would put `access` on an
+    # `inherits` edge above a removed public function on the strength of a shared key name.
+    EventKind.EDGE_ATTR_CHANGED: 0.50,
     EventKind.BECAME_UNREACHABLE: 0.80,
     EventKind.BECAME_REACHABLE: 0.55,
     EventKind.CYCLE_INTRODUCED: 0.90,
@@ -185,7 +218,7 @@ NOVELTY_BY_ATTR: dict[str, float] = {
 #: weaker claim is more worth a human's eye, not less.
 #:
 #: `None` -- unmatched residue -- is the maximum. It is also, in v0, every add, every remove
-#: and every rename (§12), which is precisely the population the tool is least sure about
+#: and every rename (§13), which is precisely the population the tool is least sure about
 #: and STATUS §6 wants measured rather than hidden.
 UNCERTAINTY_BY_TIER: dict[MatchTier | None, float] = {
     None: 1.00,

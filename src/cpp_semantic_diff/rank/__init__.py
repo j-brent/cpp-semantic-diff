@@ -7,7 +7,12 @@ conventions that decide what is library code and what is bundled test code.
 
 from cpp_semantic_diff.rank.components import Component, partition
 from cpp_semantic_diff.rank.exposure import Exposure, classify_path, exposure_map
-from cpp_semantic_diff.rank.graph import BlastGraph, BlastResult, subject_endpoints
+from cpp_semantic_diff.rank.graph import (
+    BlastGraph,
+    BlastResult,
+    subject_endpoints,
+    subject_home,
+)
 from cpp_semantic_diff.rank.ranker import HIGH_RISK, Ranking, rank_events
 from cpp_semantic_diff.rank.score import (
     Factor,
@@ -34,4 +39,5 @@ __all__ = [
     "rank_events",
     "score_event",
     "subject_endpoints",
+    "subject_home",
 ]

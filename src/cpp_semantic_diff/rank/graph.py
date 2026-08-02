@@ -21,7 +21,7 @@ it per event would put the §9 budget out of reach for no gain -- everything pas
 walk, because nothing downstream needs to know *which* four hundred entities depend on the
 subject, and carrying it would put an O(events x graph) structure in the output document.
 
-`networkx` is the declared graph library (ARCH-001 §12). It is not used here: both walks
+`networkx` is the declared graph library (ARCH-001 §13). It is not used here: both walks
 below need per-edge-kind direction rules and a visit cap that its traversal APIs do not
 express, and its set-returning results would have to be re-sorted for determinism anyway.
 It stays the right answer for the algorithms §6.1's derived events will need.
@@ -39,7 +39,7 @@ from cpp_semantic_diff.model import AnyId, Edge, EdgeKind, Model, NodeId, NodeKi
 #: (kind, reversed?) where reversed? says the *dependent* is the edge's `src`.
 #:
 #: ARCH-001 §7 names `calls` + `contains` + `uses`. Both `uses` kinds are in the enum and
-#: the v0 producer emits neither (§12 scopes extraction to contains/calls/inherits/
+#: the v0 producer emits neither (§13 scopes extraction to contains/calls/inherits/
 #: overrides), so the `uses` term contributes nothing today. They are listed anyway so the
 #: factor strengthens on its own the day the producer emits them, rather than needing this
 #: table found and edited.
@@ -92,6 +92,33 @@ def subject_endpoints(subject: AnyId) -> tuple[NodeId, ...]:
     if len(parts) == 3 and parts[1] in _EDGE_KIND_VALUES:
         return (NodeId(parts[0]), NodeId(parts[2]))
     return (NodeId(subject),)
+
+
+def subject_home(subject: AnyId) -> NodeId:
+    """The **one** entity an event is about. A node is itself; an edge is its source.
+
+    ARCH-001 §6.2 gives an event one subject, but an edge subject names two entities, and
+    every consumer that treats both as "what changed" makes the same two mistakes. Blast
+    radius attributes a new call `A -> B` to whichever of A and B more of the codebase can
+    reach, so a new call into a popular utility inherits the *utility's* fan-in -- and the
+    utility did not change. Decomposition counts the event as belonging to both, so two
+    unrelated call sites into one untouched callee become one change; on fmt at `HEAD~100`
+    that welded 260 of 335 events into a single component through bundled googletest.
+
+    The source is the answer, and it is the answer classify already gives. `rules.py`'s
+    `_removed_endpoints` picks the source over the destination because *an edge is written
+    in its source's text*: the call site is in the caller's body, the base clause is in the
+    derived class, the containment is the container's braces -- and `diff/context.py` puts
+    exactly those lines in the event's provenance. So the source is the entity whose text
+    changed, which makes it the entity whose behaviour changed and the one a reviewer
+    following provenance lands in.
+
+    This is a claim about **attribution**, not about relatedness. That `A` now calls `B` is
+    still a relation between them, and `components.py` rule 3 reads it as one -- but only
+    when `B` has an event of its own, which is what stops an untouched callee from acting
+    as a hub.
+    """
+    return subject_endpoints(subject)[0]
 
 
 def containers(model: Model, *, coupling_only: bool = False) -> dict[NodeId, NodeId]:

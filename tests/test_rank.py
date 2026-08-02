@@ -42,6 +42,7 @@ from cpp_semantic_diff.rank import (
     classify_path,
     exposure_map,
     rank_events,
+    subject_home,
 )
 from cpp_semantic_diff.rank import weights as w
 
@@ -88,6 +89,24 @@ def body(subject: str, confidence: Confidence = SURE) -> Event:
     return event(EventKind.NODE_BODY_CHANGED, subject, confidence)
 
 
+def edge_event(
+    src: str,
+    dst: str,
+    kind: EventKind = EventKind.EDGE_ADDED,
+    *,
+    edge_kind: EdgeKind = EdgeKind.CALLS,
+    confidence: Confidence = RESIDUE,
+    caused_by: Event | None = None,
+) -> Event:
+    """An event whose subject is an edge id -- `src|kind|dst` (ARCH-001 §4.2)."""
+    return Event(
+        kind=kind,
+        subject=f"{src}|{edge_kind.value}|{dst}",
+        caused_by=caused_by.id if caused_by is not None else None,
+        confidence=confidence,
+    )
+
+
 def rank(events: list[Event], base: Model | None = None, head: Model | None = None) -> Ranking:
     return rank_events(events, base or model("a"), head or model("b"))
 
@@ -130,7 +149,7 @@ class TestUncertaintyRanksUpNotDown:
         assert outranks(ranking, doubtful, certain)
 
     def test_unmatched_residue_outranks_every_tier(self) -> None:
-        """None is the maximum, not a missing value. In v0 (tier 1 only, §12) it is also
+        """None is the maximum, not a missing value. In v0 (tier 1 only, §13) it is also
         every add, remove and rename -- the population STATUS §6 wants measured."""
         events = [
             body("c:@F@f#", SURE),
@@ -191,7 +210,7 @@ class TestBlastRadiusIsWhatMakesThisWorthBuilding:
 
     def test_inheritance_propagates_a_change_the_way_calls_do(self) -> None:
         """ARCH-001 §7 names `calls` + `contains` + `uses`. The v0 producer emits no `uses`
-        edges at all (§12) and does emit `inherits`, which propagates change with no
+        edges at all (§13) and does emit `inherits`, which propagates change with no
         interpretation required: touch a base class and every derived class is touched."""
         derived = [node(f"c:@S@D{i}", kind=NodeKind.CLASS) for i in range(6)]
         head = model(
@@ -254,6 +273,146 @@ class TestBlastRadiusIsWhatMakesThisWorthBuilding:
         score = rank([removed], base, model("b")).score_for(removed.id)
         detail = score.factor(FactorName.BLAST_RADIUS).detail
         assert "9 dependent(s)" in detail and "base model" in detail
+
+
+class TestAnEdgeEventIsAboutItsSourceNotItsBusiestEndpoint:
+    """The bug the first real run found, and the one that mattered most.
+
+    Blast radius took the *larger* of an edge subject's two endpoint radii, so a new call
+    into a popular utility inherited the utility's fan-in. On fmt at `HEAD~100` that put ten
+    `EdgeAdded` events between 0.84 and 0.57 *above* the `NodeAdded(fmt::v12::vprintln)` at
+    0.70 that caused them, with the risk attributed to `detail::buffer::size` -- an entity
+    that did not change and is not in the diff. 174 of 279 cause-linked events outranked
+    their cause.
+
+    ARCH-001 §7's question is "how much of the codebase does this change put at risk", and
+    for `EdgeAdded(A -> B)` the thing that changed is A's behaviour. `graph.subject_home`
+    answers with the source, which is the same answer `classify/rules.py` already gives when
+    it picks a cause: an edge is written in its source's text.
+    """
+
+    def graph(self) -> Model:
+        """One popular utility, one leaf that gains a call into it."""
+        callers = [node(f"c:@F@c{i}#", file=LIB_SOURCE) for i in range(20)]
+        return model(
+            "m",
+            node("c:@F@hot#", file=PUBLIC),
+            node("c:@F@newcomer#", file=LIB_SOURCE),
+            *callers,
+            edges=[
+                *[edge(c.id, "c:@F@hot#") for c in callers],
+                edge("c:@F@newcomer#", "c:@F@hot#"),
+            ],
+        )
+
+    def test_a_new_call_does_not_inherit_the_callees_fan_in(self) -> None:
+        head = self.graph()
+        call = edge_event("c:@F@newcomer#", "c:@F@hot#")
+        detail = rank([call], head, head).score_for(call.id).factor(FactorName.BLAST_RADIUS).detail
+        # The caller is a leaf; the callee has 21 dependents. Reporting the callee's number
+        # would be attributing the utility's exposure to a change that did not touch it.
+        assert detail.startswith("0 dependent(s)"), detail
+
+    def test_the_entity_that_changed_outranks_the_edge_that_records_it(self) -> None:
+        """Even with no `caused_by` link at all -- rank must not depend on classify."""
+        head = self.graph()
+        changed = event(EventKind.NODE_ADDED, "c:@F@newcomer#", RESIDUE)
+        call = edge_event("c:@F@newcomer#", "c:@F@hot#")
+        assert call.caused_by is None
+        assert outranks(rank([changed, call], head, head), changed, call)
+
+    def test_the_home_of_a_node_subject_is_the_node_itself(self) -> None:
+        assert subject_home("c:@F@f#") == "c:@F@f#"
+        assert subject_home("c:@F@f#|calls|c:@F@g#") == "c:@F@f#"
+
+
+class TestAConsequenceNeverOutranksItsCause:
+    """ARCH-001 §6.3 says a change with 200 consequences is one event with 200
+    consequences, and RESEARCH-002 §4 says the ordering is the product's core claim. So an
+    event classify has already labelled a consequence cannot be the reason a reviewer starts
+    reading -- the cause is.
+
+    `_blast_radius` fixes the attribution; this bounds what is left. The two are separate on
+    purpose: this one fires only when classify has run, and the other has to work when it
+    has not.
+    """
+
+    def side(self) -> Model:
+        """The real shape: a new test body that calls into public API."""
+        return model(
+            "m",
+            node("c:@S@Test@F@TestBody#", file="test/format-test.cc", kind=NodeKind.METHOD),
+            node("c:@F@format#", file=PUBLIC),
+            edges=[edge("c:@S@Test@F@TestBody#", "c:@F@format#")],
+        )
+
+    def cascade(self) -> tuple[Event, Event]:
+        cause = event(EventKind.NODE_ADDED, "c:@S@Test@F@TestBody#", RESIDUE)
+        return cause, edge_event("c:@S@Test@F@TestBody#", "c:@F@format#", caused_by=cause)
+
+    def test_the_cause_is_read_first(self) -> None:
+        cause, effect = self.cascade()
+        assert outranks(rank([cause, effect], self.side(), self.side()), cause, effect)
+
+    def test_the_bound_says_which_event_explains_it(self) -> None:
+        """A total that is no longer the sum of its own factors has to name the reason;
+        the score is the product's explanation of itself (`score.py`)."""
+        cause, effect = self.cascade()
+        ranking = rank([cause, effect], self.side(), self.side())
+        assert ranking.score_for(effect.id).bounded_by == cause.id
+        assert ranking.score_for(cause.id).bounded_by is None
+
+    def test_the_bound_only_ever_lowers_a_score(self) -> None:
+        """It must not be able to manufacture importance: a consequence of a big change is
+        not thereby a big change."""
+        cause, effect = self.cascade()
+        ranking = rank([cause, effect], self.side(), self.side())
+        for score in ranking.scores:
+            assert score.total <= sum(f.contribution for f in score.factors) + 1e-9
+
+    def test_an_unbounded_score_is_still_exactly_the_sum_of_its_factors(self) -> None:
+        cause, _ = self.cascade()
+        score = rank([cause], self.side(), self.side()).score_for(cause.id)
+        assert score.total == pytest.approx(sum(f.contribution for f in score.factors))
+
+    def test_the_bound_follows_the_chain_not_just_one_link(self) -> None:
+        """§6.3's cascades nest -- a method links to its class, the class to its namespace --
+        so a consequence two links down is still bounded by the event at the top."""
+        head = model(
+            "m",
+            node("c:@S@C", file=LIB_SOURCE, kind=NodeKind.CLASS),
+            node("c:@S@C@F@m#", file=LIB_SOURCE, kind=NodeKind.METHOD),
+            node("c:@F@format#", file=PUBLIC),
+            edges=[
+                edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS),
+                edge("c:@S@C@F@m#", "c:@F@format#"),
+            ],
+        )
+        root = event(EventKind.NODE_ADDED, "c:@S@C", RESIDUE)
+        middle = Event(
+            kind=EventKind.NODE_ADDED,
+            subject=NodeId("c:@S@C@F@m#"),
+            caused_by=root.id,
+            confidence=RESIDUE,
+        )
+        leaf = edge_event("c:@S@C@F@m#", "c:@F@format#", caused_by=middle)
+        ranking = rank([root, middle, leaf], head, head)
+        assert ranking.order == [root.id, middle.id, leaf.id]
+        assert ranking.score_for(leaf.id).total <= ranking.score_for(root.id).total
+
+    def test_a_cause_link_pointing_outside_the_list_bounds_nothing(self) -> None:
+        """The same rule `components.py` applies: rank holds no opinion about how the list
+        was assembled, so a dangling link is ignored rather than raised on."""
+        head = model("m", node("c:@F@f#", file=PUBLIC))
+        dangling = Event(
+            kind=EventKind.NODE_BODY_CHANGED,
+            subject=NodeId("c:@F@f#"),
+            caused_by="NodeAdded:deadbeefdeadbeef",
+            confidence=SURE,
+        )
+        score = rank([dangling], head, head).score_for(dangling.id)
+        assert score.bounded_by is None
+        assert score.total == pytest.approx(sum(f.contribution for f in score.factors))
 
 
 class TestNoveltyPrefersStructureOverBodies:
@@ -416,7 +575,7 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
     ) -> None:
         """The heuristic is directory convention and nothing else -- the model carries no
         install rules, no target interfaces and no `includes` edges (§4.2 declares them,
-        §12 puts them out of v0). These are the layouts it is calibrated for; anything else
+        §13 puts them out of v0). These are the layouts it is calibrated for; anything else
         is the documented failure mode in `exposure.py`, not a silent misread."""
         assert classify_path(path) is expected
 
@@ -544,6 +703,82 @@ class TestThreeDisconnectedChangesAreThreeChanges:
         )
         assert len(rank([body("c:@F@a1#"), dangling], head, head).components) == 2
 
+    def hub(self) -> Model:
+        """One untouched utility that two unrelated new functions both start calling.
+
+        The measured shape. On fmt at `HEAD~100`, 110 of the giant component's 312
+        connections ran between `test/` and vendored `test/gtest`, because every new
+        `TEST_F` body calls `testing::internal::AssertHelper` and overrides
+        `testing::Test::TestBody` -- so twenty independent test additions across eight files
+        arrived as one change.
+        """
+        return model(
+            "m",
+            node("c:@F@util#", file=PUBLIC),
+            node("c:@F@a#", file=LIB_SOURCE),
+            node("c:@F@b#", file=LIB_SOURCE),
+            edges=[edge("c:@F@a#", "c:@F@util#"), edge("c:@F@b#", "c:@F@util#")],
+        )
+
+    def test_two_new_calls_into_one_unchanged_utility_are_two_changes(self) -> None:
+        """The rule the whole partition depended on and did not have. An entity with no
+        event of its own did not change; that two changes both reach it is a fact about the
+        utility, not evidence that they are one change. 260 of 335 events (78 %) landed in
+        one component on fmt at `HEAD~100` for want of this, and the numbers said so while
+        the output still looked like a partition."""
+        head = self.hub()
+        events = [
+            edge_event("c:@F@a#", "c:@F@util#"),
+            edge_event("c:@F@b#", "c:@F@util#"),
+        ]
+        assert len(rank(events, head, head).components) == 2
+
+    def test_but_a_utility_that_also_changed_still_joins_them(self) -> None:
+        """The other half, and the reason the rule is "both ends have an event" rather than
+        "edge events only count for their source". If the callee changed too, the caller and
+        the callee are one change -- which is what makes a shared-utility edit read as one
+        unit instead of N call sites."""
+        head = self.hub()
+        events = [
+            edge_event("c:@F@a#", "c:@F@util#"),
+            edge_event("c:@F@b#", "c:@F@util#"),
+            body("c:@F@util#"),
+        ]
+        assert len(rank(events, head, head).components) == 1
+
+    def test_an_edge_event_lands_with_the_entity_whose_text_changed(self) -> None:
+        """`EdgeAdded(f -> g)` is a change to f. It groups with f's other events whether or
+        not g has any."""
+        head = self.hub()
+        events = [edge_event("c:@F@a#", "c:@F@util#"), body("c:@F@a#")]
+        assert len(rank(events, head, head).components) == 1
+
+    def test_a_shared_class_does_not_re_import_the_bridging(self) -> None:
+        """Rule 4 reads the same one home entity per event as the rest. Reading it over
+        every entity an event *mentions* let one class carry back exactly the connection
+        rule 1 had just given up -- which is how the giant component survived the first
+        attempt at this fix, dropping from 245 events to 89 at rule 3 and back to 245 at
+        rule 4."""
+        head = model(
+            "m",
+            node("c:@S@Util", file=PUBLIC, kind=NodeKind.CLASS),
+            node("c:@S@Util@F@m#", file=PUBLIC, kind=NodeKind.METHOD),
+            node("c:@S@Util@F@n#", file=PUBLIC, kind=NodeKind.METHOD),
+            node("c:@F@a#", file=LIB_SOURCE),
+            node("c:@F@b#", file=LIB_SOURCE),
+            edges=[
+                edge("c:@S@Util", "c:@S@Util@F@m#", EdgeKind.CONTAINS),
+                edge("c:@S@Util", "c:@S@Util@F@n#", EdgeKind.CONTAINS),
+                edge("c:@F@a#", "c:@S@Util@F@m#"),
+                edge("c:@F@b#", "c:@S@Util@F@n#"),
+            ],
+        )
+        events = [
+            edge_event("c:@F@a#", "c:@S@Util@F@m#"),
+            edge_event("c:@F@b#", "c:@S@Util@F@n#"),
+        ]
+        assert len(rank(events, head, head).components) == 2
+
     def test_components_are_numbered_by_risk_so_the_first_one_is_read_first(self) -> None:
         head = model("m", node("c:@F@a1#", file=VENDORED), node("c:@F@c1#", file=PUBLIC))
         low, high = body("c:@F@a1#"), body("c:@F@c1#")
@@ -553,6 +788,84 @@ class TestThreeDisconnectedChangesAreThreeChanges:
 
 
 # -- the stage's own contract ------------------------------------------------------------
+
+
+class TestHighRiskCountsConsequencesNotNovelty:
+    """ARCH-001 §10 prints `summary.high_risk_count` on every run, so it has to be a
+    measurement. As shipped it was 133 of 335 events (40 %) on fmt at `HEAD~100`, and that
+    was structural rather than a mis-tuned threshold: in v0 (tier-1 identity only, §13)
+    *every* add and remove is unmatched residue, so the uncertainty factor sits at its
+    maximum for that whole population -- a constant 0.15 offset, not a measurement -- and it
+    is exactly what lifted a public addition with no dependents at all from 0.4625 over the
+    0.6 line. The number meant "public and new".
+
+    The fix is not to stop counting uncertainty, which §7 forbids: uncertainty still ranks
+    an event **up**, and `TestUncertaintyRanksUpNotDown` still passes unchanged. It is to
+    count high risk on `impact` -- blast radius, exposure and novelty, rescaled -- because
+    risk is a claim about consequences and our doubt about a match is not one of them.
+    """
+
+    def side(self) -> Model:
+        return model("m", node("c:@F@fresh#", file=PUBLIC), node("c:@F@other#", file=PUBLIC))
+
+    def test_a_public_addition_that_nothing_depends_on_is_not_high_risk(self) -> None:
+        """The 40 % population, one event at a time. It is worth reading -- it is at the top
+        of a small delta -- but "high risk" has to mean something a reviewer can act on."""
+        added = event(EventKind.NODE_ADDED, "c:@F@fresh#", RESIDUE)
+        score = rank([added], self.side(), self.side()).score_for(added.id)
+        assert score.factor(FactorName.BLAST_RADIUS).value == 0.0
+        assert not score.is_high_risk
+
+    def test_the_same_change_with_dependents_is_high_risk(self) -> None:
+        """The term that has to be doing the work is the one a text diff cannot compute."""
+        callers = [node(f"c:@F@c{i}#", file=LIB_SOURCE) for i in range(40)]
+        head = model(
+            "m",
+            node("c:@F@fresh#", file=PUBLIC),
+            *callers,
+            edges=[edge(c.id, "c:@F@fresh#") for c in callers],
+        )
+        added = event(EventKind.NODE_ADDED, "c:@F@fresh#", RESIDUE)
+        assert rank([added], head, head).score_for(added.id).is_high_risk
+
+    def test_the_matcher_does_not_decide_what_is_dangerous(self) -> None:
+        """The property the old threshold lacked: an event's risk must not move when a tier
+        that has nothing to do with it starts or stops running. Tiers 2-4 are a v0
+        deliverable (STATUS §6), and `high_risk_count` must not swing when they land."""
+        tiers = [None, MatchTier.SIMILARITY, MatchTier.POSITIONAL, MatchTier.DECLARED]
+        verdicts = {
+            rank(
+                [body("c:@F@fresh#", Confidence(tier=t, models_complete=True))],
+                self.side(),
+                self.side(),
+            )
+            .score_for(body("c:@F@fresh#").id)
+            .is_high_risk
+            for t in tiers
+        }
+        assert len(verdicts) == 1
+
+    def test_an_incomplete_model_does_not_inflate_the_count_either(self) -> None:
+        """§4.4's flag is global today, so it would shift every event equally -- straight
+        through a fixed threshold, turning one degraded run into a page of red."""
+        degraded = body("c:@F@fresh#", Confidence(tier=MatchTier.DECLARED, models_complete=False))
+        complete = body("c:@F@other#", Confidence(tier=MatchTier.DECLARED, models_complete=True))
+        ranking = rank([degraded, complete], self.side(), self.side())
+        # It still ranks up -- that is §7 -- and it still is not a claim about consequences.
+        assert outranks(ranking, degraded, complete)
+        assert ranking.score_for(degraded.id).is_high_risk == (
+            ranking.score_for(complete.id).is_high_risk
+        )
+
+    def test_impact_is_on_the_same_scale_as_the_total(self) -> None:
+        """One threshold serves both, so the subset has to be rescaled by its own weight sum
+        rather than compared against a number calibrated for four factors."""
+        assert pytest.approx(sum(w.FACTOR_WEIGHTS[n] for n in w.IMPACT_FACTORS)) == w.IMPACT_WEIGHT
+        assert set(w.FACTOR_WEIGHTS) > w.IMPACT_FACTORS
+        assert "uncertainty" not in w.IMPACT_FACTORS
+        head = model("m", node("c:@F@fresh#", file=PUBLIC))
+        for score in rank([body("c:@F@fresh#")], head, head).scores:
+            assert 0.0 <= score.impact <= 1.0
 
 
 class TestTheScoreIsInspectableNotAMagicNumber:

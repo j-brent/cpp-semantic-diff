@@ -30,7 +30,7 @@ from cpp_semantic_diff.model import (
 )
 from cpp_semantic_diff.rank import weights as w
 from cpp_semantic_diff.rank.exposure import EXPOSURE_ORDER, Exposure, exposure_map
-from cpp_semantic_diff.rank.graph import EMPTY_BLAST, BlastGraph, BlastResult, subject_endpoints
+from cpp_semantic_diff.rank.graph import BlastGraph, subject_endpoints, subject_home
 
 
 class FactorName(StrEnum):
@@ -65,13 +65,33 @@ class RiskScore(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     event_id: EventId
-    total: float = Field(description="Sum of the contributions, in [0, 1].")
+    total: float = Field(
+        description="Sum of the contributions, in [0, 1] -- except where `bounded_by` "
+        "names a cause, in which case it is the cause's total (see `ranker.py`)."
+    )
+    impact: float = Field(
+        default=0.0,
+        description="The three factors that measure the change itself -- blast radius, "
+        "exposure, novelty -- rescaled to their own weight sum, so it is in [0, 1] and "
+        "comparable to `total`. `total` decides the *order* and includes uncertainty, "
+        "because ARCH-001 §7 wants doubt to rank up; `impact` decides `is_high_risk`, "
+        "because a headline count of dangerous changes must not be inflated by our own "
+        "ignorance. See `weights.IMPACT_FACTORS`.",
+        ge=0.0,
+        le=1.0,
+    )
     factors: list[Factor]
     component: int = Field(
         default=0,
         description="Index of the connected component this event belongs to (ARCH-001 §7). "
         "Components are numbered by descending risk, so component 0 is the change a "
         "reviewer should read first.",
+    )
+    bounded_by: EventId | None = Field(
+        default=None,
+        description="The cause (§6.3) whose score capped this one. Recorded rather than "
+        "applied silently: `total` is otherwise the sum of the contributions, and a number "
+        "that stops being explained by its own factors has to say why.",
     )
 
     def factor(self, name: FactorName) -> Factor:
@@ -82,7 +102,23 @@ class RiskScore(BaseModel):
 
     @property
     def is_high_risk(self) -> bool:
-        return self.total >= w.HIGH_RISK
+        """ARCH-001 §10's `summary.high_risk_count`, one event at a time.
+
+        On `impact`, not on `total`, and the reason is structural rather than a retune. In
+        v0 (tier-1 identity only, §13) every add and every remove is unmatched residue, so
+        the uncertainty factor is pinned at its maximum for that whole population -- a
+        constant offset, carrying no information *within* it. Against a fixed threshold that
+        offset is decisive: a public `NodeAdded` with no dependents at all scored
+        0.25 + 0.2125 + 0.15 = 0.6125 and cleared 0.6 on the strength of being new. On fmt
+        at `HEAD~100` that made 133 of 335 events (40 %) "high risk", which is a measurement
+        of how much of the diff is new, not of how much of it is dangerous.
+
+        Dropping uncertainty from the *count* is not the inversion §7 forbids. §7's rule is
+        about attention -- uncertainty is a reason for a human to look -- and attention is
+        the ordering, which still reads all four factors. Risk is a claim about
+        consequences, and our doubt about a match is not one of them.
+        """
+        return self.impact >= w.HIGH_RISK
 
 
 @dataclass(frozen=True)
@@ -122,7 +158,13 @@ def score_event(event: Event, ctx: ScoringContext) -> RiskScore:
         _uncertainty(event.confidence),
     ]
     total = sum(f.contribution for f in factors)
-    return RiskScore(event_id=event.id, total=total, factors=factors)
+    measured = sum(f.contribution for f in factors if f.name.value in w.IMPACT_FACTORS)
+    return RiskScore(
+        event_id=event.id,
+        total=total,
+        impact=measured / w.IMPACT_WEIGHT,
+        factors=factors,
+    )
 
 
 def _factor(name: FactorName, value: float, detail: str) -> Factor:
@@ -145,38 +187,33 @@ def _blast_radius(event: Event, ctx: ScoringContext) -> Factor:
     rather than assumed, because "40 things used to depend on this" and "40 things depend on
     this" are different claims.
 
-    An edge subject is measured from both endpoints and takes the larger. An edge is a claim
-    about two entities (`diff/edges.py`), and for attention allocation the exposed one is
-    whichever of them more of the codebase can reach.
+    An edge subject is measured from its **source only** -- `graph.subject_home`, which
+    carries the argument. Taking the larger of the two endpoints, as this did, answers a
+    question nobody asked: for `EdgeAdded(A -> B)` the thing that changed is A's behaviour,
+    and B's fan-in is a fact about B that this change did not touch. On fmt at `HEAD~100`
+    that put ten `EdgeAdded` events at 0.84-0.57 above the `NodeAdded(fmt::v12::vprintln)`
+    at 0.70 that *caused* them, with the risk attributed to `detail::buffer::size` -- an
+    entity not in the diff. `_bound_by_cause` in `ranker.py` is the second half of the fix
+    and covers the case where classify has linked the consequence; this half has to work
+    when it has not, because rank must not depend on classify having run.
     """
-    endpoints = subject_endpoints(event.subject)
+    home = subject_home(event.subject)
 
-    head_roots = [n for n in endpoints if n in ctx.head.nodes]
-    if head_roots:
-        side, result = "head", _radius(ctx.head_blast, head_roots)
+    if home in ctx.head.nodes:
+        side, graph = "head", ctx.head_blast
+    elif home in ctx.base.nodes:
+        side, graph = "base", ctx.base_blast
     else:
-        base_roots = [n for n in endpoints if n in ctx.base.nodes]
-        side, result = ("base", _radius(ctx.base_blast, base_roots)) if base_roots else ("", None)
-
-    if result is None:
         # Neither model has the subject. That is not a measurement of zero -- it is the
         # absence of one, and §11 forbids reporting the two the same way.
         return _factor(FactorName.BLAST_RADIUS, 0.0, "subject not in either model")
 
+    result = graph.radius([home], max_depth=w.BLAST_MAX_DEPTH, visit_cap=w.BLAST_VISIT_CAP)
     return _factor(
         FactorName.BLAST_RADIUS,
         _saturate(result.count),
         f"{result.detail}, {side} model",
     )
-
-
-def _radius(graph: BlastGraph, roots: list[NodeId]) -> BlastResult:
-    """The larger of the endpoints' radii; see `_blast_radius` on why larger."""
-    results = [
-        graph.radius([root], max_depth=w.BLAST_MAX_DEPTH, visit_cap=w.BLAST_VISIT_CAP)
-        for root in sorted(roots)
-    ]
-    return max(results, key=lambda r: r.count) if results else EMPTY_BLAST
 
 
 def _saturate(count: int) -> float:
