@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
-from conftest import git
+from conftest import commit, git, require_fixture
 from cpp_semantic_diff.acquire.git import (
+    RENAME_SIMILARITY_ENV,
+    RevPair,
     changed_files,
     detect_default_branch,
     diff_line_count,
+    file_changes,
     is_shallow,
+    resolve_rename_similarity,
     resolve_revs,
 )
 from cpp_semantic_diff.errors import (
@@ -76,8 +81,6 @@ class TestDefaultBranchDetection:
         assert detect_default_branch(diverged_repo) == "main"
 
     def test_falls_back_to_master(self, bare_repo: Path) -> None:
-        from conftest import commit
-
         commit(bare_repo, "a.cpp", "int a();\n", "A")
         git(bare_repo, "branch", "-m", "main", "master")
         assert detect_default_branch(bare_repo) == "master"
@@ -93,3 +96,185 @@ class TestCompressionDenominator:
         revs = resolve_revs(diverged_repo, base_ref="HEAD")
         assert revs.is_empty
         assert diff_line_count(diverged_repo, revs) == 0
+
+
+class TestRenamesAreResolvedFromGit:
+    """ARCH-001 §5: renames are an *input* to matching, resolved from git before it runs.
+
+    Clang writes the source file name into the USR of every internal-linkage entity, so a
+    renamed file breaks tier-1 identity for all of them at once. The matcher may not infer
+    the rename itself -- that would derive identity from the content whose identity is in
+    question -- so this is the stage that has to know.
+    """
+
+    def test_a_rename_is_reported_with_both_paths(self, renamed_repo: Path) -> None:
+        revs = resolve_revs(renamed_repo)
+        assert file_changes(renamed_repo, revs).renames == {
+            "src/util.cpp": "src/support.cpp",
+            "src/tool.cpp": "lib/tool.cpp",
+        }
+
+    def test_a_directory_move_is_a_rename_too(self, renamed_repo: Path) -> None:
+        """`by_path` exists for this shape and is unreachable without it."""
+        revs = resolve_revs(renamed_repo)
+        renames = file_changes(renamed_repo, revs).renames
+        assert renames["src/tool.cpp"] == "lib/tool.cpp"
+
+    def test_the_change_surface_is_unchanged(self, diverged_repo: Path) -> None:
+        """`changed_files` now reads through the new parser, and must still agree with git.
+
+        The equivalence is what lets one parser serve both callers; without this test a
+        later edit to the record walker could quietly change what every review analyzes.
+        """
+        revs = resolve_revs(diverged_repo)
+        expected = git(diverged_repo, "diff", "--name-only", f"{revs.base_sha}..{revs.head_sha}")
+        assert changed_files(diverged_repo, revs) == expected.splitlines()
+
+    def test_a_rename_reports_only_the_destination_as_changed(self, renamed_repo: Path) -> None:
+        """What `--name-only` prints, so the compression denominator does not move."""
+        revs = resolve_revs(renamed_repo)
+        paths = file_changes(renamed_repo, revs).paths
+        assert "src/support.cpp" in paths
+        assert "src/util.cpp" not in paths
+
+    def test_rename_detection_does_not_depend_on_git_config(self, renamed_repo: Path) -> None:
+        """ARCH-001 §12: identity may not depend on whose `~/.gitconfig` the tool ran under.
+
+        Detection is on by default, so relying on the default would pass everywhere except
+        on the one reviewer's machine that has turned it off -- where the tool would report
+        every internal-linkage entity in a renamed file as deleted and re-added.
+        """
+        git(renamed_repo, "config", "diff.renames", "false")
+        revs = resolve_revs(renamed_repo)
+        assert file_changes(renamed_repo, revs).renames == {
+            "src/util.cpp": "src/support.cpp",
+            "src/tool.cpp": "lib/tool.cpp",
+        }
+
+    def test_a_copy_is_not_a_rename(self, bare_repo: Path) -> None:
+        """`--find-copies` is deliberately not passed.
+
+        A copy leaves the base file in place. Rewriting the base-side USR to the copy's name
+        would claim the original moved -- a node-identity judgement made from a file-level
+        heuristic, which is the inversion ARCH-001 §5 exists to prevent.
+        """
+        body = "static int helper() { return 41 + 1; }\n" * 8
+        commit(bare_repo, "src/original.cpp", body, "A")
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        commit(bare_repo, "src/duplicate.cpp", body, "copy it")
+
+        revs = resolve_revs(bare_repo)
+        changes = file_changes(bare_repo, revs)
+        assert changes.renames == {}
+        assert changes.paths == ["src/duplicate.cpp"]
+
+    def test_the_similarity_threshold_is_a_knob(self, bare_repo: Path) -> None:
+        """ARCH-001 §14 asks for the calibration surface to exist before it is needed.
+
+        A file renamed *and* substantially edited is a rename at git's default and not one
+        at a strict threshold. Both answers are defensible, which is the point: the tool has
+        to be able to state which it asked for.
+        """
+        commit(
+            bare_repo,
+            "src/util.cpp",
+            "".join(f"int line{i}() {{ return {i}; }}\n" for i in range(20)),
+            "A",
+        )
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        git(bare_repo, "mv", "src/util.cpp", "src/support.cpp")
+        (bare_repo / "src/support.cpp").write_text(
+            "".join(f"int line{i}() {{ return {i}; }}\n" for i in range(12))
+            + "".join(f"int fresh{i}() {{ return {i}; }}\n" for i in range(8)),
+            encoding="utf-8",
+        )
+        git(bare_repo, "add", "-A")
+        git(bare_repo, "commit", "-q", "-m", "rename and rework")
+
+        revs = resolve_revs(bare_repo)
+        assert file_changes(bare_repo, revs, rename_similarity=50).renames == {
+            "src/util.cpp": "src/support.cpp"
+        }
+        assert file_changes(bare_repo, revs, rename_similarity=100).renames == {}
+
+    def test_a_malformed_threshold_is_refused_not_ignored(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Unlike `$CPPSD_WORKERS`, this one changes the answer rather than the speed."""
+        monkeypatch.setenv(RENAME_SIMILARITY_ENV, "half")
+        with pytest.raises(ValueError, match="not a percentage"):
+            resolve_rename_similarity()
+
+        monkeypatch.setenv(RENAME_SIMILARITY_ENV, "50")
+        assert resolve_rename_similarity() == 50
+        assert resolve_rename_similarity(90) == 90, "an explicit request outranks the environment"
+
+    def test_two_undecodable_paths_do_not_collapse_into_one(self, bare_repo: Path) -> None:
+        """Why the rename query needs its own runner rather than `run_git`.
+
+        `run_git` decodes with `errors="replace"`, which maps every undecodable byte to the
+        same replacement character -- so `a\\xe9.cpp` and `a\\xff.cpp` become one string. In
+        `changed_files` that is a mangled label. In a rename map it is a fabricated identity:
+        two renames collapse to one entry, one of them is lost, and the survivor asserts that
+        two different files are the same file. That is the confidently-wrong output ARCH-001
+        §11 refuses, so the map is decoded with `surrogateescape` instead.
+
+        Linux-only, like the rest of the project (STATUS §8) -- these are legal filenames
+        here and not encodable on Windows at all.
+        """
+        src = bare_repo / "src"
+        src.mkdir()
+        for raw in (b"a\xe9.cpp", b"a\xff.cpp"):
+            (src / os.fsdecode(raw)).write_bytes(b"int x();\n")
+        git(bare_repo, "add", "-A")
+        git(bare_repo, "commit", "-q", "-m", "A")
+
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        for old, new in ((b"a\xe9.cpp", b"b\xe9.cpp"), (b"a\xff.cpp", b"b\xff.cpp")):
+            (src / os.fsdecode(old)).rename(src / os.fsdecode(new))
+        git(bare_repo, "add", "-A")
+        git(bare_repo, "commit", "-q", "-m", "rename both")
+
+        revs = resolve_revs(bare_repo)
+        renames = file_changes(bare_repo, revs).renames
+
+        assert len(renames) == 2, "one entry means two different files were merged into one"
+        assert renames[os.fsdecode(b"src/a\xe9.cpp")] == os.fsdecode(b"src/b\xe9.cpp")
+        assert renames[os.fsdecode(b"src/a\xff.cpp")] == os.fsdecode(b"src/b\xff.cpp")
+
+    @pytest.mark.fixtures
+    def test_fmt_core_h_to_base_h(self) -> None:
+        """The commit the fix will be measured against (STATUS §3).
+
+        `include/fmt/core.h` -> `include/fmt/base.h` is R100 -- byte-identical -- which is
+        what makes it a clean experiment: the unnamed records in that header have USRs of
+        the form `c:core.h@<byte-offset>@...`, and an R100 rename leaves the offsets alone,
+        isolating the basename as the only variable.
+
+        Git only, so this costs milliseconds: no worktree, no configure, no libclang.
+        """
+        repo = require_fixture("fmt")
+        revs = RevPair(
+            base_ref="79f1506f~1",
+            head_ref="79f1506f",
+            base_sha=git(repo, "rev-parse", "79f1506f~1"),
+            head_sha=git(repo, "rev-parse", "79f1506f"),
+        )
+        changes = file_changes(repo, revs)
+
+        assert changes.renames == {"include/fmt/core.h": "include/fmt/base.h"}
+        assert len(changes.paths) == 11
+
+    @pytest.mark.fixtures
+    def test_fmt_core_test_to_base_test(self) -> None:
+        repo = require_fixture("fmt")
+        revs = RevPair(
+            base_ref="f924d20d~1",
+            head_ref="f924d20d",
+            base_sha=git(repo, "rev-parse", "f924d20d~1"),
+            head_sha=git(repo, "rev-parse", "f924d20d"),
+        )
+        changes = file_changes(repo, revs)
+
+        assert changes.renames == {"test/core-test.cc": "test/base-test.cc"}
+        assert changes.paths == ["test/CMakeLists.txt", "test/base-test.cc"]

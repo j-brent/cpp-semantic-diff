@@ -22,8 +22,22 @@ def git(repo: Path, *args: str) -> str:
 
 
 def commit(repo: Path, name: str, content: str, message: str) -> str:
-    (repo / name).write_text(content, encoding="utf-8")
+    path = repo / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
     git(repo, "add", name)
+    git(repo, "commit", "-q", "-m", message)
+    return git(repo, "rev-parse", "HEAD")
+
+
+def move(repo: Path, src: str, dst: str, message: str) -> str:
+    """A real `git mv` plus commit -- the only honest way to test a rename map.
+
+    A hand-built map tests the parser against itself. What has to hold is that *git's* own
+    answer, at git's own threshold, reaches the matcher (ARCH-001 §5).
+    """
+    (repo / dst).parent.mkdir(parents=True, exist_ok=True)
+    git(repo, "mv", src, dst)
     git(repo, "commit", "-q", "-m", message)
     return git(repo, "rev-parse", "HEAD")
 
@@ -63,6 +77,33 @@ def diverged_repo(bare_repo: Path) -> Path:
     commit(repo, "d.cpp", "int d() { return 4; }\n", "D")
 
     git(repo, "checkout", "-q", "feature")
+    return repo
+
+
+@pytest.fixture
+def renamed_repo(bare_repo: Path) -> Path:
+    """A branch that renamed one file and moved another between directories.
+
+    Two shapes, because `RenameMap` handles them with different halves: a basename change
+    goes through `by_name` (which rewrites the file component of a file-scoped USR), a pure
+    directory move through `by_path` (which rewrites `Node.tu`). A fixture with only one of
+    them would leave half the machinery unexercised.
+
+    An unrelated edit rides along so the renames are not the whole diff -- a change surface
+    that is nothing but renames is the case least like a real review.
+
+        main:     A ─ B
+                       \\
+        feature:        └─ rename ─ move ─ edit
+    """
+    repo = bare_repo
+    commit(repo, "src/util.cpp", "static int helper() { return 1; }\n", "A")
+    commit(repo, "src/tool.cpp", "int tool() { return 2; }\n", "B")
+
+    git(repo, "checkout", "-q", "-b", "feature")
+    move(repo, "src/util.cpp", "src/support.cpp", "rename util -> support")
+    move(repo, "src/tool.cpp", "lib/tool.cpp", "move tool into lib")
+    commit(repo, "README.md", "unrelated\n", "edit something that is not a rename")
     return repo
 
 

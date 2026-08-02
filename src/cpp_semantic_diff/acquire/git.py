@@ -7,7 +7,9 @@ other people merged while the branch was open to the branch under review.
 
 from __future__ import annotations
 
+import os
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,18 +24,46 @@ from cpp_semantic_diff.errors import (
 #: Tried in order when no base ref is given and origin/HEAD is unset.
 DEFAULT_BRANCH_CANDIDATES = ("main", "master")
 
+#: Git's own `-M` default, named rather than implied. ARCH-001 §14 asks for this knob to be
+#: designed in early -- git's rename detection "has one knob and decades of tuning", and a
+#: threshold the tool never states is one no repository can be calibrated against.
+DEFAULT_RENAME_SIMILARITY = 50
 
-def run_git(repo: Path, *args: str, check: bool = True) -> str:
+#: Overrides it for a repository whose refactors are systematically noisier or cleaner.
+#: Same shape as `CPPSD_WORKERS`: the knob is the parameter, the environment is how a caller
+#: that owns no call site reaches it.
+RENAME_SIMILARITY_ENV = "CPPSD_RENAME_SIMILARITY"
+
+
+def _git(repo: Path, args: Sequence[str], *, check: bool, errors: str) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
-        errors="replace",
+        errors=errors,
     )
     if check and proc.returncode != 0:
         raise GitError(list(args), proc.returncode, proc.stderr)
-    return proc.stdout.strip()
+    return proc.stdout
+
+
+def run_git(repo: Path, *args: str, check: bool = True) -> str:
+    return _git(repo, args, check=check, errors="replace").strip()
+
+
+def run_git_z(repo: Path, *args: str) -> list[str]:
+    """NUL-separated fields from a `-z` git command, decoded the way `os` decodes paths.
+
+    `run_git` cannot serve this, and the reason is not the `.strip()` -- NUL is not
+    whitespace, so records survive it. It is `errors="replace"`, which maps two *different*
+    non-UTF-8 paths onto the same string. For `changed_files` that is a mangled label; in a
+    rename map it is a **fabricated identity**, which is the one thing ARCH-001 §5 refuses.
+    `surrogateescape` is what `os` uses for filenames, so a path that round-trips through the
+    filesystem round-trips through here.
+    """
+    out = _git(repo, args, check=True, errors="surrogateescape")
+    return [field for field in out.split("\0") if field]
 
 
 def is_git_repository(repo: Path) -> bool:
@@ -139,10 +169,148 @@ def resolve_revs(
     )
 
 
+def resolve_rename_similarity(requested: int | None = None) -> int:
+    """The similarity threshold: explicit request, then environment, then git's default.
+
+    Malformed input is fatal here, unlike `$CPPSD_WORKERS`, which is ignored on a typo. The
+    worker count is a performance knob and running at the default is better than refusing to
+    run; this threshold decides *which files are the same file*, so falling back silently to
+    a different answer than the one asked for is the quiet disagreement ARCH-001 §11 refuses.
+    """
+    if requested is None and (override := os.environ.get(RENAME_SIMILARITY_ENV, "").strip()):
+        if not override.isdigit():
+            raise ValueError(
+                f"{RENAME_SIMILARITY_ENV}={override!r} is not a percentage. It decides which "
+                f"files count as renamed, so it is not guessed at."
+            )
+        requested = int(override)
+    if requested is None:
+        return DEFAULT_RENAME_SIMILARITY
+    if not 1 <= requested <= 100:
+        raise ValueError(f"rename similarity must be a percentage in 1..100, got {requested}")
+    return requested
+
+
+@dataclass(frozen=True)
+class FileChange:
+    """One record of `git diff --name-status`.
+
+    `path` is the head-side path, except for a delete, where there is no head side and it is
+    the base-side one -- which is exactly what `--name-only` prints in each case.
+    """
+
+    status: str
+    path: str
+    old_path: str | None = None
+    score: int | None = None
+
+    @property
+    def is_rename(self) -> bool:
+        return self.old_path is not None
+
+
+@dataclass(frozen=True)
+class FileChanges:
+    """What the branch did to the file tree, with renames resolved.
+
+    The one place in this codebase that knows the shape of a git change record, for the same
+    reason `usr_file` is the one place that knows the shape of a USR: a second parser is a
+    second opinion about identity.
+    """
+
+    changes: tuple[FileChange, ...]
+
+    @property
+    def paths(self) -> list[str]:
+        """Exactly what `git diff --name-only` prints, in git's order."""
+        return [c.path for c in self.changes]
+
+    @property
+    def renames(self) -> dict[str, str]:
+        """Base path -> head path. ARCH-001 §5's input to matching."""
+        return {c.old_path: c.path for c in self.changes if c.old_path is not None}
+
+
+def file_changes(
+    repo: Path,
+    revs: RevPair,
+    *,
+    rename_similarity: int | None = None,
+) -> FileChanges:
+    """Files the branch changed, relative to the merge base, with renames resolved.
+
+    ARCH-001 §5 requires renames to be resolved from git *before* matching, because clang
+    writes the source file name into the USR of every internal-linkage entity: a renamed file
+    breaks tier 1 for all of them at once.
+
+    Three flags, each load-bearing:
+
+    `--find-renames` is passed **explicitly even though detection is on by default**. A
+    repository or reviewer with `diff.renames=false` in config would otherwise yield an empty
+    rename map and a silently different answer -- and identity may not depend on whose
+    `~/.gitconfig` the tool ran under (ARCH-001 §12).
+
+    `-z` is not a formatting preference. Without it git applies `core.quotePath` and
+    C-escapes any non-ASCII path, so the parser would need an unquoter to recover a name it
+    is about to use as identity.
+
+    `--find-copies` is deliberately **not** passed. A copy leaves the base file in place, so
+    rewriting the base-side USR to the copy's name would claim the original moved -- a
+    node-identity judgement from a file-level heuristic, which is the inversion ARCH-001 §5
+    exists to prevent.
+    """
+    similarity = resolve_rename_similarity(rename_similarity)
+    fields = run_git_z(
+        repo,
+        "diff",
+        "--name-status",
+        f"--find-renames={similarity}%",
+        "-z",
+        f"{revs.base_sha}..{revs.head_sha}",
+    )
+
+    changes: list[FileChange] = []
+    i = 0
+    while i < len(fields):
+        token = fields[i]
+        status, digits = token[:1], token[1:]
+        # R and C are the only statuses that carry a second path. Everything else -- A, D, M,
+        # T, U and the X git emits when it is confused -- is one path, and an unknown letter
+        # is treated as one path rather than refused, because a git that grew a new status
+        # should not stop a review it does not otherwise affect.
+        wants_two = status in ("R", "C")
+        needed = 3 if wants_two else 2
+        if i + needed > len(fields):
+            # A truncated record understates what changed. Refusing beats reporting a
+            # smaller diff than git did -- the same reasoning as declining to cache rather
+            # than serving a weak key (ARCH-001 §9).
+            raise ValueError(
+                f"git diff --name-status -z ended mid-record: {fields[i:]!r}. "
+                f"Expected {needed} fields for status {token!r}."
+            )
+        if wants_two:
+            changes.append(
+                FileChange(
+                    status=status,
+                    path=fields[i + 2],
+                    old_path=fields[i + 1] if status == "R" else None,
+                    score=int(digits) if digits.isdigit() else None,
+                )
+            )
+        else:
+            changes.append(FileChange(status=status, path=fields[i + 1]))
+        i += needed
+
+    return FileChanges(changes=tuple(changes))
+
+
 def changed_files(repo: Path, revs: RevPair) -> list[str]:
-    """Files the branch changed, relative to the merge base."""
-    out = run_git(repo, "diff", "--name-only", f"{revs.base_sha}..{revs.head_sha}")
-    return [line for line in out.splitlines() if line]
+    """Files the branch changed, relative to the merge base.
+
+    A view over `file_changes` rather than its own `--name-only` call, so there is one parser
+    of git change records and not two that can drift.
+    """
+    return file_changes(repo, revs).paths
 
 
 def diff_line_count(repo: Path, revs: RevPair) -> int:
