@@ -1,0 +1,243 @@
+"""The risk score: ARCH-001 §7's four inputs, kept apart all the way to the output.
+
+A score nobody can interrogate will not be trusted, and cannot be tuned. So the total is
+never the product: every factor is carried alongside it with the raw measurement that
+produced it, the weight applied, and the contribution that resulted, and `render` (§10) can
+say *why* something is first without recomputing anything or knowing how it was computed.
+That is also what makes calibration possible -- a ranking that looks wrong can be diagnosed
+down to the term responsible rather than argued about as a whole.
+
+Each factor is normalized to [0, 1] before weighting, and the weights sum to 1
+(`weights.py`), so `total` is in [0, 1] and means the same thing across runs and across
+repositories. Nothing here is stateful and nothing here mutates an input.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from cpp_semantic_diff.model import (
+    Confidence,
+    Event,
+    EventId,
+    EventKind,
+    Model,
+    NodeId,
+)
+from cpp_semantic_diff.rank import weights as w
+from cpp_semantic_diff.rank.exposure import EXPOSURE_ORDER, Exposure, exposure_map
+from cpp_semantic_diff.rank.graph import EMPTY_BLAST, BlastGraph, BlastResult, subject_endpoints
+
+
+class FactorName(StrEnum):
+    """The four inputs of ARCH-001 §7, named so consumers switch on a value rather than a
+    string literal -- the same reason `EventKind` is a closed set (`events.py`)."""
+
+    BLAST_RADIUS = "blast_radius"
+    EXPOSURE = "exposure"
+    NOVELTY = "novelty"
+    UNCERTAINTY = "uncertainty"
+
+
+class Factor(BaseModel):
+    """One term of one score, with everything needed to explain or re-derive it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: FactorName
+    value: float = Field(description="The normalized measurement, in [0, 1].", ge=0.0, le=1.0)
+    weight: float = Field(description="From `weights.py`; the only tunable half.")
+    contribution: float = Field(description="value * weight -- what this term added.")
+    detail: str = Field(
+        description="The raw measurement in words: '37 dependent(s), 4 direct', 'public', "
+        "'NodeAttrChanged(virtual)', 'unmatched'. This is what a reviewer reads when the "
+        "ranking surprises them, and it is deliberately not reconstructible from `value`."
+    )
+
+
+class RiskScore(BaseModel):
+    """One event's place in the order, and the whole of the reason for it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: EventId
+    total: float = Field(description="Sum of the contributions, in [0, 1].")
+    factors: list[Factor]
+    component: int = Field(
+        default=0,
+        description="Index of the connected component this event belongs to (ARCH-001 §7). "
+        "Components are numbered by descending risk, so component 0 is the change a "
+        "reviewer should read first.",
+    )
+
+    def factor(self, name: FactorName) -> Factor:
+        for f in self.factors:
+            if f.name is name:
+                return f
+        raise KeyError(f"score for {self.event_id} carries no {name.value} factor")
+
+    @property
+    def is_high_risk(self) -> bool:
+        return self.total >= w.HIGH_RISK
+
+
+@dataclass(frozen=True)
+class ScoringContext:
+    """Everything the four factors read, derived once for the whole event list.
+
+    Built from the two models and nothing else, so scoring stays a pure function of the
+    stage's inputs (ARCH-001 §3).
+    """
+
+    base: Model
+    head: Model
+    head_blast: BlastGraph
+    base_blast: BlastGraph
+    exposure: dict[NodeId, Exposure]
+
+    @classmethod
+    def of(cls, base: Model, head: Model) -> ScoringContext:
+        # Head first, then base, so a node present on both sides is classified by what it
+        # is *now*: a helper moved out of a public header during this change is internal.
+        merged = exposure_map(base) | exposure_map(head)
+        return cls(
+            base=base,
+            head=head,
+            head_blast=BlastGraph.of(head),
+            base_blast=BlastGraph.of(base),
+            exposure=merged,
+        )
+
+
+def score_event(event: Event, ctx: ScoringContext) -> RiskScore:
+    """One event -> one score. No ordering, no components; `ranker.py` owns both."""
+    factors = [
+        _blast_radius(event, ctx),
+        _exposure(event, ctx),
+        _novelty(event),
+        _uncertainty(event.confidence),
+    ]
+    total = sum(f.contribution for f in factors)
+    return RiskScore(event_id=event.id, total=total, factors=factors)
+
+
+def _factor(name: FactorName, value: float, detail: str) -> Factor:
+    value = min(1.0, max(0.0, value))
+    weight = w.FACTOR_WEIGHTS[name.value]
+    return Factor(name=name, value=value, weight=weight, contribution=value * weight, detail=detail)
+
+
+# -- 1 · blast radius -------------------------------------------------------------------
+
+
+def _blast_radius(event: Event, ctx: ScoringContext) -> Factor:
+    """How much depends on what changed, bounded (ARCH-001 §7).
+
+    Computed on the **head** model as §7 says, with one documented exception: a subject that
+    does not exist at head -- every `NodeRemoved` and most `EdgeRemoved` are in base
+    coordinates by construction (`diff/nodes.py`) -- is measured on the base model instead.
+    The alternative is scoring every removal at zero, which would systematically bury the
+    one event kind that can break code outside the diff. The side used is named in `detail`
+    rather than assumed, because "40 things used to depend on this" and "40 things depend on
+    this" are different claims.
+
+    An edge subject is measured from both endpoints and takes the larger. An edge is a claim
+    about two entities (`diff/edges.py`), and for attention allocation the exposed one is
+    whichever of them more of the codebase can reach.
+    """
+    endpoints = subject_endpoints(event.subject)
+
+    head_roots = [n for n in endpoints if n in ctx.head.nodes]
+    if head_roots:
+        side, result = "head", _radius(ctx.head_blast, head_roots)
+    else:
+        base_roots = [n for n in endpoints if n in ctx.base.nodes]
+        side, result = ("base", _radius(ctx.base_blast, base_roots)) if base_roots else ("", None)
+
+    if result is None:
+        # Neither model has the subject. That is not a measurement of zero -- it is the
+        # absence of one, and §11 forbids reporting the two the same way.
+        return _factor(FactorName.BLAST_RADIUS, 0.0, "subject not in either model")
+
+    return _factor(
+        FactorName.BLAST_RADIUS,
+        _saturate(result.count),
+        f"{result.detail}, {side} model",
+    )
+
+
+def _radius(graph: BlastGraph, roots: list[NodeId]) -> BlastResult:
+    """The larger of the endpoints' radii; see `_blast_radius` on why larger."""
+    results = [
+        graph.radius([root], max_depth=w.BLAST_MAX_DEPTH, visit_cap=w.BLAST_VISIT_CAP)
+        for root in sorted(roots)
+    ]
+    return max(results, key=lambda r: r.count) if results else EMPTY_BLAST
+
+
+def _saturate(count: int) -> float:
+    """Logarithmic, saturating at `BLAST_SATURATION`. See `weights.py` for why log."""
+    return math.log1p(count) / math.log1p(w.BLAST_SATURATION)
+
+
+# -- 2 · exposure -----------------------------------------------------------------------
+
+
+def _exposure(event: Event, ctx: ScoringContext) -> Factor:
+    """Public API or vendored test helper -- `exposure.py` owns the heuristic.
+
+    An edge takes the *maximum* of its endpoints for the same reason blast radius takes the
+    larger: a call from a test into public API is a change to how the public API is used,
+    and scoring it as test code would hide the one direction of that edge worth reading.
+    """
+    endpoints = subject_endpoints(event.subject)
+    classes = [ctx.exposure[n] for n in endpoints if n in ctx.exposure]
+    if not classes:
+        exposure = Exposure.INTERNAL
+        detail = f"{exposure.value} (subject not in either model)"
+    else:
+        exposure = max(classes, key=EXPOSURE_ORDER.index)
+        detail = exposure.value
+    return _factor(FactorName.EXPOSURE, w.EXPOSURE_WEIGHT[exposure], detail)
+
+
+# -- 3 · novelty ------------------------------------------------------------------------
+
+
+def _novelty(event: Event) -> Factor:
+    """What kind of change it is (ARCH-001 §7), refined by which attribute for attr events.
+
+    The attribute table is a contract with the producer rather than with the doc's prose --
+    see `weights.NOVELTY_BY_ATTR`, which is where the mismatch is spelled out.
+    """
+    if event.kind is EventKind.NODE_ATTR_CHANGED:
+        attr = event.payload.get("attr")
+        key = attr if isinstance(attr, str) else ""
+        value = w.NOVELTY_BY_ATTR.get(key, w.NOVELTY_BY_KIND[event.kind])
+        return _factor(FactorName.NOVELTY, value, f"{event.kind.value}({key})")
+    return _factor(FactorName.NOVELTY, w.NOVELTY_BY_KIND[event.kind], event.kind.value)
+
+
+# -- 4 · confidence, inverted -----------------------------------------------------------
+
+
+def _uncertainty(confidence: Confidence) -> Factor:
+    """**A low-confidence event ranks up, not down** (ARCH-001 §7).
+
+    This is the one factor whose sign is opposite to intuition, and getting it backwards is
+    invisible: the output is still a plausible ordering, it just systematically buries the
+    events the tool is least sure about -- which are exactly the ones only a human can
+    settle. `Confidence` deliberately keeps its two raw inputs rather than collapsing them
+    to a scalar (`events.py`) precisely so that this inversion is applied once, here, by the
+    stage that owns the weighting.
+    """
+    value = w.UNCERTAINTY_BY_TIER[confidence.tier]
+    detail = confidence.tier.value if confidence.tier else "unmatched"
+    if not confidence.models_complete:
+        value += w.UNCERTAINTY_INCOMPLETE_MODELS
+        detail = f"{detail}, incomplete models"
+    return _factor(FactorName.UNCERTAINTY, value, detail)
