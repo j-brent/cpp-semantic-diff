@@ -16,7 +16,7 @@ questions matter. This document establishes *how* the system answers them: the p
 model, the identity scheme that everything else depends on, and the performance design that decides
 whether the tool is usable at all.
 
-Status: draft. Section 12 marks what v0 actually builds. This document is the design and stays
+Status: draft. Section 13 marks what v0 actually builds. This document is the design and stays
 ahead of the code; what is *implemented* is tracked in [`STATUS.md`](../../STATUS.md), not here.
 
 ---
@@ -315,7 +315,7 @@ produces *no edge events at all*, rather than 200 that need collapsing. That is 
 the problem this section opens with. Tier 2 makes `NodeRenamed` reachable but adds no edge events
 beside it; only reversing the edge-identity decision in §6.1 would make this rule fire.
 
-`signature-breaks-callers` is **dormant** because its consequence is a derived event, which §12 puts
+`signature-breaks-callers` is **dormant** because its consequence is a derived event, which §13 puts
 out of v0. Classify links causes among events that already exist; it never synthesizes one. A stage
 that may create events is a stage that can hide a change inside a cause.
 
@@ -444,7 +444,87 @@ Two systematic limits get stated in the output itself, every time:
 
 ---
 
-## 12 · v0
+## 12 · Reproducibility
+
+§11 is about not claiming more than the model supports. This section is about the model being the
+same thing twice — which is a precondition for §11's confidence numbers meaning anything, and which
+the rest of the document assumes without ever requiring.
+
+Two distinct properties, and the first is where the damage is:
+
+**1 · Same-run consistency — both sides share one toolchain identity.** A two-point analysis
+subtracts one model from another. If the two were produced by different parsers, different system
+headers, or different target triples, the subtraction yields events that describe the *environment*
+rather than the change. This is a worse failure than anything in §11: not a missed change, an
+invented one, rendered with full confidence and indistinguishable in the output from a real one.
+`std::string` gaining a member because the base was parsed against libstdc++ 12 and the head
+against 14 is a `NodeAdded` like any other.
+
+**2 · Cross-run equality — identical inputs produce an identical canonical document.** Same revs,
+same toolchain identity, any machine, any day: byte-identical output over the canonical subset
+defined below. Without this there are no golden-file tests, the §10 compression metric cannot be a
+CI gate, and a user's bug report cannot be reproduced.
+
+### 12.1 Toolchain identity
+
+Identity is the full set of inputs that can change an AST. Today `Toolchain.id` is the libclang
+release triple alone, which identifies the parser but not the parse. The determinants are:
+
+| Component | Why it changes the model |
+|---|---|
+| libclang release triple | parser behaviour, USR construction |
+| target triple | `sizeof`, alignment, and every `__x86_64__`-conditional declaration |
+| resource directory | which builtin headers the parse resolves |
+| C++ standard library and version | libstdc++ 12 vs 14 vs libc++ declare different `std::` |
+| extractor code digest | the walk is half the producer — already hashed in `produce/cache.py` |
+| include-path environment | `CPATH`, `CPLUS_INCLUDE_PATH` silently rewrite the search order |
+
+**Anything that can change the AST without changing the identity is a cache-correctness bug**, not
+a documentation gap, because §9 keys the per-TU cache on this value. Two hosts agreeing on
+`libclang 18.1.3` and differing in libstdc++ write different partial models under the same key —
+reachable the moment a cache is shared, which §9 explicitly recommends for the base.
+
+### 12.2 The invariant is checked, not assumed
+
+**`diff` refuses two models whose toolchain identity differs**, with the §11 treatment: a hard
+failure naming both identities, never a diff. The cache key makes this true *incidentally* today —
+a changed producer misses cache and forces a reparse — but that is a consequence of a caching
+decision, not a guarantee, and nothing at the match or diff boundary compares the two
+`Completeness.producers` records. A property this load-bearing is asserted where it is relied on.
+
+### 12.3 What is deliberately not pinned
+
+§13 discovers a system libclang rather than using the one bundled in the wheel, because the
+bundled library ships without builtin headers and returns truncated ASTs silently. That is the
+right trade — a variable parser beats a quietly wrong one — but it means **the single most
+determinative input to the model is host-dependent by choice.** The compensation is that identity
+is *recorded and folded into every cache key*, so environment variation is detected and invalidates
+rather than being prevented. Reproducibility here is achieved by detection, not by pinning, and
+that only holds while §12.1 is complete.
+
+The compile database is the same shape of problem one layer up: `compile_commands.json` is
+generated by configure (§3.1), which depends on the CMake version and the detected host compiler.
+Compile flags are in the cache key, so a change is caught — but **both worktrees must be configured
+by the same CMake and generator**, or the flag differences are attributed to the branch.
+
+### 12.4 The canonical document
+
+§10's `meta.timings` makes two runs over identical input differ by construction, so the output
+cannot be compared to itself. The JSON therefore has a **canonical subset**: everything except
+wall-clock timings, absolute paths, and the tool's own invocation details. Paths are repo-relative;
+`meta` retains tool, schema, revs and toolchain identity, which are inputs, and excludes timings,
+which are observations. Equality tests and CI gates run over the canonical subset; the full
+document is what a human reads.
+
+**Ordering must come from explicit keys.** §3 calls events "deterministically ordered" without
+saying from what. Every stage that emits a sequence sorts on a stable total order over ids, and no
+stage may let iteration order stand in for it — Python randomizes string hashing per process under
+`PYTHONHASHSEED`, so a set of node ids iterates differently on every run and produces output that
+is non-reproducible on one machine, let alone across two.
+
+---
+
+## 13 · v0
 
 The smallest slice that tests the thesis end to end.
 
@@ -512,10 +592,10 @@ rule that says what its neighbour is forbidden to do.
 
 ---
 
-## 13 · Open questions
+## 14 · Open questions
 
 Resolved and moved into the body: the compile-database requirement at both revs and the
-base-does-not-build case (§3.1); which libclang, and proving it is complete (§12, and it was not an
+base-does-not-build case (§3.1); which libclang, and proving it is complete (§13, and it was not an
 academic question — the bundled library was silently truncating every AST). Remaining:
 
 - **Generated sources.** §3.1 states the problem but not the policy. Configure-only is the v0
@@ -525,3 +605,8 @@ academic question — the bundled library was silently truncating every AST). Re
   per-repository calibration and design the knob in early.
 - **Where does the reviewer actually read this?** CLI is right for v0 and probably wrong as the
   product. The JSON-first contract defers the decision without prejudging it.
+- **How much environment must identity capture before a cache is safe to share?** §12.1 lists the
+  determinants; which of them actually move a model is unmeasured. The cheap experiment is to build
+  the same fixture on two hosts and diff the partial models — if it is empty, the current narrow
+  identity is adequate and the rest is theory. Until that is run, a cache should not be shared
+  across machines, which contradicts §9's advice that CI pre-populate the base.
