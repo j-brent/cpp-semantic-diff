@@ -96,8 +96,8 @@ and inspect at any boundary — which matters because most debugging here is "wh
 | **acquire** | two revs | two worktrees + compile databases + completeness record |
 | **produce** | worktree + compile db | `Model` (§4) |
 | **match** | two `Model`s | `Correspondence` — bipartite matching with per-pair tier |
-| **diff** | two `Model`s + `Correspondence` | unordered `Event` list |
-| **classify** | `Event` list | events with `caused_by` links |
+| **diff** | two `Model`s + `Correspondence` | `Event` list, deterministically ordered |
+| **classify** | events + two `Model`s + `Correspondence` | events with `caused_by` links |
 | **enrich** | events + head model + tool output | events with blast radius and `Finding`s attached |
 | **rank** | enriched events | ordered events with risk scores |
 | **render** | ranked events | JSON document; terminal/HTML views consume it |
@@ -253,6 +253,18 @@ A closed, typed set. New signals become new event kinds, never free-text.
 
 **Edge** — `EdgeAdded` · `EdgeRemoved` · `EdgeRetargeted` · `EdgeKindChanged`
 
+`EdgeRetargeted` is **refused, not deferred**. An edge has no identity of its own — its id *is*
+`src|kind|dst` (§4.2) — so "this edge was retargeted from B to C" is a claim that B and C are the
+same entity, which is a node-identity judgement the one-to-one matcher (§5) has already declined to
+make. Remaking it here, on weaker evidence than the matcher had, is the confident-and-wrong failure
+this design exists to avoid. It surfaces as remove + add: the same information, without the invented
+correspondence. The kind stays in the closed set so that the refusal is explicit rather than an
+omission someone later reads as an oversight.
+
+`EdgeKindChanged` *is* emitted, and the asymmetry is the argument: an edge's endpoints are identity
+and belong to the matcher, but its kind is diffable state. Between two already-paired entities, a
+relation that was `calls` and is now `overrides` needs no new identity claim.
+
 **Derived** — `BecameUnreachable` · `BecameReachable` · `CycleIntroduced` · `FanInChanged` ·
 `LayerViolationIntroduced` · `SignatureIncompatible`
 
@@ -282,9 +294,30 @@ a second disconnected artifact to read alongside the diff, which is a net increa
 Rename one function and 200 call edges "change". That is one event with 200 consequences, not 201
 events. Consequences are linked to causes by **an explicit rule table**, not inference:
 
-- `NodeRenamed(F)` causes every `EdgeRetargeted` whose endpoint is F
-- `NodeRemoved(C)` causes `NodeRemoved` for everything C contained
-- `NodeAttrChanged(signature)` causes `SignatureIncompatible` on callers
+| Rule | Cause | Consequence | Status |
+|---|---|---|---|
+| contained-removal | `NodeRemoved(C)` | `NodeRemoved` for everything C contained | active |
+| contained-addition | `NodeAdded(C)` | `NodeAdded` for everything C contains | active |
+| edge-lost-its-endpoint | `NodeRemoved(N)` | `EdgeRemoved` for edges touching N | active |
+| edge-gained-its-endpoint | `NodeAdded(N)` | `EdgeAdded` for edges touching N | active |
+| rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **dead** |
+| signature-breaks-callers | `NodeAttrChanged(signature)` | `SignatureIncompatible` on callers | dormant |
+
+The two **addition** rules and the two **edge-endpoint** rules were missing from the earlier draft,
+and between them they carry nearly all of v0's actual cascade volume: without them, removing one
+class leaves every containment and call edge it touched standing as an unexplained top-level event,
+and adding a class of twenty methods reads as twenty-one events while the identical deletion reads
+as one.
+
+`rename-retargets-edges` is **dead, not dormant** — and it is not revived by tier 2. Because base
+edges are rewritten into head coordinates through the correspondence before comparison, a rename
+produces *no edge events at all*, rather than 200 that need collapsing. That is a stronger answer to
+the problem this section opens with. Tier 2 makes `NodeRenamed` reachable but adds no edge events
+beside it; only reversing the edge-identity decision in §6.1 would make this rule fire.
+
+`signature-breaks-callers` is **dormant** because its consequence is a derived event, which §12 puts
+out of v0. Classify links causes among events that already exist; it never synthesizes one. A stage
+that may create events is a stage that can hide a change inside a cause.
 
 Events with no matching rule get no cause link and are shown. **Collapse happens at render, never
 at diff** — the JSON always carries the full event set; the view hides consequences under causes by
@@ -457,9 +490,10 @@ Present tense is what exists; the rest is planned.
 cpp_semantic_diff/
   model/       IR types, schema                        ✓
   acquire/     git revisions · worktrees · compile db  ✓
-  produce/     toolchain ✓ · libclang extraction · per-TU cache
-  identity/    tiered matching
-  delta/       events, cause rules
+  produce/     toolchain ✓ · extraction ✓ · assembly ✓ · per-TU cache
+  match/       tiered matching (tier 1)                 ✓
+  diff/        model × model → events                   ✓
+  classify/    cause and cascade rules                  ✓
   evidence/    tool adapters                (post-v0)
   rank/        blast radius, scoring
   render/      json · terminal · html
@@ -470,6 +504,11 @@ cpp_semantic_diff/
 `acquire` and `produce` are stages of the pipeline (§3) and named for them; the earlier draft called
 the latter `producers` and grouped git with it, which put the two-point machinery inside a
 single-point stage.
+
+Every package is now named for its stage, which the earlier draft's `identity/` and `delta/` were
+not. `delta/` in particular grouped two stages with two different contracts — diff may not set
+`caused_by`, classify may not create an event — and a shared package is the wrong place to keep a
+rule that says what its neighbour is forbidden to do.
 
 ---
 
