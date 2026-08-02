@@ -14,21 +14,32 @@ model is an ordered list of lines.
 
 ## Status
 
-Early implementation. Two and a half of eight pipeline stages exist, and the tool does not yet
-produce a semantic diff — see [`STATUS.md`](STATUS.md) for the tracker.
+The pipeline runs end to end. Seven of eight stages exist; `enrich` (the evidence layer) is deferred
+past v0 by design — see [`STATUS.md`](STATUS.md) for the tracker and the known defects.
 
 | Stage | State |
 |---|---|
 | `acquire` — worktrees + compile databases at both revs | done |
-| `produce` — worktree → `Model` | toolchain done, extraction next |
-| `match` · `diff` · `classify` · `enrich` · `rank` · `render` | not started |
+| `produce` — worktree → `Model`, cached per TU, parsed in parallel | done |
+| `match` — two models → `Correspondence` | done, tier 1 only |
+| `diff` · `classify` · `rank` · `render` | done |
+| `enrich` — evidence adapters | post-v0 |
 
-What runs today: it resolves the comparison, reports the size of the text diff it has to beat, and
-materializes and configures both revisions. The [`demo` workflow](.github/workflows/demo.yml)
-publishes that against `fmt` and `spdlog` on every push, so progress is visible without a checkout.
+What it prints on real repositories:
 
-The moment this project proves or disproves itself is when `2,431 lines changed → 9 events` prints
-on a real branch. Everything is built toward that line.
+```
+fmt    HEAD~12    179 lines changed  →  16 semantic events, 4 high-risk
+fmt    HEAD~100   3,178 lines changed → 335 semantic events, 56 top-level
+spdlog HEAD~5     35 lines changed   →  0 semantic events
+```
+
+That last row is the one that validates the others: thirty-five lines of CMake, comments and a
+Windows-only header, correctly reported as no semantic change — with the reason printed rather than
+implied.
+
+Measured compression is **9.5:1 to 53:1**, roughly an order of magnitude short of the *2,431 → 9*
+this design was argued from. The thesis is not disproved, but the honest headline is two numbers:
+events, and the far smaller count left after consequences are folded under their causes.
 
 ## Requirements
 
@@ -73,12 +84,24 @@ Then, against a repository with full history:
 ```sh
 uv run cppsd plan    ~/fixtures/fmt --base HEAD~12   # what a reviewer reads today
 uv run cppsd acquire ~/fixtures/fmt --base HEAD~12   # both revisions, configured
+uv run cppsd diff    ~/fixtures/fmt --base HEAD~12   # the whole pipeline
+uv run cppsd diff    ~/fixtures/fmt --base HEAD~12 --json --out delta.json
 ```
+
+`diff` prints ranked events with consequences folded under their causes; `--expand` shows the flat
+set. The JSON is the product and always carries every event uncollapsed — the terminal is one
+consumer of it, and any incompleteness in either model is stated before the events, not in a log.
+
+A review touching ≤ 20 translation units completes in under 30 s on a warm cache; a cold `fmt`
+model is ~25 s across 8 workers. The first run against a new base pays for it and every later
+review against that base does not.
 
 | Environment variable | Effect |
 |---|---|
 | `CPPSD_LIBCLANG` | Use this library instead of discovering one |
 | `CPPSD_RESOURCE_DIR` | Override the clang resource directory |
+| `CPPSD_SCAN_DEPS` | Use this `clang-scan-deps` instead of discovering one |
+| `CPPSD_WORKERS` | Parser processes (default: cores, capped at 8). `1` takes the serial path |
 | `CPPSD_CACHE_DIR` | Where worktrees and cached models live (default: `$XDG_CACHE_HOME`) |
 | `CPPSD_FIXTURE_ROOT` | Where the test fixture clones live (default: `~/fixtures`) |
 

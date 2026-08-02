@@ -11,219 +11,226 @@ Setup, requirements and the commands that work today are in [`README.md`](README
 
 ## 1 · Pipeline
 
-Eight stages (ARCH §3). Two and a half exist.
+Eight stages (ARCH §3). **Seven exist; `enrich` is deferred post-v0 by design.**
 
 - [x] **acquire** — two revs → two worktrees + compile databases
-- [ ] **produce** — worktree + compile db → `Model` ← *in progress, see §3*
+- [x] **produce** — worktree + compile db → `Model`
   - [x] toolchain: discover a system libclang and prove it before use
-  - [x] `extract.py`: one TU → a partial model. Traversal, the five node kinds, all four
-        edge kinds, USR dedup, `symbol`, `body_hash`, per-TU failure recorded not raised
-  - [ ] builder: merge partials into one `Model`, resolve edges and template aliases,
-        fill `Completeness` (including `producer_version`)
-  - [ ] per-TU cache keyed on content + headers + flags + producer version
-- [ ] **match** — two `Model`s → `Correspondence` (tier 1 only in v0)
-- [ ] **diff** — → `Event` list
-- [ ] **classify** — cause and cascade links
-- [ ] **enrich** — blast radius, evidence adapters *(post-v0)*
-- [ ] **rank** — risk scores
-- [ ] **render** — JSON first, terminal as a consumer
+  - [x] cursor traversal and node extraction
+  - [x] USR dedup, within and across translation units
+  - [x] edges: `contains`, `calls`, `inherits`, `overrides`
+  - [x] per-TU cache keyed on content + headers + flags + producer version
+  - [x] parallel parsing — what makes the §9 budget reachable
+  - [x] `Completeness` filled in from real parse failures
+- [x] **match** — two `Model`s → `Correspondence` (tier 1 only, deliberately)
+- [x] **diff** — → `Event` list
+- [x] **classify** — cause and cascade links
+- [ ] **enrich** — evidence adapters *(post-v0; blast radius shipped inside `rank`)*
+- [x] **rank** — risk scores and decomposition
+- [x] **render** — JSON document, terminal as a consumer
+
+`uv run cppsd diff <repo> --base <ref>` runs the whole thing.
 
 ---
 
-## 2 · Done
-
-### Code
-
-- [x] `model/ir.py` — the IR (ARCH §4). `Node`, `Edge`, `Model`, `Completeness`. Scalar-only
-      attributes enforced; `body_hash` separate from `attrs`; `Location` is provenance and provably
-      not identity, with a fingerprint test saying so.
-- [x] `acquire/git.py` — revision resolution. Base is `merge-base(main, HEAD)`, three-dot.
-- [x] `acquire/workspace.py` — git worktrees cached by SHA, CMake configure, compile-database
-      parsing.
-- [x] `produce/toolchain.py` — libclang discovery and verification. Discovers via
-      `$CPPSD_LIBCLANG` → `llvm-config` (including versioned names) → `ldconfig -p` → directory
-      patterns as a last resort; parses a probe TU including `<stddef.h>` and `<stdarg.h>` and
-      refuses to run if it does not come back clean.
-- [x] `produce/extract.py` — one translation unit → a partial model, which is also the cache unit
-      (ARCH §9). Nodes keyed by USR; `contains` follows the semantic parent, so an out-of-line
-      definition belongs to its class rather than to the namespace it was written in; `overrides`
-      comes from clang rather than from matching names and signatures by hand.
-- [x] `errors.py` — the precondition taxonomy. ARCH §11: hard failures, never degraded output.
-- [x] `cli.py` — `cppsd version` · `doctor` · `plan` · `acquire`.
-
-### Infrastructure
-
-- [x] Repository published, private: `j-brent/cpp-semantic-diff`. Default branch `main`, work on
-      `dev`.
-- [x] `ci` workflow — format, lint, tests, plus two steps that exist because of specific bugs:
-      `cppsd doctor` on a runner (the only place discovery runs on a host that is not a
-      developer's), and a guard that points `CPPSD_LIBCLANG` at the truncating bundled library and
-      **requires** `doctor` to reject it.
-- [x] `demo` workflow — runs against `fmt` and `spdlog` on every push and publishes to the run
-      summary. `workflow_dispatch` takes any repo URL and base ref. Uses a fresh cache root per run
-      so a cold measurement is honestly cold, and states in place that the numerator is not built
-      yet, rather than looking like semantic-diff output while showing none.
-- [x] Linux-only cleanup: no hardcoded paths anywhere; `.gitattributes` pins LF.
-
-### Measured
-
-On `fmt`, `--base HEAD~12`, in WSL:
+## 2 · The measurement this project exists to take
 
 ```
-plan:     11 files, 5 C++ files, 179 lines changed   ← the compression denominator
-acquire:  50 C++ TUs of 51 entries, both sides
-          12.2 s cold  →  1.2 s warm
+fmt    HEAD~12    179 lines changed  →  16 semantic events, 4 high-risk
+                  7 top-level, 9 nested under a cause · 5 components
+fmt    HEAD~100   3,178 lines changed → 335 semantic events
+                  56 top-level, 279 nested · 12 components
+spdlog HEAD~30    1,708 lines changed → 32 semantic events
+                  24 top-level, 8 nested · 15 components
+spdlog HEAD~5     35 lines changed   →  0 semantic events
 ```
 
-Producer spike, before any producer exists:
+**The verdict, without spin.** Compression is real but roughly an order of magnitude weaker than
+ARCH §10's illustrative *2,431 → 9* (270:1). Measured: **9.5:1 to 53:1** on `events_reported`.
 
-| Question | Answer | Consequence |
-|---|---|---|
-| Where does libclang time go? | parse 68 %, extract 32 % | The cost is the parser, not the Python FFI. Pruning the traversal saves only 18 %. |
-| What does one TU cost, pruned? | 1.02 s | 20 TUs ≈ 20 s — inside the 30 s budget even cold. A full cold `fmt` model is 51 s per side, which is what the cache is for. |
-| What do bodies cost? | 61 % of parse time, 2 % of USRs (10,588 → 10,413) | A real two-tier lever later. Unusable in v0: `calls` edges and `body_hash` both need bodies. |
+The number that actually reads as dramatic is **top-level events after cascade collapse** — 3,178
+lines down to 56 things to read. If the compression line is to be the headline, its honest form is
+two numbers. It currently prints the weaker one first on purpose: the numerator must never quietly
+become the collapsed count, because that is the one number in this product nobody can audit from
+the outside.
 
-This disproved the hypothesis that Python binding overhead dominates, and vindicated ARCH §9's
-cache-with-the-producer plan.
+The spdlog `HEAD~5` row is the one that validates the rest. Thirty-five lines of CMake, comments and
+a Windows-only header produce zero events, *correctly* — and the run prints the §11 limit that says
+why, rather than implying the change was empty.
 
-**The real extractor, all 50 of `fmt`'s TUs at HEAD:**
+---
 
-```
-125 s total,  2.5 s/TU      ← 2.4x the spike's 1.02 s/TU estimate
-134,366 nodes extracted  →  10,574 distinct     (12.7x, dedup working)
-224,571 edges extracted  →  28,470 distinct
-kinds:  method 6,467 · function 1,615 · class 1,362 · field 821 · struct 268 · namespace 35 · union 6
-edges:  calls 16,537 · contains 9,795 · overrides 1,227 · inherits 911
-```
+## 3 · The v0 identity measurement — a negative result
 
-The estimate was low because the spike priced a *pruned traversal*, not the v0 scope: walking every
-function body for `calls` edges is work the spike never did. Split measured directly — parse ≈ 50 %,
-walk ≈ 45 %, body-hash tokenization only 3–19 %. So the 30 s warm budget still holds, but a cold
-full model is ~125 s per side rather than 51 s, and the cache carries more weight than it looked.
-`body_hash` is not the thing to cut if that ever needs cutting.
+v0 ships tier-1 identity only so the damage could be measured before tiers 2–4 were built
+(§8, ARCH §5). That measurement is a v0 deliverable and it is now in:
 
-### Findings worth keeping
+| Comparison | unmatched base | unmatched head | matched |
+|---|---|---|---|
+| fmt `HEAD~12` | 3 | 3 | 10,571 |
+| fmt `HEAD~100` | 5 | 97 | — |
+| spdlog `HEAD~30` | 2 | 1 | — |
+
+fmt `HEAD~100`'s 97 head-side residue are genuine additions, so the *pairable* bound is 5.
+
+**The upper bound on events that tiers 2–4 could remove is 3, 5 and 1.** Tier-1-only costs almost
+nothing on these repositories. This argues against the next planned investment, which is exactly
+what ARCH §10 asks the design to surface in week one rather than month six.
+
+Caveat worth keeping: fmt and spdlog are stable libraries. A repository mid-refactor would look
+different, and the number to watch is `internal_linkage_residue` — statics and anonymous-namespace
+members whose USR embeds the file name, where a file rename breaks tier 1 wholesale.
+
+---
+
+## 4 · Measured performance
+
+fmt, 50 TUs, WSL, 8 cores. All 22 measured builds — 1 vs 4 vs 8 workers, cold/warm, cache on/off —
+produced the same fingerprint, `5ba8fd29041c`.
+
+| Scenario | invalidated TUs | 1 worker | 8 workers |
+|---|---|---|---|
+| cold, cache off | 50 | 105.7 s | **31.0 s** |
+| cold, cache on | 35 + 15 in-run hits | 86.1 s | **25.6 s** |
+| fully warm | 0 | 6.3 s | 6.4 s *(no pool started)* |
+| warm, 10 sources touched | 13 | 30.7 s | **14.2 s** |
+| warm, 20 sources touched | 24 | 55.0 s | **19.4 s** |
+
+**ARCH §9's budget — ≤ 20 TUs under 30 s warm — is met**, and at 24 invalidated TUs rather than 20,
+so the stated case has more headroom than the number shows. At one worker the same review is 55 s.
+
+The residual ~6.5 s warm floor is not parallelized: ~1.3 s `clang-scan-deps` + toolchain discovery,
+~4.2 s key hashing and cache deserialization, ~0.6 s assembly.
+
+---
+
+## 5 · Findings worth keeping
+
+Every one of these came from running the code against real repositories. None was visible in
+synthetic fixtures.
 
 - **Silent AST truncation.** The `libclang` PyPI wheel ships the native library without builtin
   headers. Every TU came back with exactly one error — `'stddef.h' file not found` — and no
-  exception. The first 50-TU measurement (13.8 s) was wrong; the truth was 34.9 s. This is the
-  worst possible failure for a two-point tool: both models omit the same declarations and agree.
+  exception. The first 50-TU measurement was wrong by 21 s. This is the worst possible failure for
+  a two-point tool: both models omit the same declarations and agree.
+- **The extractor leaked the host path and commit SHA into identity.** clang spells an anonymous
+  record as `(anonymous union at <abs path>:<line>:<col>)`, and that reached `name`,
+  `qualified_name`, and — less obviously — canonical *type* spellings, so it also reached
+  `attrs["type"]`, `attrs["return_type"]` and `signature`. Worktrees are named by SHA, so 32 fmt
+  nodes and 22 spdlog nodes differed on **every comparison of any two revisions**. They were the
+  only spurious differences in an otherwise clean two-point run.
+- **Lazily-evaluated exception specifications are a tier-1 hazard.** clang leaves an implicit
+  special member's spec `unevaluated` in a TU that never odr-uses it, so `~ostream` is
+  `void () noexcept` from one TU and `void ()` from another. `signature` is tier-1 identity input:
+  add one test file and an unchanged destructor reports delete + add.
 - **Never parse a version out of a whole path.** `x86_64-linux-gnu` contains `86`, which outranked
-  every real LLVM version and ranked LLVM 16 above LLVM 20. `path_version()` matches only
-  version-bearing components; there is a test naming the failure.
+  every real LLVM version and ranked LLVM 16 above LLVM 20.
 - **Ask the system before guessing.** Ubuntu ships `llvm-config-18` and no bare `llvm-config`, so
-  the good discovery path silently never fired and hardcoded globs did all the work. `ldconfig -p`
-  reports `/lib/x86_64-linux-gnu/libclang-18.so.18` — a directory and suffix no glob had.
-  Distribution-specific advice belongs in error text, labelled; never in logic.
-- **Nothing calls a template.** A call resolves to an *instantiation*, whose USR belongs to no
-  declaration anyone wrote — 10,158 of fmt's call edges, roughly a third of the graph, pointed at
-  entities that could never be nodes. `clang_getSpecializedCursorTemplate` maps them back, but it
-  cannot be applied where it is discovered: an *explicit* specialization is hand-written code with
-  its own identity (173 of them in fmt) and collapsing it into the primary template would hide real
-  changes. The extractor records the mapping; the builder, which knows the merged node set, applies
-  it only where the instantiation is not itself a node.
-- **libclang echoes back relative paths.** A header reached through a relative `-I` comes back
-  relative, and resolving that against the *process* working directory puts it outside the
-  repository — dropping every declaration in it, with no diagnostic. Caught by a test that used a
-  relative include on purpose; `-working-directory` alone was not enough.
-- **The producer id must survive repackaging.** `libclang Ubuntu clang version 18.1.3 (1ubuntu1)`
-  as a cache-key component would invalidate every cached model when a distro rebuilds the package.
-  The id is the release triple: `libclang 18.1.3`.
+  the good discovery path silently never fired. `ldconfig -p` reports a directory and suffix no glob
+  had. The same trap recurred with `clang-scan-deps`, which is also not on PATH.
+- **The producer is the parser *and* the extraction code.** `Toolchain.id` alone leaves a cache-key
+  hole exactly the size of this project's own source: the extractor fix above changes every partial
+  while leaving all cache inputs byte-identical. `ir.py` and `extract.py` are hashed into the key.
+- **fmt's compile database has 50 entries but only 35 distinct compilations** — three test sources
+  compiled once per target, differing only in `-o`. Because the cache keys on flags as
+  `parse_arguments` produces them, 15 of 50 parses in a *cold* run are served from entries written
+  earlier in the same run.
+- **fmt's model is 80.6 % test code**, 31.7 % of it vendored gtest. Extraction is right to include
+  it; ranking had to be taught it exists, or every review opens with vendored churn.
+- **Threads do not help.** ctypes drops the GIL around `index.parse`, but the extraction half is
+  Python walking cursors: four TUs go 10.38 s → 8.93 s on four threads. 1.16×.
+- **Aliasing merges as well as resolves.** fmt's 26,071 distinct edges drop 5,113 unresolvable
+  endpoints but yield 20,958 — not what subtraction gives. 2,399 are two calls to two instantiations
+  of one template becoming one call to the template, which is what ARCH §5 asks for.
 
 ---
 
-## 3 · Next: finish the producer
+## 6 · Known defects and gaps
 
-Extraction works per TU. What is left is the **builder** — merge the partials into one `Model` —
-and then the cache, which ships **with** the producer, not after.
+Found by running the pipeline on real code. Ranked by how badly each corrupts the product's claim.
 
-The builder is the only place that knows the whole picture, so three things belong there and
-nowhere else:
-
-1. **Resolve edges against the merged node set.** An edge whose endpoint no TU declared is dropped
-   and *counted*, never silently discarded.
-2. **Apply the template aliases**, and only where the instantiation is not itself a node.
-3. **Fill `Completeness`** — `producer_version` from `Toolchain.id`, every failed TU with its
-   reason, and the unresolved-edge counts as notes.
-
-Measured on fmt so the builder has a target: after aliasing, 5,113 of 28,470 edges still have an
-endpoint outside the model. 3,361 are genuinely external (`std::`, libc, compiler builtins) and
-correctly dropped. The rest are **calls to implicit special members** — copy/move constructors,
-implicit destructors — which no one declared, so they can never be nodes. Synthesizing nodes for
-them would add half a dozen phantom entities per class; the honest answer is to report the count,
-not to invent the entity.
-
-**Settled. Do not relitigate:**
-
-- **libclang, not clangd** (ARCH §12) — full control over extraction, USRs free, no per-symbol LSP
-  round-trips, no private index format to reverse. Use the verified `Toolchain` from
-  `produce/toolchain.py`; never call `Config.set_library_file` anywhere else.
-- **Dedup by USR is correctness, not optimization.** Every header is reparsed once per TU. The
-  CodeAtlas measurements found 15,656 method cursors collapsing to 161 classes in FTXUI. Get this
-  wrong and node counts inflate by two orders of magnitude.
-- **The cache unit is the translation unit, not the commit** (ARCH §9). Key on
-  `hash(TU content, transitive header content, flags, producer version)`; assemble a commit's model
-  from cached partials plus a reparse of only the invalid ones. `clang-scan-deps` computes the
-  invalidation set and is cheap (opencv's 1,292 TUs in 14.1 s) — but it is **not on PATH** on
-  Ubuntu; it lives beside the library and must be resolved explicitly, the same way the library is.
-- **Populate `Node.symbol` from the start.** It is the join key to `abidiff`/`bloaty`/`nm`. The
-  evidence layer is deferred, but retrofitting this invalidates every cached model.
-- **Fill in `Completeness` honestly.** Every TU that fails to parse is recorded with a reason, using
-  the existing `fatal_diagnostics()`. ARCH §11.
-- **v0 extraction scope** (ARCH §12): namespace / class / function / method / field nodes;
-  `contains`, `calls`, `inherits`, `overrides` edges. Nothing else.
-
-**The budget** (ARCH §9): a review touching ≤ 20 TUs completes in under 30 s warm.
-
-**After the producer**, in order: tier-1 identity matching, the delta, then the compression metric
-end to end. Build toward the print statement, not toward feature completeness.
+- [ ] **Consequences outrank their causes.** `_blast_radius` takes the larger of an edge's two
+      endpoints, so a new call into a popular utility inherits the utility's fan-in. On fmt
+      `HEAD~100`, `NodeAdded vprintln` scores 0.70 while ten `EdgeAdded` nested *under* it score up
+      to 0.84. Ranking order is the product's core claim, so this matters more than it looks.
+- [ ] **`high_risk_count` does not discriminate** — 40 % of events on fmt `HEAD~100`. Structural,
+      not a tuning accident: in v0 every add/remove is unmatched residue, so uncertainty is pinned
+      at 1.0 and a public `NodeAdded` clears the 0.6 threshold with *zero* blast radius. It
+      currently measures "public and new".
+- [ ] **Decomposition collapses on large diffs** — 78 % of events in one component on fmt
+      `HEAD~100`. `calls` edges connect most of a header-only library.
+- [ ] **`Completeness.is_complete` counts TU parses only.** fmt drops ~5,113 of 26,071 distinct
+      edges per side and `is_complete` still returns `True`, so `Confidence.models_complete` is
+      `True` on every event in a model that discarded a fifth of its graph. The only record is prose
+      in `notes`, which no consumer can state numerically.
+- [ ] **No `EdgeAttrChanged` event kind.** `inherits` going public → private between two otherwise
+      unchanged classes is invisible in the delta — a real C++ breaking change, silently dropped.
+- [ ] **`match_models(renames=...)` is never fed.** ARCH §5 requires file renames resolved from git
+      *before* matching; `acquire` exposes only `changed_files` (`--name-only`), which cannot carry
+      them. Needs an `acquire` API.
+- [ ] **`Node.tu` is declared and never populated.** `ir.py` documents it as identity-relevant for
+      internal linkage; the producer never sets it. Partly masked because clang's USRs for
+      internal-linkage entities already embed the file name.
+- [ ] **`EdgeAdded`/`EdgeRemoved` between two surviving nodes is not collapsible** by any current
+      cause rule, and is the bulk of the remaining top-level noise.
+- [ ] Self-edges appear in real models (`is_named_arg -> is_named_arg`). Producer-side.
+- [ ] Worker startup is ~0.6 s each, of which the probe is 24 ms — the rest is
+      `candidate_libraries()` re-running `llvm-config`/`ldconfig` that the parent already ran.
+      Wants a `Toolchain.adopt(library, expected_id)`.
+- [ ] `cli.py` has no `--workers` flag, though `build_model(workers=...)` and `$CPPSD_WORKERS` are
+      live.
+- [ ] `cache.notes()` quotes a stale per-TU cost (~2.6 s; now ~1.5–2.0 s serial, ~0.5 s parallel).
+- [ ] Member function templates are classified `function`, not `method`, losing `explicit` with no
+      other representation — 414 on fmt. Both models omit it identically, so it does not corrupt a
+      diff; it corrupts rendering and any kind-keyed logic.
+- [ ] `signature` is `-std`-dependent. spdlog is configured `-std=c++11`, where `noexcept` is not
+      part of the function type; 157 of its 2,478 nodes carry `exception_spec` with no `noexcept` in
+      the signature. A `CMAKE_CXX_STANDARD` bump — one line of diff — rewrites 6 % of the model.
+      Belongs in `Completeness` as a language-mode note. Relatedly, **fmt's compile database carries
+      no `-std` at all**, so fmt is parsed at libclang's default standard rather than the project's.
 
 ---
 
-## 4 · Backlog
-
-- [ ] `Completeness.producer_version` is declared and never set. It must carry `Toolchain.id`, and
-      the same string must be a component of the per-TU cache key — a model built by a different
-      parser is a different model. Wire both together when the producer lands, not after.
-- [ ] Terminal output is `rich` tables built inline in `cli.py`. Fine for four commands; it becomes
-      the wrong shape the moment `render` exists, since JSON is the product and the terminal is a
-      consumer (ARCH §10).
-- [ ] The `demo` workflow measures cold and warm acquire only. Extend it as each stage lands; the
-      "numerator" section is the placeholder to fill.
-
----
-
-## 5 · Still open
+## 7 · Still open
 
 - **Generated sources.** ARCH §3.1 states the problem, not the policy. Configure-only is the v0
   design; `clang-scan-deps` failed on 119 of opencv's 1,292 TUs (9.2 %) against an unbuilt tree,
   every one on a header CMake emits during the build. `fmt` and `spdlog` will not reveal where the
   threshold is.
-- **Tier-4 similarity threshold.** Git's `-M` has one knob and decades of tuning. Assume this needs
-  per-repository calibration; design the knob in early.
+- **Whether tiers 2–4 are worth building at all**, given §3. The answer is probably "not on these
+  repositories" and "unknown on a repository mid-refactor". Measure a third repository before
+  deciding.
 - **Where the reviewer actually reads this.** CLI is right for v0 and probably wrong as the
   product. The JSON-first contract defers the decision without prejudging it.
+- **Unnamed (not anonymous) records have an unstable USR** — file basename plus a byte offset that
+  moves on any edit above the record. A tier-1 hazard. Neither fixture has one.
 
 ---
 
-## 6 · Decisions — with the reason, so you can tell if it still holds
+## 8 · Decisions — with the reason, so you can tell if it still holds
 
 | Decision | Why |
 |---|---|
 | Python, standalone repo | CodeAtlas C++ is TypeScript only because it began as a VS Code extension. Ideas carry over from it, not modules. |
-| Linux only during design and implementation | Windows support is dead weight while the shape is still moving. Portability rules stay (§7) — cross-platform *correctness* is cheap; cross-platform *support* is not. |
+| Linux only during design and implementation | Windows support is dead weight while the shape is still moving. Portability rules stay (§9) — cross-platform *correctness* is cheap; cross-platform *support* is not. |
 | A system libclang is a hard requirement | The wheel's bundled library truncates ASTs silently. Convenience is not worth a failure mode that produces two agreeing wrong models. |
 | Base is `merge-base(main, HEAD)` | Against main's tip, every change other people merged while the branch was open gets attributed to this branch. There is a test for this; keep it. |
 | Compile database required at **both** revs | Hard precondition, not a degradation path. Configure is seconds, so it is affordable. |
 | Base that does not build ⇒ hard failure | The base is main. A main that does not build is a different problem, not this tool's. |
-| JSON is the product, terminal is a consumer | Keeps delivery surfaces out of the analysis core — the mistake that made CodeAtlas TypeScript. |
-| v0 ships **tier-1 identity only** | Renames will look bad on purpose. Measure the damage before building tiers 2–4. That measurement is a v0 deliverable. |
-| Identity tiers are one-to-one | Splits and merges surface as unmatched residue rather than being forced into a match. Confident-and-wrong is the failure mode to avoid. |
+| JSON is the product, terminal is a consumer | Keeps delivery surfaces out of the analysis core — the mistake that made CodeAtlas TypeScript. `render`'s signature admits no `Model`. |
+| v0 ships **tier-1 identity only** | Renames look bad on purpose. Measure the damage before building tiers 2–4. Done — see §3. |
+| Identity tiers are one-to-one | Splits and merges surface as unmatched residue rather than being forced into a match. Enforced in the type, not just the matcher: a double-pairing does not crash, it produces a delta that reads perfectly and describes a change nobody made. |
 | Cascade collapse at render, never at diff | JSON always carries the full event set; the view hides consequences under causes. When cause attribution is uncertain, show rather than hide. |
+| `EdgeRetargeted` is refused, not deferred | An edge's id *is* `src\|kind\|dst`, so "retargeted from B to C" claims B and C are the same entity — a node-identity judgement the one-to-one matcher already declined. |
+| The cache unit is the TU, not the commit | Per-commit caching means the first review against any new base pays full price, and the base is what every review shares. |
+| Declining to cache beats a weaker key | A missing or version-mismatched `clang-scan-deps` disables the cache whole. Declining to cache is slow; a stale hit is wrong. |
+| The cache key covers the extraction code, not just libclang | `extract.py` decides what becomes a node; change it and the same inputs yield a different partial. Hashed rather than a hand-bumped constant, because forgetting a constant fails toward serving stale entries. |
+| Workers use `spawn`, not `fork` | A forked child inherits the parent's verified libclang, so the toolchain guarantee would hold *by accident of start method* and stop holding silently if that default changed. |
+| Low confidence ranks **up** | Uncertainty is a reason for a human to look, not a reason to hide (ARCH §7). Guarded by mutation-tested cases. |
 
 ---
 
-## 7 · Conventions
+## 9 · Conventions
 
 - **No hardcoded paths.** A tool that analyzes arbitrary repositories on arbitrary machines cannot
   carry assumptions about either. Ask the system, then fall back; document fallbacks as fallbacks.
@@ -232,8 +239,10 @@ end to end. Build toward the print statement, not toward feature completeness.
 - **Docs carry a metadata block** — `id`, `type`, `status`, `author`, `created`, `dependencies`.
   IDs are `RESEARCH-00x` and `ARCH-00x`, unique, never recycled.
 - **Commit messages** say what changed and *why it matters*. Record findings discovered by running
-  the code; several are recorded that way and every one was a real bug in waiting.
+  the code; every finding in §5 was a real bug in waiting.
 - **Tests assert the design, not the implementation.** The merge-base test exists because getting it
   wrong is invisible in output; the fingerprint test exists because "a moved entity is the same
-  entity" is a claim ARCH makes. Prefer tests of that kind.
+  entity" is a claim ARCH makes; the cache-invalidation tests exist because a stale hit is the worst
+  failure this system can have. Prefer tests of that kind. Do not pin float scores — it fossilizes
+  weights that are meant to be tuned.
 - Run `uv run ruff format . && uv run ruff check . && uv run pytest -q` before committing.
