@@ -161,7 +161,7 @@ class TestEveryMatchSaysHowItWasMade:
 
     def test_the_correspondence_records_which_tiers_ran(self) -> None:
         """ "Unmatched" means different things depending on this. With only tier 1 it
-        includes every rename (§12), and output that does not say so overstates it."""
+        includes every rename (§13), and output that does not say so overstates it."""
         c = match_models(model("a"), model("b"))
         assert c.tiers_run == [MatchTier.DECLARED]
 
@@ -173,7 +173,7 @@ class TestEveryMatchSaysHowItWasMade:
 
 
 class TestRenamesLookBadOnPurpose:
-    """STATUS §6 and ARCH-001 §12. v0 ships tier 1 only and measures the damage.
+    """STATUS §6 and ARCH-001 §13. v0 ships tier 1 only and measures the damage.
 
     This test exists to be *deleted* when tier 2 lands. Until then it pins the decision so
     that nobody softens it with a name-based fallback, which would destroy the measurement
@@ -206,7 +206,7 @@ class TestTiersRunOverTheResidue:
     """
 
     class Structural:
-        """A stand-in for tier 2: pair on body_hash. Deliberately not shipped (§12)."""
+        """A stand-in for tier 2: pair on body_hash. Deliberately not shipped (§13)."""
 
         tier = MatchTier.STRUCTURAL
 

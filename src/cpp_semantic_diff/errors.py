@@ -74,7 +74,7 @@ class ConfigureError(PreconditionError):
 
 
 class ClangToolchainError(PreconditionError):
-    """No libclang that can be trusted to parse completely (ARCH-001 §11, §12).
+    """No libclang that can be trusted to parse completely (ARCH-001 §11, §13).
 
     Terminal by design. The alternative is a parser that returns truncated ASTs without
     raising, which yields two models that agree on the same missing declarations -- an

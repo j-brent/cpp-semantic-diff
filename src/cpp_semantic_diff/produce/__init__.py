@@ -1,4 +1,4 @@
-"""Stage 2: turn a `Checkout` into a `Model` (ARCH-001 §4, §9, §12)."""
+"""Stage 2: turn a `Checkout` into a `Model` (ARCH-001 §4, §9, §13)."""
 
 from __future__ import annotations
 

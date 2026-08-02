@@ -91,7 +91,7 @@ def edge_pairs(result: TuExtract, kind: EdgeKind) -> set[tuple[str, str]]:
 
 
 class TestScope:
-    """ARCH-001 §12 fixes the v0 scope. A wider one is not a bonus -- it is events nothing
+    """ARCH-001 §13 fixes the v0 scope. A wider one is not a bonus -- it is events nothing
     consumes and cache entries that churn."""
 
     def test_extracts_the_five_kinds(self, tmp_path: Path, toolchain: Toolchain) -> None:

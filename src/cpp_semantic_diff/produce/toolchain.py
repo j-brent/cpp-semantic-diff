@@ -1,6 +1,6 @@
 """Locating and verifying the C++ parser.
 
-ARCH-001 §12 chose libclang over clangd. This module decides *which* libclang, and
+ARCH-001 §13 chose libclang over clangd. This module decides *which* libclang, and
 proves it works before any real parsing happens.
 
 The motivating failure: the `libclang` PyPI wheel ships the parsing engine but not the

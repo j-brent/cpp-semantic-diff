@@ -204,7 +204,7 @@ def diff(
     started = time.perf_counter()
 
     try:
-        # The parser is a precondition, not a dependency (ARCH-001 §12). Verified before a
+        # The parser is a precondition, not a dependency (ARCH-001 §13). Verified before a
         # worktree is materialized, so a host that cannot parse fails in a second rather
         # than after a configure.
         toolchain = load()

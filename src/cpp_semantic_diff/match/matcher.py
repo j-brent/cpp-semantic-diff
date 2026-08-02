@@ -8,7 +8,7 @@ if the driver did it inline, every later tier would arrive as a rewrite of this 
 instead of an entry in a list.
 
 The package is named for the pipeline stage (§3) rather than ARCH's `identity/` sketch in
-§12, for the same reason `acquire`/`produce` are: stages are the vocabulary everything else
+§13, for the same reason `acquire`/`produce` are: stages are the vocabulary everything else
 uses.
 """
 
@@ -44,7 +44,7 @@ class Tier(Protocol):
 
 
 def default_tiers(renames: Mapping[str, str] | None = None) -> tuple[Tier, ...]:
-    """v0 runs tier 1 and nothing else (ARCH-001 §12, STATUS §6).
+    """v0 runs tier 1 and nothing else (ARCH-001 §13, STATUS §6).
 
     Tiers 2-4 are excluded on purpose: a rename surfaces as a remove plus an add, and how
     badly that reads on real branches is a v0 deliverable. Softening it here -- a name-based

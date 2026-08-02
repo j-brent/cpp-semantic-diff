@@ -22,7 +22,7 @@ diff stage existed, and two of its decisions moved the ground under it:
 
 2. §6.3's "NodeAttrChanged(signature) causes SignatureIncompatible on callers" is a
    correct rule about an event this pipeline does not yet emit. `SignatureIncompatible` is
-   derived, §12 puts derived events out of v0, and `events.py` records their payloads as
+   derived, §13 puts derived events out of v0, and `events.py` records their payloads as
    undesigned. **Classify links causes among events that already exist; it never synthesizes
    one.** Synthesizing here would move the derived-event machinery (which needs both models
    plus graph algorithms) into the stage whose whole contract is relabeling, and would put
@@ -55,7 +55,7 @@ class RuleStatus(StrEnum):
     """
 
     ACTIVE = "active"
-    #: Correct, and will fire once a stage that is out of v0 scope (ARCH-001 §12) lands.
+    #: Correct, and will fire once a stage that is out of v0 scope (ARCH-001 §13) lands.
     DORMANT = "dormant"
     #: Correct against ARCH-001 §6.3 as written, but describing events the pipeline refuses
     #: to emit by design rather than by omission. No later stage makes it reachable.
@@ -184,7 +184,7 @@ def _callee_of(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
     and the cause is on the callee whose signature moved. Sorted, so that a caller of two
     changed callees gets a stable answer rather than one that depends on edge order -- but
     that stability is a floor, not an answer. When the payload of `SignatureIncompatible` is
-    designed (`events.py` records it as undesigned, §12), it should name the callee, and
+    designed (`events.py` records it as undesigned, §13), it should name the callee, and
     this locator should read it from there; the ambiguity is an artifact of the payload
     being empty, not a property of the relation.
     """
@@ -259,7 +259,7 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
         subjects=_callee_of,
         status=RuleStatus.DORMANT,
         note="Correct, and dormant because nothing emits `SignatureIncompatible`: it is "
-        "derived, §12 puts derived events out of v0, and its payload is undesigned. This "
+        "derived, §13 puts derived events out of v0, and its payload is undesigned. This "
         "stage links events that exist and never synthesizes one -- doing so here would "
         "put an event in the JSON that no stage owns.",
     ),

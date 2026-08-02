@@ -14,7 +14,7 @@ in output:
   arriving through the back door. It becomes a recorded failure or it becomes an error.
 - **Every worker holds the verified toolchain.** A fresh process has an unconfigured
   `clang.cindex`, and an unverified libclang returns truncated ASTs without raising
-  (ARCH-001 §12). One worker doing that would leave a hole in the model shaped exactly
+  (ARCH-001 §13). One worker doing that would leave a hole in the model shaped exactly
   like whatever it parsed.
 
 Integration tests by necessity, like `test_build.py`: there is no useful way to fake
@@ -264,7 +264,7 @@ class TestNothingVanishes:
 
 
 class TestTheVerifiedToolchainReachesEveryWorker:
-    """ARCH-001 §12 and STATUS §3. The parent proves one libclang can reach the compiler's
+    """ARCH-001 §13 and STATUS §3. The parent proves one libclang can reach the compiler's
     builtin headers before any model is built; a worker process starts with none of that.
     An unverified library does not raise -- it returns a truncated AST -- so a worker with
     the wrong one produces partial models that are quietly missing declarations, and they

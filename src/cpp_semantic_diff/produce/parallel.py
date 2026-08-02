@@ -21,7 +21,7 @@ process pool buys the cores.
 
 **Every worker parses with the verified toolchain, or refuses to parse.** A fresh process
 has an unconfigured `clang.cindex`, and a `Config` that defaults to the bundled wheel
-library returns *truncated ASTs without raising* (ARCH-001 §12) -- one worker silently
+library returns *truncated ASTs without raising* (ARCH-001 §13) -- one worker silently
 producing partial models is the failure this project exists to prevent, arriving through a
 back door. `_configure_worker` therefore pins `CPPSD_LIBCLANG` to the library the parent
 already proved and calls `toolchain.load()`, which is the only place allowed to call
@@ -124,7 +124,7 @@ _index: ci.Index | None = None
 def _configure_worker(library: str, resource_dir: str, expected_id: str) -> None:
     """Give this process the parent's verified parser, or make it unable to parse.
 
-    The parent has already paid for discovery and the builtin-header probe (ARCH-001 §12).
+    The parent has already paid for discovery and the builtin-header probe (ARCH-001 §13).
     Pinning `CPPSD_LIBCLANG` hands that answer over so the worker does not re-derive it --
     `candidate_libraries()` puts the override first -- while still going through
     `toolchain.load()`, which is the only function permitted to call

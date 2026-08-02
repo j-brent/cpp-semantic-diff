@@ -47,7 +47,7 @@ from cpp_semantic_diff.model.ir import (
 )
 from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 
-#: The v0 extraction scope (ARCH-001 §12): namespace, class, function, method, field.
+#: The v0 extraction scope (ARCH-001 §13): namespace, class, function, method, field.
 #: Anything not named here is not modelled -- enums, aliases, and namespace-scope variables
 #: are deliberate omissions, not oversights. Adding a kind is additive; every kind added
 #: before the delta exists is a kind whose events nothing consumes.
@@ -752,7 +752,7 @@ class _Extractor:
 
         `CALL_EXPR` only. The `DECL_REF_EXPR` that accompanies every call would double
         every edge, and taking a function's address is a different relation than calling it
-        -- one this scope does not model (ARCH-001 §12).
+        -- one this scope does not model (ARCH-001 §13).
         """
         for node in cursor.walk_preorder():
             if node.kind is not ci.CursorKind.CALL_EXPR:

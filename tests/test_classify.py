@@ -539,7 +539,7 @@ class TestTheRuleTableIsExplicit:
 
     def test_no_dormant_or_unreachable_rule_fires_on_a_v0_delta(self) -> None:
         """If one ever does, either a later tier landed or a stage started emitting a kind
-        §12 puts out of v0 -- both worth knowing about at the moment they happen."""
+        §13 puts out of v0 -- both worth knowing about at the moment they happen."""
         base = model(
             "a",
             node(N, name="ns", kind=NodeKind.NAMESPACE),
@@ -564,7 +564,7 @@ class TestTheDormantRulesAreImplementedNotPretended:
     def test_the_pipeline_emits_neither_kind_the_dormant_rules_key_on(self) -> None:
         """The claim the tests below must not be read as contradicting. `EdgeRetargeted` is
         refused by design (`diff/edges.py`), and `SignatureIncompatible` is derived and out
-        of v0 scope (§12) -- so neither appears in any delta this pipeline produces."""
+        of v0 scope (§13) -- so neither appears in any delta this pipeline produces."""
         base = model("a", node(F), node(G, name="g"), edges=[edge(F, G)])
         head = model("b", node(F), node(C, name="C", kind=NodeKind.CLASS), edges=[edge(F, C)])
         dormant = {r.consequence for r in CAUSE_RULES if r.status is not RuleStatus.ACTIVE}
@@ -585,7 +585,7 @@ class TestTheDormantRulesAreImplementedNotPretended:
         assert cause is not None and cause.payload["attr"] == "signature"
 
     def test_classify_does_not_synthesize_the_derived_event_itself(self) -> None:
-        """The line this stage does not cross. §12 puts derived events out of v0 and
+        """The line this stage does not cross. §13 puts derived events out of v0 and
         `events.py` records their payloads as undesigned; a stage whose contract is
         relabeling must not put an event in the JSON that no stage owns."""
         base = model("a", node(F), node(G, name="g", attrs={"signature": "()"}), edges=[edge(F, G)])
