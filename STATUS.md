@@ -348,11 +348,13 @@ Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the me
 - [ ] Member function templates are classified `function`, not `method`, losing `explicit` with no
       other representation — 414 on fmt. Both models omit it identically, so it does not corrupt a
       diff; it corrupts rendering and any kind-keyed logic.
-- [ ] `signature` is `-std`-dependent. spdlog is configured `-std=c++11`, where `noexcept` is not
-      part of the function type; 157 of its 2,478 nodes carry `exception_spec` with no `noexcept` in
-      the signature. A `CMAKE_CXX_STANDARD` bump — one line of diff — rewrites 6 % of the model.
-      Belongs in `Completeness` as a language-mode note. Relatedly, **fmt's compile database carries
-      no `-std` at all**, so fmt is parsed at libclang's default standard rather than the project's.
+- [x] ~~`signature` is `-std`-dependent and nothing says so.~~ `Completeness.language_modes` now
+      carries the `-std=` values each side was parsed at, and the view says so in yellow when the
+      two differ. The dependence is unchanged and unfixable — `noexcept` is part of the function
+      type from C++17 and not before — so the answer is to state it, per ARCH §11. leveldb
+      `HEAD~9..~1` reads `base c++11 → head c++11, c++17`, and the mixed head is real: 20 vendored
+      `benchmark` TUs stay at c++11 while leveldb's own 73 move to c++17. fmt still states no `-std`
+      at all, which now shows as an empty list rather than as silence.
 
 ---
 

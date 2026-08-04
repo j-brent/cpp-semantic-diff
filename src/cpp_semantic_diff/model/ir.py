@@ -227,6 +227,15 @@ class Completeness(BaseModel):
     build_available: bool = False
     producers: list[str] = Field(default_factory=list)
     producer_version: str = ""
+    language_modes: list[str] = Field(
+        default_factory=list,
+        description="The distinct `-std=` values the compile database gives the C++ TUs, "
+        "sorted. Empty where the build states none, which is itself worth seeing -- the TUs "
+        "are then parsed at the parser's default rather than the project's. A determinant of "
+        "the AST that nothing else in this record captures: raising CMAKE_CXX_STANDARD is one "
+        "line of diff and changes which declarations exist, and in the delta that is "
+        "indistinguishable from new code (ARCH-001 §11, §12.1).",
+    )
     notes: list[str] = Field(
         default_factory=list,
         description="Anything the builder wants to say that has no field of its own. Not "

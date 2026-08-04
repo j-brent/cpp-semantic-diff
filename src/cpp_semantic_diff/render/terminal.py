@@ -93,6 +93,8 @@ def _completeness(document: DiffDocument, console: Console) -> None:
     if not block.degraded:
         console.print(f"[dim]{parsed} · both sides parsed clean[/]")
         _boundary(block, console)
+        # Both sides can parse perfectly and still have been asked different questions.
+        _language_mode(block, console)
         return
 
     console.print()
@@ -108,6 +110,27 @@ def _completeness(document: DiffDocument, console: Console) -> None:
             console.print(f"  [dim]{report.side.value:4} … {len(report.failures) - 5} more[/]")
     console.print(f"  [dim]{parsed}[/]")
     _boundary(block, console)
+    _language_mode(block, console)
+
+
+def _language_mode(block: CompletenessBlock, console: Console) -> None:
+    """The `-std=` each side was parsed at, printed only when the two differ.
+
+    Silent when they agree, because a standard that did not move explains nothing and §11's
+    limits are already the standing ones. Yellow when it moved, because that is a determinant
+    of the AST which no other line accounts for: leveldb `HEAD~9..~1` raises
+    `CMAKE_CXX_STANDARD` from 11 to 17 in one line of CMake, and 117 entities appear in
+    vendored googletest that no source change explains. In the delta they read as plain
+    additions, so without this a reviewer has no way to reach the right conclusion.
+    """
+    base, head = block.base.language_modes, block.head.language_modes
+    if base == head:
+        return
+    console.print(
+        f"  [yellow]language mode differs: base {', '.join(base) or 'unset'} → "
+        f"head {', '.join(head) or 'unset'} — additions and removals may be the standard "
+        f"moving rather than the code[/]"
+    )
 
 
 def _boundary(block: CompletenessBlock, console: Console) -> None:

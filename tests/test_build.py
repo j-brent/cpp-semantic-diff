@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -63,6 +64,52 @@ def project(tmp_path: Path, sources: dict[str, str], tus: Sequence[str]) -> Chec
 
 def build(tmp_path: Path, toolchain: Toolchain, sources: dict[str, str], *tus: str) -> Model:
     return build_model(project(tmp_path, sources, tus), toolchain=toolchain)
+
+
+class TestTheLanguageModeIsRecorded:
+    """A determinant of the AST that nothing else in `Completeness` captures.
+
+    Raising `CMAKE_CXX_STANDARD` is one line of CMake and changes which declarations exist.
+    Measured on leveldb `HEAD~9..~1` (11 → 17): 117 entities appear in vendored googletest
+    that no source change explains, and in the delta they are indistinguishable from new
+    code. Reported so the reviewer can reach the right conclusion (STATUS §5).
+    """
+
+    SOURCES: ClassVar[dict[str, str]] = {"a.cpp": "int a() { return 1; }\n"}
+
+    def test_the_standard_the_build_asked_for_is_recorded(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        model = build(tmp_path, toolchain, self.SOURCES, "a.cpp")
+        assert model.completeness.language_modes == ["c++17"]
+
+    def test_a_build_that_states_no_standard_records_none(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """fmt's compile database carries no `-std` at all, so it is parsed at libclang's
+        default rather than the project's. Empty is the honest answer, not a guess."""
+        (tmp_path / "a.cpp").write_text(self.SOURCES["a.cpp"], encoding="utf-8")
+        database = tmp_path / "compile_commands.json"
+        database.write_text(
+            json.dumps(
+                [
+                    {
+                        "directory": str(tmp_path),
+                        "file": "a.cpp",
+                        "arguments": ["clang++", "-c", "a.cpp", "-o", "a.o"],
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        checkout = Checkout(rev=REV, path=tmp_path, compile_db=CompileDatabase.load(database))
+        model = build_model(checkout, toolchain=toolchain, cache=False)
+        assert model.completeness.language_modes == []
+
+    def test_modes_are_deduplicated_and_sorted(self, toolchain: Toolchain) -> None:
+        """One entry per distinct standard, not per TU -- a 900-TU build states one fact."""
+        model = assemble(REV, [], toolchain=toolchain, language_modes=["c++17", "c++11", "c++17"])
+        assert model.completeness.language_modes == ["c++11", "c++17"]
 
 
 def named(model: Model, qualified: str) -> list[Node]:

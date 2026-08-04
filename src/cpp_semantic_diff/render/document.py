@@ -142,6 +142,12 @@ class CompletenessReport(BaseModel):
     )
     producer_version: str
     producers: list[str] = Field(default_factory=list)
+    language_modes: list[str] = Field(
+        default_factory=list,
+        description="`-std=` values this side was parsed at, sorted. Empty means the build "
+        "states none and the parser's default was used. Compare the two sides: a difference "
+        "here explains additions and removals that no source change accounts for.",
+    )
 
     tus_complete: bool = Field(
         description="Every attempted TU parsed. **This is a claim about parsing and about "
@@ -172,6 +178,7 @@ class CompletenessReport(BaseModel):
             build_available=completeness.build_available,
             producer_version=completeness.producer_version,
             producers=list(completeness.producers),
+            language_modes=list(completeness.language_modes),
             tus_complete=completeness.is_complete,
             failures=[
                 TuFailure(path=t.path, detail=t.detail)

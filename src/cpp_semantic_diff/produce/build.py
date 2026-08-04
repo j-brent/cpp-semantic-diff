@@ -57,6 +57,7 @@ from cpp_semantic_diff.produce.cache import TuCache
 from cpp_semantic_diff.produce.extract import (
     TuExtract,
     extract,
+    language_mode,
     merge_edge,
     merge_node,
 )
@@ -119,6 +120,7 @@ def assemble(
     toolchain: Toolchain,
     build_available: bool = False,
     notes: Sequence[str] = (),
+    language_modes: Sequence[str] = (),
 ) -> Model:
     """Merge partial models into the model of one revision.
 
@@ -191,6 +193,11 @@ def assemble(
         # as a different producer.
         producers=[toolchain.id],
         producer_version=toolchain.id,
+        # Not derived from the extracts: they are cached, and a field added to the cached
+        # payload would read as empty for every entry written before it existed. The compile
+        # database is re-read on every run, so taking it from there is both correct now and
+        # correct for entries written yesterday.
+        language_modes=sorted(set(language_modes)),
         notes=list(notes),
     )
 
@@ -294,4 +301,5 @@ def build_model(
         # must see that stated rather than assumed.
         build_available=False,
         notes=notes,
+        language_modes=[m for e in entries if (m := language_mode(e)) is not None],
     )

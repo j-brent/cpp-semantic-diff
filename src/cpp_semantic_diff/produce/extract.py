@@ -324,6 +324,31 @@ def parse_arguments(entry: CompileEntry, toolchain: Toolchain) -> list[str]:
     return toolchain.parse_args(args)
 
 
+def language_mode(entry: CompileEntry) -> str | None:
+    """The `-std=` this TU is compiled at, or None if the build does not say.
+
+    A determinant of the AST that the include closure's content hashing cannot see, and one
+    a reviewer cannot infer: raising `CMAKE_CXX_STANDARD` is one line of CMake and rewrites
+    part of the model, because a newer standard exposes declarations an older one hides and
+    changes what belongs to a function's type. Measured on leveldb `HEAD~9..~1`, which bumps
+    11 to 17: 117 entities appeared in vendored googletest alone, and in the residue they are
+    indistinguishable from new code (STATUS §5).
+
+    So the mode is reported rather than left to be inferred. It is *not* folded into
+    `Completeness.is_complete` -- a standards bump is not a hole in coverage, it is a
+    different question asked of the same source, and §11 wants such a limit stated as a fact
+    rather than raised as an alarm.
+
+    Read here rather than in `build.py` because this module already owns what a compile
+    argument means (`parse_arguments`), and a second place that knows the spelling of `-std`
+    is a second place that can get it wrong.
+    """
+    for arg in reversed(entry.arguments):  # last wins, as it does for the compiler
+        if arg.startswith("-std="):
+            return arg.removeprefix("-std=")
+    return None
+
+
 #: One entry per distinct (spelling, root, build directory). A translation unit asks about
 #: the same few hundred files thousands of times: three real fmt TUs together answered
 #: 14,981 questions about 208 distinct paths. Bounded rather than unbounded because a
