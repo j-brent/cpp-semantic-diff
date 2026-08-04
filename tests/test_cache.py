@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
+import time
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -35,6 +37,7 @@ from cpp_semantic_diff.produce.build import build_model
 from cpp_semantic_diff.produce.cache import (
     GENERATIONS,
     TuCache,
+    collect,
     dumps,
     find_scanner,
     loads,
@@ -577,6 +580,88 @@ def _without_cache_hits(model: Model) -> dict:
     for result in dump["completeness"]["tus"]:
         result["cache_hit"] = False
     return dump
+
+
+class TestCollectingSupersededGenerations:
+    """`_evict` cannot reach the thing that actually accumulates (STATUS §6).
+
+    It trims within one TU's directory and only runs on a *write*. `Cache.identity` hashes
+    the producer code digest, so changing `extract.py` gives every TU a new identity
+    directory and nothing ever writes to the old ones again -- so nothing ever evicts them.
+    Every producer change has left a full copy of the cache behind. Measured on this machine
+    mid-session: 1,156 entries and 229 MB, of which 576 entries and 147 MB were unreachable.
+    """
+
+    def entry(self, store: Path, name: str, *, age_days: float) -> Path:
+        path = store / name[:2] / name / f"{name}.json.gz"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x" * 1024)
+        stamp = time.time() - age_days * 86400
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def test_an_unused_entry_goes_and_a_used_one_stays(self, tmp_path: Path) -> None:
+        old = self.entry(tmp_path, "aaaaaa", age_days=90)
+        fresh = self.entry(tmp_path, "bbbbbb", age_days=1)
+
+        sweep = collect(tmp_path, max_age_days=30)
+
+        assert not old.exists()
+        assert fresh.exists()
+        assert (sweep.removed, sweep.kept) == (1, 1)
+        assert sweep.freed == 1024
+
+    def test_a_dry_run_reports_without_removing(self, tmp_path: Path) -> None:
+        """The number is worth having before the deletion, given the deletion is the point."""
+        old = self.entry(tmp_path, "aaaaaa", age_days=90)
+        sweep = collect(tmp_path, max_age_days=30, dry_run=True)
+        assert old.exists()
+        assert sweep.removed == 1
+
+    def test_it_reaches_across_producer_generations(self, tmp_path: Path) -> None:
+        """The case `_evict` structurally cannot: two identity directories for one TU, the
+        older one orphaned by a producer change and never written to again."""
+        superseded = self.entry(tmp_path / "v1", "old111", age_days=90)
+        current = self.entry(tmp_path / "v1", "new222", age_days=0)
+
+        collect(tmp_path, max_age_days=30)
+
+        assert not superseded.exists()
+        assert current.exists()
+
+    def test_emptied_directories_do_not_survive_their_entries(self, tmp_path: Path) -> None:
+        old = self.entry(tmp_path, "aaaaaa", age_days=90)
+        collect(tmp_path, max_age_days=30)
+        assert not old.parent.exists(), "the sharded skeleton is swept with its contents"
+
+    def test_a_missing_store_is_not_an_error(self, tmp_path: Path) -> None:
+        """`cppsd cache gc` on a machine that has never run a diff is a no-op, not a crash."""
+        assert collect(tmp_path / "nothing-here").removed == 0
+
+
+class TestAHitKeepsAnEntryAlive:
+    """`collect` sweeps on mtime, so a read has to refresh it.
+
+    Otherwise the sweep collects exactly backwards: a TU that never changes is the one the
+    cache serves most and writes least, so its entry would look staler the better the cache
+    was working.
+    """
+
+    def test_loading_an_entry_refreshes_it(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        checkout = project(tmp_path / "src", {"a.cpp": "int a();\n"}, ["a.cpp"])
+        cache = TuCache.open(checkout, toolchain=toolchain, store=store(tmp_path))
+
+        entry = checkout.cpp_entries[0]
+        list(cache.extracts([entry]))  # populates
+        key = cache.key(entry)
+        assert key is not None, "the entry must be cacheable or this tests nothing"
+        path = cache._path(cache.identity(entry), key)
+
+        stale = time.time() - 90 * 86400
+        os.utime(path, (stale, stale))
+        list(cache.extracts([entry]))  # a hit
+
+        assert path.stat().st_mtime > stale, "a served entry must not look unused"
 
 
 def _partial_dump(partial) -> dict:

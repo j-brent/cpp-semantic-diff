@@ -38,6 +38,13 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+cache_app = typer.Typer(
+    name="cache",
+    help="Inspect and reclaim the model cache.",
+    no_args_is_help=True,
+)
+app.add_typer(cache_app)
+
 console = Console()
 err_console = Console(stderr=True)
 
@@ -106,6 +113,65 @@ def doctor() -> None:
     table.add_row("target", tc.target or "[yellow]undetermined -- do not share this cache[/]")
     table.add_row("producer id", tc.id)
     console.print(table)
+
+
+def _megabytes(size: int) -> str:
+    return f"{size / 1_048_576:.0f} MB"
+
+
+@cache_app.command("status")
+def cache_status() -> None:
+    """What the cache holds, and how much of it is reclaimable."""
+    from cpp_semantic_diff.acquire.workspace import cache_root
+    from cpp_semantic_diff.produce.cache import DEFAULT_MAX_AGE_DAYS, collect, store_root
+
+    sweep = collect(dry_run=True)
+    worktrees = cache_root() / "worktrees"
+    worktree_bytes = sum(p.stat().st_size for p in worktrees.rglob("*") if p.is_file())
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_column(style="dim")
+    table.add_column()
+    table.add_row("location", str(cache_root()))
+    table.add_row("TU models", f"{sweep.total:,} entries · {_megabytes(sweep.held + sweep.freed)}")
+    table.add_row(
+        f"unused {DEFAULT_MAX_AGE_DAYS}d+", f"{sweep.removed:,} entries · {_megabytes(sweep.freed)}"
+    )
+    # Reported but not swept: removing a worktree is `git worktree remove` against the
+    # repository that owns it, and this command does not know which that is.
+    table.add_row("worktrees", f"{_megabytes(worktree_bytes)} [dim](not collected)[/]")
+    table.add_row("store", str(store_root()))
+    console.print(table)
+
+
+@cache_app.command("gc")
+def cache_gc(
+    days: Annotated[
+        int,
+        typer.Option("--older-than", help="Collect entries unused for this many days."),
+    ] = 30,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Report what would be collected and remove nothing."),
+    ] = False,
+) -> None:
+    """Reclaim cache entries nothing has used lately.
+
+    `TuCache._evict` trims within one TU's directory and cannot reach the case that actually
+    accumulates: every change to the extraction code gives each TU a new identity directory,
+    and nothing ever writes to the old ones again (ARCH-001 §9, STATUS §6).
+
+    Safe by construction -- an entry collected here is reparsed on the next run that wants
+    it, which is the same cost as one that was never written.
+    """
+    from cpp_semantic_diff.produce.cache import collect
+
+    sweep = collect(max_age_days=days, dry_run=dry_run)
+    verb = "would collect" if dry_run else "collected"
+    console.print(
+        f"{verb} [bold]{sweep.removed:,}[/] of {sweep.total:,} entries · "
+        f"{_megabytes(sweep.freed)} freed · {_megabytes(sweep.held)} kept"
+    )
 
 
 @app.command()

@@ -54,6 +54,7 @@ Declining to cache is slow. A stale hit is wrong.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import gzip
 import hashlib
@@ -61,6 +62,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 import uuid
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
@@ -386,6 +388,102 @@ def loads(blob: bytes) -> TuExtract:
     )
 
 
+#: Entries untouched for longer than this are collectable by default. Generous on purpose:
+#: the cost of collecting a live entry is one reparse, and the cost of keeping a dead one is
+#: disk, so the default errs toward keeping.
+DEFAULT_MAX_AGE_DAYS = 30
+
+
+@dataclass(frozen=True)
+class Sweep:
+    """What a `collect` did, or would do. Sizes in bytes."""
+
+    removed: int = 0
+    freed: int = 0
+    kept: int = 0
+    held: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.removed + self.kept
+
+
+def store_root() -> Path:
+    """Every generation of TU models, not just the current `ENTRY_FORMAT`.
+
+    A sweep has to reach above `v{ENTRY_FORMAT}`: bumping the format orphans a whole store
+    directory at once, which is the largest single thing that can be left behind.
+    """
+    return cache_root() / "tu-models"
+
+
+def collect(
+    root: Path | None = None,
+    *,
+    max_age_days: int = DEFAULT_MAX_AGE_DAYS,
+    dry_run: bool = False,
+) -> Sweep:
+    """Remove cache entries nothing has used lately, across every producer generation.
+
+    **The hole this fills.** `TuCache._evict` trims within one TU's directory, keeping the
+    newest `GENERATIONS`. That is the right rule for a TU whose content keeps changing, and
+    it cannot reach the case that actually accumulates: `Cache.identity` hashes the producer
+    code digest, so changing `extract.py` or `ir.py` gives *every* TU a brand-new identity
+    directory and the previous generation is never written to again. `_evict` only runs on a
+    write, so directories nothing writes to are immortal. Every producer change has therefore
+    left a full copy of the cache behind since the cache was written (STATUS §6).
+
+    Age, because there is nothing better to key on. The alternative -- delete every identity
+    that is not the current producer's -- needs a toolchain and a checkout to know what the
+    current identity *is*, which would make cleaning the cache require a repository to clean
+    it against. Age needs neither and collects the same directories one generation later.
+
+    Safe by construction: an entry this removes is reparsed on the next run that wants it.
+    Declining to cache is slow and never wrong (§8), and that applies to a cache entry this
+    deleted exactly as it applies to one that was never written.
+    """
+    root = root or store_root()
+    cutoff = time.time() - max_age_days * 86400
+    sweep = Sweep()
+    if not root.is_dir():
+        return sweep
+
+    for entry in root.rglob("*.json.gz"):
+        try:
+            stat = entry.stat()
+        except OSError:  # pragma: no cover - vanished under us, which is fine
+            continue
+        if stat.st_mtime < cutoff:
+            if not dry_run:
+                try:
+                    entry.unlink()
+                except OSError:  # pragma: no cover - permissions, read-only store
+                    sweep = Sweep(
+                        sweep.removed, sweep.freed, sweep.kept + 1, sweep.held + stat.st_size
+                    )
+                    continue
+            sweep = Sweep(sweep.removed + 1, sweep.freed + stat.st_size, sweep.kept, sweep.held)
+        else:
+            sweep = Sweep(sweep.removed, sweep.freed, sweep.kept + 1, sweep.held + stat.st_size)
+
+    if not dry_run:
+        _prune_empty(root)
+    return sweep
+
+
+def _prune_empty(root: Path) -> None:
+    """Remove directories left holding nothing, deepest first.
+
+    An identity directory that keeps its skeleton after its entries are gone is not a
+    correctness problem, but the store is sharded two levels deep and a repository's worth of
+    empty directories is slow to walk and alarming to look at.
+    """
+    for directory in sorted(root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if directory.is_dir():
+            with contextlib.suppress(OSError):  # not empty, or racing another run
+                directory.rmdir()
+
+
 # -- the cache ----------------------------------------------------------------------
 
 
@@ -619,6 +717,13 @@ class TuCache:
         except Exception:
             path.unlink(missing_ok=True)
             return None
+        # A hit refreshes the entry's mtime, which is what makes `collect` an age sweep over
+        # *use* rather than over *writes*. Without it a TU that never changes -- the
+        # overwhelming majority on any repository -- looks stale precisely because the cache
+        # is working, and the sweep would collect the entries it should keep first.
+        # Best-effort: a read-only store is a slower build, not a failed one.
+        with contextlib.suppress(OSError):
+            path.touch()
         return partial
 
     def save(self, identity: str, key: str, partial: TuExtract) -> None:
