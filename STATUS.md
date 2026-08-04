@@ -44,6 +44,9 @@ spdlog HEAD~30    1,708 lines changed → 32 semantic events, 5 high-risk
                   24 top-level, 8 nested · 18 components
 spdlog HEAD~5     35 lines changed   →  0 semantic events
 
+leveldb HEAD~9..~1 45 lines changed  →   6 semantic events, 3 high-risk   (7.5 lines/event)
+                  + 117 in bundled dependencies from a CMAKE_CXX_STANDARD bump
+
 leveldb HEAD~10   52 lines changed   → 134 semantic events, 5 high-risk
                   3,660 more in bundled dependencies (96 %), ranked last
                   11 top-level · 142 components · first vendored event at rank 112
@@ -109,17 +112,26 @@ why, rather than implying the change was empty.
 v0 ships tier-1 identity only so the damage could be measured before tiers 2–4 were built
 (§8, ARCH §5). That measurement is a v0 deliverable and it is now in:
 
-| Comparison | unmatched base | unmatched head | matched |
-|---|---|---|---|
-| fmt `HEAD~12` | 3 | 3 | 10,571 |
-| fmt `HEAD~100` | 5 | 97 | — |
-| spdlog `HEAD~30` | 2 | 1 | — |
+| Comparison | unmatched base | unmatched head | matched | pairable bound |
+|---|---|---|---|---|
+| fmt `HEAD~12` | 3 | 3 | 10,571 | 3 |
+| fmt `HEAD~100` | 5 | 97 | — | 5 |
+| spdlog `HEAD~30` | 2 | 1 | — | 1 |
+| leveldb `HEAD~9..~1` | **0** | 49 | 7,695 | **0** |
 
-fmt `HEAD~100`'s 97 head-side residue are genuine additions, so the *pairable* bound is 5.
+Head-side residue is not pairable where it is genuinely new: fmt `HEAD~100`'s 97 are real additions,
+and leveldb's 49 are an artifact of the `CMAKE_CXX_STANDARD 11 → 17` bump in that range exposing
+declarations C++11 did not (all 49 in vendored googletest — see §5).
 
-**The upper bound on events that tiers 2–4 could remove is 3, 5 and 1.** Tier-1-only costs almost
-nothing on these repositories. This argues against the next planned investment, which is exactly
-what ARCH §10 asks the design to surface in week one rather than month six.
+**The upper bound on events that tiers 2–4 could remove is 3, 5, 1 and 0** — and the zero is on the
+only repository with real implementation files rather than a header-only library. Tier-1-only costs
+almost nothing anywhere it has been measured. This argues against the next planned investment, which
+is exactly what ARCH §10 asks the design to surface in week one rather than month six.
+
+**Verdict: do not build tiers 2–4.** §7 held this open pending a third repository; it now has one,
+of a deliberately different shape, and the answer got *stronger* rather than weaker. What would
+reopen it is a repository mid-refactor — none of these four comparisons renames anything
+substantial, and `internal_linkage_residue` remains the number to watch.
 
 Caveat worth keeping: fmt and spdlog are stable libraries. A repository mid-refactor would look
 different, and the number to watch is `internal_linkage_residue` — statics and anonymous-namespace
@@ -234,6 +246,15 @@ synthetic fixtures.
 - **`EdgeAttrChanged` is correct and almost never fires** — zero occurrences across 300 commits of
   each fixture. Worth knowing before anything is built on top of it: a rule that depends on it will
   look correct in review and do nothing in practice.
+- **The `-std` hazard is real, and it was found by a one-line CMake diff.** §6 predicted that a
+  `CMAKE_CXX_STANDARD` bump "rewrites 6 % of the model"; leveldb `HEAD~9..~1` does exactly that —
+  `11 → 17`, 45 lines of diff, and **117 events in vendored googletest** (49 `NodeAdded`, 67
+  `EdgeAdded`) from declarations C++17 exposes and C++11 did not. Two things worth keeping. The
+  first-party events on that range are **6, all real** and all traceable to the commits in it, so
+  the artifact did not contaminate what the reviewer reads — the vendored partition contained it,
+  which is that decision earning its place a second time. And the artifact is invisible in the
+  residue as anything but "additions": a language-mode change looks exactly like new code, which is
+  why `Completeness` should carry the language mode (§6) rather than leaving it to be inferred.
 - **`git worktree add` does not populate submodules**, and nothing noticed until the fixture set
   widened past two repositories that vendor by copying. A submodule is a gitlink — mode 160000, a
   commit id — and the worktree gets an empty directory. leveldb failed CMake configure, which
@@ -341,9 +362,9 @@ Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the me
   design; `clang-scan-deps` failed on 119 of opencv's 1,292 TUs (9.2 %) against an unbuilt tree,
   every one on a header CMake emits during the build. `fmt` and `spdlog` will not reveal where the
   threshold is.
-- **Whether tiers 2–4 are worth building at all**, given §3. The answer is probably "not on these
-  repositories" and "unknown on a repository mid-refactor". Measure a third repository before
-  deciding.
+- ~~**Whether tiers 2–4 are worth building at all.**~~ **Answered: no.** The third repository is in
+  and the pairable bound on leveldb is **0** (§3). Still unknown on a repository mid-refactor, which
+  is the one condition that would reopen it.
 - **Where the reviewer actually reads this.** CLI is right for v0 and probably wrong as the
   product. The JSON-first contract defers the decision without prejudging it.
 - **Unnamed (not anonymous) records have an unstable USR** — file basename plus a byte offset that
