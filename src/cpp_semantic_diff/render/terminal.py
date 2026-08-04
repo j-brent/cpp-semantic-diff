@@ -146,6 +146,17 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
         parts.append(f"{document.meta.timings.total:.1f}s")
     console.print(f"  [dim]{' · '.join(parts)}[/]")
 
+    if s.vendored_events:
+        # The events are ranked last, so on a dependency bump a top-N view simply stops
+        # showing them -- and silence there is indistinguishable from "nothing changed".
+        # A reviewer is reviewing their own code, but they are entitled to know how much
+        # was set aside on their behalf and that it is in the JSON.
+        share = s.vendored_events / s.events_reported if s.events_reported else 0.0
+        console.print(
+            f"  [dim]{s.vendored_events:,} event(s) in bundled dependencies "
+            f"({share:.0%} of the delta) ranked last — in the JSON, not shown here[/]"
+        )
+
     if tree.promoted:
         # §6.3: when cause attribution is uncertain, show. Saying so is the other half --
         # a refusal nobody is told about looks exactly like a rule that never fired.

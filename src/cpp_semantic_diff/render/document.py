@@ -436,6 +436,13 @@ class Summary(BaseModel):
         description="`len(events)`. The complete set. Not the visible set, not the "
         "top-level set, not a filtered set."
     )
+    vendored_events: int = Field(
+        default=0,
+        description="How many of `events_reported` are in bundled dependencies, which rank "
+        "after everything first-party as a block. Stated separately and never subtracted "
+        "from the numerator: a dependency bump can be 96 % of the delta, and a reviewer has "
+        "to be able to tell 'almost nothing changed' from 'almost everything was set aside'.",
+    )
     compression: str = Field(
         description="§10's sentence, ready to print: '2,431 lines changed -> 9 semantic "
         "events, 2 high-risk'. Rendered here so every view prints the same claim."

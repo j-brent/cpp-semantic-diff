@@ -95,7 +95,10 @@ def build_document(
             cpp_files_changed=cpp_files_changed,
             files_renamed=files_renamed,
             events_reported=count,
-            compression=compression_sentence(lines_changed, count, high_risk),
+            vendored_events=ranking.vendored_count,
+            compression=compression_sentence(
+                lines_changed, count, high_risk, ranking.vendored_count
+            ),
             compression_ratio=(lines_changed / count) if count else None,
             high_risk_count=high_risk,
             top_level_events=sum(1 for e in events if e.caused_by is None),
@@ -111,7 +114,7 @@ def build_document(
     )
 
 
-def compression_sentence(lines_changed: int, events: int, high_risk: int) -> str:
+def compression_sentence(lines_changed: int, events: int, high_risk: int, vendored: int = 0) -> str:
     """§10's line, verbatim in shape: *2,431 lines changed -> 9 semantic events, 2 high-risk*.
 
     Built here rather than in a view so that every consumer prints the same claim, and so
@@ -123,13 +126,24 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int) -> str
     that moved a `#define`), and zero events on a large diff is the single most important
     result this tool can report -- it means the change had no semantic content the model can
     see, which is either excellent news or a hole in the model.
+
+    **`events` stays the whole set.** Vendored churn is named beside the number, never
+    subtracted from it: STATUS §2 exists because this is the one figure nobody can audit from
+    outside, and a numerator that quietly shrank whenever a dependency moved would be exactly
+    the redefinition that stops it measuring anything. Naming it also stops the ratio being
+    read as a straight compression claim on a commit where the denominator did not see what
+    the numerator counted -- a submodule bump is one line of text diff and thousands of
+    modelled entities (STATUS §6).
     """
     head = (
         f"{lines_changed:,} lines changed -> {events:,} semantic event{'' if events == 1 else 's'}"
     )
     if not events:
         return f"{head} (no semantic change the model can see)"
-    return f"{head}, {high_risk:,} high-risk"
+    tail = f", {high_risk:,} high-risk"
+    if vendored:
+        tail += f" ({vendored:,} in bundled dependencies, ranked last)"
+    return f"{head}{tail}"
 
 
 def _entities(events: Sequence[Event], base: Model, head: Model) -> dict[NodeId, EntitySummary]:

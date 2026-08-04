@@ -556,6 +556,59 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
         own_test, vendored = body("c:@F@t#"), body("c:@F@v#")
         assert outranks(rank([own_test, vendored], head, head), own_test, vendored)
 
+    def test_a_heavily_depended_on_vendored_removal_still_loses_to_a_trivial_own_change(
+        self,
+    ) -> None:
+        """The case the weighted term could not win, measured on leveldb before this held.
+
+        A submodule bump removes googletest entities with hundreds of dependents. Blast
+        radius (0.35) plus novelty for a removal (0.25) is 0.60, while all of exposure is
+        0.25 -- so the vendored removal scored 0.76 and a changed public attribute scored
+        about 0.44. The top 12 events and 44 of the top 50 were bundled googletest.
+
+        The claim is not that vendored is worth less. It is that it is not what is being
+        reviewed, which is an ordering and not a quantity -- so it is a partition, and no
+        blast radius can buy a way out of it.
+        """
+        dependents = [node(f"c:@F@d{i}#", file=VENDORED) for i in range(40)]
+        head = model(
+            "m",
+            node("c:@F@assert_helper#", file=VENDORED),
+            node("c:@F@own#", file=PUBLIC),
+            *dependents,
+            edges=[edge(d.id, "c:@F@assert_helper#") for d in dependents],
+        )
+        vendored = event(EventKind.NODE_REMOVED, "c:@F@assert_helper#", RESIDUE)
+        mine = body("c:@F@own#")
+
+        ranking = rank([vendored, mine], head, head)
+        totals = {s.event_id: s.total for s in ranking.scores}
+
+        # Without this the test could pass because the scores happen to order correctly,
+        # and it would keep passing if the partition were deleted. The point is that the
+        # vendored event scores *higher* and is still ranked below.
+        assert totals[vendored.id] > totals[mine.id], (
+            "the weighted score still prefers the vendored removal -- that is the defect "
+            "the partition exists to overrule, so this test is vacuous without it"
+        )
+        assert ranking.order[0] == mine.id, "a page of googletest is not the review"
+        assert ranking.vendored_count == 1
+
+    def test_vendored_events_keep_their_order_among_themselves(self) -> None:
+        """The partition decides which block, never the order inside it. Zeroing the weight
+        would make every bundled change equally uninteresting, so a reviewer who does go
+        looking finds them shuffled."""
+        dependents = [node(f"c:@F@d{i}#", file=VENDORED) for i in range(30)]
+        head = model(
+            "m",
+            node("c:@F@big#", file=VENDORED),
+            node("c:@F@small#", file=VENDORED),
+            *dependents,
+            edges=[edge(d.id, "c:@F@big#") for d in dependents],
+        )
+        big, small = body("c:@F@big#"), body("c:@F@small#")
+        assert outranks(rank([small, big], head, head), big, small)
+
     @pytest.mark.parametrize(
         ("path", "expected"),
         [

@@ -596,6 +596,29 @@ class TestTheResidueIsReported:
         assert "tier declared only" in out
         assert "removal plus an addition" in out
 
+    def test_bundled_dependency_churn_is_named_not_hidden(self) -> None:
+        """A dependency bump can be 96 % of the delta (leveldb, STATUS §2). Ranking puts it
+        last, so a top-N view stops showing it -- which means the count has to be stated, or
+        "almost nothing changed" and "almost everything was set aside" look identical."""
+        own = node("c:@F@own#", name="own", file="src/lib.cc")
+        dep = node("c:@F@dep#", name="dep", file="third_party/gtest/gtest.cc")
+        doc = pipeline(model("a", own, dep), model("b", own))
+
+        assert doc.summary.vendored_events == 1
+        assert doc.summary.events_reported == 1, "the numerator is still the whole set"
+        assert "bundled dependencies" in doc.summary.compression
+
+    def test_the_numerator_never_shrinks_when_a_dependency_moves(self) -> None:
+        """STATUS §2: this is the one figure nobody can audit from outside. Naming vendored
+        churn beside it is honest; subtracting it would be the redefinition that stops the
+        metric measuring anything."""
+        deps = [
+            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(5)
+        ]
+        doc = pipeline(model("a", *deps), model("b"))
+        assert doc.summary.events_reported == 5
+        assert doc.summary.vendored_events == 5
+
     def test_resolved_renames_reach_the_document(self) -> None:
         """ARCH-001 §5's one identity input that comes from outside the models.
 

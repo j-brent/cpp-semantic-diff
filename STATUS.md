@@ -44,21 +44,30 @@ spdlog HEAD~30    1,708 lines changed → 32 semantic events, 5 high-risk
                   24 top-level, 8 nested · 18 components
 spdlog HEAD~5     35 lines changed   →  0 semantic events
 
-leveldb HEAD~10   52 lines changed   → 3,794 semantic events, 21 high-risk   ** BROKEN **
-                  1,070 top-level · 142 components · 96.5 % of events vendored
+leveldb HEAD~10   52 lines changed   → 3,794 semantic events, 21 high-risk
+                  3,660 in bundled dependencies (96 %), ranked last
+                  134 first-party events · first vendored event at rank 112
 ```
 
-**The leveldb row is the product failing, and it is left in the table for that reason.** The
-commit bumps `third_party/googletest` and `third_party/benchmark`. Two defects compound, both in
-§6:
+**The leveldb row is what a third fixture was for.** The commit bumps `third_party/googletest` and
+`third_party/benchmark`, and on the first run the top 12 events and 44 of the top 50 were bundled
+googletest — the exact failure `rank/exposure.py` was written to prevent. Vendored code now sorts
+after everything first-party as a block (§6, and `ranker.py` carries the arithmetic), so the top
+event is `DBImpl::TEST_CompactMemTable` — which is what the commit says it does.
 
-- the denominator is blind to submodules — `git diff --numstat` scores a pointer bump as one line,
-  while the model sees the whole content change, so 52 and 3,794 are counted over different
-  universes and their ratio means nothing;
-- 3,661 of the 3,794 events are in `third_party/`, and **ranking does not demote them** — the top 12
-  events are all vendored, and 44 of the top 50.
+| | before | after |
+|---|---|---|
+| vendored in top 12 | 12 | **0** |
+| vendored in top 50 | 44 | **0** |
+| rank of first vendored event | 1 | **112** |
 
-The real change is 15 events in library code. A reviewer runs this and gets a page of googletest.
+Neither original fixture could show it: they vendor googletest as a static copy that never differs
+between two revisions of the host, so vendored event counts were always near zero. It takes a
+dependency that moves as a unit.
+
+**Still broken on this row:** `compression_ratio` reads 0.0 lines per event, because the denominator
+is blind to submodule content while the numerator is not (§6). `events_reported` remains the whole
+set on purpose — the vendored count is stated beside it, never subtracted.
 
 **The verdict, without spin.** Compression is real but roughly an order of magnitude weaker than
 ARCH §10's illustrative *2,431 → 9* (270:1). Measured: **9.5:1 to 53:1** on `events_reported`.
@@ -252,17 +261,6 @@ namespace-scope `static` or an anonymous namespace.
 
 The first two are what the leveldb row in §2 is made of, and they are the most serious open items.
 
-- [ ] **Exposure loses to blast radius, so vendored churn tops the ranking.** `exposure.py` exists
-      to stop "a modified assertion helper in bundled googletest above a modified `fmt::format`",
-      and on leveldb it does not. The arithmetic says why: exposure is one weighted term capped at
-      `W_EXPOSURE` 0.25, and the VENDORED/PUBLIC gap is worth 0.2375 of score — while blast radius
-      (0.35) plus novelty (0.25) is 0.60. A removed gtest node with 241 dependents scores 0.76; a
-      public attribute change scores ~0.44. **Exposure is a weighted factor where it needed to be
-      closer to a gate.** Invisible on fmt and spdlog because their vendored gtest is a static copy
-      that never differs between two revisions of the host; a submodule bump changes all of it at
-      once. Do not fix by raising the weight — that is tuning against one symptom. The shape that
-      fits the existing design is a **cause**: a dependency bump is one cause with N consequences,
-      which is what `classify` and §6.3's cascade collapse already exist for.
 - [ ] **The compression denominator is blind to submodule content.** `diff_line_count` uses
       `git diff --numstat`, which scores a submodule pointer bump as one line, while `produce` now
       materializes submodules and models everything inside them. Numerator and denominator are
@@ -360,6 +358,7 @@ Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the me
 | Check what the whole key already covers before widening an identity | The stdlib and builtin headers turned out to be content-keyed via the include closure. Every redundant key component costs a mass invalidation to defend against a defended hazard. |
 | Workers use `spawn`, not `fork` | A forked child inherits the parent's verified libclang, so the toolchain guarantee would hold *by accident of start method* and stop holding silently if that default changed. |
 | Low confidence ranks **up** | Uncertainty is a reason for a human to look, not a reason to hide (ARCH §7). Guarded by mutation-tested cases. |
+| Vendored code is **partitioned** out of the ranking, not merely down-weighted | The reviewer is reviewing their own code; a bumped dependency is context, not the subject. As a weighted term it lost — measured on leveldb, where blast radius plus novelty (0.60) beat all of exposure (0.25) and put googletest in the top 12. Raising the weight would fossilize a number against one repository and still lose on the next. The claim is "not what is being reviewed", which is an ordering, not a quantity. Only VENDORED — the project's own tests are its code and keep the weighted demotion. |
 
 ---
 

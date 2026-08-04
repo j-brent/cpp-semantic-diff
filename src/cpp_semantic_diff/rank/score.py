@@ -93,6 +93,12 @@ class RiskScore(BaseModel):
         "applied silently: `total` is otherwise the sum of the contributions, and a number "
         "that stops being explained by its own factors has to say why.",
     )
+    exposure: Exposure = Field(
+        default=Exposure.INTERNAL,
+        description="The subject's exposure class, carried as a field and not only inside "
+        "`factors` because the order partitions on it: no vendored event outranks any "
+        "first-party one, whatever the scores say (`ranker.py`).",
+    )
 
     def factor(self, name: FactorName) -> Factor:
         for f in self.factors:
@@ -164,6 +170,7 @@ def score_event(event: Event, ctx: ScoringContext) -> RiskScore:
         total=total,
         impact=measured / w.IMPACT_WEIGHT,
         factors=factors,
+        exposure=exposure_of(event, ctx),
     )
 
 
@@ -224,21 +231,27 @@ def _saturate(count: int) -> float:
 # -- 2 · exposure -----------------------------------------------------------------------
 
 
-def _exposure(event: Event, ctx: ScoringContext) -> Factor:
-    """Public API or vendored test helper -- `exposure.py` owns the heuristic.
+def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
+    """The subject's exposure class -- `exposure.py` owns the heuristic.
 
     An edge takes the *maximum* of its endpoints for the same reason blast radius takes the
     larger: a call from a test into public API is a change to how the public API is used,
     and scoring it as test code would hide the one direction of that edge worth reading.
+
+    A subject in neither model is INTERNAL rather than VENDORED: the partition in `ranker.py`
+    hides vendored events, and an unclassifiable subject must not be hidden by accident.
     """
     endpoints = subject_endpoints(event.subject)
     classes = [ctx.exposure[n] for n in endpoints if n in ctx.exposure]
     if not classes:
-        exposure = Exposure.INTERNAL
-        detail = f"{exposure.value} (subject not in either model)"
-    else:
-        exposure = max(classes, key=EXPOSURE_ORDER.index)
-        detail = exposure.value
+        return Exposure.INTERNAL
+    return max(classes, key=EXPOSURE_ORDER.index)
+
+
+def _exposure(event: Event, ctx: ScoringContext) -> Factor:
+    exposure = exposure_of(event, ctx)
+    known = any(n in ctx.exposure for n in subject_endpoints(event.subject))
+    detail = exposure.value if known else f"{exposure.value} (subject not in either model)"
     return _factor(FactorName.EXPOSURE, w.EXPOSURE_WEIGHT[exposure], detail)
 
 
