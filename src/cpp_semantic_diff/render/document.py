@@ -57,7 +57,14 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #: and report a model that lost a fifth of its edges as having lost none -- §11's failure
 #: exactly, and the reason this is a bump rather than an addition. `EdgeAttrChanged` also
 #: joins the event kinds in this version.
-SCHEMA_VERSION = "1.1"
+#:
+#: 1.1 -> 1.2: `compression_ratio` and `high_risk_count` are taken over *first-party* events
+#: rather than every modelled one, and `vendored_events` names what was set aside. A bump and
+#: not an addition because both existing fields keep their names and change their meaning: a
+#: 1.1 consumer would read the new ratio as the old one and see a repository's compression
+#: apparently improve on precisely the commit where a dependency was bumped. `events_reported`
+#: is untouched and still the complete set -- the one number that may never quietly shrink.
+SCHEMA_VERSION = "1.2"
 
 #: ARCH-001 §11: "Two systematic limits get stated in the output itself, every time."
 #: They are data on the document rather than a line in one view, because "every time"
@@ -448,9 +455,13 @@ class Summary(BaseModel):
         "events, 2 high-risk'. Rendered here so every view prints the same claim."
     )
     compression_ratio: float | None = Field(
-        description="lines_changed / events_reported. None when there are no events, "
-        "because 'infinite compression' and 'nothing to review' are different facts and a "
-        "sentinel would let a consumer average over them."
+        description="lines_changed / first-party events (`events_reported` minus "
+        "`vendored_events`). Not over the whole event set: the denominator is lines of text "
+        "diff, and git shows a submodule bump as two lines rather than the hundred thousand "
+        "inside it, so dividing by every modelled event compares two different universes. "
+        "None when there are no first-party events, because 'infinite compression' and "
+        "'nothing of yours changed' are different facts and a sentinel would let a consumer "
+        "average over them."
     )
     high_risk_count: int = Field(description="Scores at or above `rank.HIGH_RISK`.")
 

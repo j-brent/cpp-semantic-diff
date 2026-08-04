@@ -28,18 +28,23 @@ past v0 by design — see [`STATUS.md`](STATUS.md) for the tracker and the known
 What it prints on real repositories:
 
 ```
-fmt    HEAD~12    179 lines changed  →  16 semantic events, 4 high-risk
-fmt    HEAD~100   3,178 lines changed → 335 semantic events, 56 top-level
-spdlog HEAD~5     35 lines changed   →  0 semantic events
+fmt     HEAD~12    179 lines changed  →  16 semantic events, 2 high-risk
+spdlog  HEAD~30    1,708 lines changed →  32 semantic events, 5 high-risk
+spdlog  HEAD~5     35 lines changed   →   0 semantic events
+leveldb HEAD~10    52 lines changed   → 134 semantic events, 5 high-risk
+                                         + 3,660 in bundled dependencies, ranked last
 ```
 
-That last row is the one that validates the others: thirty-five lines of CMake, comments and a
+The spdlog `HEAD~5` row validates the others: thirty-five lines of CMake, comments and a
 Windows-only header, correctly reported as no semantic change — with the reason printed rather than
 implied.
 
-Measured compression is **9.5:1 to 53:1**, roughly an order of magnitude short of the *2,431 → 9*
-this design was argued from. The thesis is not disproved, but the honest headline is two numbers:
-events, and the far smaller count left after consequences are folded under their causes.
+The leveldb row is the one that argues against the thesis, and it is here for that reason. Measured
+compression is **0.4:1 to 53:1** — that commit *decompresses*, turning 52 lines into 134 things to
+read, because bumping googletest moved a great deal of test code under it. Compression is real on
+some commits and inverted on others, and which is which appears to depend on repository shape more
+than on the tool: the two libraries that agree are both header-only and vendor by copying. See
+[`STATUS.md`](STATUS.md) §2.
 
 ## Requirements
 

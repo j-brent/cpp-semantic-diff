@@ -44,9 +44,9 @@ spdlog HEAD~30    1,708 lines changed → 32 semantic events, 5 high-risk
                   24 top-level, 8 nested · 18 components
 spdlog HEAD~5     35 lines changed   →  0 semantic events
 
-leveldb HEAD~10   52 lines changed   → 3,794 semantic events, 21 high-risk
-                  3,660 in bundled dependencies (96 %), ranked last
-                  134 first-party events · first vendored event at rank 112
+leveldb HEAD~10   52 lines changed   → 134 semantic events, 5 high-risk
+                  3,660 more in bundled dependencies (96 %), ranked last
+                  39 top-level · 142 components · first vendored event at rank 112
 ```
 
 **The leveldb row is what a third fixture was for.** The commit bumps `third_party/googletest` and
@@ -65,12 +65,32 @@ Neither original fixture could show it: they vendor googletest as a static copy 
 between two revisions of the host, so vendored event counts were always near zero. It takes a
 dependency that moves as a unit.
 
-**Still broken on this row:** `compression_ratio` reads 0.0 lines per event, because the denominator
-is blind to submodule content while the numerator is not (§6). `events_reported` remains the whole
-set on purpose — the vendored count is stated beside it, never subtracted.
+**The ratio no longer straddles.** It was 0.0 lines per event, dividing a first-party denominator by
+a whole-world numerator. The denominator was never wrong — git renders a submodule bump as the two
+lines a reviewer actually reads, and §10 defines it as "the number a reviewer would otherwise have
+read", so inflating it to the hundred thousand lines inside googletest would have been fiction that
+flattered the ratio. The numerator came down instead: `compression_ratio` and `high_risk_count` are
+over first-party events, `vendored_events` names what was set aside, and `events_reported` stays the
+complete set. Schema 1.1 → 1.2, because two fields kept their names and changed their meaning.
+
+**leveldb still reads 0.4 lines per event, and that is the honest answer.** 52 lines of text diff
+produced 134 first-party semantic events — mostly test-code entities that moved because googletest
+moved under them. The tool is not compressing here; it is reporting that a two-line dependency bump
+had 134 consequences in this repository's own code, which is a real finding and the opposite of the
+thesis on this commit. Worth keeping visible rather than averaging away.
+
+Nothing else moved: fmt `HEAD~12` (11.2 lines/event) and spdlog `HEAD~30` (53.4) are unchanged to
+the digit, which is the check that the numerator was aligned rather than shrunk.
 
 **The verdict, without spin.** Compression is real but roughly an order of magnitude weaker than
-ARCH §10's illustrative *2,431 → 9* (270:1). Measured: **9.5:1 to 53:1** on `events_reported`.
+ARCH §10's illustrative *2,431 → 9* (270:1). Measured: **0.4:1 to 53:1** on first-party events.
+
+The bottom of that range is new and it is not a rounding error — leveldb `HEAD~10` *decompresses*,
+turning 52 lines into 134 things to read. Both fixtures that were available when the "9.5:1 to 53:1"
+claim was written are header-only libraries that vendor by copying; the first repository with real
+implementation files and a moving dependency produced a ratio below 1. One commit is not a verdict
+on the thesis, but the range no longer supports a claim of reliable compression, and quoting the old
+one now would mean quoting the two repositories that agreed.
 
 The number that actually reads as dramatic is **top-level events after cascade collapse** — 3,178
 lines down to 56 things to read. If the compression line is to be the headline, its honest form is
@@ -261,16 +281,11 @@ namespace-scope `static` or an anonymous namespace.
 
 The first two are what the leveldb row in §2 is made of, and they are the most serious open items.
 
-- [ ] **The compression denominator is blind to submodule content.** `diff_line_count` uses
-      `git diff --numstat`, which scores a submodule pointer bump as one line, while `produce` now
-      materializes submodules and models everything inside them. Numerator and denominator are
-      counted over different universes, so `compression` is not merely unflattering on leveldb, it
-      is meaningless. Either count what changed inside the submodule or exclude it from both sides;
-      the metric may not straddle.
-- [ ] **Every metric is computed over the whole model, including vendored and test code.**
-      `events_reported`, `compression` and `internal_linkage_residue` do not distinguish what
-      `rank/exposure.py` already classifies. leveldb is 52.8 % vendored and 28.5 % test by node
-      count, so the headline number is dominated by code nobody is reviewing.
+- [ ] **`internal_linkage_residue` is still computed over the whole model**, vendored included —
+      the last metric that does not distinguish what `rank/exposure.py` classifies. leveldb is
+      52.8 % vendored by node count. `compression_ratio` and `high_risk_count` were fixed; this one
+      lives on `Correspondence`, which is upstream of `rank` and has no exposure map, so it needs a
+      decision about where the classification belongs rather than a one-line change.
 
 Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the measurements.
 

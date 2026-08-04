@@ -26,6 +26,7 @@ from rich.console import Console
 from rich.text import Text
 
 from cpp_semantic_diff.model import EventId, Side
+from cpp_semantic_diff.rank.exposure import Exposure
 from cpp_semantic_diff.render.collapse import Collapsed, CollapseNode, collapse
 from cpp_semantic_diff.render.document import CompletenessBlock, DiffDocument
 
@@ -139,7 +140,14 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
     parts = []
     if s.compression_ratio is not None:
         parts.append(f"{s.compression_ratio:.1f} lines per event")
-    parts.append(f"{len(tree.roots)} shown, {tree.hidden} nested under a cause")
+    # Counted over first-party events only, like the sentence above it. A collapse count
+    # taken over the whole forest would sit beside a first-party headline and describe a
+    # different set -- which is the straddle this line would otherwise reintroduce one row
+    # below the place it was fixed.
+    vendored_ids = {i for i, sc in document.scores.items() if sc.exposure is Exposure.VENDORED}
+    roots = sum(1 for r in tree.roots if r.event_id not in vendored_ids)
+    nested = sum(1 for i in tree.flatten() if i not in vendored_ids) - roots
+    parts.append(f"{roots} top-level, {nested} nested under a cause")
     parts.append(f"{s.components} component{'' if s.components == 1 else 's'}")
     parts.append(f"{s.files_changed} files ({s.cpp_files_changed} C++)")
     if document.meta.timings.total:

@@ -68,6 +68,7 @@ def build_document(
 
     high_risk = ranking.high_risk_count
     count = len(events)
+    first_party = ranking.first_party_count
 
     return DiffDocument(
         meta=Meta(
@@ -97,9 +98,9 @@ def build_document(
             events_reported=count,
             vendored_events=ranking.vendored_count,
             compression=compression_sentence(
-                lines_changed, count, high_risk, ranking.vendored_count
+                lines_changed, first_party, high_risk, ranking.vendored_count
             ),
-            compression_ratio=(lines_changed / count) if count else None,
+            compression_ratio=(lines_changed / first_party) if first_party else None,
             high_risk_count=high_risk,
             top_level_events=sum(1 for e in events if e.caused_by is None),
             components=len(ranking.components),
@@ -127,22 +128,31 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int, vendor
     result this tool can report -- it means the change had no semantic content the model can
     see, which is either excellent news or a hole in the model.
 
-    **`events` stays the whole set.** Vendored churn is named beside the number, never
-    subtracted from it: STATUS §2 exists because this is the one figure nobody can audit from
-    outside, and a numerator that quietly shrank whenever a dependency moved would be exactly
-    the redefinition that stops it measuring anything. Naming it also stops the ratio being
-    read as a straight compression claim on a commit where the denominator did not see what
-    the numerator counted -- a submodule bump is one line of text diff and thousands of
-    modelled entities (STATUS §6).
+    **`events` here is the first-party count, and the two sides must match.** The denominator
+    is lines of text diff -- "the number a reviewer would otherwise have read" -- and git
+    renders a submodule bump as two lines, not the hundred thousand inside it. Dividing that
+    by every modelled event compares a first-party denominator against a whole-world
+    numerator, which on leveldb read 0.0 lines per event. So vendored events are named beside
+    the sentence and excluded from the arithmetic, and the fix is a real cost rather than a
+    flattering one: aligning the universes made leveldb's ratio finite but still inverted,
+    which is the honest result.
+
+    `summary.events_reported` is untouched and remains the complete set. STATUS §2 exists
+    because that is the one figure nobody can audit from outside, and it may not shrink
+    because a dependency moved.
     """
     head = (
         f"{lines_changed:,} lines changed -> {events:,} semantic event{'' if events == 1 else 's'}"
     )
     if not events:
+        if vendored:
+            # Distinct from "nothing changed": a dependency moved and none of it reached
+            # the reviewer's own code, which is a result rather than an absence of one.
+            return f"{head} (all {vendored:,} of it in bundled dependencies)"
         return f"{head} (no semantic change the model can see)"
     tail = f", {high_risk:,} high-risk"
     if vendored:
-        tail += f" ({vendored:,} in bundled dependencies, ranked last)"
+        tail += f" · {vendored:,} more in bundled dependencies, ranked last"
     return f"{head}{tail}"
 
 

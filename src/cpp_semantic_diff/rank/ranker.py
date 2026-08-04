@@ -57,15 +57,32 @@ class Ranking(BaseModel):
         return sum(1 for s in self.scores if s.exposure is Exposure.VENDORED)
 
     @property
+    def first_party_count(self) -> int:
+        """Events in the reviewer's own code -- everything except bundled dependencies.
+
+        The numerator of §10's compression ratio. The denominator is lines of *text diff*,
+        and git shows a submodule bump as two lines rather than the hundred thousand inside
+        it, so a ratio taken over every modelled event compares a first-party denominator
+        against a whole-world numerator. On leveldb that read 0.0 lines per event.
+        """
+        return sum(1 for s in self.scores if s.exposure is not Exposure.VENDORED)
+
+    @property
     def high_risk_count(self) -> int:
         """The `summary.high_risk_count` of §10; the threshold lives in `weights.py`.
 
-        **What the number means, in one sentence:** the count of events whose measured
-        consequences -- blast radius, exposure and the kind of change -- clear the high-risk
-        threshold on their own, with the tool's uncertainty about the match kept out of the
-        count even though it is kept in the order (`RiskScore.is_high_risk`).
+        **What the number means, in one sentence:** the count of *first-party* events whose
+        measured consequences -- blast radius, exposure and the kind of change -- clear the
+        high-risk threshold on their own, with the tool's uncertainty about the match kept
+        out of the count even though it is kept in the order (`RiskScore.is_high_risk`).
+
+        First-party for the same reason the ratio is: this is a headline count of changes
+        the reviewer should look at, and they are not looking at bundled googletest. On
+        leveldb 16 of 21 high-risk events were vendored, so the unpartitioned count would
+        have promised sixteen dangerous changes that the view does not show and the reviewer
+        did not write.
         """
-        return sum(1 for s in self.scores if s.is_high_risk)
+        return sum(1 for s in self.scores if s.is_high_risk and s.exposure is not Exposure.VENDORED)
 
     def score_for(self, event_id: EventId) -> RiskScore:
         for s in self.scores:

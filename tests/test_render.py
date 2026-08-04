@@ -418,6 +418,63 @@ class TestCompressionCountsWhatItClaims:
             == "2,431 lines changed -> 9 semantic events, 2 high-risk"
         )
 
+    def test_the_ratio_does_not_straddle_two_universes(self) -> None:
+        """Measured on leveldb: 52 lines changed, 3,794 events, 0.0 lines per event.
+
+        The denominator is lines of *text diff*, and git renders a submodule bump as two
+        lines rather than the hundred thousand inside it. Dividing that by every modelled
+        event compares a first-party denominator against a whole-world numerator, so the two
+        sides have to be taken over the same universe or the number means nothing.
+        """
+        own = node("c:@F@own#", name="own", file="src/lib.cc")
+        deps = [
+            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(9)
+        ]
+        doc = pipeline(model("a", own, *deps), model("b", *deps), lines_changed=10)
+
+        assert doc.summary.events_reported == 1, "one first-party removal"
+        assert doc.summary.vendored_events == 0, "the dependency itself did not change here"
+        assert doc.summary.compression_ratio == 10 / 1
+
+    def test_a_dependency_bump_does_not_flatten_the_ratio(self) -> None:
+        own = node("c:@F@own#", name="own", file="src/lib.cc")
+        deps = [
+            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(20)
+        ]
+        doc = pipeline(model("a", own, *deps), model("b"), lines_changed=10)
+
+        assert doc.summary.vendored_events == 20
+        assert doc.summary.events_reported == 21, "the complete set is still reported"
+        assert doc.summary.compression_ratio == 10 / 1, (
+            "10 lines over the one first-party event, not over all 21"
+        )
+
+    def test_a_bump_that_touches_nothing_of_yours_says_so(self) -> None:
+        """Distinct from 'no semantic change': something did change, none of it yours."""
+        deps = [
+            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(4)
+        ]
+        doc = pipeline(model("a", *deps), model("b"), lines_changed=10)
+
+        assert doc.summary.compression_ratio is None
+        assert "bundled dependencies" in doc.summary.compression
+        assert "no semantic change" not in doc.summary.compression
+
+    def test_high_risk_does_not_count_what_the_reviewer_is_not_shown(self) -> None:
+        """On leveldb 16 of 21 high-risk events were vendored. A headline promising sixteen
+        dangerous changes the view never shows is worse than no headline."""
+        dependents = [node(f"c:@F@x{i}#", file="third_party/gtest/gtest.cc") for i in range(40)]
+        base = model(
+            "a",
+            node("c:@F@assert_helper#", file="third_party/gtest/gtest.cc"),
+            *dependents,
+            edges=[edge(d.id, "c:@F@assert_helper#") for d in dependents],
+        )
+        doc = pipeline(base, model("b", *dependents), lines_changed=10)
+
+        assert doc.summary.vendored_events >= 1
+        assert doc.summary.high_risk_count == 0
+
     def test_the_view_prints_the_sentence_the_document_carries(self) -> None:
         """One claim, one place. A view that composed its own could quietly disagree with
         the JSON about the only number the project is testing."""
