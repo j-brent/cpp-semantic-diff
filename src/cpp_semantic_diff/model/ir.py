@@ -22,6 +22,37 @@ EdgeId = NewType("EdgeId", str)
 type AttrValue = str | int | float | bool | None
 
 
+def usr_file(node_id: str) -> str | None:
+    """The file component of a file-scoped USR, or None for an external-linkage one.
+
+    Clang writes the source file into the USR of anything with internal linkage -- statics,
+    anonymous-namespace members -- because those entities are only distinguishable by where
+    they live: `c:util.cpp@F@helper#` against `c:@F@helper#`. It writes the *file name*, not
+    the path, so two worktrees at different absolute paths still agree; a rename that changes
+    the name does not.
+
+    This is the only place the *format* of a USR is interpreted; everywhere else it is an
+    opaque key and should stay that way. Anything that needs to know about internal linkage
+    asks here rather than growing its own idea of what a USR looks like.
+
+    **It lives in `ir.py` for a cache-correctness reason, not a tidiness one.** The producer
+    keys its stored partials on `_producer_code_digest`, which hashes exactly two modules --
+    `ir.py` and `extract.py`. `extract.py` decides `Node.tu` by asking this function, so a
+    helper that changed the answer while living anywhere else would rewrite every partial
+    while leaving every cache key byte-identical: the stale hit ARCH-001 §9 calls the worst
+    failure available here. `match.declared` re-exports it, which is where it used to live
+    and where its callers still expect it.
+    """
+    if not node_id.startswith("c:"):
+        return None
+    rest = node_id[2:]
+    # `c:@...` is external linkage; a bare `c:` is not a declaration USR at all.
+    if not rest or rest.startswith("@"):
+        return None
+    name, sep, _ = rest.partition("@")
+    return name if sep and name else None
+
+
 class NodeKind(StrEnum):
     NAMESPACE = "namespace"
     CLASS = "class"
@@ -335,6 +366,14 @@ class Model(BaseModel):
             h.update(n.kind.value.encode())
             h.update((n.signature or "").encode())
             h.update((n.body_hash or "").encode())
+            # ARCH-001 §5: the TU is identity exactly where the USR is file-scoped, and this
+            # hashes it under the same condition `DeclaredTier.key` applies -- one rule about
+            # when the TU counts, in two places that must not disagree. Without it the
+            # docstring's claim above is false: two same-named statics in different source
+            # files share a USR, so moving one between files changes identity and nothing
+            # this hashes, and the fingerprints would match while the delta did not.
+            if usr_file(node_id) is not None:
+                h.update((n.tu or "").encode())
             for key in sorted(n.attrs):
                 h.update(f"{key}={n.attrs[key]!r}".encode())
         for edge_id in sorted(e.id for e in self.edges):

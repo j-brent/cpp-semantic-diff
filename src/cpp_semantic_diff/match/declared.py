@@ -17,32 +17,16 @@ from dataclasses import dataclass, field
 
 from cpp_semantic_diff.model import MatchTier, Model, Node, NodeId
 
+# Re-exported, not defined here. It moved to `model/ir.py` when the producer began deciding
+# `Node.tu` with it: `_producer_code_digest` hashes `ir.py` and `extract.py` and nothing
+# else, so a helper the stored partials depend on must live inside that digest, or changing
+# it rewrites every partial while every cache key stays byte-identical. Callers of
+# `match.usr_file` are unaffected.
+from cpp_semantic_diff.model.ir import usr_file as usr_file
+
 #: Tier-1 key: the (possibly rewritten) USR, plus the defining TU for entities whose USR is
 #: file-scoped. ARCH-001 §5: "Identity must include the TU".
 type DeclaredKey = tuple[str, str | None]
-
-
-def usr_file(node_id: str) -> str | None:
-    """The file component of a file-scoped USR, or None for an external-linkage one.
-
-    Clang writes the source file into the USR of anything with internal linkage -- statics,
-    anonymous-namespace members -- because those entities are only distinguishable by where
-    they live: `c:util.cpp@F@helper#` against `c:@F@helper#`. It writes the *file name*, not
-    the path, so two worktrees at different absolute paths still agree; a rename that changes
-    the name does not.
-
-    This is the only place the *format* of a USR is interpreted; everywhere else it is an
-    opaque key and should stay that way. Anything that needs to know about internal linkage
-    asks here rather than growing its own idea of what a USR looks like.
-    """
-    if not node_id.startswith("c:"):
-        return None
-    rest = node_id[2:]
-    # `c:@...` is external linkage; a bare `c:` is not a declaration USR at all.
-    if not rest or rest.startswith("@"):
-        return None
-    name, sep, _ = rest.partition("@")
-    return name if sep and name else None
 
 
 @dataclass(frozen=True)

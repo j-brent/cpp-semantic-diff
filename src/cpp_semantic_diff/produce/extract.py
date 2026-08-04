@@ -44,6 +44,7 @@ from cpp_semantic_diff.model.ir import (
     NodeKind,
     TuResult,
     TuStatus,
+    usr_file,
 )
 from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 
@@ -693,13 +694,56 @@ class TuExtract:
 
 
 class _Extractor:
-    def __init__(self, root: Path, base: Path, toolchain: Toolchain) -> None:
+    def __init__(self, root: Path, base: Path, toolchain: Toolchain, tu: str) -> None:
         self.root = root
         self.base = base
         self.toolchain = toolchain
+        #: This TU's own primary source, repo-relative -- the same form `_location` produces,
+        #: so `_defining_tu` compares like with like rather than a path against a path shape.
+        self.tu = tu
         self.nodes: dict[NodeId, Node] = {}
         self.edges: dict[str, Edge] = {}
         self.aliases: dict[str, str] = {}
+
+    def _defining_tu(self, usr: str, location: Location | None) -> str | None:
+        """The defining translation unit, set only where it is a *fact* (ARCH-001 §5).
+
+        §5 requires identity to include the TU for entities whose USR is file-scoped: clang
+        writes a file *name* into those, so `static void helper()` in `a/util.cpp` and an
+        unrelated one in `b/util.cpp` produce the same USR and merge into one node. A body
+        change in whichever lost the merge then produces no event at all -- under-reporting,
+        which §5 refuses more strongly than it refuses noise.
+
+        Two conditions, and the second is the load-bearing one.
+
+        **A file-scoped USR only.** For external linkage the same entity legitimately appears
+        in every TU that includes its header, and `DeclaredTier.key` deliberately excludes the
+        TU for exactly that reason: the set of TUs that can see a declaration changes for
+        reasons that have nothing to do with the change under review.
+
+        **And the declaration is in this TU's own primary source.** A `static` declared in a
+        *header* is a different entity per includer, and USR dedup collapses all of them into
+        one node whose TU is whichever observation ranked highest. That winner flips when an
+        unrelated source file joins the build -- so recording it would make identity depend on
+        which *other* files exist, and break tier 1 for an entity the review never touched.
+        Where the declaration is in the TU's own source, exactly one TU can see it and there
+        is nothing to choose between.
+
+        The second condition trades some §5 coverage for not inventing a new source of
+        revision-flippable identity. Everywhere it declines, `tu` stays None and matching is
+        exactly what it was before -- `DeclaredTier` already documents that fallback.
+
+        Repo-relative on both sides of the comparison, because both come from `_relative`
+        with this extractor's root. An absolute path would carry the SHA-named worktree
+        directory into every partial, base and head would never agree, and every
+        internal-linkage match would break on every comparison -- the class of bug STATUS §5
+        records as the extractor leaking the host path into identity.
+        """
+        if usr_file(usr) is None:
+            return None
+        if location is None or location.file != self.tu:
+            return None
+        return self.tu
 
     def note_alias(self, cursor: ci.Cursor, usr: str) -> None:
         """Record `usr` as a possible instantiation of a template the builder may know."""
@@ -749,6 +793,7 @@ class _Extractor:
         if not usr:
             return
 
+        location = _location(cursor, self.root, self.base)
         self.add_node(
             Node(
                 id=NodeId(usr),
@@ -759,7 +804,8 @@ class _Extractor:
                 symbol=_mangled(cursor),
                 attrs=_attributes(cursor, kind),
                 body_hash=body_hash(cursor) if cursor.is_definition() else None,
-                location=_location(cursor, self.root, self.base),
+                location=location,
+                tu=self._defining_tu(usr, location),
             )
         )
 
@@ -867,7 +913,7 @@ def extract(
             ),
         )
 
-    extractor = _Extractor(root, entry.directory, toolchain)
+    extractor = _Extractor(root, entry.directory, toolchain, relative)
     extractor.visit(tu.cursor)
     return TuExtract(
         path=relative,

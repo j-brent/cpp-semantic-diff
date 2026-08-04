@@ -187,7 +187,11 @@ is public. Every `Node.tu` conclusion drawn from fmt alone rested on a sample of
 ## 4 · Measured performance
 
 fmt, 50 TUs, WSL, 8 cores. All 22 measured builds — 1 vs 4 vs 8 workers, cold/warm, cache on/off —
-produced the same fingerprint, `5ba8fd29041c`.
+produced the same fingerprint, `5ba8fd29041c`. That value is superseded: `Model.fingerprint()`
+now hashes `Node.tu` where the USR is file-scoped, so fmt `HEAD~12` reads `5ca3843b6c1a` —
+verified identical at 1 and 8 workers, which is the property the check is for. The number changing
+when the model gains content is expected; the number changing between two runs of the same build
+would be the defect.
 
 | Scenario | invalidated TUs | 1 worker | 8 workers |
 |---|---|---|---|
@@ -310,13 +314,23 @@ The first two are what the leveldb row in §2 is made of, and they are the most 
 
 Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the measurements.
 
-- [ ] **`Node.tu` is declared and never populated.** `ir.py` documents it as identity-relevant for
-      internal linkage; the producer never sets it, so `RenameMap.by_path` — the half of the rename
-      machinery that handles directory moves — is unreachable. Partly masked because clang's USRs
-      for internal-linkage entities already embed the file name. Not a free fix: populating it makes
-      tier 1 *stricter*, and where the producer's choice of TU is arbitrary (a static declared in a
-      header, deduped across N includers) the winner can flip between revisions and break matches
-      that work today. `Model.fingerprint()` does not hash `tu` and will have to.
+- [x] ~~**`Node.tu` is declared and never populated.**~~ Set where the USR is file-scoped **and**
+      the declaration is in the TU's own primary source. The second condition is what makes it
+      safe: a `static` in a *header* is one entity per includer collapsed to one node, so its TU
+      would be whichever observation ranked highest and would flip when an unrelated source joined
+      the build. Under the narrow rule exactly one TU can see each entity that gets a TU, so there
+      is nothing to flip. `Model.fingerprint()` hashes it under the same condition
+      `DeclaredTier.key` uses — fmt `HEAD~12` is now `5ca3843b6c1a` (§4). Re-measured on all three
+      fixtures: **every event count, high-risk count and residue identical to before**, which is
+      what "near-zero risk by construction" predicted.
+- [ ] **Two same-basename statics still merge into one node** — and `Node.tu` does *not* fix this,
+      which PLAN-001 claimed it would. `merge_node` keys the model on `Node.id`, which **is** the
+      USR, so the collision happens before any TU is recorded; half of them stay invisible and a
+      body change in either produces no event. What `tu` fixed is the *matching* half: a base node
+      from `a/` no longer pairs with a head node from `b/`. Separating them in the model needs the
+      node dictionary keyed on `(usr, tu)`, which reaches every edge endpoint, every event, every
+      cache entry and the JSON contract. Named rather than half-done. No instance in any fixture;
+      `tests/test_tu_identity.py` is the only place it exists.
 - [x] ~~**`EdgeAdded`/`EdgeRemoved` between two surviving nodes is not collapsible**~~ — the shape
       that actually caused it is: a dependency adds an overload and every call site moves to it,
       leaving the old overload declared but uncalled. `call-moved-to-another-overload` links those

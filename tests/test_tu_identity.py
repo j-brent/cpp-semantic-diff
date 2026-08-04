@@ -108,12 +108,17 @@ class TestTwoSourcesSharingABasename:
         assert util == ["c:util.cpp@F@file_helper#", "c:util.cpp@aN@F@shared_helper#"]
 
     def test_four_functions_collapse_into_two_nodes(self, hazards: Model) -> None:
-        """**Characterization: this is the defect, not the design.**
+        """**Characterization, and `Node.tu` does not fix it** -- which the plan got wrong.
 
-        Half of these functions are absent from the model. A body change in whichever copy
-        lost the merge produces *no event* -- under-reporting, which ARCH-001 §5 refuses
-        more strongly than it refuses noise. Populating `Node.tu` is what separates them;
-        when it does, this count becomes 4 and the test says so instead.
+        The claim was that populating `tu` would separate these. It does not: `merge_node`
+        keys the model on `Node.id`, which *is* the USR, so two same-USR statics merge into
+        one node whether or not that node then records a TU. Half of these functions remain
+        absent from the model and a body change in either produces no event.
+
+        What `tu` fixes is the *matching* half -- a base node from `a/` no longer pairs with
+        a head node from `b/` (`test_match.py`). Separating them in the model needs the node
+        dictionary keyed on `(usr, tu)`, which reaches every edge endpoint, every event and
+        the JSON contract. Recorded in STATUS §6 rather than half-done here.
         """
         util = [i for i, f in scoped(hazards).items() if f == "util.cpp"]
         assert len(util) == 2, "two of the four survived; the other two are unreachable"
@@ -147,32 +152,57 @@ class TestAStaticDeclaredInAHeader:
         assert "common.h" not in TU_IDENTITY_TUS, "it is a header, never a translation unit"
 
 
-class TestTheProducerDoesNotPopulateTu:
-    """**Characterization.** `ir.py` declares `tu` as identity-relevant and nothing sets it.
+class TestTheProducerRecordsTheDefiningTu:
+    """ARCH-001 §5's "identity must include the TU", under the narrow rule (PLAN-001 §3.3).
 
-    Pinned here rather than left implicit so that populating it is a visible change to a
-    stated fact, not a silent one. The likeliest way that change goes wrong is that it
-    quietly does nothing -- a path-normalization mismatch leaves `tu` None everywhere, every
-    test still passes, and the model is unchanged. This test failing is the signal that it
-    worked.
+    These two were characterization tests asserting the gap was open, written to *fail* when
+    it closed -- the guard against the change silently doing nothing, which was its likeliest
+    failure mode: one path-normalization mismatch leaves `tu` None everywhere while every
+    other test still passes. Both failed on the first run of the real change. Inverted here.
     """
 
-    def test_nothing_carries_a_tu_today(self, hazards: Model) -> None:
-        assert [n.id for n in hazards.nodes.values() if n.tu is not None] == []
+    def test_a_static_in_its_own_source_carries_that_source(self, hazards: Model) -> None:
+        util = {n.tu for i, n in hazards.nodes.items() if scoped(hazards).get(i) == "util.cpp"}
+        assert util <= {"a/util.cpp", "b/util.cpp"}
+        assert None not in util
 
-    def test_the_fingerprint_does_not_see_the_tu_today(self, hazards: Model) -> None:
-        """So a change that only moved an entity between TUs would fingerprint as identical.
+    def test_a_header_declared_static_carries_none(self, hazards: Model) -> None:
+        """The narrow rule's whole point. `common.h` is one entity per includer, collapsed to
+        one node whose TU would be whichever observation ranked highest -- a value that flips
+        when an unrelated source joins the build."""
+        header = [n for i, n in hazards.nodes.items() if scoped(hazards).get(i) == "common.h"]
+        assert header and all(n.tu is None for n in header)
 
-        `Model.fingerprint()` claims two equal fingerprints produce an empty delta, and
-        `diff/differ.py` relies on it. Once `tu` is identity that claim needs `tu` hashed
-        under the same condition, or the claim becomes false.
-        """
+    def test_external_linkage_never_carries_one(self, hazards: Model) -> None:
+        """The same entity legitimately appears in every TU that includes its header, so a
+        TU here would be recording which includer the merge happened to prefer."""
+        external = [n for i, n in hazards.nodes.items() if usr_file(i) is None]
+        assert external and all(n.tu is None for n in external)
+
+    def test_the_tu_is_repository_relative(self, hazards: Model) -> None:
+        """An absolute path would carry the SHA-named worktree directory into every partial,
+        so base and head would never agree and every internal-linkage match would break on
+        every comparison (STATUS §5)."""
+        assert all(not n.tu.startswith("/") for n in hazards.nodes.values() if n.tu)
+
+    def test_the_fingerprint_sees_the_tu_where_it_is_identity(self, hazards: Model) -> None:
+        """`Model.fingerprint()` claims two equal fingerprints produce an empty delta, and
+        `diff/differ.py` relies on it. With `tu` in the tier-1 key, a fingerprint blind to it
+        would call two models identical that the matcher pairs differently."""
         before = hazards.fingerprint()
         moved = hazards.model_copy(deep=True)
         for node in moved.nodes.values():
             if usr_file(node.id) is not None:
                 node.tu = "somewhere/else.cpp"
-        assert moved.fingerprint() == before, (
-            "characterization: the fingerprint is blind to `tu`. When `tu` becomes identity "
-            "this must fail, and `fingerprint()` must hash it for file-scoped USRs."
-        )
+        assert moved.fingerprint() != before
+
+    def test_the_fingerprint_ignores_it_where_it_is_not(self, hazards: Model) -> None:
+        """Hashed under the *same* condition `DeclaredTier.key` applies, so there is one rule
+        about when the TU counts. An external-linkage node's TU is not identity, and a
+        fingerprint that saw it would report a difference the matcher does not."""
+        before = hazards.fingerprint()
+        moved = hazards.model_copy(deep=True)
+        for node in moved.nodes.values():
+            if usr_file(node.id) is None:
+                node.tu = "somewhere/else.cpp"
+        assert moved.fingerprint() == before
