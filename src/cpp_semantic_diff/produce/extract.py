@@ -583,8 +583,17 @@ def merge_edge(
     and so that the merged graph never aliases a partial model's objects.
 
     Attributes belong to the relation, not to the site (`virtual` is a property of the
-    callee, `access` of the base specifier), so a later arrival can only fill a gap, never
-    contradict what is already recorded.
+    callee, `access` of the base specifier), so two translation units observing the same
+    edge should agree. When they do not, one of them knew less: `virtual` is read off
+    `callee.is_virtual_method()` and is `False` both for "not virtual" and for a callee this
+    TU could not resolve as a method, and `access` falls back to `"private"` where clang
+    reports none. So the merge takes the *best-informed* observation under a total order
+    (`_edge_attr_rank`) rather than the first to arrive.
+
+    First-to-arrive was the bug this replaced, and it was silent: `setdefault` made the value
+    a function of compile-database order, so the same two revisions could diff clean or dirty
+    depending on which TU the pool happened to finish first. `merge_node` has been ordered
+    for exactly this reason since it was written; edges were not.
     """
     # A self-edge is not a relation worth an event, and an empty USR is not an identity.
     # Enforced here rather than at the call sites because the builder creates both cases
@@ -600,7 +609,28 @@ def merge_edge(
         if location not in edge.locations:
             edge.locations.append(location)
     for name, value in (attrs or {}).items():
-        edge.attrs.setdefault(name, value)
+        current = edge.attrs.get(name)
+        if current is None or _edge_attr_rank(value) > _edge_attr_rank(current):
+            edge.attrs[name] = value
+
+
+def _edge_attr_rank(value: AttrValue) -> tuple[bool, str]:
+    """A total order over one edge attribute's observed values. Highest wins.
+
+    Two components, and only the first is a judgement.
+
+    **Truthy outranks falsy**, because every falsy value this producer emits is also what it
+    emits when it does not know: `virtual=False` covers "not a virtual method" and "not
+    resolvable as a method here", and `access` falls back to `"private"`. Preferring the
+    positive observation never discards a fact for a default.
+
+    **Then `repr`**, which is a tie-break and not a claim. Two truthy observations that
+    disagree -- `"public"` against `"protected"` on one base specifier -- is a contradiction
+    the producer should not be able to create, and if it ever does, the answer this picks is
+    stable but arbitrary. Stable is the part that matters: `max` over a total order is
+    commutative, so the model does not depend on which TU the pool finished first (§9).
+    """
+    return (bool(value), repr(value))
 
 
 def _qualified_name(cursor: ci.Cursor) -> str:

@@ -14,12 +14,22 @@ import pytest
 
 from cpp_semantic_diff.acquire.workspace import CompileEntry
 from cpp_semantic_diff.errors import PreconditionError
-from cpp_semantic_diff.model.ir import EdgeKind, Model, Node, NodeId, NodeKind
+from cpp_semantic_diff.model.ir import (
+    AttrValue,
+    Edge,
+    EdgeKind,
+    Location,
+    Model,
+    Node,
+    NodeId,
+    NodeKind,
+)
 from cpp_semantic_diff.produce.extract import (
     DROPPED_FLAGS,
     TuExtract,
     body_hash,
     extract,
+    merge_edge,
     merge_node,
     parse_arguments,
 )
@@ -321,6 +331,63 @@ class TestMergingObservationsOfOneEntity:
         size = next(n for n in merged.values() if n.qualified_name == "app::S::size")
         assert size.body_hash is not None
         assert size.location is not None and size.location.file == "b.cpp"
+
+
+class TestMergingObservationsOfOneEdge:
+    """The same rule as for nodes, and it was missing here (STATUS §6).
+
+    An edge attribute belongs to the relation, so two TUs seeing one edge should agree. When
+    they do not, one knew less -- `virtual` is `False` both for "not virtual" and for a
+    callee this TU could not resolve as a method, and `access` falls back to `"private"`.
+    `setdefault` took whichever arrived first, which made the model a function of
+    compile-database order: the same two revisions could diff clean or dirty depending on
+    which TU the worker pool finished first.
+
+    Built by hand rather than parsed. The disagreement is between *translation units*, and
+    the smallest honest way to stage two disagreeing observations of one edge is to hand them
+    to the merge directly -- the same reason `merge_node` has unit-level tests beside the
+    parsed ones.
+    """
+
+    SRC, DST = "c:@F@caller#", "c:@F@callee#"
+
+    def merged(self, *observations: dict[str, AttrValue]) -> dict[str, AttrValue]:
+        edges: dict[str, Edge] = {}
+        for attrs in observations:
+            merge_edge(edges, self.SRC, self.DST, EdgeKind.CALLS, (), dict(attrs))
+        return edges[f"{self.SRC}|calls|{self.DST}"].attrs
+
+    def test_the_result_does_not_depend_on_the_order_the_observations_arrived(self) -> None:
+        uninformed, informed = {"virtual": False}, {"virtual": True}
+        assert self.merged(uninformed, informed) == self.merged(informed, uninformed)
+
+    def test_the_better_informed_observation_wins(self) -> None:
+        """`virtual=False` is what a TU reports when it could not resolve the callee as a
+        method at all, so a `True` from any TU is positive evidence and a `False` is not."""
+        assert self.merged({"virtual": False}, {"virtual": True}) == {"virtual": True}
+        assert self.merged({"virtual": True}, {"virtual": False}) == {"virtual": True}
+
+    def test_a_real_access_specifier_beats_the_private_fallback(self) -> None:
+        """`_access(child) or "private"` means `"private"` is also the value for *unknown*."""
+        assert self.merged({"access": "private"}, {"access": "public"}) == {"access": "public"}
+        assert self.merged({"access": "public"}, {"access": "private"}) == {"access": "public"}
+
+    def test_an_attribute_only_one_tu_saw_is_still_recorded(self) -> None:
+        assert self.merged({}, {"virtual": True}) == {"virtual": True}
+
+    def test_call_sites_still_accumulate_across_observations(self) -> None:
+        """The merge is per attribute; locations are a union and must not have changed."""
+        edges: dict[str, Edge] = {}
+        for line in (10, 20, 10):
+            merge_edge(
+                edges,
+                self.SRC,
+                self.DST,
+                EdgeKind.CALLS,
+                (Location(file="a.cpp", line=line),),
+                {"virtual": False},
+            )
+        assert [loc.line for loc in edges[f"{self.SRC}|calls|{self.DST}"].locations] == [10, 20]
 
 
 #: A destructor declared in a header and defined in one of the two TUs that include it.
