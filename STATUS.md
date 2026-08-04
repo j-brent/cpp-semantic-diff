@@ -142,6 +142,17 @@ synthetic fixtures.
 - **Aliasing merges as well as resolves.** fmt's 26,071 distinct edges drop 5,113 unresolvable
   endpoints but yield 20,958 — not what subtraction gives. 2,399 are two calls to two instantiations
   of one template becoming one call to the template, which is what ARCH §5 asks for.
+- **`EdgeAttrChanged` is correct and almost never fires** — zero occurrences across 300 commits of
+  each fixture. Worth knowing before anything is built on top of it: a rule that depends on it will
+  look correct in review and do nothing in practice.
+- **`git diff --name-only` was discarding an answer git had already computed.** Rename detection
+  defaults on since git 2.9, so the base-side path of every rename was available all along and the
+  flag choice threw it away. Before building machinery to recover something, check whether the tool
+  already knows it and is being asked the wrong question.
+- **`errors="replace"` is not a safe default when the string is an identity.** Two different
+  undecodable paths decode to the same string, so a rename map built through `run_git` would collapse
+  two renames into one entry and assert that two different files are the same file. Paths that are
+  identity are decoded with `surrogateescape`, the way `os` decodes filenames.
 
 ---
 
@@ -156,12 +167,18 @@ largest component 78 %→18 %); `Completeness` unable to state incompleteness nu
 missing `EdgeAttrChanged`; and a toolchain identity that named the parser but not the parse. Every
 one was invisible on synthetic fixtures and obvious on the first real run.
 
+The first two are one piece of work, not two — designed in [PLAN-001](docs/plans/rename-identity.md).
+
 - [ ] **`match_models(renames=...)` is never fed.** ARCH §5 requires file renames resolved from git
-      *before* matching; `acquire` exposes only `changed_files` (`--name-only`), which cannot carry
-      them. Needs an `acquire` API.
+      *before* matching. `acquire.file_changes` now supplies the map (`267660b`); `cli.py` still
+      calls `match_models` without it, so the defect is open until it is wired.
 - [ ] **`Node.tu` is declared and never populated.** `ir.py` documents it as identity-relevant for
-      internal linkage; the producer never sets it. Partly masked because clang's USRs for
-      internal-linkage entities already embed the file name.
+      internal linkage; the producer never sets it, so `RenameMap.by_path` — the half of the rename
+      machinery that handles directory moves — is unreachable. Partly masked because clang's USRs
+      for internal-linkage entities already embed the file name. Not a free fix: populating it makes
+      tier 1 *stricter*, and where the producer's choice of TU is arbitrary (a static declared in a
+      header, deduped across N includers) the winner can flip between revisions and break matches
+      that work today. `Model.fingerprint()` does not hash `tu` and will have to.
 - [ ] **`EdgeAdded`/`EdgeRemoved` between two surviving nodes is not collapsible** by any current
       cause rule, and is the bulk of the remaining top-level noise.
 - [ ] **Exposure takes the max over both edge endpoints** while blast radius and decomposition now
@@ -209,6 +226,11 @@ one was invisible on synthetic fixtures and obvious on the first real run.
   product. The JSON-first contract defers the decision without prejudging it.
 - **Unnamed (not anonymous) records have an unstable USR** — file basename plus a byte offset that
   moves on any edit above the record. A tier-1 hazard. Neither fixture has one.
+- **`diff.renameLimit` can silently truncate the rename map.** Git skips *inexact* rename detection
+  on large diffs and says so on stderr, which `run_git` discards on success — so the map would be
+  incomplete with no signal, exactly the ARCH §11 case that wants the limit stated. `-l0` removes the
+  cap but is potentially quadratic on the large refactor where it matters. Neither answer is
+  obviously right, and the fixtures are too small to force the choice.
 
 ---
 
@@ -253,3 +275,10 @@ one was invisible on synthetic fixtures and obvious on the first real run.
   failure this system can have. Prefer tests of that kind. Do not pin float scores — it fossilizes
   weights that are meant to be tuned.
 - Run `uv run ruff format . && uv run ruff check . && uv run pytest -q` before committing.
+- **Reserve the shared contracts when work is split across concurrent agents.** `model/ir.py` and
+  `model/events.py` are what every stage agrees on; letting several workstreams edit them
+  concurrently produces four partial versions of one decision. Held as read-only with a
+  stop-and-report rule, it caught four separate requests to change `Completeness` and `EventKind`,
+  which were then done once as a coherent pass. **Commit coupled work together** — a stage emitting
+  a new event kind and the ranker learning its weight are one commit, because either alone is a
+  `KeyError`.
