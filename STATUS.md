@@ -43,7 +43,22 @@ fmt    HEAD~100   3,178 lines changed → 335 semantic events, 17 high-risk
 spdlog HEAD~30    1,708 lines changed → 32 semantic events, 5 high-risk
                   24 top-level, 8 nested · 18 components
 spdlog HEAD~5     35 lines changed   →  0 semantic events
+
+leveldb HEAD~10   52 lines changed   → 3,794 semantic events, 21 high-risk   ** BROKEN **
+                  1,070 top-level · 142 components · 96.5 % of events vendored
 ```
+
+**The leveldb row is the product failing, and it is left in the table for that reason.** The
+commit bumps `third_party/googletest` and `third_party/benchmark`. Two defects compound, both in
+§6:
+
+- the denominator is blind to submodules — `git diff --numstat` scores a pointer bump as one line,
+  while the model sees the whole content change, so 52 and 3,794 are counted over different
+  universes and their ratio means nothing;
+- 3,661 of the 3,794 events are in `third_party/`, and **ranking does not demote them** — the top 12
+  events are all vendored, and 44 of the top 50.
+
+The real change is 15 events in library code. A reviewer runs this and gets a page of googletest.
 
 **The verdict, without spin.** Compression is real but roughly an order of magnitude weaker than
 ARCH §10's illustrative *2,431 → 9* (270:1). Measured: **9.5:1 to 53:1** on `events_reported`.
@@ -234,6 +249,30 @@ and 0 after, because the prediction that fmt's anonymous records carry file-scop
 clang spells them `…@Ua`. `internal_linkage_residue` is 0 on most real renames, so it cannot serve
 as a smoke test; a fixture commit has to be chosen by first checking the renamed file for a
 namespace-scope `static` or an anonymous namespace.
+
+The first two are what the leveldb row in §2 is made of, and they are the most serious open items.
+
+- [ ] **Exposure loses to blast radius, so vendored churn tops the ranking.** `exposure.py` exists
+      to stop "a modified assertion helper in bundled googletest above a modified `fmt::format`",
+      and on leveldb it does not. The arithmetic says why: exposure is one weighted term capped at
+      `W_EXPOSURE` 0.25, and the VENDORED/PUBLIC gap is worth 0.2375 of score — while blast radius
+      (0.35) plus novelty (0.25) is 0.60. A removed gtest node with 241 dependents scores 0.76; a
+      public attribute change scores ~0.44. **Exposure is a weighted factor where it needed to be
+      closer to a gate.** Invisible on fmt and spdlog because their vendored gtest is a static copy
+      that never differs between two revisions of the host; a submodule bump changes all of it at
+      once. Do not fix by raising the weight — that is tuning against one symptom. The shape that
+      fits the existing design is a **cause**: a dependency bump is one cause with N consequences,
+      which is what `classify` and §6.3's cascade collapse already exist for.
+- [ ] **The compression denominator is blind to submodule content.** `diff_line_count` uses
+      `git diff --numstat`, which scores a submodule pointer bump as one line, while `produce` now
+      materializes submodules and models everything inside them. Numerator and denominator are
+      counted over different universes, so `compression` is not merely unflattering on leveldb, it
+      is meaningless. Either count what changed inside the submodule or exclude it from both sides;
+      the metric may not straddle.
+- [ ] **Every metric is computed over the whole model, including vendored and test code.**
+      `events_reported`, `compression` and `internal_linkage_residue` do not distinguish what
+      `rank/exposure.py` already classifies. leveldb is 52.8 % vendored and 28.5 % test by node
+      count, so the headline number is dominated by code nobody is reviewing.
 
 Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the measurements.
 
