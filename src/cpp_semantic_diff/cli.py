@@ -299,6 +299,7 @@ def diff(
         lines_changed=lines,
         files_changed=len(files),
         cpp_files_changed=sum(1 for f in files if Path(f).suffix.lower() in CPP_SUFFIXES),
+        files_renamed=len(changes.renames),
         timings=timings,
     )
 

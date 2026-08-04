@@ -286,28 +286,46 @@ def _residue(document: DiffDocument, console: Console) -> None:
 
     So the residue is printed on every run, not only when it is large, and it is printed as
     a limitation of the tool rather than as a property of the change. A reader who is not
-    told that a rename reads as a removal plus an addition will conclude the branch deleted
-    something.
+    told what identity could not resolve will read the residue as something the branch did.
+
+    The rename line is stated in whichever direction is true of *this* run. Renames are now
+    resolved from git and applied (ARCH-001 §5), so the blanket warning that "a rename reads
+    as a removal plus an addition" would be false wherever git found one -- and a caveat
+    that is false where it matters most teaches a reader to discount it everywhere.
     """
     r = document.summary.residue
+    renamed = document.summary.files_renamed
     tiers = ", ".join(t.value for t in r.tiers_run) or "none"
     console.print()
     console.print(f"[dim]identity: tier {tiers} only (ARCH-001 §13, STATUS §6)[/]")
     console.print(
         f"  [dim]{r.matched:,} matched · {r.unmatched_base:,} base / {r.unmatched_head:,} "
-        f"head unmatched — a rename reads here as a removal plus an addition[/]"
+        f"head unmatched[/]"
     )
+    if renamed:
+        console.print(
+            f"  [dim]{renamed:,} file rename{'' if renamed == 1 else 's'} resolved from git "
+            f"and applied to identity[/]"
+        )
+    else:
+        console.print(
+            "  [dim]git found no renames; one it could not detect would read here as a "
+            "removal plus an addition[/]"
+        )
     if r.pairable_residue:
         console.print(
             f"  [dim]at most {r.pairable_residue:,} of those are pairs tiers 2-4 could "
             f"match; that is the upper bound on what rename detection would remove[/]"
         )
     if r.internal_linkage_residue:
-        # ARCH-001 §5's named hazard. Non-zero without a file rename means the tier-1 key is
-        # wrong, which is a bug in the matcher and not a fact about the branch.
+        # ARCH-001 §5's named hazard, and now a sharper signal than it was. Renames are fed
+        # to the matcher, so this being non-zero is no longer explained by "a file moved" --
+        # it means a rename git did not report (a split, or below the similarity threshold),
+        # or a tier-1 key that is wrong. Both are worth a look; neither is a fact about the
+        # branch.
         console.print(
             f"  [yellow]{r.internal_linkage_residue:,} unmatched entities have file-scoped "
-            f"USRs (internal linkage); a file rename breaks tier 1 for these[/]"
+            f"USRs (internal linkage); a rename git did not report breaks tier 1 for these[/]"
         )
 
 

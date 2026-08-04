@@ -424,6 +424,13 @@ class Summary(BaseModel):
     )
     files_changed: int
     cpp_files_changed: int
+    files_renamed: int = Field(
+        default=0,
+        description="Renames git resolved and the matcher was given (ARCH-001 §5). Reported "
+        "because it is the one input to identity that comes from outside the models: a "
+        "reviewer comparing two runs cannot otherwise tell whether a rename was seen and "
+        "applied or missed entirely, and those produce very different deltas.",
+    )
 
     events_reported: int = Field(
         description="`len(events)`. The complete set. Not the visible set, not the "

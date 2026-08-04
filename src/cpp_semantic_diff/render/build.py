@@ -50,6 +50,7 @@ def build_document(
     lines_changed: int,
     files_changed: int,
     cpp_files_changed: int,
+    files_renamed: int = 0,
     timings: Timings | None = None,
 ) -> DiffDocument:
     """Assemble ARCH-001 §10's document from the stage outputs.
@@ -92,6 +93,7 @@ def build_document(
             lines_changed=lines_changed,
             files_changed=files_changed,
             cpp_files_changed=cpp_files_changed,
+            files_renamed=files_renamed,
             events_reported=count,
             compression=compression_sentence(lines_changed, count, high_risk),
             compression_ratio=(lines_changed / count) if count else None,

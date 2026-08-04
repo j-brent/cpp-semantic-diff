@@ -109,6 +109,7 @@ def document(
     *,
     correspondence: Correspondence | None = None,
     lines_changed: int = 100,
+    files_renamed: int = 0,
 ) -> DiffDocument:
     corr = correspondence if correspondence is not None else match_models(base, head)
     return build_document(
@@ -122,6 +123,7 @@ def document(
         lines_changed=lines_changed,
         files_changed=3,
         cpp_files_changed=2,
+        files_renamed=files_renamed,
     )
 
 
@@ -593,6 +595,35 @@ class TestTheResidueIsReported:
         out = draw(doc)
         assert "tier declared only" in out
         assert "removal plus an addition" in out
+
+    def test_resolved_renames_reach_the_document(self) -> None:
+        """ARCH-001 §5's one identity input that comes from outside the models.
+
+        Without it in the JSON, two runs that differ only in whether a rename was seen are
+        indistinguishable to a consumer -- and they produce very different deltas.
+        """
+        f = node("c:@F@f#", name="f")
+        doc = document(model("a", f), model("b", f), [], files_renamed=2)
+        assert doc.summary.files_renamed == 2
+
+    def test_the_rename_caveat_is_stated_in_the_direction_that_is_true(self) -> None:
+        """A caveat that is false where it matters most teaches a reader to discount it.
+
+        Renames are resolved from git and applied now, so "a rename reads as a removal plus
+        an addition" must not be printed on a run where git found one and the matcher used
+        it. The claim flips instead of being dropped: what is still true is that a rename
+        git *could not* detect reads that way.
+        """
+        f = node("c:@F@f#", name="f")
+        base, head = model("a", f), model("b", f)
+
+        applied = draw(document(base, head, [], files_renamed=1))
+        assert "1 file rename resolved from git" in applied
+        assert "removal plus an addition" not in applied
+
+        none_found = draw(document(base, head, [], files_renamed=0))
+        assert "git found no renames" in none_found
+        assert "removal plus an addition" in none_found
 
 
 # -- 5 · the contract itself ---------------------------------------------------------------

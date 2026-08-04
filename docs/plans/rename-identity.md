@@ -158,7 +158,7 @@ per-directory.**
 |---|---|---|
 | 1 | `acquire`: resolve renames from git | done, `267660b` |
 | 2 | `cli`: feed the matcher — **where the defect closes** | done, measured in §5 |
-| 3 | `render`: state the rename count in the document | |
+| 3 | `render`: state the rename count in the document | done |
 | 4 | `model`/`produce`: populate `Node.tu`, plus cache GC | |
 | 5 | docs: fold the measurements into `STATUS.md`, delete this file | |
 
