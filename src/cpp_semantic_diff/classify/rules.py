@@ -191,10 +191,47 @@ def _callee_of(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
     yield from ctx.head_callees.get(NodeId(event.subject), ())
 
 
+def _overload_the_caller_moved_to(ctx: ClassifyContext, event: Event) -> Iterator[EdgeId]:
+    """The edge this caller gained to a *different overload of the same function*.
+
+    The shape, measured on leveldb: googletest gave `AssertHelper::AssertHelper` a
+    `std::string_view` overload, and every `TEST` body stopped calling the `const char *`
+    one. That is 28 `EdgeRemoved` events whose endpoints both survive -- the old overload is
+    still declared, it is merely no longer called -- so neither `edge-lost-its-endpoint` nor
+    anything else in this table reaches them, and they were the bulk of what was left at top
+    level after every other cascade had collapsed.
+
+    **This is not `EdgeRetargeted` by another name.** That event is refused because an edge's
+    id is `src|kind|dst`, so "retargeted from B to C" asserts B and C are the same entity --
+    a node-identity claim the one-to-one matcher already declined. This rule asserts nothing
+    of the kind: B and C are distinct nodes, distinct overloads, both present at head. The
+    claim is only that one call site moved within an overload set, which is a fact about the
+    *caller's* outgoing edges and needs no opinion about whether B and C are the same thing.
+
+    Same edge kind, and the overload set is `qualified_name` equality -- which is what an
+    overload set *is*, since overloads differ exactly in signature. Candidates arrive in
+    `head_out_edges` order, which is sorted by edge id, so a caller that gained two overloads
+    gets a stable answer rather than one that depends on model construction.
+    """
+    removed = ctx.base_edges.get(EdgeId(event.subject))
+    if removed is None:
+        return
+    old = ctx.base.nodes.get(removed.dst)
+    if old is None:
+        return
+    for edge in ctx.head_out_edges.get(removed.src, ()):
+        if edge.kind is not removed.kind or edge.dst == removed.dst:
+            continue
+        gained = ctx.head.nodes.get(edge.dst)
+        if gained is not None and gained.qualified_name == old.qualified_name:
+            yield edge.id
+
+
 # --------------------------------------------------------------------------------------
 # The table. Ordered; the first rule that finds a cause wins, which matters only if two
-# rules ever share a consequence kind -- none do today, and the ordering is the documented
-# tie-break if one ever does.
+# rules ever share a consequence kind -- `edge-lost-its-endpoint` and `call-moved-to-another
+# -overload` both explain an `EdgeRemoved`, and the order below is the tie-break: an endpoint
+# that actually went away is the better explanation than one the caller merely stopped using.
 
 CAUSE_RULES: tuple[CauseRule, ...] = (
     CauseRule(
@@ -228,6 +265,20 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
         note="Not in §6.3, and it is what carries v0's real cascades: removing one class "
         "removes every containment and call edge that touched it. `diff/edges.py` emits "
         "those deliberately and names this stage as the one that links them.",
+    ),
+    CauseRule(
+        name="call-moved-to-another-overload",
+        arch=None,
+        cause=EventKind.EDGE_ADDED,
+        consequence=EventKind.EDGE_REMOVED,
+        subjects=_overload_the_caller_moved_to,
+        status=RuleStatus.ACTIVE,
+        note="Not in §6.3. The one shape that survived every other rule on a real "
+        "repository: an overload is added to a dependency and every call site moves to it, "
+        "leaving an `EdgeRemoved` whose endpoints both still exist. The cause is the "
+        "`EdgeAdded` rather than the new overload's `NodeAdded` so that the chain stays "
+        "one-step-per-fact -- the addition is already linked to the node by "
+        "`edge-gained-its-endpoint`, and both collapse under it.",
     ),
     CauseRule(
         name="edge-gained-its-endpoint",

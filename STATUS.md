@@ -46,7 +46,7 @@ spdlog HEAD~5     35 lines changed   →  0 semantic events
 
 leveldb HEAD~10   52 lines changed   → 134 semantic events, 5 high-risk
                   3,660 more in bundled dependencies (96 %), ranked last
-                  39 top-level · 142 components · first vendored event at rank 112
+                  11 top-level · 142 components · first vendored event at rank 112
 ```
 
 **The leveldb row is what a third fixture was for.** The commit bumps `third_party/googletest` and
@@ -296,8 +296,13 @@ Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the me
       tier 1 *stricter*, and where the producer's choice of TU is arbitrary (a static declared in a
       header, deduped across N includers) the winner can flip between revisions and break matches
       that work today. `Model.fingerprint()` does not hash `tu` and will have to.
-- [ ] **`EdgeAdded`/`EdgeRemoved` between two surviving nodes is not collapsible** by any current
-      cause rule, and is the bulk of the remaining top-level noise.
+- [x] ~~**`EdgeAdded`/`EdgeRemoved` between two surviving nodes is not collapsible**~~ — the shape
+      that actually caused it is: a dependency adds an overload and every call site moves to it,
+      leaving the old overload declared but uncalled. `call-moved-to-another-overload` links those
+      to the `EdgeAdded`, which chains to the new overload's `NodeAdded`. leveldb `HEAD~10`:
+      **39 top-level → 11**, and fmt and spdlog unchanged to the digit, which is the check that it
+      did not over-link. A call genuinely dropped between two survivors still has no cause and is
+      still shown — that is the design (`test_classify.py`), not a gap.
 - [ ] **Exposure takes the max over both edge endpoints** while blast radius and decomposition now
       take the source. Contained by the cause bound today, but an `EdgeAdded` from test code into
       public API with *no* cause link is still scored as public. Decide it deliberately.
@@ -343,6 +348,9 @@ Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the me
   product. The JSON-first contract defers the decision without prejudging it.
 - **Unnamed (not anonymous) records have an unstable USR** — file basename plus a byte offset that
   moves on any edit above the record. A tier-1 hazard. Neither fixture has one.
+- **ARCH §6.3's cause table is missing a row.** `call-moved-to-another-overload` was found by
+  running the tool, not by reading the design, and it is the rule that carries the largest cascade
+  measured so far. §6.3 should name it, or state why the four uncited rules stay uncited.
 - **`diff.renameLimit` can silently truncate the rename map.** Git skips *inexact* rename detection
   on large diffs and says so on stderr, which `run_git` discards on success — so the map would be
   incomplete with no signal, exactly the ARCH §11 case that wants the limit stated. `-l0` removes the

@@ -232,6 +232,70 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
         events = classify(base, model("b", *both))
         assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{G}") is None
 
+    def test_a_call_moving_between_overloads_is_explained_by_the_overload_it_moved_to(
+        self,
+    ) -> None:
+        """The shape that survived every other rule on a real repository.
+
+        googletest gave `AssertHelper::AssertHelper` a `std::string_view` overload and every
+        `TEST` body moved to it. Both endpoints of the lost edge still exist -- the old
+        overload is still declared, merely uncalled -- so nothing in the table reached it,
+        and 28 of leveldb's 38 remaining top-level events were this one shape.
+        """
+        old = node("c:@F@h#c", name="h", qualified_name="ns::h", signature="void (const char *)")
+        new = node("c:@F@h#s", name="h", qualified_name="ns::h", signature="void (string_view)")
+        caller = node(F)
+
+        base = model("a", caller, old, edges=[edge(F, old.id)])
+        head = model("b", caller, old, new, edges=[edge(F, new.id)])
+        events = classify(base, head)
+
+        assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") == by_subject(
+            events, EventKind.EDGE_ADDED, f"{F}|calls|{new.id}"
+        )
+
+    def test_the_whole_chain_collapses_under_the_new_overload(self) -> None:
+        """The `EdgeAdded` is itself caused by the new overload's `NodeAdded`, so a reviewer
+        reads one fact -- an overload appeared -- with both edge events nested beneath it."""
+        old = node("c:@F@h#c", name="h", qualified_name="ns::h", signature="void (const char *)")
+        new = node("c:@F@h#s", name="h", qualified_name="ns::h", signature="void (string_view)")
+        caller = node(F)
+        events = classify(
+            model("a", caller, old, edges=[edge(F, old.id)]),
+            model("b", caller, old, new, edges=[edge(F, new.id)]),
+        )
+        assert cause_of(events, EventKind.EDGE_ADDED, f"{F}|calls|{new.id}") == by_subject(
+            events, EventKind.NODE_ADDED, new.id
+        )
+        assert cause_of(events, EventKind.NODE_ADDED, new.id) is None, "the root of the chain"
+
+    def test_a_call_that_moved_to_an_unrelated_function_is_not_explained_away(self) -> None:
+        """The guard. The rule keys on `qualified_name`, which is what an overload set *is*;
+        a caller that dropped one call and gained an unrelated one has made two changes, and
+        nesting either under the other would hide a real one."""
+        old = node("c:@F@h#c", name="h", qualified_name="ns::h")
+        other = node("c:@F@k#", name="k", qualified_name="ns::k")
+        caller = node(F)
+        events = classify(
+            model("a", caller, old, edges=[edge(F, old.id)]),
+            model("b", caller, old, other, edges=[edge(F, other.id)]),
+        )
+        assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") is None
+
+    def test_a_removed_endpoint_still_outranks_an_overload_explanation(self) -> None:
+        """Both rules can explain one `EdgeRemoved`, and table order decides. An endpoint
+        that actually went away is the better account than one the caller stopped using."""
+        old = node("c:@F@h#c", name="h", qualified_name="ns::h")
+        new = node("c:@F@h#s", name="h", qualified_name="ns::h")
+        caller = node(F)
+        events = classify(
+            model("a", caller, old, edges=[edge(F, old.id)]),
+            model("b", caller, new, edges=[edge(F, new.id)]),
+        )
+        assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") == by_subject(
+            events, EventKind.NODE_REMOVED, old.id
+        )
+
     def test_an_edge_onto_an_added_node_is_caused_by_that_addition(self) -> None:
         head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
         events = classify(model("a", node(F)), head)
@@ -521,14 +585,20 @@ class TestTheRuleTableIsExplicit:
         assert "everything C contained" in active
 
     def test_the_rules_that_carry_v0s_cascades_are_not_in_arch(self) -> None:
-        """The other half of the discrepancy: the edge-endpoint rules do the work in v0 and
-        §6.3 does not name them. Asserted so that amending the doc is a visible change here
-        rather than a silent divergence."""
+        """The other half of the discrepancy: the edge rules do the work in v0 and §6.3 does
+        not name them. Asserted so that amending the doc is a visible change here rather than
+        a silent divergence.
+
+        `call-moved-to-another-overload` joined them because a real repository produced a
+        cascade §6.3 did not anticipate -- a dependency adding an overload and every call
+        site moving to it. ARCH-001 §6.3 should grow a row for it.
+        """
         uncited = {r.name for r in CAUSE_RULES if not r.arch}
         assert uncited == {
             "contained-addition",
             "edge-lost-its-endpoint",
             "edge-gained-its-endpoint",
+            "call-moved-to-another-overload",
         }
 
     def test_no_rule_names_a_kind_outside_the_closed_event_set(self) -> None:

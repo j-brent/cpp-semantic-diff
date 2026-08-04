@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 from cpp_semantic_diff.diff import containers
 from cpp_semantic_diff.match import Correspondence
-from cpp_semantic_diff.model import EdgeId, EdgeKind, Model, NodeId
+from cpp_semantic_diff.model import Edge, EdgeId, EdgeKind, Model, NodeId
 
 
 @dataclass(frozen=True)
@@ -48,12 +48,24 @@ class ClassifyContext:
     #: (§6.3), and built anyway so that rule is a table entry rather than a rewrite.
     head_callees: Mapping[NodeId, tuple[NodeId, ...]]
 
+    #: Edge id -> the edge, base side. An edge event's subject names an edge, and a rule that
+    #: needs its *kind* must not recover it by splitting the id: `Edge.id` is `src|kind|dst`
+    #: over USRs, and a USR is an opaque clang string that may contain anything.
+    base_edges: Mapping[EdgeId, Edge]
+
+    #: Source -> its outgoing edges, head side. What lets a rule ask "does this caller now
+    #: call something else instead", which is a question about the head graph and not about
+    #: any event.
+    head_out_edges: Mapping[NodeId, tuple[Edge, ...]]
+
     @classmethod
     def build(cls, base: Model, head: Model, correspondence: Correspondence) -> ClassifyContext:
         callees: dict[NodeId, set[NodeId]] = defaultdict(set)
+        out: dict[NodeId, list[Edge]] = defaultdict(list)
         for edge in head.edges:
             if edge.kind is EdgeKind.CALLS:
                 callees[edge.src].add(edge.dst)
+            out[edge.src].append(edge)
         return cls(
             base=base,
             head=head,
@@ -68,6 +80,12 @@ class ClassifyContext:
             base_endpoints=_endpoints(base),
             head_endpoints=_endpoints(head),
             head_callees={src: tuple(sorted(dsts)) for src, dsts in callees.items()},
+            base_edges={edge.id: edge for edge in base.edges},
+            # Sorted by id so a rule yielding several candidates yields them in an order
+            # that does not depend on model construction (§3).
+            head_out_edges={
+                src: tuple(sorted(edges, key=lambda e: e.id)) for src, edges in out.items()
+            },
         )
 
     def removed(self, base_id: NodeId) -> bool:
