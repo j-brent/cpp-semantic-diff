@@ -198,6 +198,63 @@ class Checkout:
         return [e for e in self.compile_db.entries if e.is_cpp]
 
 
+def materialize_submodules(worktree: Path, rev: str) -> None:
+    """Check out the submodules `rev` pins, because `git worktree add` does not.
+
+    A submodule is a gitlink -- mode 160000, a commit id and nothing else -- and
+    `git worktree add` creates it as an *empty directory*. Every header the superproject
+    expects to find there is missing, so CMake fails on a tree that builds perfectly in the
+    original clone, and it fails saying the source directory has no `CMakeLists.txt`. That
+    reaches the user as ARCH-001 §3.1's "the base is expected to build", which is both
+    alarming and wrong: the base builds, the worktree was incomplete.
+
+    Silent truncation is the alternative worth naming. Where a missing submodule does *not*
+    break configure -- an optional dependency, a vendored library only some targets use --
+    the compile database is simply smaller, both revisions lose the same entities, and the
+    two models agree with each other. That is the failure this project exists to argue
+    against (STATUS §5), reached by a different road than the libclang one.
+
+    The pinned commit is the right version by construction: it is what this revision
+    recorded, so a commit that bumps a submodule is a real difference between the two
+    models rather than an artefact of when the tool ran.
+
+    **This needs the network, and it is worth knowing why it cannot be made not to.** A
+    worktree shares the superproject's object store but *not* its submodule module store:
+    `git submodule update` clones into `.git/worktrees/<sha>/modules/...`, a fresh store per
+    worktree, so the parent having the submodule checked out does not help. Measured, with
+    the network blocked, on leveldb: the clone is attempted and fails.
+    `submodule.alternateLocation=superproject` does not rescue it either, because the
+    alternate is resolved against the worktree's gitdir, which is the empty one.
+
+    So the cost is one submodule clone per revision analyzed, paid once because worktrees are
+    cached by SHA (ARCH-001 §9), and a repository with submodules cannot be analyzed offline.
+    That is a limit of `git worktree`, not a choice made here, and it is stated rather than
+    discovered.
+    """
+    if not (worktree / ".gitmodules").is_file():
+        return
+
+    result = subprocess.run(
+        ["git", "-C", str(worktree), "submodule", "update", "--init", "--recursive"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode != 0:
+        raise CompileDatabaseError(
+            rev,
+            str(worktree),
+            "This revision pins git submodules and they could not be checked out. "
+            "`git worktree add` does not populate them, so the tree is incomplete and any "
+            "model built from it would omit whatever they provide.\n"
+            f"git said: {result.stderr.strip()}\n"
+            "A worktree clones submodules into its own module store, so this needs network "
+            "access to wherever they are hosted -- having them checked out in the repository "
+            "does not help.",
+        )
+
+
 @contextmanager
 def checkout(
     repo: Path,
@@ -217,6 +274,7 @@ def checkout(
     if created:
         worktree.parent.mkdir(parents=True, exist_ok=True)
         run_git(repo, "worktree", "add", "--detach", "--quiet", str(worktree), rev)
+        materialize_submodules(worktree, rev)
 
     try:
         database_path = find_compile_database(worktree)

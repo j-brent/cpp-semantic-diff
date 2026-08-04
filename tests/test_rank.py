@@ -568,6 +568,15 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
             ("third_party/zlib/zlib.h", Exposure.VENDORED),
             ("examples/demo.cc", Exposure.TEST),
             ("support/tools_test.cc", Exposure.TEST),
+            # leveldb: tests live *beside* the code they test, with no `test/` directory
+            # anywhere. fmt and spdlog both segregate, so until leveldb was added nothing
+            # exercised the filename-stem half of the rule on a real layout.
+            ("db/db_impl.cc", Exposure.INTERNAL),
+            ("db/db_test.cc", Exposure.TEST),
+            ("util/coding_test.cc", Exposure.TEST),
+            ("include/leveldb/db.h", Exposure.PUBLIC),
+            ("benchmarks/db_bench.cc", Exposure.TEST),
+            ("third_party/googletest/googletest/src/gtest.cc", Exposure.VENDORED),
         ],
     )
     def test_the_path_convention_reads_the_layouts_it_claims_to(

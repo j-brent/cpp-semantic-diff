@@ -108,6 +108,31 @@ def renamed_repo(bare_repo: Path) -> Path:
 
 
 @pytest.fixture
+def submodule_repo(tmp_path: Path, bare_repo: Path) -> Path:
+    """A superproject pinning a submodule -- the shape `git worktree add` does not carry.
+
+    leveldb is the first fixture with one; fmt and spdlog vendor by copying, so nothing
+    exercised this until the fixture set widened.
+    """
+    inner = tmp_path / "inner"
+    inner.mkdir()
+    git(inner, "init", "-q", "-b", "main")
+    git(inner, "config", "user.email", "test@example.com")
+    git(inner, "config", "user.name", "Test")
+    git(inner, "config", "commit.gpgsign", "false")
+    commit(inner, "vendor.h", "int vendored();\n", "vendor")
+
+    # Git blocks the `file://` transport for submodules (CVE-2022-39253) and ignores repo
+    # config for it, so it has to come from the command line. Real submodule URLs are
+    # remote; this is a property of the fixture, never of the tool -- which is why the
+    # relaxation is applied here and via the environment in the test, and never in
+    # `materialize_submodules`.
+    git(bare_repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(inner), "dep")
+    commit(bare_repo, "main.cpp", '#include "dep/vendor.h"\nint m() { return vendored(); }\n', "A")
+    return bare_repo
+
+
+@pytest.fixture
 def shallow_repo(tmp_path: Path, bare_repo: Path) -> Path:
     commit(bare_repo, "a.cpp", "int a();\n", "A")
     commit(bare_repo, "b.cpp", "int b();\n", "B")

@@ -103,6 +103,29 @@ in vendored `gmock-gtest-all.cc`. Most renames touch none and cost nothing — `
 `base.h` measured 0 before *and* after. So the defect is rare but severe where it lands, which is
 the argument for fixing it rather than counting how often it fires.
 
+### Both original fixtures were the wrong shape — leveldb added
+
+fmt and spdlog are both effectively header-only, and **spdlog vendors fmt**
+(`include/spdlog/fmt/bundled/`, `src/bundled_fmtlib_format.cpp`), so they were closer to one and a
+half samples than two. That matters specifically here: a header-only library cannot use
+namespace-scope statics, because that would mean one copy per translation unit. The fixtures
+structurally excluded the phenomenon `Node.tu` exists for.
+
+| | nodes | TUs | file-scoped USRs | of those, **library code** |
+|---|---|---|---|---|
+| fmt `HEAD~12` | 10,574 | 50 | 153 (1.5 %) | **2** |
+| leveldb `HEAD~10` | 7,977 | 93 | 825 (10.3 %) | **428** |
+
+Model composition by exposure class, which is the number that explains it:
+
+| | vendored | test | internal | public |
+|---|---|---|---|---|
+| fmt | 31.7 % | 49.0 % | **0.0 %** (3 nodes) | 19.4 % |
+| leveldb | 52.8 % | 28.5 % | **6.2 %** (491) | 12.5 % |
+
+fmt has *three* internal nodes in the whole model — everything lives in `include/`, so everything
+is public. Every `Node.tu` conclusion drawn from fmt alone rested on a sample of two.
+
 ---
 
 ## 4 · Measured performance
@@ -167,6 +190,21 @@ synthetic fixtures.
 - **`EdgeAttrChanged` is correct and almost never fires** — zero occurrences across 300 commits of
   each fixture. Worth knowing before anything is built on top of it: a rule that depends on it will
   look correct in review and do nothing in practice.
+- **`git worktree add` does not populate submodules**, and nothing noticed until the fixture set
+  widened past two repositories that vendor by copying. A submodule is a gitlink — mode 160000, a
+  commit id — and the worktree gets an empty directory. leveldb failed CMake configure, which
+  surfaced as ARCH §3.1's "the base is expected to build": alarming and wrong, since the base built
+  and the worktree was incomplete. The quieter case is worse — where a missing submodule does *not*
+  break configure, both models lose the same entities and agree with each other, which is the §5
+  silent-truncation failure by another road. Fixed in `acquire`, and it **requires network**: a
+  worktree clones submodules into its own module store (`.git/worktrees/<sha>/modules/…`), so the
+  parent having them checked out does not help and `submodule.alternateLocation=superproject` does
+  not rescue it. Both measured with the network blocked.
+- **The exposure heuristic generalized to a layout it was not fitted to.** leveldb puts
+  `db/db_test.cc` beside `db/db_impl.cc` with no `test/` directory anywhere, so only the
+  filename-stem half of the rule applies — and it classifies correctly. One over-promotion worth
+  calibrating: `port/port_stdcxx.h` reads PUBLIC because it is a header outside a private segment,
+  though leveldb treats `port/` as internal.
 - **`git diff --name-only` was discarding an answer git had already computed.** Rename detection
   defaults on since git 2.9, so the base-side path of every rename was available all along and the
   flag choice threw it away. Before building machinery to recover something, check whether the tool

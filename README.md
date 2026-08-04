@@ -106,8 +106,19 @@ review against that base does not.
 | `CPPSD_FIXTURE_ROOT` | Where the test fixture clones live (default: `~/fixtures`) |
 
 Development: `uv run ruff format . && uv run ruff check . && uv run pytest -q`. Tests marked
-`fixtures` need real clones of `fmt` and `spdlog` under `CPPSD_FIXTURE_ROOT`; they skip without
-them.
+`fixtures` need real clones under `CPPSD_FIXTURE_ROOT`; they skip without them.
+
+```sh
+cd ~/fixtures
+git clone https://github.com/fmtlib/fmt
+git clone https://github.com/gabime/spdlog
+git clone --recurse-submodules https://github.com/google/leveldb
+```
+
+The third is not more of the same. fmt and spdlog are both effectively header-only and spdlog
+vendors fmt, so between them they cover one shape; leveldb is `.cc`-based with real internal
+linkage, keeps its tests beside the code they test, and pins submodules. Each of those exercises
+something the first two cannot — see [`STATUS.md`](STATUS.md) §3.
 
 ## Documents
 

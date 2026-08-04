@@ -19,7 +19,9 @@ from cpp_semantic_diff.acquire.git import (
     resolve_rename_similarity,
     resolve_revs,
 )
+from cpp_semantic_diff.acquire.workspace import materialize_submodules
 from cpp_semantic_diff.errors import (
+    CompileDatabaseError,
     NotAGitRepositoryError,
     ShallowRepositoryError,
     UnknownRefError,
@@ -96,6 +98,60 @@ class TestCompressionDenominator:
         revs = resolve_revs(diverged_repo, base_ref="HEAD")
         assert revs.is_empty
         assert diff_line_count(diverged_repo, revs) == 0
+
+
+class TestAWorktreeCarriesWhatTheRevisionPins:
+    """A submodule is a gitlink, and `git worktree add` materializes it as an empty directory.
+
+    Found by widening the fixture set: fmt and spdlog vendor by copying, so nothing pinned a
+    submodule until leveldb. The visible symptom was CMake reporting no `CMakeLists.txt`,
+    surfaced as ARCH-001 §3.1's "the base is expected to build" -- alarming and wrong, since
+    the base builds fine and it was the worktree that was incomplete.
+
+    The quieter case is the one that matters more: where a missing submodule does *not* break
+    configure, both models lose the same entities and agree with each other. That is STATUS
+    §5's silent-truncation failure reached by a different road.
+    """
+
+    def test_a_worktree_starts_without_the_submodule(
+        self, submodule_repo: Path, tmp_path: Path
+    ) -> None:
+        """The behaviour being compensated for. If git ever populates these itself, this
+        test fails and `materialize_submodules` can go."""
+        worktree = tmp_path / "wt"
+        git(submodule_repo, "worktree", "add", "--detach", "--quiet", str(worktree), "HEAD")
+        assert (worktree / "dep").is_dir(), "the gitlink becomes a directory"
+        assert not (worktree / "dep" / "vendor.h").exists(), "but an empty one"
+
+    def test_materializing_fills_it_in(
+        self, submodule_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # `GIT_CONFIG_*` is the only way to pass this that git honours, short of putting it
+        # in the tool. A local submodule URL is a fixture artefact; relaxing the transport
+        # guard belongs to the test that created one, not to production code.
+        monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+        monkeypatch.setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+        monkeypatch.setenv("GIT_CONFIG_VALUE_0", "always")
+
+        worktree = tmp_path / "wt"
+        git(submodule_repo, "worktree", "add", "--detach", "--quiet", str(worktree), "HEAD")
+        materialize_submodules(worktree, "HEAD")
+        assert (worktree / "dep" / "vendor.h").read_text(encoding="utf-8") == "int vendored();\n"
+
+    def test_a_submodule_that_cannot_be_fetched_is_refused_not_ignored(
+        self, submodule_repo: Path, tmp_path: Path
+    ) -> None:
+        """ARCH-001 §11. An incomplete tree that still configures is the dangerous case:
+        both models lose the same entities and agree. Without the transport relaxation above
+        the clone fails, which stands in for the offline case."""
+        worktree = tmp_path / "wt"
+        git(submodule_repo, "worktree", "add", "--detach", "--quiet", str(worktree), "HEAD")
+        with pytest.raises(CompileDatabaseError, match="submodules"):
+            materialize_submodules(worktree, "HEAD")
+
+    def test_a_repository_without_submodules_is_untouched(self, diverged_repo: Path) -> None:
+        """No `.gitmodules`, no subprocess -- the common case pays nothing."""
+        materialize_submodules(diverged_repo, "HEAD")
 
 
 class TestRenamesAreResolvedFromGit:
