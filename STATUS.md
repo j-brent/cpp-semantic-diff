@@ -312,7 +312,9 @@ The first two are what the leveldb row in §2 is made of, and they are the most 
       lives on `Correspondence`, which is upstream of `rank` and has no exposure map, so it needs a
       decision about where the classification belongs rather than a one-line change.
 
-Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the measurements.
+The renames-and-defining-TU work is complete; PLAN-001 was folded into this file and deleted, as
+its own header instructed. Its measurements are in §2 and §3, and the one claim it got wrong is
+below.
 
 - [x] ~~**`Node.tu` is declared and never populated.**~~ Set where the USR is file-scoped **and**
       the declaration is in the TU's own primary source. The second condition is what makes it
@@ -324,7 +326,7 @@ Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the me
       fixtures: **every event count, high-risk count and residue identical to before**, which is
       what "near-zero risk by construction" predicted.
 - [ ] **Two same-basename statics still merge into one node** — and `Node.tu` does *not* fix this,
-      which PLAN-001 claimed it would. `merge_node` keys the model on `Node.id`, which **is** the
+      which the plan for that work claimed it would. `merge_node` keys the model on `Node.id`, which **is** the
       USR, so the collision happens before any TU is recorded; half of them stay invisible and a
       body change in either produces no event. What `tu` fixed is the *matching* half: a base node
       from `a/` no longer pairs with a head node from `b/`. Separating them in the model needs the

@@ -1,11 +1,15 @@
-"""What the defining TU does and does not decide -- ARCH-001 §5, PLAN-001 §3.3.
+"""What the defining TU does and does not decide -- ARCH-001 §5, STATUS §6.
 
 §5 says identity must include the translation unit for entities whose USR is file-scoped.
-`Node.tu` is declared for it and the producer does not populate it, so this module is mostly
-**characterization**: it pins what the model does today, against the shapes that make the
-question decidable. When `tu` is populated, the tests marked as such are expected to change,
-and the diff between them is the change's effect -- stated in tests rather than argued from
-a docstring.
+`Node.tu` now carries it, under a rule narrower than §5's text: only where the declaration is
+in the translation unit's *own* source, because anywhere else the TU is whichever observation
+won a merge and would flip when an unrelated file joined the build.
+
+Most of this module began as characterization -- tests asserting the gap was open, written to
+fail when it closed, because the likeliest failure of that change was silently doing nothing.
+They failed on its first run and are now inverted. What remains characterization is
+`TestTwoSourcesSharingABasename`, which pins a defect `Node.tu` does **not** fix and which
+the plan for that work wrongly claimed it would.
 
 The shapes live in `conftest.TU_IDENTITY_HAZARDS`, which explains why no real fixture can
 stand in for them. Real libclang, a few lines of C++ each, no includes beyond one local
@@ -131,7 +135,7 @@ class TestTwoSourcesSharingABasename:
 
 
 class TestAStaticDeclaredInAHeader:
-    """The case that argues *against* setting `tu` unconditionally (PLAN-001 §3.3).
+    """The case that argues *against* setting `tu` unconditionally (STATUS §6).
 
     `common.h` is included by two TUs, so its static and its anonymous-namespace function
     are one entity per includer. USR dedup collapses them to one node, and any TU recorded
@@ -153,7 +157,7 @@ class TestAStaticDeclaredInAHeader:
 
 
 class TestTheProducerRecordsTheDefiningTu:
-    """ARCH-001 §5's "identity must include the TU", under the narrow rule (PLAN-001 §3.3).
+    """ARCH-001 §5's "identity must include the TU", under the narrow rule (STATUS §6).
 
     These two were characterization tests asserting the gap was open, written to *fail* when
     it closed -- the guard against the change silently doing nothing, which was its likeliest

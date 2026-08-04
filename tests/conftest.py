@@ -146,7 +146,7 @@ def shallow_repo(tmp_path: Path, bare_repo: Path) -> Path:
     return clone
 
 
-#: The TU-identity hazards, in the smallest C++ that produces them (PLAN-001 §5.1).
+#: The TU-identity hazards, in the smallest C++ that produces them (STATUS §6).
 #:
 #: These shapes exist in no fixture repository. fmt has 250 file-scoped USRs at `da256982`
 #: and *one* of them is header-declared, so the narrow-vs-broad `Node.tu` rule would be
