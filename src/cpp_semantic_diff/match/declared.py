@@ -51,9 +51,11 @@ class RenameMap:
 
     ARCH-001 §5 is explicit that file renames are "resolved from git before matching -- not
     discovered by the matcher". Discovering them here would mean inferring identity from the
-    very content whose identity is in question. So this is an input; `acquire` supplies it
-    (`git diff --name-status -M` already knows). v0 has no caller passing one yet, and the
-    cost of that is visible rather than hidden: it shows up in
+    very content whose identity is in question. So this is an input, and
+    `acquire.file_changes` supplies it from `git diff --name-status --find-renames`.
+
+    What it costs when the map is wrong in either direction is visible rather than hidden:
+    a rename that reaches here unresolved shows up in
     `Correspondence.internal_linkage_residue`.
     """
 

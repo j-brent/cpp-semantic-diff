@@ -13,10 +13,12 @@ a string.
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
+from cpp_semantic_diff.acquire import file_changes, resolve_revs
 from cpp_semantic_diff.match import Correspondence, Match, match_models, usr_file
 from cpp_semantic_diff.model import Location, MatchTier, Model, Node, NodeId, NodeKind
 
@@ -326,3 +328,22 @@ class TestInternalLinkage:
         base = model("a", node(self.STATIC_BASE))
         head = model("b", node(self.STATIC_BASE))
         assert pairs(match_models(base, head)) == {(self.STATIC_BASE, self.STATIC_BASE)}
+
+    def test_gits_answer_reaches_the_matcher(self, renamed_repo: Path) -> None:
+        """The seam, which is where the defect actually lived.
+
+        `renames=` worked and was tested from the day it was written; nothing ever produced
+        the argument. So a test over the matcher alone cannot catch a regression here -- the
+        assertion has to run a real `git mv` through `acquire` and into `match_models`, with
+        the residue as the verdict. No libclang, so it costs milliseconds.
+        """
+        revs = resolve_revs(renamed_repo)
+        renames = file_changes(renamed_repo, revs).renames
+
+        base = model("a", node(self.STATIC_BASE, name="helper"))
+        head = model("b", node("c:support.cpp@F@helper#", name="helper"))
+
+        assert match_models(base, head).internal_linkage_residue == 2, (
+            "the fixture must actually break tier 1, or the next assertion proves nothing"
+        )
+        assert match_models(base, head, renames=renames).internal_linkage_residue == 0

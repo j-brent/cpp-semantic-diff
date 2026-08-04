@@ -266,6 +266,25 @@ class TestRenamesAreResolvedFromGit:
         assert len(changes.paths) == 11
 
     @pytest.mark.fixtures
+    def test_fmt_posix_cc_to_os_cc(self) -> None:
+        """The commit that actually demonstrates the defect (STATUS §3).
+
+        Unlike the two below, this one renames a file that *contains* internal-linkage
+        entities -- `convert_rwcount` in an anonymous namespace. Before the map was fed, it
+        produced 8 events for one unchanged function. The measurement depends on this
+        rename being detected, so it is pinned here where it costs milliseconds rather than
+        only in a full-pipeline run.
+        """
+        repo = require_fixture("fmt")
+        revs = RevPair(
+            base_ref="da256982~1",
+            head_ref="da256982",
+            base_sha=git(repo, "rev-parse", "da256982~1"),
+            head_sha=git(repo, "rev-parse", "da256982"),
+        )
+        assert file_changes(repo, revs).renames == {"src/posix.cc": "src/os.cc"}
+
+    @pytest.mark.fixtures
     def test_fmt_core_test_to_base_test(self) -> None:
         repo = require_fixture("fmt")
         revs = RevPair(

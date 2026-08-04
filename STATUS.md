@@ -81,6 +81,28 @@ Caveat worth keeping: fmt and spdlog are stable libraries. A repository mid-refa
 different, and the number to watch is `internal_linkage_residue` — statics and anonymous-namespace
 members whose USR embeds the file name, where a file rename breaks tier 1 wholesale.
 
+### The rename hazard, measured
+
+fmt `da256982` (`src/posix.cc` → `src/os.cc`), before and after `acquire.file_changes` was wired
+into `match_models`:
+
+| | before | after |
+|---|---|---|
+| `internal_linkage_residue` | 2 | **0** |
+| unmatched base / head | 1 / 1 | 0 / 0 |
+| events reported | 8 | **0** |
+| high-risk | 6 | **0** |
+
+All eight were **one unchanged function** — `convert_rwcount` in the renamed file's anonymous
+namespace — reported as removed and added, with its two call edges and its `contains` edge each
+counted twice. Zero is the correct answer: the same commit moved declarations from `posix.h` to
+`os.h`, and external-linkage USRs do not encode the file, so that part is correctly no event.
+
+**How rare, and how bad.** fmt has **154 file-scoped USRs out of 9,752 nodes** (1.6 %), 144 of them
+in vendored `gmock-gtest-all.cc`. Most renames touch none and cost nothing — `include/fmt/core.h` →
+`base.h` measured 0 before *and* after. So the defect is rare but severe where it lands, which is
+the argument for fixing it rather than counting how often it fires.
+
 ---
 
 ## 4 · Measured performance
@@ -167,11 +189,16 @@ largest component 78 %→18 %); `Completeness` unable to state incompleteness nu
 missing `EdgeAttrChanged`; and a toolchain identity that named the parser but not the parse. Every
 one was invisible on synthetic fixtures and obvious on the first real run.
 
-The first two are one piece of work, not two — designed in [PLAN-001](docs/plans/rename-identity.md).
+Also closed: **`match_models(renames=...)` was never fed** — `acquire.file_changes` now resolves
+renames from git and `cli.py` passes them (§3 has the before/after). The lesson worth keeping is
+about the *measurement*, not the fix: the commit chosen to demonstrate the defect showed 0 before
+and 0 after, because the prediction that fmt's anonymous records carry file-scoped USRs was wrong —
+clang spells them `…@Ua`. `internal_linkage_residue` is 0 on most real renames, so it cannot serve
+as a smoke test; a fixture commit has to be chosen by first checking the renamed file for a
+namespace-scope `static` or an anonymous namespace.
 
-- [ ] **`match_models(renames=...)` is never fed.** ARCH §5 requires file renames resolved from git
-      *before* matching. `acquire.file_changes` now supplies the map (`267660b`); `cli.py` still
-      calls `match_models` without it, so the defect is open until it is wired.
+Designed in [PLAN-001](docs/plans/rename-identity.md), which also carries the measurements.
+
 - [ ] **`Node.tu` is declared and never populated.** `ir.py` documents it as identity-relevant for
       internal linkage; the producer never sets it, so `RenameMap.by_path` — the half of the rename
       machinery that handles directory moves — is unreachable. Partly masked because clang's USRs

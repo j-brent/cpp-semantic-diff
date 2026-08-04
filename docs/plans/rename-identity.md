@@ -157,7 +157,7 @@ per-directory.**
 | | Commit | State |
 |---|---|---|
 | 1 | `acquire`: resolve renames from git | done, `267660b` |
-| 2 | `cli`: feed the matcher — **where the defect closes** | next |
+| 2 | `cli`: feed the matcher — **where the defect closes** | done, measured in §5 |
 | 3 | `render`: state the rename count in the document | |
 | 4 | `model`/`produce`: populate `Node.tu`, plus cache GC | |
 | 5 | docs: fold the measurements into `STATUS.md`, delete this file | |
@@ -176,20 +176,36 @@ the JSON document and the terminal view, so it reads straight off the tool:
 uv run cppsd diff ~/fixtures/fmt --base 79f1506f~1 --head 79f1506f --json --out before.json
 ```
 
-**`79f1506f` is the real experiment.** The rename is R100 — byte-identical — and the pre-rename
-`core.h` holds many unnamed enums, unions and structs, whose USRs are file-scoped
-(`c:core.h@<byte-offset>@…`). Because the rename is R100 the byte offsets are unchanged, which
-isolates the basename as the only variable and neutralizes `STATUS.md` §7's unstable-USR hazard.
+**Measured, commit 2.** `da256982` (`src/posix.cc` → `src/os.cc`, 2019):
 
-**`f924d20d` is the control and should show nothing.** `test/core-test.cc` has no anonymous
-namespace, no namespace-scope `static` and no unnamed records — its gtest `TEST(...)` macros expand
-to external-linkage classes. A residue of 0 before *and* after is a useful result, not a failed one:
-it bounds how often this defect actually bites. Report it.
+| | before | after |
+|---|---|---|
+| `internal_linkage_residue` | 2 | **0** |
+| unmatched base / head | 1 / 1 | 0 / 0 |
+| events reported | 8 | **0** |
+| high-risk | 6 | **0** |
 
-**Check the `79f1506f` baseline before trusting any of this.** If it is already 0, the unnamed enums
-are not reaching the model as nodes at all, and the measurement moves to a purpose-built fixture
-rather than to another real commit. The magnitudes predicted here come from reading the extractor,
-not from running it.
+All eight events were **one unchanged function** — `convert_rwcount`, in the anonymous namespace of
+the renamed file: `NodeRemoved` + `NodeAdded`, its two call edges each removed and re-added, and its
+`contains` edge. Six scored high-risk. Zero is the correct answer here: the commit also moved
+declarations from `posix.h` into `os.h`, and external-linkage USRs do not encode the file, so a
+declaration changing headers is correctly no event at all.
+
+**The commit this plan originally named was the wrong one, and the reason is worth keeping.**
+`79f1506f` (`include/fmt/core.h` → `base.h`) measured **0 before and 0 after**. The prediction that
+its unnamed enums and unions carry file-scoped USRs was wrong: clang spells an *anonymous* record's
+USR `…@Ua`, not `c:<file>@<offset>`, so those entities were never file-scoped. `f924d20d` is 0 for
+the reason predicted — gtest `TEST(...)` macros expand to external-linkage classes.
+
+**The bound that finding puts on the defect.** fmt has **154 file-scoped USRs out of 9,752 nodes**
+(1.6 %), and 144 of them are in vendored `gmock-gtest-all.cc`. So the defect is *rare but severe*:
+most renames touch nothing with internal linkage and cost nothing, and a rename that does hit one
+turns a single unchanged function into eight events, most of them high-risk. Judging it by how often
+it fires would have been the wrong call — a reviewer who meets it sees a screen of invented work.
+
+Method note for the remaining commits: `internal_linkage_residue` is 0 on most real renames, so it
+cannot be used as a smoke test. Pick the fixture commit by first checking that the renamed file
+contains a `static` at namespace scope or an anonymous namespace.
 
 **Separate the two defects — four cells, because they can mask each other:**
 

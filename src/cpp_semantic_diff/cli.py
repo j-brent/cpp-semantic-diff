@@ -23,7 +23,7 @@ from rich.console import Console
 from rich.table import Table
 
 from cpp_semantic_diff import __version__
-from cpp_semantic_diff.acquire import changed_files, diff_line_count, resolve_revs
+from cpp_semantic_diff.acquire import diff_line_count, file_changes, resolve_revs
 from cpp_semantic_diff.acquire.workspace import checkout
 from cpp_semantic_diff.errors import PreconditionError
 from cpp_semantic_diff.render import DEFAULT_LIMIT
@@ -121,7 +121,8 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
         _fail(error)
         return
 
-    files = changed_files(repo, revs)
+    changes = file_changes(repo, revs)
+    files = changes.paths
     lines = diff_line_count(repo, revs)
     cpp = [f for f in files if Path(f).suffix.lower() in CPP_SUFFIXES]
 
@@ -132,6 +133,11 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     table.add_row("base", f"merge-base({revs.base_ref}, {revs.head_ref})")
     table.add_row("files changed", str(len(files)))
     table.add_row("C++ files", str(len(cpp)))
+    # Renames are identity input, not trivia (ARCH-001 §5): a renamed file breaks tier-1
+    # identity for every internal-linkage entity in it. `plan` answers "what would be
+    # analyzed" in a second, and this is now part of the answer rather than something a
+    # reviewer discovers two minutes into a `diff`.
+    table.add_row("files renamed", str(len(changes.renames)))
     table.add_row("lines changed", str(lines))
     console.print(table)
 
@@ -222,7 +228,8 @@ def diff(
             )
             return
 
-        files = changed_files(repo, revs)
+        changes = file_changes(repo, revs)
+        files = changes.paths
         lines = diff_line_count(repo, revs)
 
         t = time.perf_counter()
@@ -251,16 +258,12 @@ def diff(
     # From here the pipeline is pure (ARCH-001 §3): four functions over what is already in
     # memory, each the input of the next, none of them touching the disk.
     t = time.perf_counter()
-    # `renames` is deliberately not passed, and this is a **known gap**, not a default.
-    # ARCH-001 §5 requires file renames to be resolved from git *before* matching, because
-    # USRs for internal-linkage and anonymous-namespace entities incorporate the file path
-    # and a file rename breaks tier 1 for every one of them. `match_models` takes the map;
-    # `acquire` exposes only `changed_files` (`git diff --name-only`), which cannot carry
-    # renames, so there is nothing here to pass. Until `acquire` grows one, a review that
-    # renames a file will over-report removals and additions in exactly that population --
-    # which the view names, as `internal_linkage_residue`, rather than letting it pass as
-    # ordinary churn. Inventing a rename map here would put an identity decision in the CLI.
-    correspondence = match_models(base_model, head_model)
+    # ARCH-001 §5: renames are resolved from git *before* matching, because USRs for
+    # internal-linkage and anonymous-namespace entities incorporate the file name and a
+    # rename breaks tier 1 for every one of them. Git's answer is passed through unfiltered
+    # -- deciding which renames count is `RenameMap`'s job, and inventing or narrowing one
+    # here would put an identity decision in the CLI.
+    correspondence = match_models(base_model, head_model, renames=changes.renames)
     timings.match = time.perf_counter() - t
 
     t = time.perf_counter()
