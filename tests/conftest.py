@@ -121,6 +121,52 @@ def shallow_repo(tmp_path: Path, bare_repo: Path) -> Path:
     return clone
 
 
+#: The TU-identity hazards, in the smallest C++ that produces them (PLAN-001 §5.1).
+#:
+#: These shapes exist in no fixture repository. fmt has 250 file-scoped USRs at `da256982`
+#: and *one* of them is header-declared, so the narrow-vs-broad `Node.tu` rule would be
+#: decided there on a sample of one; its four repeated compile-database basenames are all
+#: the same file recompiled, so the collision below has no instance at all. A rule cannot be
+#: chosen against a repository that does not contain the case it is about.
+#:
+#: Two hazards, and they pull in opposite directions:
+#:
+#: `a/util.cpp` and `b/util.cpp` -- clang writes the file *name* into a file-scoped USR, not
+#: the path, so four distinct functions here share two USRs. Today they merge and half of
+#: them vanish, which is **under-reporting**: a body change in `b`'s copy produces no event
+#: at all. This is the case ARCH-001 §5's "identity must include the TU" exists for.
+#:
+#: `common.h` included by `one.cpp` and `two.cpp` -- one entity per includer, collapsed by
+#: USR dedup to a single node whose TU is whichever observation won. Populating `tu` here
+#: would make identity depend on which *other* files happen to be in the build, so an
+#: unrelated new source could break the match for an entity nobody touched.
+TU_IDENTITY_HAZARDS: dict[str, str] = {
+    "a/util.cpp": (
+        "namespace { int shared_helper() { return 1; } }\n"
+        "static int file_helper() { return 2; }\n"
+        "int a_entry() { return shared_helper() + file_helper(); }\n"
+    ),
+    "b/util.cpp": (
+        "namespace { int shared_helper() { return 10; } }\n"
+        "static int file_helper() { return 20; }\n"
+        "int b_entry() { return shared_helper() + file_helper(); }\n"
+    ),
+    "common.h": (
+        "namespace { int header_helper() { return 3; } }\n"
+        "static int header_static() { return 4; }\n"
+    ),
+    "one.cpp": (
+        '#include "common.h"\nint one_entry() { return header_helper() + header_static(); }\n'
+    ),
+    "two.cpp": (
+        '#include "common.h"\nint two_entry() { return header_helper() + header_static(); }\n'
+    ),
+}
+
+#: Every translation unit in `TU_IDENTITY_HAZARDS`, in compile-database order.
+TU_IDENTITY_TUS: tuple[str, ...] = ("a/util.cpp", "b/util.cpp", "one.cpp", "two.cpp")
+
+
 def require_fixture(name: str) -> Path:
     path = FIXTURE_ROOT / name
     if not path.is_dir():

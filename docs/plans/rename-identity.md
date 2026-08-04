@@ -105,18 +105,54 @@ filtering would put an identity policy in the orchestration layer.
 `match/declared.py`'s docstring says "v0 has no caller passing one yet" and must name
 `acquire.file_changes` instead.
 
-### 3.3 · Populate `Node.tu` — the risky one, and it goes last
+### 3.3 · Populate `Node.tu`
 
 **The rule is narrower than "wherever the USR is file-scoped".** Two conditions:
 
 1. `usr_file(node.id) is not None`, and
 2. **the declaration is in the TU's own primary source file.**
 
-Condition 2 is the load-bearing one and it is a judgement call, not a derivation. It declines to
-invent a TU for header-declared internal-linkage entities, where there is no single true answer and
-the arbitrary winner flips when an unrelated source file is added — breaking tier 1 for an entity the
-review never touched. It trades some §5 coverage for not introducing a new source of
-revision-flippable identity. **Settle it with the matrix in §5, not by argument.**
+Condition 2 is the load-bearing one. It declines to invent a TU for header-declared
+internal-linkage entities, where there is no single true answer and the arbitrary winner flips when
+an unrelated source file is added — breaking tier 1 for an entity the review never touched.
+
+#### What the risk actually is, and what condition 2 does to it
+
+The change makes tier 1 stricter: two nodes match only if USR *and* TU agree. Every way `tu` can
+differ between base and head for one entity is a lost match — add + remove, the defect commit 2
+closed, by another route. There is exactly one mechanism that produces a differing `tu`: **an entity
+whose TU is arbitrary**, i.e. one observed by more than one TU and collapsed by USR dedup, where
+`_observation_rank` picks a winner that can flip.
+
+Condition 2 removes that mechanism rather than mitigating it. If `tu` is set only where the
+declaration is in the TU's own primary source, exactly one TU can observe the entity, so there is
+nothing to choose between and nothing to flip. What remains is: the file was renamed (`by_path`
+repairs it) or it was not (`tu` is identical). **Under the narrow rule the risk is near zero by
+construction, not by measurement.** The earlier framing of this step as "the risky one" was true of
+the *broad* rule; it does not survive condition 2.
+
+Two residual risks, neither of them the one originally feared:
+
+- **A silent no-op.** If `location.file` and the TU path are normalized differently, `tu` is never
+  set, every test passes and nothing changes. This is the likeliest failure and the one to guard
+  explicitly.
+- **Two same-basename sources each declaring a same-named static** still merge, because `usr_file`
+  returns a name and not a path. After this change the merged node's `tu` is one of the two, so
+  deleting either can break the survivor's match. Note the direction: today those two entities are
+  wrongly merged into *one*, which is under-reporting. This converts under-reporting into
+  over-reporting, which is the trade ARCH-001 §5 asks for.
+
+#### What this step actually buys — not what the plan first said
+
+`by_path` does **not** make directory moves work. A directory move leaves the basename unchanged,
+the USR carries the name and not the path, so tier 1 already matches directory moves today with `tu`
+unset — `test_a_directory_move_needs_no_rewriting` passes now. `by_path` exists to repair damage
+that *populating `tu` itself creates*.
+
+The real payoff is ARCH-001 §5's stated requirement: two different statics sharing a basename
+currently collapse into one node, so a body change is reported between two unrelated functions.
+That is **under-reporting**, the failure direction this project refuses. Neither fixture contains an
+instance, which is why §5 needs a purpose-built one.
 
 `tu` must be **repo-relative**. An absolute path carries the SHA-named worktree directory into every
 partial, base and head never agree, and every internal-linkage match breaks on every comparison —
@@ -207,16 +243,46 @@ Method note for the remaining commits: `internal_linkage_residue` is 0 on most r
 cannot be used as a smoke test. Pick the fixture commit by first checking that the renamed file
 contains a `static` at namespace scope or an anonymous namespace.
 
-**Separate the two defects — four cells, because they can mask each other:**
+### The four-cell matrix cannot decide the `tu` rule — measured
+
+The matrix below was designed to settle narrow-vs-broad on real fixtures. It cannot, and the numbers
+say why. At `da256982`, fmt has **250 file-scoped nodes; 249 would get `tu` set under condition 2
+and 1 would not** (a static in `chrono.h`). That one node is the *entire* difference between the
+narrow and broad rules on this fixture — the deciding cell would be a sample of one.
+
+The other hazard needs two distinct paths sharing a basename. fmt has four basenames appearing more
+than once in the compile database (`format.cc`, `test-main.cc`, `gtest-extra.cc`, `util.cc`) and
+**all four are the same file recompiled** — one distinct path each. So that case is n=0 here.
+
+Run on fmt, the matrix returns "clean" and means almost nothing. **The purpose-built fixture in §5.1
+is what decides the rule.** The matrix keeps a narrower job: a regression check that the 249
+affected nodes did not lose matches.
 
 | | `tu` unpopulated | `tu` populated |
 |---|---|---|
-| **renames not fed** | today's baseline | **must not regress** |
-| **renames fed** | expect the drop | expect the same drop |
+| **renames not fed** | the pre-commit-2 baseline | |
+| **renames fed** | today | **must not regress** |
 
-The top-right cell decides the narrow-vs-broad `tu` rule. Run the broad rule once as a throwaway: if
-broad regresses and narrow does not, that is a `STATUS.md` §5 finding of exactly the kind that is
-invisible on synthetic fixtures.
+Note the rows have shifted since this was written: renames are wired as of `00dcc1c`, so "today" is
+the bottom-left cell and reproducing the top row now needs a stash. Do not spend a run on the broad
+rule here — n=1 cannot settle it.
+
+### 5.1 · The fixture that can decide it
+
+A purpose-built repository containing the shapes no real fixture has, cheap enough to run in the
+suite:
+
+- a `static` declared in a **header** included by two TUs — the case condition 2 declines to set
+  `tu` for, and the one where the broad rule flips;
+- **two same-basename sources in different directories**, each declaring a same-named `static` — the
+  USR collision that currently under-reports;
+- a **renamed source** carrying an anonymous namespace — the shape commit 2 was measured on, kept as
+  a regression guard;
+- a **directory move**, to pin that it needs no rewriting.
+
+The rule to decide it by is unchanged: if broad regresses where narrow does not, the narrow rule
+stands. What changed is *where* that gets asked — on a fixture built to contain the hazard, not on a
+repository that happens to have one instance of it.
 
 Then re-run the §4 fingerprint check across worker counts and cache states. `Node.tu` changes the
 fingerprint *by design*, so the assertion is that the new value is stable, not that it matches the
