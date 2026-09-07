@@ -3,12 +3,16 @@ name: demo
 # Runs the tool against real C++ repositories and publishes the result to the run
 # summary, so progress is visible in GitHub rather than only on a developer's terminal.
 #
-# What this currently shows is the *denominator* of the compression metric (ARCH-001 §10)
-# -- how much a reviewer has to read today -- plus proof that both revisions were
-# acquired and the parser is sound. The numerator is the semantic delta, and the stages
-# that produce it are not built yet. The summary says so explicitly and in place, because
-# a page that looks like semantic-diff output while showing none would be exactly the
-# confidently-wrong artifact this project exists to argue against.
+# The page shows both halves of the compression metric (ARCH-001 §10): the *denominator*
+# from `cppsd plan` -- what a reviewer has to read today -- and the *numerator* from
+# `cppsd diff`, which runs the whole pipeline end to end. Seven of the eight stages exist;
+# `enrich` is deferred post-v0 by design (ARCH-001 §13) and the summary says so.
+#
+# Wherever it can, this file pastes tool output rather than asserting facts in YAML. An
+# earlier version of this workflow described a two-stage pipeline in prose, was accurate
+# the day it was written, and became false without anyone editing it -- which is precisely
+# the confidently-wrong artifact this project exists to argue against. Output cannot go
+# stale; a paragraph in a workflow can.
 
 on:
   push:
@@ -42,6 +46,11 @@ jobs:
         # Inputs go through the environment and jq rather than being interpolated into
         # the script; `${{ }}` expansion happens before bash sees the line, so a crafted
         # ref would otherwise run as shell.
+        #
+        # The default bases are the ones STATUS.md §2 tracks, so this page and the tracker
+        # can be compared digit for digit -- a demo that measured some other range would
+        # be a second, unreconciled set of numbers. leveldb is tracked there too but is
+        # not here: it needs submodules, which a plain clone does not fetch.
         env:
           IN_REPO: ${{ inputs.repo }}
           IN_BASE: ${{ inputs.base }}
@@ -53,7 +62,7 @@ jobs:
           else
             matrix=$(jq -cn '[
               {name: "fmt",    url: "https://github.com/fmtlib/fmt.git",    base: "HEAD~12"},
-              {name: "spdlog", url: "https://github.com/gabime/spdlog.git", base: "HEAD~12"}
+              {name: "spdlog", url: "https://github.com/gabime/spdlog.git", base: "HEAD~30"}
             ]')
           fi
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
@@ -62,6 +71,9 @@ jobs:
   analyze:
     needs: targets
     runs-on: ubuntu-24.04
+    # Two full models per leg on a cold cache is the expensive part; the cap exists so a
+    # pathological subject fails visibly instead of occupying a runner for six hours.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +81,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # `libclang-common-18-dev` is the load-bearing one: it carries the builtin headers.
+      # Without them libclang returns truncated ASTs and raises nothing, and two truncated
+      # models agree with each other perfectly (ARCH-001 §11). `cppsd doctor` is what
+      # catches it, and its output is the first thing the summary prints.
       - name: Install toolchain
         run: |
           sudo apt-get update -qq
@@ -103,27 +119,64 @@ jobs:
 
           # A fresh cache root per run, so "cold" is honestly cold. Reusing the default
           # would measure a warm run and call it a cold one.
+          #
+          # Not `--no-cache`, which reparses every TU: that measures cache-*off*, which is
+          # a different and slower thing. An empty cache root is the cold that a first
+          # review against a new base actually pays, in-run hits included -- fmt's compile
+          # database has 50 entries but only 35 distinct compilations (STATUS §5), and
+          # pretending otherwise would overstate the cost being reported.
           export CPPSD_CACHE_DIR="$RUNNER_TEMP/cache"
 
-          uv run cppsd doctor            > "$OUT/doctor.txt"  2>&1 || true
-          uv run cppsd plan "$SUBJECT" --base "$BASE" > "$OUT/plan.txt" 2>&1 || true
+          # Parallelism has no flag; `$CPPSD_WORKERS` is the knob and its default is what
+          # the machine can run. Left unset on purpose so the timings below are what this
+          # runner does, and `nproc` is printed beside them so they can be read.
+          cores=$(nproc)
 
+          uv run cppsd doctor > "$OUT/doctor.txt" 2>&1
+          doctor_rc=$?
+
+          uv run cppsd plan "$SUBJECT" --base "$BASE" > "$OUT/plan.txt" 2>&1
+          plan_rc=$?
+
+          # One analysis, two consumers. `--out` writes the versioned JSON document *and*
+          # renders the terminal view of that same document; `--json` would replace the
+          # view rather than add to it, and running twice to get both halves would be two
+          # analyses of the same commit pair. JSON is the product, the terminal is a
+          # consumer of it (ARCH-001 §10).
+          #
+          # `--limit` is passed explicitly so a change to the CLI default cannot quietly
+          # change what this page shows. The JSON artifact carries every event either way.
           cold_start=$(date +%s%N)
-          uv run cppsd acquire "$SUBJECT" --base "$BASE" > "$OUT/acquire.txt" 2>&1
-          acquire_rc=$?
+          uv run cppsd diff "$SUBJECT" --base "$BASE" --limit 25 \
+            --out "$OUT/diff.json" > "$OUT/diff.txt" 2>&1
+          diff_rc=$?
           cold_ms=$(( ($(date +%s%N) - cold_start) / 1000000 ))
 
-          warm_start=$(date +%s%N)
-          uv run cppsd acquire "$SUBJECT" --base "$BASE" > "$OUT/acquire-warm.txt" 2>&1 || true
-          warm_ms=$(( ($(date +%s%N) - warm_start) / 1000000 ))
-
-          lines=$(grep -oP 'lines changed\s+\K[0-9]+' "$OUT/plan.txt" || echo "?")
-          echo "acquire_rc=$acquire_rc" >> "$GITHUB_OUTPUT"
+          # The same comparison a second time. Nothing has changed, so nothing is
+          # invalidated: this is the warm *floor*, not ARCH-001 §9's "≤ 20 TUs under 30 s"
+          # case, which needs a review that actually touches something. Labelled that way
+          # in the table rather than being allowed to read as the budget claim.
+          #
+          # Skipped when the cold run failed: there is no cache to be warm about, and a
+          # slow failure would otherwise be paid for twice.
+          warm_rc=0
+          warm_ms=0
+          if [ "$diff_rc" -eq 0 ]; then
+            warm_start=$(date +%s%N)
+            uv run cppsd diff "$SUBJECT" --base "$BASE" --limit 25 \
+              > "$OUT/diff-warm.txt" 2>&1
+            warm_rc=$?
+            warm_ms=$(( ($(date +%s%N) - warm_start) / 1000000 ))
+          fi
 
           {
             echo "# ${NAME} — \`${BASE}...HEAD\`"
             echo
             echo "## Parser"
+            echo
+            echo "Runs first because the failure it catches has no symptom: a libclang that"
+            echo "cannot reach the builtin headers truncates silently, and two truncated models"
+            echo "agree (ARCH-001 §11). Nothing below is worth reading if this section is not clean."
             echo
             echo '```'
             cat "$OUT/doctor.txt"
@@ -135,31 +188,105 @@ jobs:
             cat "$OUT/plan.txt"
             echo '```'
             echo
-            echo "## Acquire — both revisions materialized and configured"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$diff_rc" -ne 0 ]; then
+            {
+              echo "## The numerator — \`cppsd diff\` FAILED (exit ${diff_rc})"
+              echo
+              echo "No semantic delta was produced for this target. The job fails rather than"
+              echo "publishing a page that looks like output and is missing the half that matters."
+              echo
+              echo '```'
+              cat "$OUT/diff.txt"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$diff_rc"
+          fi
+
+          {
+            echo "## The numerator — the semantic delta"
             echo
             echo '```'
-            cat "$OUT/acquire.txt"
+            cat "$OUT/diff.txt"
             echo '```'
+            echo
+            echo "## Headline numbers"
+            echo
+            echo "Read out of \`diff.json\` with \`jq\`, not scraped from the text above — the"
+            echo "JSON is the document and the terminal view is one rendering of it (ARCH-001 §10)."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Two rounding forms below: lines-per-event to 2 dp, seconds to 1 dp. jq has no
+          # printf for this, hence the multiply/round/divide.
+          jq -r '
+            .summary as $s | .meta as $m |
+            "**\($s.compression)**",
+            "",
+            "| | |",
+            "|---|---|",
+            "| lines changed (denominator) | \($s.lines_changed) across \($s.files_changed) files, \($s.cpp_files_changed) C++ |",
+            "| semantic events (numerator) | \($s.events_reported) |",
+            "| of which high-risk | \($s.high_risk_count) |",
+            "| lines per event | \((($s.compression_ratio * 100) | round) / 100) |",
+            "| top-level after cascade collapse | \($s.top_level_events) |",
+            "| components | \($s.components) |",
+            "| vendored events, sorted after first-party | \($s.vendored_events) |",
+            "| identity residue | \($s.residue.matched) matched · \($s.residue.unmatched_base) base / \($s.residue.unmatched_head) head unmatched · \($s.residue.internal_linkage_residue) internal-linkage |",
+            "| identity tiers run | \($s.residue.tiers_run | join(", ")) |",
+            "| pipeline time, cold (in-process) | \((($m.timings.total * 10) | round) / 10) s |",
+            "| schema · producer | \($m.schema_version) · \($m.tool) \($m.tool_version) |",
+            "| revisions | `\($m.base_rev[0:12])` → `\($m.head_rev[0:12])` |"
+          ' "$OUT/diff.json" >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo
+            echo "## Wall clock"
             echo
             echo "| | |"
             echo "|---|---|"
-            echo "| cold | ${cold_ms} ms |"
-            echo "| warm (worktrees cached by SHA) | ${warm_ms} ms |"
+            echo "| cold — empty cache root, both models built | ${cold_ms} ms |"
+            echo "| warm — identical rerun, every TU cached | ${warm_ms} ms |"
+            echo "| runner | ubuntu-24.04, ${cores} cores |"
             echo
-            echo "## The numerator — not built yet"
+            echo "The warm row is the floor: rerunning the same comparison invalidates nothing."
+            echo "ARCH-001 §9's budget — a review touching ≤ 20 TUs in under 30 s warm — needs a"
+            echo "run that touches something, and is measured in STATUS §4 rather than here."
             echo
-            echo "**${lines} changed lines compress to: not yet measurable.**"
+            echo "## Still deferred, on purpose"
             echo
-            echo "Two of eight pipeline stages exist. \`produce\`, \`match\`, \`diff\`,"
-            echo "\`classify\`, \`enrich\`, \`rank\` and \`render\` are unimplemented, so this run"
-            echo "shows the cost of the text diff and the fact that both revisions were"
-            echo "acquired cleanly — not a semantic delta. This section fills in as those"
-            echo "stages land; that is the moment the project proves or disproves itself."
+            echo "\`enrich\` is the one stage of eight not built. The evidence adapters (ARCH-001 §8)"
+            echo "are post-v0 by design (§13), so \`findings\` is empty in the JSON above; blast"
+            echo "radius, which §3 lists under \`enrich\`, shipped inside \`rank\` instead."
+            echo
+            echo "Identity is tier-1 only (§13): a rename git did not detect reads as a removal plus"
+            echo "an addition. What that cost on *this* comparison, and what the model's standing"
+            echo "limits are, is printed by the tool in the \`identity:\` and \`true of every run:\`"
+            echo "blocks above — by the tool, so that this page cannot go stale the way it once did."
+            echo
+            echo "\`doctor\` exited ${doctor_rc}, \`plan\` exited ${plan_rc}, warm \`diff\` exited ${warm_rc}."
           } >> "$GITHUB_STEP_SUMMARY"
 
-          exit $acquire_rc
+          # `doctor` is a precondition, not a report: if the parser cannot be trusted then
+          # neither can anything printed above it. `produce` probe-parses for the same
+          # reason and `diff` would normally have failed first, but the job must not pass
+          # on the chance that it did not.
+          if [ "$doctor_rc" -ne 0 ]; then
+            exit "$doctor_rc"
+          fi
 
-      - name: Upload raw output
+          # The warm run is a real assertion about the cache, not a decoration: if the
+          # second pass fails where the first succeeded, that is a cache defect and the
+          # job should say so (ARCH-001 §9 — a stale cache is the worst failure here).
+          #
+          # `plan` stays advisory. It is the cheap pre-flight, its own output is pasted
+          # above, and it has no way to fail that `diff` would survive.
+          exit "$warm_rc"
+
+      # `diff.json` is the artifact that matters; the .txt files are the rendered views
+      # kept beside it so a failed run can be read without rerunning it.
+      - name: Upload JSON document and rendered views
         if: always()
         uses: actions/upload-artifact@v7
         with:
