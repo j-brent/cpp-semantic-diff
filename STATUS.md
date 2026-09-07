@@ -7,6 +7,11 @@ each working session. Started 2026-08-01 as a handover note; kept as a tracker b
 Setup, requirements and the commands that work today are in [`README.md`](README.md). Design is
 [ARCH-001](docs/architecture/overview.md); this file is state, not design.
 
+Active plans: [PLAN-003](docs/plans/ship-v0.md) — what remains before v0 ships, measured rather
+than estimated from this file; [PLAN-002](docs/plans/bitcoin-fixture.md) — Bitcoin Core as a
+scale-and-shape probe. Each says in its own header what it is deleted into here, the way PLAN-001
+was (§6). A plan is a plan; this file is the state it leaves behind.
+
 ---
 
 ## 1 · Pipeline
@@ -278,6 +283,15 @@ synthetic fixtures.
   defaults on since git 2.9, so the base-side path of every rename was available all along and the
   flag choice threw it away. Before building machinery to recover something, check whether the tool
   already knows it and is being asked the wrong question.
+- **A defect report written from rendered output can name the wrong stage.** "Self-edges appear
+  in real models — producer-side" sat in §6 for weeks. The producer has refused `src == dst` since
+  the day it was written; the JSON for the event behind that report carries two *different* USRs,
+  a partial specialization and its primary template, and the `inherits` edge between them is
+  exactly right. What was broken was one stage downstream and an order of magnitude smaller: the
+  display name collapsed two identities into one string. The rendering is the surface almost every
+  observation is made through, and it is lossy on purpose — it trades identities for names a human
+  can read. So the first move on anything seen in the terminal is to read the same event in the
+  JSON, which is what §8 means by the JSON being the product rather than a debug convenience.
 - **`errors="replace"` is not a safe default when the string is an identity.** Two different
   undecodable paths decode to the same string, so a rename map built through `run_git` would collapse
   two renames into one entry and assert that two different files are the same file. Paths that are
@@ -306,6 +320,11 @@ namespace-scope `static` or an anonymous namespace.
 
 The first two are what the leveldb row in §2 is made of, and they are the most serious open items.
 
+Three more are closed below that were listed open until now: the `merge_edge` attribute merge and
+the cache sweep were fixed by commits that did not touch this file, and the self-edge item was never
+a defect in the stage it named. A tracker drifts by omission, not by error — the fix landed, the
+line stayed — so an item here is only as current as the last commit that thought to edit it.
+
 - [ ] **`internal_linkage_residue` is still computed over the whole model**, vendored included —
       the last metric that does not distinguish what `rank/exposure.py` classifies. leveldb is
       52.8 % vendored by node count. `compression_ratio` and `high_risk_count` were fixed; this one
@@ -325,14 +344,21 @@ below.
       `DeclaredTier.key` uses — fmt `HEAD~12` is now `5ca3843b6c1a` (§4). Re-measured on all three
       fixtures: **every event count, high-risk count and residue identical to before**, which is
       what "near-zero risk by construction" predicted.
-- [ ] **Two same-basename statics still merge into one node** — and `Node.tu` does *not* fix this,
-      which the plan for that work claimed it would. `merge_node` keys the model on `Node.id`, which **is** the
-      USR, so the collision happens before any TU is recorded; half of them stay invisible and a
-      body change in either produces no event. What `tu` fixed is the *matching* half: a base node
-      from `a/` no longer pairs with a head node from `b/`. Separating them in the model needs the
-      node dictionary keyed on `(usr, tu)`, which reaches every edge endpoint, every event, every
-      cache entry and the JSON contract. Named rather than half-done. No instance in any fixture;
-      `tests/test_tu_identity.py` is the only place it exists.
+- [ ] **Two same-basename statics still merge into one node — a standing decision, not a backlog
+      item.** `Node.tu` does *not* fix this, which the plan for that work claimed it would.
+      `merge_node` keys the model on `Node.id`, which **is** the USR, so the collision happens
+      before any TU is recorded; half of them stay invisible and a body change in either produces
+      no event. What `tu` fixed is the *matching* half: a base node from `a/` no longer pairs with
+      a head node from `b/`. Separating them in the model needs the node dictionary keyed on
+      `(usr, tu)`, which reaches every edge endpoint, every event, every cache entry and the JSON
+      contract — days of work through the contracts §9 holds read-only for exactly that reason.
+      **Deliberately left named rather than half-done**, because there is no instance in any
+      fixture and `tests/test_tu_identity.py` is the only place it exists: the cost is certain and
+      the occurrence rate is zero on everything measured. The trigger to revisit is an observed
+      instance, not a spare afternoon — and it is cheap to watch for, since `merge_node` already
+      sees both observations and two partials offering different non-`None` `tu` for one USR *is*
+      the collision. Counting that costs nothing and would turn this from a prediction into a
+      number.
 - [x] ~~**`EdgeAdded`/`EdgeRemoved` between two surviving nodes is not collapsible**~~ — the shape
       that actually caused it is: a dependency adds an overload and every call site moves to it,
       leaving the old overload declared but uncalled. `call-moved-to-another-overload` links those
@@ -345,12 +371,56 @@ below.
       public API with *no* cause link is still scored as public. Decide it deliberately.
 - [ ] **No cause rule links `NodeAttrChanged(virtual)` to the `EdgeAttrChanged` on every call edge
       into it.** A method gaining `virtual` with N callers is N+1 top-level events.
-- [ ] **`merge_edge` merges edge attrs with `setdefault`** — the first partial to arrive wins, so an
-      edge attribute that differs between TUs is silently taken from whichever TU parsed first.
-- [ ] Self-edges appear in real models (`is_named_arg -> is_named_arg`). Producer-side.
-- [ ] **Superseded cache identities are never reclaimed.** `_evict` trims within one identity
-      directory only, so every producer change orphans the previous generation — ~109 MB after
-      today's. Needs a `cppsd cache gc` or an age sweep.
+- [x] ~~**`merge_edge` merges edge attrs with `setdefault`**~~ — the merge now takes the
+      *best-informed* observation under a total order (`_edge_attr_rank`) rather than the first to
+      arrive. Truthy outranks falsy because every falsy value this producer emits is also what it
+      emits when it does not know — `virtual` is `False` both for "not virtual" and for a callee
+      this TU could not resolve as a method, `access` falls back to `"private"` — so the rule never
+      discards a fact for a default; `repr` beyond that is a stable tie-break and says so. The
+      reason worth carrying: first-to-arrive made the value a function of compile-database order
+      and pool-completion order, so the same two revisions could diff clean or dirty depending on
+      which TU finished first, and worse under the parallel producer, where that is not stable
+      between two runs of the *same* build. `merge_node` has been ordered against exactly this
+      since it was written and edges simply never were. `max` over a total order is commutative,
+      which is the property the tests assert rather than the values.
+- [x] ~~Self-edges appear in real models (`is_named_arg -> is_named_arg`). Producer-side.~~
+      **Misdiagnosed, and the misdiagnosis is the part worth keeping (§5).** `merge_edge` has
+      refused `src == dst` since the first extraction commit, so no self-edge can reach an
+      assembled model. What was observed is the *terminal* printing
+      `fmt::v12::detail::is_named_arg -> fmt::v12::detail::is_named_arg`; the JSON for that same
+      event carries two different USRs — `…@SP>1#T@is_named_arg>#1t0.0` and
+      `…@ST>1#T@is_named_arg` — a partial specialization inheriting from its primary template.
+      The edge is real, correct, and `inherits`. The defect is the display name and it moves to
+      render, below, where it gets much smaller.
+- [ ] **A rendered name that is not an identity.** `DiffDocument.entity_names` disambiguates two
+      entities sharing a qualified name by appending the signature that distinguishes them, which
+      is right for overloads and does nothing for class templates: `signature` is `None` on a
+      record, so a partial specialization and its primary template print as one string and an
+      edge between them reads as a bug in the tool. Every review containing a specialization hits
+      it — fmt `HEAD~12` shows it above the fold. The fix belongs in `render/document.py`
+      (`entity_names` / `_plain_name`), not in `terminal.py`: the view asks the document for the
+      label, so the JSON's `entities[*].qualified_name` collapses identically and only the keys,
+      which are USRs, stay distinct.
+- [x] ~~**Superseded cache identities are never reclaimed.**~~ `cppsd cache gc [--older-than N]
+      [--dry-run]`, with `cppsd cache status` as the command that makes the number checkable
+      before it is acted on. The hole was structural rather than a leak: `_evict` keeps the newest
+      generations *within one TU directory* and only runs on a write, while `Cache.identity`
+      hashes the producer code digest — so every change to `extract.py` or `ir.py` gives every TU
+      a brand-new identity directory, and a directory nothing writes to again is immortal.
+      Measured when it shipped: **1,156 entries / 229 MB, of which 576 entries / 147 MB were
+      unreachable by any code path.** On this machine today the store reads 834 entries / 120 MB,
+      757 entries / 100 MB of it unused 30 d+. Worktrees (63 MB) are reported and explicitly *not*
+      collected: removing one is `git worktree remove` against the repository that owns it, and
+      this command does not know which that is. Safe by construction — a collected entry is
+      reparsed by the next run that wants it, which is §8's settled argument applied to an entry
+      that was deleted rather than never written. It works only because a cache *hit* now touches
+      its entry; without that the sweep would run backwards, since the TU that never changes is
+      the one the cache serves most and writes least.
+  - [ ] It keys on **age, not on identity**. The precise rule — delete every identity that is not
+        the current producer's — needs a toolchain and a checkout to know what the current identity
+        *is*, which would make cleaning the cache require a repository to clean it against. Age
+        needs neither and collects the same directories one generation later, so a superseded
+        generation survives until nothing has touched it for `--older-than` days.
 - [ ] `CPPSD_RESOURCE_DIR` is keyed by path, not content: `clang-scan-deps` runs the compile-database
       command without our `-resource-dir`, so the closure reports the *default* resource dir's
       headers. Changing the directory invalidates; changing its contents does not. Escape-hatch only.
@@ -390,6 +460,16 @@ below.
 - **ARCH §6.3's cause table is missing a row.** `call-moved-to-another-overload` was found by
   running the tool, not by reading the design, and it is the rule that carries the largest cascade
   measured so far. §6.3 should name it, or state why the four uncited rules stay uncited.
+- **Should `rank/exposure.py` key on `Node.tu`?** Its docstring said it could not, because the
+  producer never populated the field; that stopped being true (§6) and the docstring has been
+  corrected, which leaves the actual question unasked rather than answered. `tu` is set only where
+  the USR is file-scoped *and* the declaration is in the TU's own primary source, so it is `None`
+  for almost every node — file-scoped USRs are 1.5 % of fmt's nodes and 10.3 % of leveldb's, and
+  `tu` covers a subset of those. It could not classify a model on its own. What it might do is
+  sharpen the INTERNAL/PUBLIC boundary where it *is* set: an entity nobody outside one TU can name
+  is internal by the language rather than by directory convention, which is the half of the rule
+  §5 records `port/port_stdcxx.h` getting wrong. Whether that is worth a second mechanism beside
+  path convention is undecided; no exposure logic was changed.
 - **`diff.renameLimit` can silently truncate the rename map.** Git skips *inexact* rename detection
   on large diffs and says so on stderr, which `run_git` discards on success — so the map would be
   incomplete with no signal, exactly the ARCH §11 case that wants the limit stated. `-l0` removes the

@@ -18,10 +18,14 @@ classes, ordered:
 limitation and it is stated rather than hidden. The model carries `Node.location.file`
 (repository-relative, forward slashes), `Node.symbol`, `Node.tu` and the edge graph.
 `symbol` says an entity has linkage, not that anyone outside the library may use it.
-`Node.tu` is declared in the IR and the current producer never populates it, so it is not
-available to key on. The `target` node kind and `includes` edges in §4.2 -- which is what
-would let this be answered from the build system instead of from directory names -- are
-outside v0's extraction scope (§13). Directory convention is what is left.
+`Node.tu` is populated now, but only where the USR is file-scoped *and* the declaration is in
+the TU's own primary source (STATUS §6) -- file-scoped USRs are 1.5 % of fmt's nodes and 10.3 %
+of leveldb's, and `tu` is set on a subset of those, so it is `None` for almost every node this
+rule has to classify. It is a fact about internal linkage rather than a key exposure could work
+from, and this rule does not read it; whether it should is STATUS §7. The `target` node kind and
+`includes` edges in §4.2 -- which is what would let this be answered from the build system
+instead of from directory names -- are outside v0's extraction scope (§13). Directory convention
+is what is left.
 
 **Failure modes, plainly.**
 
