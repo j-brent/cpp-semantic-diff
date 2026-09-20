@@ -664,6 +664,87 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
         assert exposure_map(head)[NodeId("c:@S@Test@F@m#")] is Exposure.VENDORED
 
 
+class TestAnEdgeIsAsExposedAsEitherOfItsEnds:
+    """Exposure takes the **max** over an edge's endpoints where blast radius and
+    decomposition take the source (`graph.subject_home`). The asymmetry is the decision, not
+    an oversight, and `score.exposure_of` carries the measurement behind it.
+
+    The short form: `subject_home` answers *attribution* -- whose text changed -- and the
+    source is right for that. ARCH-001 §7 asks exposure whether the subject is reachable from
+    a public header, which is a property of the pair an edge names. Of STATUS §8's two
+    decisions, "low confidence ranks up" wins over "the reviewer is reviewing their own
+    code": the latter is a claim about attribution, and `subject_home` already spends it.
+    """
+
+    NAMESPACE = "c:@N@fmt@N@v12@N@detail"
+    ADDED = "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg"
+    OWN_TEST = "c:@F@check_format_as#"
+
+    def side(self, *, with_added: bool) -> Model:
+        """fmt `HEAD~12`'s shape: a namespace reopened in a test header, a new entity
+        declared in a public one, and a test-code entity that went away."""
+        namespace = node(self.NAMESPACE, file="test/scan.h", kind=NodeKind.NAMESPACE)
+        if not with_added:
+            return model("base", namespace, node(self.OWN_TEST, file="test/format-test.cc"))
+        return model(
+            "head",
+            namespace,
+            node(self.ADDED, file=PUBLIC, kind=NodeKind.CLASS),
+            edges=[edge(self.NAMESPACE, self.ADDED, EdgeKind.CONTAINS)],
+        )
+
+    def test_adding_a_public_entity_to_a_namespace_is_a_public_change(self) -> None:
+        """The measured case, and the reason the source is the wrong end here.
+
+        A `contains` edge's source is the *container*, and a namespace is reopened per file
+        so its deduped node keeps one arbitrary location (`exposure.py` says so and declines
+        to promote through it). On fmt `HEAD~12` that location is `test/scan.h`, so reading
+        the source alone calls the addition of `include/fmt/base.h` entities test code --
+        and splits one change across the demotion on the strength of which header happened
+        to reopen the namespace last.
+        """
+        base, head = self.side(with_added=False), self.side(with_added=True)
+        containment = edge_event(self.NAMESPACE, self.ADDED, edge_kind=EdgeKind.CONTAINS)
+        ranking = rank([containment], base, head)
+
+        # Without this the test would pass on a source-only rule the day the namespace node
+        # happened to be deduped to a public header, which is not a property anything can
+        # rely on. The source *is* test code; the claim is that it does not decide.
+        assert exposure_map(head)[NodeId(self.NAMESPACE)] is Exposure.TEST
+        assert ranking.score_for(containment.id).exposure is Exposure.PUBLIC
+
+    def test_it_outranks_unrelated_test_churn_that_the_source_rule_would_put_above_it(
+        self,
+    ) -> None:
+        """The ordering claim, which is what a reviewer sees. fmt `HEAD~12`: reading the
+        source drops these two events from ranks 5-6 to 9-10, below four test-code
+        removals, while the `NodeAdded` they belong to stays public at ranks 1-2."""
+        base, head = self.side(with_added=False), self.side(with_added=True)
+        containment = edge_event(self.NAMESPACE, self.ADDED, edge_kind=EdgeKind.CONTAINS)
+        churn = event(EventKind.NODE_REMOVED, self.OWN_TEST, RESIDUE)
+        ranking = rank([churn, containment], base, head)
+        assert outranks(ranking, containment, churn)
+
+    def test_a_first_party_call_into_vendored_code_stays_first_party(self) -> None:
+        """The direction max is safe in, and the one leveldb actually contains: 114 of its
+        116 boundary-crossing edge events are the repository's own tests calling googletest.
+        Taking the max cannot pull such an event into `ranker.py`'s vendored block, so the
+        partition still holds -- and the two rules agree here, because the source is already
+        the more exposed end."""
+        head = model(
+            "m",
+            node("c:@F@db_test#", file="db/db_test.cc"),
+            node("c:@F@assert_helper#", file=VENDORED),
+        )
+        call = edge_event("c:@F@db_test#", "c:@F@assert_helper#")
+        vendored = body("c:@F@assert_helper#")
+        ranking = rank([vendored, call], head, head)
+
+        assert ranking.score_for(call.id).exposure is Exposure.TEST
+        assert ranking.vendored_count == 1
+        assert outranks(ranking, call, vendored)
+
+
 # -- decomposition ----------------------------------------------------------------------
 
 

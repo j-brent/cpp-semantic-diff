@@ -234,9 +234,47 @@ def _saturate(count: int) -> float:
 def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
     """The subject's exposure class -- `exposure.py` owns the heuristic.
 
-    An edge takes the *maximum* of its endpoints for the same reason blast radius takes the
-    larger: a call from a test into public API is a change to how the public API is used,
-    and scoring it as test code would hide the one direction of that edge worth reading.
+    **An edge takes the maximum of its two endpoints, and deliberately does not follow
+    `graph.subject_home` the way blast radius and decomposition now do.** That asymmetry was
+    raised as a defect; it is kept, and measured rather than argued. `subject_home` answers a
+    question about *attribution* -- whose text changed, whose behaviour changed, what is
+    coupled to what -- and the source is the right answer to all three. ARCH-001 §7 asks
+    exposure a different question: "is the subject reachable from a public header". That is a
+    property of the pair an edge names, not of one end of it, and for a `contains` edge the
+    source is the *container* -- the one node whose location this model cannot pin down.
+
+    Measured on all three fixtures, max against source-only:
+
+    - **spdlog `HEAD~30` (9 edge events) and leveldb `HEAD~10` (2,351) are identical.** Not
+      one event changes class, score, rank, component or high-risk status. On leveldb every
+      edge that crosses the vendored boundary crosses *into* it -- 114 `test -> vendored` and
+      2 `public -> vendored`, the repository's own tests calling googletest -- where the
+      source is already the more exposed end and the two rules agree by construction.
+    - **fmt `HEAD~12` holds the only two divergences, and they are the argument for max.**
+      Both are the `contains` edges that put this commit's two new partial specializations
+      into `namespace fmt::v12::detail`; the specializations are declared in
+      `include/fmt/base.h`, and the namespace's deduped node carries one arbitrary location,
+      which here is `test/scan.h` -- precisely the instability `exposure.py` says it will not
+      rely on. Source-only therefore reads "a public API entity was added" as TEST and drops
+      the two events from ranks 5-6 to 9-10, below four test-code removals, while the
+      `NodeAdded` they belong to stays PUBLIC at ranks 1-2. One change, split across the
+      demotion, on the strength of which header happened to reopen a namespace last.
+
+    So of STATUS §8's two decisions, *"low confidence ranks up"* wins over *"the reviewer is
+    reviewing their own code"*. The second is a claim about attribution and it is already
+    spent -- `subject_home` applies it everywhere the question is what changed. Exposure is
+    not that question, and max is the reading that cannot hide: it only ever moves an event
+    toward the reviewer, never out of sight.
+
+    **The one direction max can err in, named rather than guarded.** It never pulls a
+    first-party event into `ranker.py`'s vendored block, but the reverse is open: an
+    `EdgeAdded(gtest_helper -> leveldb::Status)` would score PUBLIC and escape the partition
+    on the strength of an endpoint its source did not write. There are **zero** such events
+    across the three fixtures -- no `vendored -> {test, internal, public}` edge event on
+    leveldb, the only one with a moving vendored dependency -- so flooring the partition on
+    the source class while the weighted factor kept the max would be a second mechanism
+    defending a hazard nothing has produced. The trigger to revisit is an observed instance,
+    and it is cheap to watch for: it is a divergence whose source is VENDORED.
 
     A subject in neither model is INTERNAL rather than VENDORED: the partition in `ranker.py`
     hides vendored events, and an unclassifiable subject must not be hidden by accident.
