@@ -504,6 +504,22 @@ class TestIncompletenessIsVisible:
         assert "incomplete" in out
         assert "src/b.cpp" in out and "stddef.h not found" in out
 
+    def test_the_reason_a_tu_failed_reaches_the_page_whole(self) -> None:
+        """§11.2 asks for what was missing, which makes a mangled reason worse than a loud
+        one. A clang diagnostic quotes C++ and C++ is bracketed -- `[[nodiscard]]`, a
+        template argument list, clang's own `[note]` -- and the terminal's markup parser
+        drops a bracketed run it cannot style. So the disclosure arrived with the cause
+        deleted and still looked like a disclosure. The claim held here is not about
+        escaping: it is that the page carries the whole reason the document carries,
+        whatever characters happen to be in it.
+        """
+        reason = "ignoring return value of function declared [[nodiscard]]; see [note] above"
+        doc = self._doc(incomplete(reason), clean())
+
+        carried = doc.completeness.base.failures[0].detail
+        assert carried == reason, "the document must be the thing that is intact"
+        assert carried in draw(doc), "the view printed less than the document gave it"
+
     def test_the_warning_precedes_the_events(self) -> None:
         """Order is the whole of §11.2's claim: a reader who reaches the events first has
         already formed a belief the caveat then has to undo."""
@@ -802,6 +818,135 @@ class TestTheDocumentIsTheContract:
         labels = {doc.entity_name(NodeId(n.id)) for n in (one, two)}
         assert len(labels) == 2
         assert all("f" in label for label in labels)
+
+
+# -- 6 · a label is not an identity, and must not pretend to be one ------------------------
+
+#: The two fmt entities STATUS §5's misfiled defect was written from: a class template and a
+#: partial specialization of it, with the `inherits` edge between them. Real USRs, because
+#: the distinction between them survives in the USR and nowhere else on the summary -- both
+#: are `struct`, both have no signature, and `qualified_name` is the same string.
+TEMPLATE_USR = "c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg"
+PARTIAL_USR = "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0"
+SHARED_NAME = "fmt::v12::detail::is_named_arg"
+
+
+def record(usr: str, *, line: int) -> Node:
+    return node(
+        usr,
+        kind=NodeKind.STRUCT,
+        name="is_named_arg",
+        qualified_name=SHARED_NAME,
+        line=line,
+    )
+
+
+def specialization_document(*nodes: Node) -> DiffDocument:
+    """Both records added on the head side, with the `inherits` edge the producer emits."""
+    head = model("b", *nodes, edges=[edge(PARTIAL_USR, TEMPLATE_USR, EdgeKind.INHERITS)])
+    return pipeline(model("a"), head)
+
+
+class TestALabelNamesOneEntity:
+    """**Two entities never share a display name.** STATUS §6, §5.
+
+    The claim is about the *design of the rule*, not about the words it produces, so nothing
+    below pins a formatted label. What is defended is that the rule separates entities the
+    previous rule collapsed, that it separates them from facts the document already carries,
+    and -- the part that would be a worse defect than the one it fixes -- that it never
+    separates them by the order they happened to arrive in.
+    """
+
+    def test_records_sharing_a_qualified_name_are_labelled_apart(self) -> None:
+        """A class template and a partial specialization of it share a qualified name and
+        have no signature, so the overload rule -- the only one there used to be -- left
+        both printing as the same string, and the `inherits` edge between them rendered as
+        a self-edge. That was filed against the producer, which was right all along."""
+        doc = specialization_document(
+            record(TEMPLATE_USR, line=1056), record(PARTIAL_USR, line=1062)
+        )
+
+        labels = {doc.entity_name(NodeId(usr)) for usr in (TEMPLATE_USR, PARTIAL_USR)}
+        assert len(labels) == 2
+        assert all(SHARED_NAME in label for label in labels)
+
+    def test_the_edge_between_them_no_longer_reads_as_a_self_edge(self) -> None:
+        """The surface the defect was reported from. `label` resolves both endpoints of an
+        edge subject, so this is the rendering a reviewer actually sees."""
+        doc = specialization_document(
+            record(TEMPLATE_USR, line=1056), record(PARTIAL_USR, line=1062)
+        )
+        edges = [e for e in doc.events if e.kind is EventKind.EDGE_ADDED]
+        rendered = [doc.label(e.subject) for e in edges]
+
+        self_edges = [r for r in rendered if len(set(r.split(" -> "))) == 1]
+        assert not self_edges, f"an edge between two entities renders as one: {self_edges}"
+
+    def test_the_label_does_not_depend_on_the_order_entities_arrived(self) -> None:
+        """Two identical runs must render identically, here and on another machine. A
+        disambiguator read off insertion order or a list index would satisfy "distinct" and
+        break that -- which is a worse defect than the one it fixed, because a tool that
+        disagrees with itself cannot be diffed against its own output."""
+        first = specialization_document(
+            record(TEMPLATE_USR, line=1056), record(PARTIAL_USR, line=1062)
+        )
+        reversed_arrival = specialization_document(
+            record(PARTIAL_USR, line=1062), record(TEMPLATE_USR, line=1056)
+        )
+
+        for usr in (TEMPLATE_USR, PARTIAL_USR):
+            assert first.entity_name(NodeId(usr)) == reversed_arrival.entity_name(NodeId(usr))
+
+    def test_a_name_nothing_shares_is_printed_as_itself(self) -> None:
+        """Disambiguation is a response to an ambiguity, not a house style. Annotating a
+        name no other entity has would push the thing the reader came for off the line."""
+        f = node("c:@F@f#", name="f", qualified_name="f")
+        doc = pipeline(model("a", f), model("b"))
+        assert doc.entity_name(NodeId(f.id)) == "f"
+
+    def test_entities_that_share_everything_visible_are_still_separated(self) -> None:
+        """ARCH-001 §5's internal-linkage hazard, seen from the view: two file-scoped
+        entities can share a qualified name *and* a signature, so a rule that gave up when
+        nothing semantic distinguished them would reintroduce the defect one case over.
+        It falls back instead."""
+        one = node("c:src/a.cpp@F@helper#", file="src/a.cpp", name="helper", signature="void ()")
+        two = node("c:src/b.cpp@F@helper#", file="src/b.cpp", name="helper", signature="void ()")
+        doc = pipeline(model("a", one, two), model("b"))
+
+        assert doc.entity_name(NodeId(one.id)) != doc.entity_name(NodeId(two.id))
+
+    def test_nothing_that_varies_by_host_reaches_a_label(self) -> None:
+        """STATUS §5: the extractor once leaked an absolute worktree path into identity, and
+        worktrees are named by SHA, so 32 fmt nodes differed on every comparison of any two
+        revisions. A label derived from a path must be derived from the repository-relative
+        one, or that shape comes back through the view."""
+        doc = specialization_document(
+            record(TEMPLATE_USR, line=1056), record(PARTIAL_USR, line=1062)
+        )
+        for usr in (TEMPLATE_USR, PARTIAL_USR):
+            assert "/home/" not in doc.entity_name(NodeId(usr))
+            assert not doc.entity_name(NodeId(usr)).startswith("/")
+
+    def test_the_disambiguated_name_survives_the_trip_to_the_page(self) -> None:
+        """Disambiguating in the document is only half of it: the view has to print what it
+        was given. It did not, and had not since overloads were first bracketed -- the
+        annotation is bracketed and a bracket is rich's markup delimiter, so the markup
+        parser ate `[void (int)]` and `[partial specialization]` alike and the terminal
+        showed the ambiguous name the document had taken care to disambiguate. A defect
+        with no visible symptom except the one being fixed, so it is held here rather than
+        left to the next person to rediscover.
+        """
+        records = specialization_document(
+            record(TEMPLATE_USR, line=1056), record(PARTIAL_USR, line=1062)
+        )
+        one = node("c:@F@f#i#", name="f", signature="void (int)")
+        two = node("c:@F@f#d#", name="f", signature="void (double)")
+        overloads = pipeline(model("a", one, two), model("b"))
+
+        for doc, ids in ((records, (TEMPLATE_USR, PARTIAL_USR)), (overloads, (one.id, two.id))):
+            out = draw(doc, limit=0)
+            for usr in ids:
+                assert doc.entity_name(NodeId(usr)) in out
 
 
 class TestTheViewIsHonestAboutItself:

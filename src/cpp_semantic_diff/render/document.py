@@ -30,6 +30,8 @@ outputs; this module is the shape and the invariants.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from functools import cached_property
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -485,6 +487,122 @@ class Summary(BaseModel):
     residue: Residue
 
 
+# -- naming: telling apart two entities that share a qualified name ----------------------
+#
+# Identity is the USR (ARCH-001 §5), so an ambiguity here is only ever in the *label*.
+# STATUS §5 records what it costs to leave one in place: a rendered name that collapsed a
+# partial specialization and its primary template into one string was read as a self-edge,
+# filed as a producer defect, and sat in §6 for weeks against a producer that was right.
+#
+# A *discriminator* is a pure function of one entity that returns the annotation to bracket
+# after its name, or None when it has nothing to say. `entity_names` tries them in the order
+# below and takes the first that yields a value for **every** member of an ambiguous group
+# *and* yields a different one for each -- so a group is annotated uniformly, or not by that
+# rule at all. Two properties follow, and both are the point:
+#
+# - **Stable.** Every discriminator reads fields of the entity itself. None reads iteration
+#   order, insertion order or a position in a list, so two runs of the same comparison render
+#   identically and so do two machines. The group is a *set* of entities sharing a name, and
+#   the choice of rule is a function of that set's contents, never of how it was built.
+# - **Repository-relative, never absolute.** `_by_location` leans on `Location.file` being
+#   repo-relative. STATUS §5's worst identity bug was the extractor leaking a worktree path --
+#   and worktrees are named by SHA -- which made 32 fmt nodes differ on every comparison.
+#   That shape must not come back through the label.
+
+
+def _by_signature(node_id: NodeId, entity: EntitySummary) -> str | None:
+    """The overload's parameter types. What the original rule used, and right for the case
+    it was written for: two `log_msg_buffer::log_msg_buffer` constructors are two entities
+    and the signature is exactly what distinguishes them. `None` on a record, which is why
+    it cannot be the only rule."""
+    return entity.signature
+
+
+#: How clang spells a tag's template role into its USR, which is the one place the document
+#: still carries the distinction: `extract.py` maps `CLASS_TEMPLATE` and
+#: `CLASS_TEMPLATE_PARTIAL_SPECIALIZATION` to the *tag* kind, so `fmt::v12::detail::
+#: is_named_arg` is `struct` on both sides of the `inherits` edge and `kind` cannot separate
+#: them. `S`/`C`/`U` is a plain tag and says nothing on its own -- it is read only for the
+#: template arguments that may follow it, which make it a specialization.
+_USR_TEMPLATE_FORMS = {
+    "ST": "primary template",
+    "UT": "primary template",
+    "SP": "partial specialization",
+    "UP": "partial specialization",
+}
+
+#: The entity's own declaration is the *last* record in its USR, so this anchors at the end:
+#: `@<marker><parameters>@<name>[<arguments>]`. Anchoring is what makes it safe to read a
+#: USR here at all. A template argument can itself be a USR -- fmt's `native_formatter` has
+#: `…@ST>3#T#T#N$@N@fmt@N@v12@N@detail@E@type@native_formatter` -- and a rule that took the
+#: last marker it could find anywhere would report the *argument's* kind as the entity's.
+#: `[^@]*` cannot cross into a nested USR, so such a spelling matches nothing and the rule
+#: declines. Declining is a missed annotation; guessing would be a wrong one, and a wrong
+#: name is the defect being fixed.
+_USR_TAIL = r"@(ST|UT|SP|UP|S|C|U)(?:>[^@]*)?@{name}(>.*)?$"
+
+_RECORD_KINDS = frozenset({NodeKind.CLASS, NodeKind.STRUCT, NodeKind.UNION})
+
+
+def _by_template_role(node_id: NodeId, entity: EntitySummary) -> str | None:
+    """Primary template, partial specialization or specialization, read off the USR.
+
+    Preferred over the location because it answers the question the reader actually has.
+    `is_named_arg -> is_named_arg` reads as a bug; two line numbers defuse that but leave
+    the reader to open the header to find out what the two are. *`partial specialization`
+    inherits from `primary template`* is the fact, it is what the producer modelled, and it
+    is legible without leaving the page. It is also unaffected by the code moving.
+
+    Restricted to records because the markers are tag markers: applied to a method or a
+    function, the same shapes appear in the *enclosing* class's segment of the USR and would
+    be reported as the member's own role.
+    """
+    if entity.kind not in _RECORD_KINDS or not entity.name:
+        return None
+    match = re.search(_USR_TAIL.format(name=re.escape(entity.name)), node_id, re.DOTALL)
+    if match is None:
+        return None
+    marker, arguments = match.group(1), match.group(2)
+    # A plain tag carrying template arguments is a specialization of something; a plain tag
+    # without them is an ordinary record, which cannot share a scope with a template of the
+    # same name and so has nothing to disambiguate against.
+    return _USR_TEMPLATE_FORMS.get(marker) or ("specialization" if arguments else None)
+
+
+def _by_location(node_id: NodeId, entity: EntitySummary) -> str | None:
+    """Where it is declared: repository-relative path and line.
+
+    Precise and always available, and the only thing that separates the case neither rule
+    above can -- two internal-linkage entities with the same qualified name and the same
+    signature in two different files, which ARCH-001 §5 names as the tier-1 hazard. It ranks
+    below the template role rather than above it because it is noisy, because it changes when
+    code moves, and because `terminal.py` already prints the location after a node subject:
+    promoting it would print the same string twice on the same line.
+    """
+    if entity.location is None:
+        return None
+    return f"{entity.location.file}:{entity.location.line}"
+
+
+def _by_id(node_id: NodeId, entity: EntitySummary) -> str | None:
+    """The USR. Exact, ugly, and guaranteed to work, because it is the key this entity is
+    stored under and `entities` is a dict. Unreadable as a name -- but it is the string that
+    takes the reader to the same entity in the JSON, which STATUS §5 makes the first move on
+    anything surprising seen in the terminal."""
+    return node_id
+
+
+#: Tried in order, most legible first. `_by_id` terminates the search on every possible
+#: input, so the ambiguous fallback in `entity_names` is unreachable rather than merely
+#: unlikely -- see the comment there for why it is written anyway.
+_DISCRIMINATORS: tuple[Callable[[NodeId, EntitySummary], str | None], ...] = (
+    _by_signature,
+    _by_template_role,
+    _by_location,
+    _by_id,
+)
+
+
 class DiffDocument(BaseModel):
     """ARCH-001 §10's document. The product.
 
@@ -584,12 +702,24 @@ class DiffDocument(BaseModel):
     def entity_names(self) -> dict[NodeId, str]:
         """Display names for every entity, disambiguated where a name is not unique.
 
-        C++ overloads share a qualified name -- two `log_msg_buffer::log_msg_buffer`
-        constructors are two entities -- and a view that printed the bare name would show
-        the same line twice and read as a bug in the tool rather than as two real changes.
-        Identity is the USR (§5), so the ambiguity is only ever in the *label*; the fix is
-        therefore a labelling one, and it appends the signature that made them distinct
-        rather than an index that means nothing.
+        Sharing a qualified name is ordinary C++ -- two `log_msg_buffer::log_msg_buffer`
+        constructors are two entities, and so are `is_named_arg` and the partial
+        specialization of it -- and a view that printed the bare name would show the same
+        line twice and read as a bug in the tool rather than as two real changes. Identity
+        is the USR (§5), so the ambiguity is only ever in the *label*; the fix is a
+        labelling one, and it appends something that *means* the difference rather than an
+        index that means nothing.
+
+        The rules, and the order they are tried in, are above this class. This method only
+        applies them: for each group of entities sharing a name, the first rule that has
+        something to say about every member and says something different about each wins,
+        and annotates the whole group.
+
+        Bracketed rather than concatenated, which the original rule got right and is worth
+        keeping for every rule: `Node.signature` is a whole function type
+        (`void (const log_msg &)`), so juxtaposing it against the name reads as a malformed
+        declaration rather than as a disambiguator. Everything appended here reads as an
+        annotation about the entity, never as C++.
 
         Cached because it is O(entities) and the view asks per event; safe to cache for the
         same reason `Correspondence.by_base` is -- `entities` is written once by `build.py`
@@ -601,12 +731,23 @@ class DiffDocument(BaseModel):
 
         out: dict[NodeId, str] = {}
         for name, ids in by_name.items():
-            for node_id in ids:
-                signature = self.entities[node_id].signature
-                # Bracketed rather than concatenated: `Node.signature` is a whole function
-                # type (`void (const log_msg &)`), so juxtaposing it against the name reads
-                # as a malformed declaration rather than as a disambiguator.
-                out[node_id] = f"{name} [{signature}]" if len(ids) > 1 and signature else name
+            if len(ids) == 1:
+                out[ids[0]] = name
+                continue
+            for discriminator in _DISCRIMINATORS:
+                marks = [discriminator(i, self.entities[i]) for i in ids]
+                if None in marks or len(set(marks)) != len(marks):
+                    continue
+                out.update({i: f"{name} [{m}]" for i, m in zip(ids, marks, strict=True)})
+                break
+            else:
+                # Unreachable: `_by_id` returns the key each entity is stored under, and a
+                # dict cannot hold two. Written anyway because the alternative is a label
+                # that is ambiguous while the code believes it disambiguated -- the exact
+                # failure this method exists to prevent -- and a defect that announces
+                # itself in the output costs one reader a confusing line, where a silent
+                # one cost STATUS §5 a misfiled bug against the wrong stage.
+                out.update({i: f"{name} [ambiguous: {i}]" for i in ids})
         return out
 
     @staticmethod

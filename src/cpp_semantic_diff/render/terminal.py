@@ -8,6 +8,23 @@ lands in the presentation layer, and the analysis core has a delivery surface in
 is the mistake §10 names. **If this view needs a number the document does not carry, the fix
 is to put it in the document.**
 
+**No document string passes through the markup parser.** Every value read off the document is
+`escape()`d before it is interpolated into a markup template. Rich reads `[...]` as a style
+tag and *drops* one it cannot resolve rather than raising, so a bracket that is not styling
+disappears along with what it contained: `f [void (int)]` printed as `f`, a diagnostic about
+`[[nodiscard]]` printed as one about `[]`.
+
+Worth knowing precisely, because the obvious example is the wrong one. Rich's tag pattern
+requires `[a-z#/@]` after the bracket, so a warning flag (`[-Wunused-variable]`) passes
+through untouched and the hazard looks theoretical. What does not pass through is every C++
+attribute (`[[nodiscard]]`, `[[maybe_unused]]`), clang's own `[note]`/`[deprecated]` phrasing,
+a standard-section citation, and every annotation `DiffDocument.label` appends. All of which
+is to say the rule cannot be applied by inspecting strings for danger -- it is positional.
+The *view* supplies the markup; everything it styles is data.
+
+This matters most exactly where §11.2 requires the output to say what was missing: half a
+reason a model is incomplete reads as a whole one.
+
 The page is ordered by what §11 and §10 say must be seen first:
 
 1. **Completeness, at the top, never in a log** (§11.2). What was missing precedes what was
@@ -23,6 +40,7 @@ The page is ordered by what §11 and §10 say must be seen first:
 from __future__ import annotations
 
 from rich.console import Console
+from rich.markup import escape
 from rich.text import Text
 
 from cpp_semantic_diff.model import EventId, Side
@@ -61,7 +79,8 @@ def render(
 def _header(document: DiffDocument, console: Console) -> None:
     meta = document.meta
     console.print(
-        f"[bold]{meta.repo}[/]  [dim]{meta.base_ref}...{meta.head_ref}[/]  "
+        f"[bold]{escape(meta.repo)}[/]  "
+        f"[dim]{escape(meta.base_ref)}...{escape(meta.head_ref)}[/]  "
         f"[dim]({meta.base_rev[:12]} -> {meta.head_rev[:12]})[/]"
     )
 
@@ -87,7 +106,7 @@ def _completeness(document: DiffDocument, console: Console) -> None:
     parsed = (
         f"base {block.base.tus_parsed}/{block.base.tus_total} TUs · "
         f"head {block.head.tus_parsed}/{block.head.tus_total} TUs · "
-        f"{block.head.producer_version or 'unknown producer'}"
+        f"{escape(block.head.producer_version) or 'unknown producer'}"
     )
 
     if not block.degraded:
@@ -100,12 +119,22 @@ def _completeness(document: DiffDocument, console: Console) -> None:
     console.print()
     console.print("[bold yellow]this model is incomplete[/] [dim]— read what follows knowing it[/]")
     for side, warning in block.warnings:
-        console.print(f"  [yellow]{side.value:4}[/] {warning}")
+        console.print(f"  [yellow]{side.value:4}[/] {escape(warning)}")
     for report in (block.base, block.head):
         # Named, not counted. A reviewer who knows which TU failed knows which part of the
         # tree to distrust; a reviewer told "3 failed" knows only to distrust all of it.
+        #
+        # Escaped because a parse failure is a clang diagnostic quoting C++, and C++ is
+        # bracketed: `[[nodiscard]]`, a template argument list, clang's own `[note]`. The
+        # markup parser drops what it cannot style, so the sentence naming the cause used to
+        # arrive with the cause removed -- a §11.2 failure wearing the costume of a §11.2
+        # disclosure, which is the worst place in this view for it to happen.
         for failure in report.failures[:5]:
-            console.print(f"  [dim]{report.side.value:4} {failure.path}: {failure.detail}[/]")
+            # `str()` rather than `or ""`: a detail-less failure has always printed "None"
+            # here, and this pass is an escaping pass -- changing what the block says is a
+            # separate decision from making it say all of it.
+            detail = escape(str(failure.detail))
+            console.print(f"  [dim]{report.side.value:4} {escape(failure.path)}: {detail}[/]")
         if len(report.failures) > 5:
             console.print(f"  [dim]{report.side.value:4} … {len(report.failures) - 5} more[/]")
     console.print(f"  [dim]{parsed}[/]")
@@ -126,9 +155,11 @@ def _language_mode(block: CompletenessBlock, console: Console) -> None:
     base, head = block.base.language_modes, block.head.language_modes
     if base == head:
         return
+    # `-std=` values come out of the build, not out of this project's source.
+    was, now = escape(", ".join(base)), escape(", ".join(head))
     console.print(
-        f"  [yellow]language mode differs: base {', '.join(base) or 'unset'} → "
-        f"head {', '.join(head) or 'unset'} — additions and removals may be the standard "
+        f"  [yellow]language mode differs: base {was or 'unset'} → "
+        f"head {now or 'unset'} — additions and removals may be the standard "
         f"moving rather than the code[/]"
     )
 
@@ -141,7 +172,7 @@ def _boundary(block: CompletenessBlock, console: Console) -> None:
     against 26,071 and a catastrophe against 6,000, and only the ratio distinguishes them.
     """
     for side, sentence in block.boundaries:
-        console.print(f"  [dim]{side.value:4} {sentence}[/]")
+        console.print(f"  [dim]{side.value:4} {escape(sentence)}[/]")
 
 
 # -- 2 · the metric the project is pointed at --------------------------------------------
@@ -158,7 +189,7 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
     """
     s = document.summary
     console.print()
-    console.print(f"[bold]{s.compression}[/]")
+    console.print(f"[bold]{escape(s.compression)}[/]")
 
     parts = []
     if s.compression_ratio is not None:
@@ -286,8 +317,15 @@ def _subject(document: DiffDocument, subject: str) -> str:
     `sides` comes off the entity summary rather than off the event kind, which is what makes
     a rename legible for what it is in v0: the removal and the addition are two one-sided
     entities, and the marks say so without the view guessing that they are related.
+
+    The label is escaped, per the module rule. It is the site that rule was found at:
+    `DiffDocument.label` brackets its disambiguator -- `f [void (int)]`,
+    `is_named_arg [partial specialization]` -- so an unescaped label had the whole annotation
+    eaten and printed the ambiguous name the document had taken care to disambiguate. The
+    return value is markup this function *composed* and is interpolated by `_event` as such;
+    only the parts read off the document are escaped.
     """
-    label = document.label(subject)
+    label = escape(document.label(subject))
     entity = document.entities.get(subject)  # type: ignore[arg-type]
     if entity is None:
         return f"[cyan]{label}[/]"
@@ -296,7 +334,7 @@ def _subject(document: DiffDocument, subject: str) -> str:
     )
     where = ""
     if entity.location is not None:
-        where = f"  [dim]{entity.location.file}:{entity.location.line}[/]"
+        where = f"  [dim]{escape(entity.location.file)}:{entity.location.line}[/]"
     return f"{mark} [cyan]{label}[/]{where}"
 
 
@@ -314,6 +352,9 @@ def _why(document: DiffDocument, node: CollapseNode, console: Console, *, indent
         return
     ordered = sorted(score.factors, key=lambda f: -f.contribution)
     why = " · ".join(f"{f.name.value.replace('_', ' ')} {f.detail}" for f in ordered)
+    # `Text(...)` with an explicit style, not a markup string -- `Text` does not parse
+    # markup, so `f.detail` needs no escaping and must not be rewritten into a
+    # `console.print(f"[dim]…")` without one. The module rule, satisfied the other way.
     line = Text(f"{indent}       {why}", style="dim", no_wrap=False)
     console.print(line)
     if node.children:
@@ -377,7 +418,7 @@ def _limits(document: DiffDocument, console: Console) -> None:
     console.print()
     console.print("[dim]true of every run:[/]")
     for limit in document.completeness.limits:
-        console.print(f"  [dim]{limit}[/]")
+        console.print(f"  [dim]{escape(limit)}[/]")
 
 
 def hidden_ids(tree: Collapsed) -> set[EventId]:
