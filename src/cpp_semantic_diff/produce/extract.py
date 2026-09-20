@@ -58,8 +58,10 @@ from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 #: *declared* templates appear as cursors, so implicit instantiations never enter the model
 #: and cannot produce instantiation-only deltas.
 #:
-#: The record kinds here are the *default* for a templated record; `_node_kind` refines them
-#: from the tag clang actually parsed, because CLASS_TEMPLATE covers `struct` too.
+#: Two of the mappings here are *defaults* that `_node_kind` refines, both for the same
+#: reason -- clang files a template under one cursor kind whatever it was written as.
+#: CLASS_TEMPLATE covers `struct` too, and FUNCTION_TEMPLATE covers a member function
+#: template just as it covers a free one.
 MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.NAMESPACE: NodeKind.NAMESPACE,
     ci.CursorKind.CLASS_DECL: NodeKind.CLASS,
@@ -68,7 +70,7 @@ MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.STRUCT_DECL: NodeKind.STRUCT,
     ci.CursorKind.UNION_DECL: NodeKind.UNION,
     ci.CursorKind.FUNCTION_DECL: NodeKind.FUNCTION,
-    ci.CursorKind.FUNCTION_TEMPLATE: NodeKind.FUNCTION,
+    ci.CursorKind.FUNCTION_TEMPLATE: NodeKind.FUNCTION,  # unless it is a member; see below
     ci.CursorKind.CXX_METHOD: NodeKind.METHOD,
     ci.CursorKind.CONSTRUCTOR: NodeKind.METHOD,
     ci.CursorKind.DESTRUCTOR: NodeKind.METHOD,
@@ -116,6 +118,17 @@ TAG_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.STRUCT_DECL: NodeKind.STRUCT,
     ci.CursorKind.CLASS_DECL: NodeKind.CLASS,
     ci.CursorKind.UNION_DECL: NodeKind.UNION,
+}
+
+#: The class-like scopes: a declaration whose *semantic* parent is one of these is a member.
+#: All five are what clang actually reports as the semantic parent of a member -- `class`,
+#: `struct` and `union` bodies, a class template's body, and a partial specialization's --
+#: and a full specialization is a plain CLASS_DECL/STRUCT_DECL, so it needs no entry of its
+#: own. A member of a class template is a member.
+RECORD_KINDS = TEMPLATED_RECORD_KINDS | {
+    ci.CursorKind.CLASS_DECL,
+    ci.CursorKind.STRUCT_DECL,
+    ci.CursorKind.UNION_DECL,
 }
 
 #: Function bodies are deliberately *not* skipped. `calls` edges and `body_hash` both need
@@ -250,16 +263,47 @@ def template_tag_kind(cursor: ci.Cursor) -> ci.CursorKind | None:
     return _template_tag(cursor)
 
 
+def _is_member(cursor: ci.Cursor) -> bool:
+    """Whether this declaration belongs to a class-like scope (ARCH-001 §4.1).
+
+    The *semantic* parent, never the lexical one. A friend function template is written
+    inside a class body and is not a member of it -- clang reports its lexical parent as the
+    class and its semantic parent as the enclosing namespace, which is the distinction the
+    language makes and the one a node kind should record. The reverse case needs the same
+    answer from the other direction: an out-of-line `template <class T> void C::f(T)` is
+    written at namespace scope and its semantic parent is still `C`.
+    """
+    parent = cursor.semantic_parent
+    return parent is not None and parent.kind in RECORD_KINDS
+
+
 def _node_kind(cursor: ci.Cursor) -> NodeKind | None:
     """The modelled kind of a cursor, or None if v0 does not model it.
 
     Kind is not identity -- the USR is -- so getting this wrong corrupts no diff. It does
     corrupt rendering and every kind-keyed rule downstream, and "21 qualified names are both
     a class and a struct" is the kind of inconsistency that gets read as a matching bug.
+
+    Two refinements, both because a cursor kind is not the question being asked.
+
+    **A templated record** is CLASS_TEMPLATE whichever tag was written, so the tag is asked
+    for separately (`template_tag_kind`).
+
+    **A member function template** is FUNCTION_TEMPLATE whether its semantic parent is a
+    namespace or a class, so the cursor kind alone cannot tell `fmt::format` from
+    `basic_memory_buffer::append` -- 414 of fmt's nodes were classified `function` while
+    every non-template member beside them was a `method`. Membership is a property of the
+    scope, so it is read off the scope. Getting it right is also what gives these nodes the
+    method attributes: `_attributes` keys on the node kind, so `explicit` on a constructor
+    template had no representation anywhere in the model until the kind was right.
     """
     kind = MODELLED_KINDS.get(cursor.kind)
-    if kind is not None and cursor.kind in TEMPLATED_RECORD_KINDS:
+    if kind is None:
+        return None
+    if cursor.kind in TEMPLATED_RECORD_KINDS:
         return TAG_KINDS.get(template_tag_kind(cursor), kind)
+    if cursor.kind is ci.CursorKind.FUNCTION_TEMPLATE and _is_member(cursor):
+        return NodeKind.METHOD
     return kind
 
 
@@ -469,6 +513,13 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["deleted"] = cursor.is_deleted_method()
         attrs["defaulted"] = cursor.is_default_method()
         attrs["exception_spec"] = _exception_spec(cursor)
+    # Keyed on the node kind rather than on the cursor kind, which is what lets a member
+    # function template carry exactly what an ordinary method carries. Clang's
+    # `clang_CXXMethod_*` predicates unwrap a FunctionTemplateDecl to the function it
+    # templates, so a member template answers them for real: an `explicit` constructor
+    # template reads explicit, a `static` one reads static, a `const` one reads const.
+    # `explicit` in particular had no other representation in the model -- there is no
+    # attribute a `function` carries that could hold it (STATUS §6).
     if kind is NodeKind.METHOD:
         attrs["static"] = cursor.is_static_method()
         attrs["virtual"] = cursor.is_virtual_method()

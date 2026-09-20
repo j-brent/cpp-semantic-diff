@@ -660,6 +660,127 @@ class TestTemplates:
         assert kinds("Either") == {NodeKind.UNION}
 
 
+class TestAMemberFunctionTemplateIsAMethod:
+    """Clang files every function template under one cursor kind, so a mapping keyed on the
+    cursor kind reports a member template as a free function -- 414 of them on fmt, beside
+    the non-template members of the same classes, which are methods. Membership is a
+    property of the scope, so the claim under test is about the scope: whatever the tag on
+    the declaration, what decides is whether it was declared inside a class.
+
+    The kind is not identity and both sides of a diff got it wrong identically, so no delta
+    was ever corrupted. What was corrupted is everything downstream that reads a kind --
+    and, because `_attributes` is keyed on the node kind, the method attributes were absent
+    entirely. `explicit` is the one with nowhere else to live: a `function` has no attribute
+    that could carry it (STATUS §6)."""
+
+    SOURCE = """
+    namespace app {
+    template <typename T> T free_tpl(T v) { return v; }
+
+    class Widget {
+     public:
+      template <typename T> explicit Widget(T v) {}
+      template <typename T> void member_tpl(T v);
+      template <typename T> static T static_tpl(T v) { return v; }
+      template <typename T> int const_tpl(T v) const { return 0; }
+      void ordinary() const {}
+      template <typename T> friend void befriend(T v);
+    };
+    template <typename T> void befriend(T v) {}
+
+    struct Plain { template <typename T> void s_tpl(T v) {} };
+    union Either { int tag; template <typename T> void u_tpl(T v) {} };
+
+    template <typename T> class Boxed {
+     public:
+      template <typename U> explicit Boxed(U v) {}
+      template <typename U> void ct_tpl(U v) {}
+    };
+
+    template <typename T> class Boxed<T*> {
+     public:
+      template <typename U> void partial_tpl(U v) {}
+    };
+
+    template <typename T> void Widget::member_tpl(T v) {}
+    }
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("member_tpl"), toolchain, {"a.cpp": self.SOURCE})
+
+    def kind(self, result: TuExtract, qualified: str) -> NodeKind:
+        return named(result, qualified).kind
+
+    def test_a_template_declared_inside_a_class_is_a_method(self, result: TuExtract) -> None:
+        assert result.ok
+        assert self.kind(result, "app::Widget::member_tpl") is NodeKind.METHOD
+        assert self.kind(result, "app::Widget::static_tpl") is NodeKind.METHOD
+        assert self.kind(result, "app::Widget::const_tpl") is NodeKind.METHOD
+        assert self.kind(result, "app::Widget::Widget") is NodeKind.METHOD
+
+    def test_struct_union_and_class_template_scopes_count_too(self, result: TuExtract) -> None:
+        """A member of a class template is a member. Clang reports the semantic parent as
+        CLASS_TEMPLATE (and as CLASS_TEMPLATE_PARTIAL_SPECIALIZATION for a partial), which
+        is a different cursor kind from CLASS_DECL and the same answer."""
+        assert self.kind(result, "app::Plain::s_tpl") is NodeKind.METHOD
+        assert self.kind(result, "app::Either::u_tpl") is NodeKind.METHOD
+        assert self.kind(result, "app::Boxed::ct_tpl") is NodeKind.METHOD
+        assert self.kind(result, "app::Boxed::Boxed<T>") is NodeKind.METHOD
+        assert self.kind(result, "app::Boxed::partial_tpl") is NodeKind.METHOD
+
+    def test_a_template_at_namespace_scope_is_still_a_function(self, result: TuExtract) -> None:
+        assert self.kind(result, "app::free_tpl") is NodeKind.FUNCTION
+
+    def test_an_out_of_line_definition_is_the_same_method(self, result: TuExtract) -> None:
+        """`member_tpl` is declared in the class and defined at namespace scope. One entity,
+        one kind -- the same claim the record tags make, and the reason the rule reads the
+        semantic parent: the lexical parent of the definition is the namespace."""
+        members = [n for n in result.nodes.values() if n.name == "member_tpl"]
+        assert len(members) == 1
+        assert members[0].kind is NodeKind.METHOD
+        assert members[0].body_hash is not None, "the out-of-line definition was not merged in"
+
+    def test_a_friend_template_is_not_a_member_of_the_class_it_is_written_in(
+        self, result: TuExtract
+    ) -> None:
+        """The case that says the rule is the *semantic* parent rather than the lexical one.
+        A friend is declared inside the class body and is not a member of it; clang agrees,
+        and reports the namespace as its semantic parent."""
+        assert self.kind(result, "app::befriend") is NodeKind.FUNCTION
+
+    def test_explicit_survives_on_a_constructor_template(self, result: TuExtract) -> None:
+        """The attribute STATUS §6 records as lost with no other representation. It is not a
+        new attribute name: it is the one an ordinary explicit constructor already carries,
+        reaching a node that could not carry it while its kind said `function`."""
+        assert named(result, "app::Widget::Widget").attrs["explicit"] is True
+        assert named(result, "app::Boxed::Boxed<T>").attrs["explicit"] is True
+
+    def test_it_carries_what_an_ordinary_method_carries_and_nothing_new(
+        self, result: TuExtract
+    ) -> None:
+        """Consistency is the whole claim: a member function template is a method, so it
+        answers the same questions a method answers. An attribute set that differs by so
+        much as a key would make `NodeAttrChanged` fire on a declaration gaining or losing
+        `template`, which is not what happened to it."""
+        ordinary = named(result, "app::Widget::ordinary")
+        member_tpl = named(result, "app::Widget::member_tpl")
+        assert set(member_tpl.attrs) == set(ordinary.attrs)
+        assert member_tpl.attrs["template"] is True
+        assert ordinary.attrs["template"] is False
+        assert named(result, "app::Widget::static_tpl").attrs["static"] is True
+        assert named(result, "app::Widget::const_tpl").attrs["const"] is True
+
+    def test_the_free_template_carries_no_method_attributes(self, result: TuExtract) -> None:
+        """The other half of the same claim -- `explicit` on a free function is not a
+        question, and an attribute that is absent for some nodes of a kind and present for
+        others is what ARCH-001 §4.3 forbids."""
+        free = named(result, "app::free_tpl")
+        assert "explicit" not in free.attrs
+        assert set(free.attrs) == set(named(result, "app::befriend").attrs)
+
+
 class TestFailureIsRecordedNotRaised:
     def test_a_broken_tu_is_reported_as_incompleteness(
         self, tmp_path: Path, toolchain: Toolchain
