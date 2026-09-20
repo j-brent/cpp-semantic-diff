@@ -308,9 +308,20 @@ events. Consequences are linked to causes by **an explicit rule table**, not inf
 | contained-removal | `NodeRemoved(C)` | `NodeRemoved` for everything C contained | active |
 | contained-addition | `NodeAdded(C)` | `NodeAdded` for everything C contains | active |
 | edge-lost-its-endpoint | `NodeRemoved(N)` | `EdgeRemoved` for edges touching N | active |
+| call-moved-to-another-overload | `EdgeAdded(caller→G)` | `EdgeRemoved(caller→F)`, F and G overloads of one name | active |
 | edge-gained-its-endpoint | `NodeAdded(N)` | `EdgeAdded` for edges touching N | active |
-| rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **dead** |
-| signature-breaks-callers | `NodeAttrChanged(signature)` | `SignatureIncompatible` on callers | dormant |
+| rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **unreachable** |
+| signature-change-breaks-callers | `NodeAttrChanged(signature)` | `SignatureIncompatible` on callers | dormant |
+
+**That is the whole table, and it is closed the way §6.1's event set is closed.** The rows are
+`CAUSE_RULES` in `classify/rules.py` and the Status column is its `RuleStatus`; nothing outside that
+module decides what causes what. There is no second class of rule — no "implementation detail" tier
+that the design declines to name — because a cause link is exactly the claim this document exists to
+justify: it is what render hides an event under, and a rule that lives only in the code is a
+reviewer's change disappearing for a reason the design cannot be read to explain. So a rule found by
+running the tool belongs here at the moment it is added, with where it came from stated in place —
+which is what the rest of this section is. Order is part of the table: the first rule that finds a
+cause wins, which matters wherever two rules share a consequence kind.
 
 The two **addition** rules and the two **edge-endpoint** rules were missing from the earlier draft,
 and between them they carry nearly all of v0's actual cascade volume: without them, removing one
@@ -318,15 +329,40 @@ class leaves every containment and call edge it touched standing as an unexplain
 and adding a class of twenty methods reads as twenty-one events while the identical deletion reads
 as one.
 
-`rename-retargets-edges` is **dead, not dormant** — and it is not revived by tier 2. Because base
-edges are rewritten into head coordinates through the correspondence before comparison, a rename
-produces *no edge events at all*, rather than 200 that need collapsing. That is a stronger answer to
-the problem this section opens with. Tier 2 makes `NodeRenamed` reachable but adds no edge events
-beside it; only reversing the edge-identity decision in §6.1 would make this rule fire.
+`call-moved-to-another-overload` is the row this section did not reason its way to. It came from
+running the tool: googletest gave `AssertHelper::AssertHelper` a `std::string_view` overload, every
+`TEST` body stopped calling the `const char *` one, and the 28 resulting `EdgeRemoved` events have
+*both* endpoints still present — the old overload is still declared, it is merely no longer called —
+so no endpoint rule reaches them and they were the bulk of what stood at top level after every other
+cascade had collapsed. With the rule in, leveldb `HEAD~10` goes from **39 top-level events to 11**,
+and `fmt` and `spdlog` are unchanged to the digit, which is the check that it collapses a real
+relation rather than whatever happens to be nearby. A call genuinely dropped between two survivors
+still gets no cause and is still shown; that is this section's last paragraph, not a gap in this
+rule.
 
-`signature-breaks-callers` is **dormant** because its consequence is a derived event, which §13 puts
-out of v0. Classify links causes among events that already exist; it never synthesizes one. A stage
-that may create events is a stage that can hide a change inside a cause.
+**It is not `EdgeRetargeted` readmitted under another name**, and §6.1 is why that distinction has
+to be argued rather than assumed. That event is refused because "retargeted from F to G" asserts
+that F and G are the same entity, which is a node-identity claim the one-to-one matcher declined.
+This rule asserts nothing of the kind: F and G are two distinct overloads, both present at head, and
+the claim is only that one call site moved *within* an overload set — a fact about the caller's own
+outgoing edges that needs no opinion about whether F and G are the same thing. The set is
+`qualified_name` equality with the edge kind held fixed, which is what an overload set is, since
+overloads differ exactly in signature (§5). The cause is the `EdgeAdded` rather than G's own
+`NodeAdded`, so that every link carries one fact: the added edge is already linked to the added node
+by `edge-gained-its-endpoint`, and both collapse under it. The row sits below
+`edge-lost-its-endpoint` because both explain an `EdgeRemoved` and the order is the tie-break — an
+endpoint that actually went away is a better explanation than one the caller merely stopped using.
+
+`rename-retargets-edges` is **unreachable, not dormant** — and it is not revived by tier 2. Because
+base edges are rewritten into head coordinates through the correspondence before comparison, a
+rename produces *no edge events at all*, rather than 200 that need collapsing. That is a stronger
+answer to the problem this section opens with. Tier 2 makes `NodeRenamed` reachable but adds no edge
+events beside it; only reversing the edge-identity decision in §6.1 would make this rule fire. The
+rule is kept and implemented rather than deleted, because deleting it would lose that argument.
+
+`signature-change-breaks-callers` is **dormant** because its consequence is a derived event, which
+§13 puts out of v0. Classify links causes among events that already exist; it never synthesizes one.
+A stage that may create events is a stage that can hide a change inside a cause.
 
 Events with no matching rule get no cause link and are shown. **Collapse happens at render, never
 at diff** — the JSON always carries the full event set; the view hides consequences under causes by
