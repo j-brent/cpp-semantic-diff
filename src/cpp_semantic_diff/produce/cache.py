@@ -1,10 +1,12 @@
 """The per-TU model cache -- what makes the performance budget reachable.
 
 ARCH-001 §9 sets the budget: **a review touching <= 20 TUs completes in under 30 s on a
-warm cache**. A cold `fmt` model is 50 TUs in 76-117 s depending on the host, so the budget
-is not a matter of making the parser faster; it is a matter of not parsing what has not
-changed. Measured on fmt: 76 s cold, 6.0 s fully warm, 18.9 s for a review that touched
-five TUs -- a marginal 2.6 s per translation unit the diff actually invalidated.
+warm cache**. A cold `fmt` model is 50 TUs in anything from half a minute to two, depending
+on the host and the worker count, so the budget is not a matter of parsing faster; it is a
+matter of not parsing what has not changed. The measurements live in STATUS §4, dated and
+maintained; they are deliberately not restated here, and `notes()` reports the cost of the
+build in hand rather than quoting any of them -- a per-TU cost asserted in prose was correct
+when it was written and went stale without anyone editing the line.
 
 **The unit is the translation unit, not the commit.** Caching whole models would mean the
 first review against any new base pays full price, and the base is exactly what every
@@ -44,6 +46,17 @@ the standard library and clang's own builtin headers -- a TU including `<string>
 `<cstddef>` closes over 151 files, 68 of them libstdc++ and 14 of them in the resource
 directory -- so libstdc++ 12 versus 14, or a different resource directory's `stddef.h`,
 already changes the key by content rather than by path.
+
+That last one holds only while the scanner and the parser read the *same* resource
+directory, which is the ordinary case and not a guaranteed one: `clang-scan-deps` runs the
+compile database's own command and never sees our `-resource-dir`, so under
+`CPPSD_RESOURCE_DIR` it reports the builtin headers of its own default directory while the
+parser reads the override's. The path is in the key (it is a parse argument) and the
+contents are not, which is a key that looks content-addressed and is not.
+`_uncovered_resource_dir` therefore checks whether the closure names any file under the
+override -- when it does, the override *is* the directory the scanner resolved and every
+builtin header the parser reads is content-hashed like any other closure member, and when
+it does not, the cache declines rather than key those headers by path (§8).
 
 **When the closure cannot be computed, nothing is cached.** `clang-scan-deps` is the only
 thing here that knows which headers a TU reads, and a key without them produces stale hits
@@ -504,6 +517,16 @@ class CacheStats:
         """TUs the cache had *some* entry for, so the miss rate below means something."""
         return self.hits + self.stale
 
+    @property
+    def parsed(self) -> int:
+        """TUs this build actually sent to libclang -- what its time was spent on.
+
+        Not `stale`: an invalidated TU and a TU the cache never had cost the same parse,
+        and dividing a build's elapsed time by the invalidated ones alone would report a
+        per-TU cost several times the real one on a build that was mostly cold.
+        """
+        return self.stale + self.cold + self.uncacheable
+
 
 class TuCache:
     """A content-addressed store of partial models, and a producer of them.
@@ -523,6 +546,7 @@ class TuCache:
         store: Path,
         closures: dict[Path, list[Path]],
         disabled: str = "",
+        remedy: str = "",
     ) -> None:
         self.root = root.resolve()
         #: Both spellings of the worktree path. A compile database records the path it was
@@ -533,7 +557,15 @@ class TuCache:
         self.store = store
         self.closures = closures
         self.disabled = disabled
+        #: What a user could do about `disabled`. Carried beside the reason rather than
+        #: folded into it because the conditions have different answers, and one generic
+        #: remedy sends half of them to install a package they already have.
+        self.remedy = remedy
         self.stats = CacheStats()
+        #: When this cache started producing partials, so `notes()` can report what the
+        #: build cost instead of asserting what a build costs. The scan that precedes
+        #: construction is deliberately outside it: the note is about reparsing.
+        self.opened = time.monotonic()
         self._digests: dict[Path, str] = {}
         self._relatives: dict[Path, str] = {}
 
@@ -571,7 +603,58 @@ class TuCache:
                 closures={},
                 disabled=f"{scanner} produced no include closures for {checkout.compile_db.path}",
             )
-        return cls(root=checkout.path, toolchain=toolchain, store=store, closures=closures)
+        cache = cls(root=checkout.path, toolchain=toolchain, store=store, closures=closures)
+        # Decided after construction because the check reads the closures and wants the
+        # instance's own path-resolution memo (`_relative`), which `key()` pays for anyway.
+        cache.disabled, cache.remedy = cache._uncovered_resource_dir()
+        return cache
+
+    def _uncovered_resource_dir(self) -> tuple[str, str]:
+        """Refuse to cache when the parser's builtin headers are outside the key.
+
+        `clang-scan-deps` is run on the compile database's own command, which does not
+        carry the `-resource-dir` the extractor adds (`Toolchain.parse_args`). So under
+        `CPPSD_RESOURCE_DIR` the closure describes the *scanner's* default resource
+        directory while the parse reads the override's. The override's path is a parse
+        argument and so reaches `identity` -- changing the directory invalidates -- but its
+        contents reach nothing, so changing them does not. That is a stale hit on every
+        translation unit, of the kind ARCH-001 §9 calls confidently wrong output.
+
+        Checked rather than assumed, because the hazard is usually not live. The reason to
+        set the override at all is a libclang that cannot find its own builtin headers, and
+        what it is then pointed at is normally the directory the version-matched scanner
+        resolves for itself -- on this host `/usr/lib/clang/18` and
+        `/usr/lib/llvm-18/lib/clang/18` are one directory through a symlink, and `_relative`
+        resolves both spellings to the same file. Where that holds, the closure *names*
+        those headers and they are content-hashed like any other member, so a key component
+        covering the directory a second time would defend an already-defended hazard at the
+        cost of a mass invalidation (STATUS §8). The answer is therefore neither a wider key
+        nor a blanket refusal: look at what the closure already covers, and decline only the
+        case that escapes it.
+
+        A build whose sources reach no builtin header at all also has nothing under the
+        override in any closure, and is declined as well. That is a synthetic project rather
+        than a C++ repository, and declining is slow where the alternative is wrong.
+        """
+        resource_dir = self.toolchain.resource_dir
+        if resource_dir is None:
+            return "", ""
+        prefix = _resolved(resource_dir).as_posix() + "/"
+        for closure in self.closures.values():
+            for path in closure:
+                # `_relative` is repo-relative under the token for repository files and the
+                # resolved absolute path for everything else, so this compares like with
+                # like and a repository header can never satisfy it.
+                if self._relative(path).startswith(prefix):
+                    return "", ""
+        return (
+            f"CPPSD_RESOURCE_DIR is {resource_dir} and no file under it appears in any "
+            f"include closure, so {SCAN_DEPS_NAME} -- which scans the compile database's "
+            f"own command and never sees -resource-dir -- did not report the builtin "
+            f"headers this parse actually reads. They would be keyed by path, not content",
+            f"Unset CPPSD_RESOURCE_DIR, or point it at the resource directory "
+            f"{SCAN_DEPS_NAME} resolves for itself, to restore the cache.",
+        )
 
     # -- keys ------------------------------------------------------------------
 
@@ -804,11 +887,14 @@ class TuCache:
         """
         notes: list[str] = []
         if self.disabled:
+            remedy = self.remedy or (
+                f"Install the LLVM tools package matching {self.toolchain.id} "
+                f"(Debian/Ubuntu: llvm-<version>-tools, which is where {SCAN_DEPS_NAME} "
+                f"lives) to restore it."
+            )
             notes.append(
                 f"per-TU cache disabled: {self.disabled}. Every translation unit was "
-                f"parsed from source. Install the LLVM tools package matching "
-                f"{self.toolchain.id} (Debian/Ubuntu: llvm-<version>-tools, which is where "
-                f"{SCAN_DEPS_NAME} lives) to restore it."
+                f"parsed from source. {remedy}"
             )
             return notes
 
@@ -824,12 +910,22 @@ class TuCache:
         # invalidates every TU that includes it and degrades to a full rebuild, and that
         # "must be reported as such rather than silently taking ten minutes".
         if self.stats.stale >= 5 and self.stats.stale > self.stats.hits:
+            # Timed, not quoted. This note is read as the explanation of why a run was
+            # slow, and the constant it used to carry ("~2.6 s per translation unit") was
+            # measured on one host at one worker count, was right when it was written, and
+            # went stale without anyone editing the line -- the same failure as a workflow
+            # that asserts a fact in prose. The clock is in hand: the cache is constructed
+            # once per model and `notes()` is read after the last partial (`build._noting`),
+            # so the interval is exactly this build's production. A reader gets what this
+            # run cost, on this machine, at whatever worker count it actually used.
+            elapsed = time.monotonic() - self.opened
             notes.append(
                 f"{self.stats.stale} of {self.stats.known} cached translation units were "
-                f"invalidated and reparsed, so this build cost close to a cold one at "
-                f"~2.6 s per translation unit. The usual cause is a change to a "
-                f"widely-included header, which invalidates every TU that includes it "
-                f"(ARCH-001 §9)"
+                f"invalidated and reparsed, so this build cost close to a cold one: "
+                f"{elapsed:.1f} s to produce its partial models, "
+                f"{elapsed / self.stats.parsed:.1f} s per translation unit parsed. The "
+                f"usual cause is a change to a widely-included header, which invalidates "
+                f"every TU that includes it (ARCH-001 §9)"
             )
 
         if self.stats.unreadable_deps:

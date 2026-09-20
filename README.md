@@ -99,14 +99,16 @@ consumer of it, and any incompleteness in either model is stated before the even
 
 A review touching ≤ 20 translation units completes in under 30 s on a warm cache; a cold `fmt`
 model is ~25 s across 8 workers. The first run against a new base pays for it and every later
-review against that base does not.
+review against that base does not. `diff --workers N` (`-j N`) sets how many parser processes
+that is for one run; `$CPPSD_WORKERS` sets it for every run, and the flag wins where both are
+given.
 
 | Environment variable | Effect |
 |---|---|
 | `CPPSD_LIBCLANG` | Use this library instead of discovering one |
-| `CPPSD_RESOURCE_DIR` | Override the clang resource directory |
+| `CPPSD_RESOURCE_DIR` | Override the clang resource directory. An escape hatch: it turns the per-TU cache off unless the include closure already covers the directory |
 | `CPPSD_SCAN_DEPS` | Use this `clang-scan-deps` instead of discovering one |
-| `CPPSD_WORKERS` | Parser processes (default: cores, capped at 8). `1` takes the serial path |
+| `CPPSD_WORKERS` | Parser processes when `--workers` is absent (default: cores, capped at 8). `1` takes the serial path |
 | `CPPSD_CACHE_DIR` | Where worktrees and cached models live (default: `$XDG_CACHE_HOME`) |
 | `CPPSD_FIXTURE_ROOT` | Where the test fixture clones live (default: `~/fixtures`) |
 

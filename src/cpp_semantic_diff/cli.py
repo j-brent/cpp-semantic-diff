@@ -259,6 +259,17 @@ def diff(
         bool,
         typer.Option("--no-cache", help="Reparse every TU. What a cold measurement needs."),
     ] = False,
+    workers: Annotated[
+        int | None,
+        typer.Option(
+            "--workers",
+            "-j",
+            help=(
+                "Parser processes. Default: $CPPSD_WORKERS, else this machine's cores "
+                "capped at 8. 1 parses in this process, which is the serial path."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Diff the semantic models at two revisions -- the whole pipeline (ARCH-001 §3).
 
@@ -314,7 +325,12 @@ def diff(
             ):
                 status.print(f"[dim]building {label} model[/] {len(co.cpp_entries)} TUs")
                 t = time.perf_counter()
-                models[label] = build_model(co, toolchain=toolchain, cache=cache)
+                # `workers` is passed through as `None` when the flag is absent, never as
+                # a count computed here. `produce.parallel.worker_count` is the one place
+                # that resolves flag > $CPPSD_WORKERS > what this machine can run, and a
+                # default filled in at this layer would shadow the environment variable
+                # for every run -- two mechanisms for one knob, disagreeing silently.
+                models[label] = build_model(co, toolchain=toolchain, cache=cache, workers=workers)
                 setattr(timings, slot, time.perf_counter() - t)
             base_model, head_model = models["base"], models["head"]
     except PreconditionError as error:

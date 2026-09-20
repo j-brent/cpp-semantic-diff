@@ -316,6 +316,14 @@ class Toolchain:
         hashed by `_producer_code_digest`. A second, coarser statement of a fact the key
         already holds by content adds no detection and one more thing to keep true.
 
+        The builtin-header half of that is true because the scanner resolves the same
+        resource directory this library does, which `CPPSD_RESOURCE_DIR` can break: the
+        scanner runs the compile database's own command and never sees the `-resource-dir`
+        `parse_args` adds below. Putting the override in this identity would not fix it --
+        it is a host path, which the paragraph below refuses for `resource_dir`
+        specifically -- so the cache checks the closure instead and declines to store
+        anything when the override is not in it (`TuCache._uncovered_resource_dir`).
+
         `resource_dir` in particular must not appear here as a path. ARCH-001 §12.2 makes
         this value something two *hosts* compare, and a path would make two genuinely
         equivalent toolchains hard-fail on where their distribution puts things -- breaking
@@ -384,6 +392,10 @@ def load() -> Toolchain:
 
     # An explicit resource dir is an escape hatch, not a fallback: the probe below runs
     # either way, so a truncating toolchain cannot slip through by taking this branch.
+    # It has one cost beyond this module: `clang-scan-deps` builds cache keys from the
+    # compile database's command and never sees this flag, so an override the include
+    # closure does not already name turns the per-TU cache off rather than key builtin
+    # headers by path (`produce/cache.py`, STATUS §6 and §8).
     override = os.environ.get("CPPSD_RESOURCE_DIR")
     resource_dir = Path(override) if override else None
 

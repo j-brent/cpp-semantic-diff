@@ -22,6 +22,7 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import re
 import time
 from collections.abc import Sequence
 from dataclasses import replace
@@ -528,6 +529,71 @@ class TestDecliningToCache:
         assert cache.stats.uncacheable == 1
 
 
+class TestAnOverriddenResourceDirIsCoveredOrDeclined:
+    """`CPPSD_RESOURCE_DIR` changes what the parser reads and not what the scanner scans.
+
+    `clang-scan-deps` is given the compile database's own command, which carries no
+    `-resource-dir`, so the closure describes the resource directory *it* resolved. The
+    override's path is a parse argument and reaches the identity; its contents reach
+    nothing. Whether that is a stale hit waiting to happen depends entirely on whether the
+    two directories are the same one, so the cache asks rather than assumes -- the two
+    tests below are the two answers, and getting the first one wrong is silent.
+    """
+
+    def test_a_resource_dir_outside_every_closure_disables_the_cache(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The builtin headers this parse reads would be keyed by path, so nothing is
+        stored. A key that names a directory instead of hashing it invalidates when the
+        override is pointed somewhere else and hits after the directory's contents change
+        -- and the contents are what the parse reads (ARCH-001 §9; STATUS §8, declining to
+        cache beats a weaker key)."""
+        # A second resource directory, holding what this build's TUs need of one. Its
+        # contents are irrelevant to the claim and its *path* is the whole point: the
+        # hazard is builtin headers that the scanner never reported, whether or not they
+        # happen to say the same thing as the ones it did.
+        unscanned = tmp_path / "resource-dir" / "include"
+        unscanned.mkdir(parents=True)
+        (unscanned / "stddef.h").write_text(
+            "typedef unsigned long size_t;\ntypedef long ptrdiff_t;\n", encoding="utf-8"
+        )
+        (unscanned / "stdarg.h").write_text("\n", encoding="utf-8")
+
+        checkout = project(tmp_path / "w", SHARED, ("a.cpp", "b.cpp"))
+        model, cache = build(checkout, replace(toolchain, resource_dir=unscanned.parent), tmp_path)
+
+        assert cache.disabled and "CPPSD_RESOURCE_DIR" in cache.disabled
+        assert not list(store(tmp_path).rglob("*.json.gz")), "keyed on a path, not content"
+        assert any("CPPSD_RESOURCE_DIR" in note for note in model.completeness.notes)
+        # Slow, not wrong: the model is the one a full parse produces.
+        assert _named(model, "app::twice")
+
+    def test_the_resource_dir_the_closure_already_names_is_cached_as_usual(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The other half of the same rule, and the reason the check is a check.
+
+        The ordinary use of the override is a libclang that cannot find its own builtin
+        headers being pointed at the ones the matching `clang-scan-deps` uses. Those
+        headers are then closure members like any other and are content-hashed already, so
+        refusing to cache -- or adding the directory to the key a second time -- would
+        spend a full reparse defending a hazard the key already defends (STATUS §8)."""
+        sources = {"a.cpp": "#include <cstddef>\nstd::size_t width() { return sizeof(int); }\n"}
+        checkout = project(tmp_path / "w", sources, ("a.cpp",))
+        scanned = _scanner_resource_dir(TuCache.open(checkout, toolchain=toolchain))
+        if scanned is None:  # pragma: no cover - depends on the host's header layout
+            pytest.skip("no resource-directory header in the include closure to point at")
+
+        covered = replace(toolchain, resource_dir=scanned)
+        model, cache = build(checkout, covered, tmp_path)
+        assert not cache.disabled
+        assert cache.stats.stored == 1
+
+        warm, cache = build(checkout, covered, tmp_path)
+        assert cache.stats.hits == 1
+        assert warm.fingerprint() == model.fingerprint()
+
+
 class TestThePathologicalCaseIsReported:
     def test_a_widely_included_header_says_that_it_rebuilt_everything(
         self, tmp_path: Path, toolchain: Toolchain
@@ -569,6 +635,35 @@ class TestThePathologicalCaseIsReported:
 
         assert cache.stats.stale == 1 and cache.stats.hits == 5
         assert not any("invalidated" in note for note in model.completeness.notes)
+
+    def test_the_cost_it_quotes_is_measured_on_this_build(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The note is read as the explanation of why a run was slow, so the cost in it has
+        to be this run's.
+
+        It used to quote a constant. The constant was measured on one host at one worker
+        count, was true when it was written, and became false without anyone editing the
+        line -- a fact asserted in prose goes stale silently, while a fact read off the
+        clock cannot. What this asserts is that the figure is a function of how long the
+        build took: the same counters over two more minutes must move the quoted cost by
+        two minutes."""
+        sources = {"wide.h": "#pragma once\nint w();\n"}
+        tus = [f"t{i}.cpp" for i in range(6)]
+        for i, name in enumerate(tus):
+            sources[name] = f'#include "wide.h"\nint f{i}() {{ return w(); }}\n'
+        checkout = project(tmp_path / "w", sources, tus)
+        build(checkout, toolchain, tmp_path)
+
+        (checkout.path / "wide.h").write_text("#pragma once\nint w();\nint extra();\n")
+        _, cache = build(checkout, toolchain, tmp_path)
+        assert cache.stats.stale == 6
+
+        quick = _quoted_seconds(cache.notes())
+        cache.opened -= 120  # the same six TUs, on a machine two minutes slower
+        slow = _quoted_seconds(cache.notes())
+
+        assert slow - quick == pytest.approx(120, abs=1), "the cost is not read off a clock"
 
 
 # -- helpers ------------------------------------------------------------------------
@@ -672,6 +767,29 @@ def _partial_dump(partial) -> dict:
         "edges": sorted(e.model_dump_json() for e in partial.edges.values()),
         "aliases": partial.aliases,
     }
+
+
+def _quoted_seconds(notes: Sequence[str]) -> float:
+    """The production cost the invalidation note reports, as a number."""
+    note = next(n for n in notes if "invalidated" in n)
+    match = re.search(r"([\d.]+) s to produce", note)
+    assert match is not None, f"the note quotes no measured cost: {note}"
+    return float(match.group(1))
+
+
+def _scanner_resource_dir(cache: TuCache) -> Path | None:
+    """The resource directory `clang-scan-deps` resolved, read out of the closure itself.
+
+    Asked of the scan rather than of a sibling binary, because the claim under test is
+    about agreement between the scanner and the parser, and `clang -print-resource-dir`
+    would answer for whichever clang is on PATH -- which is not necessarily either of them.
+    """
+    for closure in cache.closures.values():
+        for path in closure:
+            resolved = path.resolve()
+            if resolved.name == "stddef.h" and "clang" in resolved.parts:
+                return resolved.parent.parent
+    return None
 
 
 def _named(model: Model, qualified: str) -> list:
