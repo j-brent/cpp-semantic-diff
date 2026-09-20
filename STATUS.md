@@ -191,12 +191,62 @@ is public. Every `Node.tu` conclusion drawn from fmt alone rested on a sample of
 
 ## 4 · Measured performance
 
+### The model fingerprint — and a correction to what this section claimed
+
+fmt `HEAD~12` — base rev `bcaa44d05579`, 10,574 nodes, 20,958 edges — fingerprints
+**`1a6339b03c13b1d0f513220b9ad37938`** at `HEAD`. Written out in full, with the fixture, the range
+and the counts beside it, so that the next person can *check* it instead of trusting it.
+
+**Both values this section carried before were never reproducible.** It recorded `5ba8fd29041c`,
+then `5ca3843b6c1a` superseding it when `Model.fingerprint()` began hashing `Node.tu`. Measured in
+a worktree at `07ed88b` — the exact commit whose STATUS diff introduced `5ca3843b6c1a` — the same
+comparison against the same clone, same `base_sha bcaa44d05579`, same 10,574 nodes and 20,958
+edges, reads `9ab7fd9a298171b3d5c4a5690d0958ba`. The code at the moment the number was written
+produced a different number, so the error is in the writing and not in the code. Three things
+confirm that reading. `fingerprint()` has been `blake2b(digest_size=16)` since the scaffolding
+commit `b7394b9`, so it returns **32** hex characters and both recorded values are 12 — and every
+`[:12]` in this codebase truncates a *git revision* (`cli.py`, `render/terminal.py`,
+`acquire/git.py`), never a fingerprint. The fmt clone has no `FETCH_HEAD` at all — never fetched
+since it was cloned on 2026-08-01 — so the commit range did not move under the measurement. And
+the two measured values agree with each other: `826209c` is the only commit between `07ed88b` and
+`HEAD` that changes what the producer puts in a node, and a member function template becoming a
+`method` is exactly the kind of change that must move a fingerprint, since kind and attrs are
+hashed.
+
+Marked wrong rather than quietly overwritten, because a superseded number's *story* is what this
+file carries forward — and the story is the reusable part. A truncated hash with no fixture, no
+range and no counts beside it is unfalsifiable; there was nothing to check it against, so nobody
+checked it, through two sessions and one supersession that copied the shape of the mistake forward.
+
+**What this section asserts is a property of the check, not of a literal.** Two runs of one build
+must agree — 1 worker against 8, a cold cache against a warm one, in either order. A value that
+moves when the model gains content is expected and correct: `Node.tu` moved it, and so did the
+member function template fix (§6). A value that moves between two runs of the same build is the
+defect, and it is the only thing this number is for. Phrasing it as "fmt reads X" inverted that —
+it made the literal the claim, which is how a wrong literal survived unnoticed while the property
+it stood for was holding the whole time. The current value was verified identical across cold/warm
+and 1/8 workers by the commit that produced it, and reproduced exactly in a separate run.
+
+The fingerprint reaches nobody. It appears in no CLI output and in no JSON field; outside
+`differ.py`'s docstring its only callers are tests and ad-hoc scripts. That is a large part of why
+a wrong value went unchallenged — contradicting it required someone to decide to compute it by
+hand. Whether it *should* surface is §7's question, not answered here.
+
+### Timing — stale, and named rather than deleted or guessed
+
 fmt, 50 TUs, WSL, 8 cores. All 22 measured builds — 1 vs 4 vs 8 workers, cold/warm, cache on/off —
-produced the same fingerprint, `5ba8fd29041c`. That value is superseded: `Model.fingerprint()`
-now hashes `Node.tu` where the USR is file-scoped, so fmt `HEAD~12` reads `5ca3843b6c1a` —
-verified identical at 1 and 8 workers, which is the property the check is for. The number changing
-when the model gains content is expected; the number changing between two runs of the same build
-would be the defect.
+agreed with one another, which is the check above passing twenty-two times; what they were recorded
+as agreeing *on* is the part that did not survive re-measurement.
+
+**The numbers below were taken on 2026-08-02 (`7dad880`) and have not been re-taken.** Six commits
+have touched `extract.py` or `ir.py` since — `93b0d04`, `3c71f8a`, `4cb9290`, `9118830`, `07ed88b`,
+`826209c` — and every one of them gives every TU a fresh `Cache.identity`, including `3c71f8a`,
+which changed two comments. That is §8's hash-the-source decision working as designed, and it means
+the store these warm rows were served from is superseded whole: "fully warm" is a state this
+machine would have to re-earn before the row could be reproduced. The extraction half has also
+gained per-cursor work in that range that nothing has timed. The *shape* is structural and is not
+in doubt — parallelism pays on invalidated TUs and not at all on the warm floor — but the absolute
+seconds describe a producer that no longer exists.
 
 | Scenario | invalidated TUs | 1 worker | 8 workers |
 |---|---|---|---|
@@ -206,10 +256,13 @@ would be the defect.
 | warm, 10 sources touched | 13 | 30.7 s | **14.2 s** |
 | warm, 20 sources touched | 24 | 55.0 s | **19.4 s** |
 
-**ARCH §9's budget — ≤ 20 TUs under 30 s warm — is met**, and at 24 invalidated TUs rather than 20,
-so the stated case has more headroom than the number shows. At one worker the same review is 55 s.
+**ARCH §9's budget — ≤ 20 TUs under 30 s warm — was met when this was taken**, and at 24
+invalidated TUs rather than 20, so the stated case had more headroom than the number shows. At one
+worker the same review took 55 s. Re-taking the 24-TU row is what would turn this back from a
+past-tense measurement into a current claim; inventing a correction for it would be the mistake the
+first half of this section is about.
 
-The residual ~6.5 s warm floor is not parallelized: ~1.3 s `clang-scan-deps` + toolchain discovery,
+The residual ~6.5 s warm floor was not parallelized: ~1.3 s `clang-scan-deps` + toolchain discovery,
 ~4.2 s key hashing and cache deserialization, ~0.6 s assembly.
 
 ---
@@ -292,6 +345,18 @@ synthetic fixtures.
   observation is made through, and it is lossy on purpose — it trades identities for names a human
   can read. So the first move on anything seen in the terminal is to read the same event in the
   JSON, which is what §8 means by the JSON being the product rather than a debug convenience.
+- **The same surface fails in the other direction too: it deletes.** The finding above is the view
+  naming the wrong stage; this is the view removing the evidence. `_subject` interpolated entity
+  labels into rich markup unescaped and `[` opens a markup tag, so an overload disambiguation that
+  was correct in the document never once reached a screen, and the identical hole in `_completeness`
+  was shortening the parse-failure detail ARCH §11.2 requires to be stated. **Absence in the
+  terminal is not evidence of absence in the product** — which is the failure ARCH §11 opens by
+  naming, arriving one stage past where §11 looks for it, in the view rather than in the analysis.
+  It is also the harder half of the pair: a wrong name provokes a defect report, a silent deletion
+  provokes nothing, and both defects sat unreported from `f6cf2a6` through every fixture run
+  since. Hence the rule the fix took: escape positionally, at every point a document string
+  enters the markup, never at the sites judged to need it — you cannot tell by looking at a
+  string whether it will lose something.
 - **`errors="replace"` is not a safe default when the string is an identity.** Two different
   undecodable paths decode to the same string, so a rename map built through `run_git` would collapse
   two renames into one entry and assert that two different files are the same file. Paths that are
@@ -325,6 +390,10 @@ the cache sweep were fixed by commits that did not touch this file, and the self
 a defect in the stage it named. A tracker drifts by omission, not by error — the fix landed, the
 line stayed — so an item here is only as current as the last commit that thought to edit it.
 
+Five more are struck this pass — the render label, member function templates, `--workers`,
+`cache.notes()` and `CPPSD_RESOURCE_DIR` — which takes PLAN-003's §B tail down to its last row, the
+exposure-endpoint decision below.
+
 - [ ] **`internal_linkage_residue` is still computed over the whole model**, vendored included —
       the last metric that does not distinguish what `rank/exposure.py` classifies. leveldb is
       52.8 % vendored by node count. `compression_ratio` and `high_risk_count` were fixed; this one
@@ -341,9 +410,10 @@ below.
       would be whichever observation ranked highest and would flip when an unrelated source joined
       the build. Under the narrow rule exactly one TU can see each entity that gets a TU, so there
       is nothing to flip. `Model.fingerprint()` hashes it under the same condition
-      `DeclaredTier.key` uses — fmt `HEAD~12` is now `5ca3843b6c1a` (§4). Re-measured on all three
-      fixtures: **every event count, high-risk count and residue identical to before**, which is
-      what "near-zero risk by construction" predicted.
+      `DeclaredTier.key` uses, so fmt `HEAD~12`'s fingerprint moved, as it had to — though the
+      literal written here for it was never reproducible, and §4 now carries the measured value in
+      place of it. Re-measured on all three fixtures: **every event count, high-risk count and
+      residue identical to before**, which is what "near-zero risk by construction" predicted.
 - [ ] **Two same-basename statics still merge into one node — a standing decision, not a backlog
       item.** `Node.tu` does *not* fix this, which the plan for that work claimed it would.
       `merge_node` keys the model on `Node.id`, which **is** the USR, so the collision happens
@@ -392,15 +462,27 @@ below.
       `…@ST>1#T@is_named_arg` — a partial specialization inheriting from its primary template.
       The edge is real, correct, and `inherits`. The defect is the display name and it moves to
       render, below, where it gets much smaller.
-- [ ] **A rendered name that is not an identity.** `DiffDocument.entity_names` disambiguates two
-      entities sharing a qualified name by appending the signature that distinguishes them, which
-      is right for overloads and does nothing for class templates: `signature` is `None` on a
-      record, so a partial specialization and its primary template print as one string and an
-      edge between them reads as a bug in the tool. Every review containing a specialization hits
-      it — fmt `HEAD~12` shows it above the fold. The fix belongs in `render/document.py`
-      (`entity_names` / `_plain_name`), not in `terminal.py`: the view asks the document for the
-      label, so the JSON's `entities[*].qualified_name` collapses identically and only the keys,
-      which are USRs, stay distinct.
+- [x] ~~**A rendered name that is not an identity.**~~ `entity_names` now disambiguates with a
+      ladder — signature, template role, location, USR — taking the first discriminator that
+      separates *every* member of an ambiguous group, so a group is annotated uniformly or not by
+      that rule at all. No rung reads iteration order or a list index, which is the property that
+      matters: a label that varied between two runs of one comparison would be a worse defect than
+      the one being fixed. The template role is read off the USR because `kind` cannot see it — the
+      extractor maps `CLASS_TEMPLATE` and `CLASS_TEMPLATE_PARTIAL_SPECIALIZATION` both to the tag
+      kind — and the pattern is anchored at the end of the string, because a template argument can
+      itself be a USR and an unanchored read would report the argument's kind as the entity's.
+      **The item grew a second defect on the way out, and the second is why the first was never
+      visible.** `_subject` interpolated the label into rich markup unescaped, and `[` opens a
+      markup tag, so `f [void (int)]` has printed as `f` since the bracketing was written — **the
+      overload disambiguation had never once reached a terminal**, on any review, in any fixture.
+      The same hole in `_completeness` was deleting part of the reason a model is incomplete
+      (`[[nodiscard]]` rendering as `[]`), which is what ARCH §11.2 requires to be shown.
+      `git log -S` puts both defects in `f6cf2a6`, the commit that introduced the bracketing:
+      neither is a regression, they shipped broken together. The escape is positional and the
+      whole file was
+      swept rather than the two known sites — no string read off the document reaches the markup
+      parser — because you cannot tell by looking at a string whether it will lose something. §5
+      carries the general form.
 - [x] ~~**Superseded cache identities are never reclaimed.**~~ `cppsd cache gc [--older-than N]
       [--dry-run]`, with `cppsd cache status` as the command that makes the number checkable
       before it is acted on. The hole was structural rather than a leak: `_evict` keeps the newest
@@ -421,19 +503,64 @@ below.
         *is*, which would make cleaning the cache require a repository to clean it against. Age
         needs neither and collects the same directories one generation later, so a superseded
         generation survives until nothing has touched it for `--older-than` days.
-- [ ] `CPPSD_RESOURCE_DIR` is keyed by path, not content: `clang-scan-deps` runs the compile-database
-      command without our `-resource-dir`, so the closure reports the *default* resource dir's
-      headers. Changing the directory invalidates; changing its contents does not. Escape-hatch only.
+- [x] ~~`CPPSD_RESOURCE_DIR` is keyed by path, not content.~~ **Resolved narrower than the item
+      claimed, and no key was widened.** `clang-scan-deps` does run the compile-database command
+      without our `-resource-dir` — but on an ordinary host the directory it resolves for itself is
+      the one the override names: here `/usr/lib/clang/18` and `/usr/lib/llvm-18/lib/clang/18` are
+      one directory through a symlink, the same inodes, and `_relative` resolves both spellings to
+      the same file. Where that holds, every builtin header the parse reads is already
+      content-hashed as a closure member, and a key component covering the directory a second time
+      would defend an already-defended hazard at the price of a mass invalidation. That is §8's
+      "check what the whole key already covers before widening an identity" holding literally, on
+      the second hazard in a row. What escapes is a resource directory from a *different*
+      installation than the scanner's — and there the cache declines to store rather than key
+      builtin headers by path, which is §8 again from the other side. Checked rather than assumed:
+      `_uncovered_resource_dir` asks whether any closure names a file under the override, which is
+      exactly the difference between the two cases, and it returns immediately when the variable is
+      unset.
 - [ ] Worker startup is ~0.6 s each, of which the probe is 24 ms — the rest is
       `candidate_libraries()` re-running `llvm-config`/`ldconfig` that the parent already ran.
-      Wants a `Toolchain.adopt(library, expected_id)`. The same cost makes `tests/test_toolchain.py`
-      take 140 s of the suite's ~100 s wall — one fix covers both.
-- [ ] `cli.py` has no `--workers` flag, though `build_model(workers=...)` and `$CPPSD_WORKERS` are
-      live.
-- [ ] `cache.notes()` quotes a stale per-TU cost (~2.6 s; now ~1.5–2.0 s serial, ~0.5 s parallel).
-- [ ] Member function templates are classified `function`, not `method`, losing `explicit` with no
-      other representation — 414 on fmt. Both models omit it identically, so it does not corrupt a
-      diff; it corrupts rendering and any kind-keyed logic.
+      Wants a `Toolchain.adopt(library, expected_id)`. **The second half of this item was a
+      wrong number and is withdrawn**: it claimed the same cost made `tests/test_toolchain.py`
+      "take 140 s of the suite's ~100 s wall", which does not parse — the suite is serial, there
+      is no `xdist` in `pyproject.toml` — and measured today that file runs **22 tests in 6.3 s**
+      against a full suite of 509 in 145 s. So this is worth doing for the producer and not for
+      the suite, and the "one fix covers both" argument for prioritising it is gone. Third wrong
+      literal found in this file in one pass (§4 has the other two); the pattern is a number
+      written from an impression rather than from a run.
+- [x] ~~`cli.py` has no `--workers` flag, though `build_model(workers=...)` and `$CPPSD_WORKERS`
+      are live.~~ `--workers` / `-j` on `diff`, the only command that builds a model. Passed through
+      as `None` when the flag is absent rather than as a count resolved in the CLI, so
+      `produce.parallel.worker_count` stays the single place that orders flag > `$CPPSD_WORKERS` >
+      cores — a default filled in at the CLI layer would shadow the environment variable on every
+      run.
+- [x] ~~`cache.notes()` quotes a stale per-TU cost (~2.6 s).~~ It measures rather than restates:
+      the cache is constructed once per model and `notes()` is read after the last partial, so
+      `time.monotonic()` across that window is this build's own production time. Divided by the TUs
+      actually parsed, not by the invalidated ones alone, which would report several times the real
+      cost on a mostly-cold build. No fresher constant replaced the old one, because the next
+      constant goes stale the same way — the same ~2.6 s figure was also sitting in the module
+      docstring, which is the part worth keeping: a number asserted in prose has no owner and no
+      expiry, so one measurement had drifted in two places at once.
+- [x] ~~Member function templates are classified `function`, not `method`, losing `explicit` with
+      no other representation — 414 on fmt.~~ Clang files a template under `FUNCTION_TEMPLATE`
+      whether its semantic parent is a namespace or a class, so a mapping keyed on the cursor kind
+      cannot tell `fmt::format` from `basic_memory_buffer::append`. Membership is a property of the
+      scope and is now read off the scope — the **semantic** parent, never the
+      lexical one, and a friend function template is the case that decides it: it is written inside
+      a class body and is not a member of it, and clang reports the class as its lexical parent and
+      the enclosing namespace as its semantic one. 414 fmt nodes and 163 spdlog nodes changed class.
+      The finding is that `explicit` needed no work of its own: the `clang_CXXMethod_*` predicates
+      unwrap a `FunctionTemplateDecl` to the function it templates, so they had always answered
+      correctly on these cursors, and the value was being discarded solely because `_attributes`
+      keys on the node kind and `function` carries nothing that could hold it. Fixing the kind was
+      the whole fix — 23 fmt and 2 spdlog nodes now carry `explicit` that carried nothing before.
+      Measured before and after on one clone in one session: every event id, the kind histogram, the
+      ranking order and all of events / high-risk / top-level / components / matched / residue
+      identical on both fixtures, the only change in either document being `entities[*].kind`.
+      Nothing in the codebase treats the two kinds differently — `rank/graph.py`'s container set is
+      the only NodeKind-keyed rule and `diff/` never compares node kind — so a kind change cannot
+      produce an event.
 - [x] ~~`signature` is `-std`-dependent and nothing says so.~~ `Completeness.language_modes` now
       carries the `-std=` values each side was parsed at, and the view says so in yellow when the
       two differ. The dependence is unchanged and unfixable — `noexcept` is part of the function
@@ -457,9 +584,25 @@ below.
   product. The JSON-first contract defers the decision without prejudging it.
 - **Unnamed (not anonymous) records have an unstable USR** — file basename plus a byte offset that
   moves on any edit above the record. A tier-1 hazard. Neither fixture has one.
-- **ARCH §6.3's cause table is missing a row.** `call-moved-to-another-overload` was found by
-  running the tool, not by reading the design, and it is the rule that carries the largest cascade
-  measured so far. §6.3 should name it, or state why the four uncited rules stay uncited.
+- ~~**ARCH §6.3's cause table is missing a row.**~~ **Answered, and the table is now closed.**
+  §6.3 names `call-moved-to-another-overload` with where it came from stated in place, says that it
+  is the whole table, that the rows are `CAUSE_RULES` in `classify/rules.py` and its Status column
+  is `RuleStatus`, and that order is part of the table — the first rule to find a cause wins, which
+  matters now that two rules share `EdgeRemoved`. The question underneath it, whether a design
+  document should list every rule the implementation happens to have, was answered yes for reasons
+  specific to this table: a cause link is what render hides an event under, so a rule living only in
+  the code is a reviewer's change disappearing for a reason the design cannot be read to explain.
+  Two rows were also drifting from the code and were corrected against it — `rename-retargets-edges`
+  is `UNREACHABLE` rather than "dead", and the signature rule is spelled
+  `signature-change-breaks-callers`.
+- **Should the model fingerprint surface anywhere a reader can see it?** It is in no CLI output and
+  no JSON field; outside `differ.py`'s docstring its only callers are tests and ad-hoc scripts,
+  which is a large part of how §4 carried two unreproducible values across two sessions. In the JSON
+  it would let two runs be compared without re-running the tool, which is ARCH §12's reproducibility
+  claim made checkable from outside. Against: it is an internal content hash with no meaning to a
+  reviewer, and publishing it in the document makes it a contract that every future change to what
+  `fingerprint()` hashes then breaks. Left open deliberately — §4's correction is an argument for
+  making the number checkable, not yet an argument for where.
 - **Should `rank/exposure.py` key on `Node.tu`?** Its docstring said it could not, because the
   producer never populated the field; that stopped being true (§6) and the docstring has been
   corrected, which leaves the actual question unasked rather than answered. `tu` is set only where
