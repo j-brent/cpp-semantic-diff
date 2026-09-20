@@ -54,7 +54,7 @@ leveldb HEAD~9..~1 45 lines changed  →   6 semantic events, 3 high-risk   (7.5
 
 leveldb HEAD~10   52 lines changed   → 134 semantic events, 5 high-risk
                   3,660 more in bundled dependencies (96 %), ranked last
-                  11 top-level · 142 components · first vendored event at rank 112
+                  11 first-party top-level · 142 components · first vendored at rank 135
 ```
 
 **The leveldb row is what a third fixture was for.** The commit bumps `third_party/googletest` and
@@ -67,11 +67,24 @@ event is `DBImpl::TEST_CompactMemTable` — which is what the commit says it doe
 |---|---|---|
 | vendored in top 12 | 12 | **0** |
 | vendored in top 50 | 44 | **0** |
-| rank of first vendored event | 1 | **112** |
+| rank of first vendored event | 1 | **135** |
 
 Neither original fixture could show it: they vendor googletest as a static copy that never differs
 between two revisions of the host, so vendored event counts were always near zero. It takes a
 dependency that moves as a unit.
+
+**That last row is arithmetic rather than a measurement, which is why it went stale.** The partition
+sorts every non-VENDORED score ahead of every VENDORED one (`ranker.py`), so the first vendored rank
+*is* the first-party event count plus one. It was written as 112 when that count was 111; the count
+is 134 today, so the number is 135. Stated as the relationship it could not have drifted — a literal
+another number in the same file determines is a literal that will be wrong later — the same species
+as the ones §4 and §6 withdrew. The other two rows are measured and still hold.
+
+**"top-level" in this section counts first-party events; the JSON's field does not.**
+`summary.top_level_events` counts every event with no `caused_by`, vendored included — **1,039** on
+leveldb `HEAD~10`, against the 11 above. Both numbers are correct and they are not the same
+measurement; said without the qualifier, a reader checking this file against a document finds a
+hundredfold discrepancy and no way to tell which side is wrong.
 
 **The ratio no longer straddles.** It was 0.0 lines per event, dividing a first-party denominator by
 a whole-world numerator. The denominator was never wrong — git renders a submodule bump as the two
@@ -358,9 +371,9 @@ synthetic fixtures.
   enters the markup, never at the sites judged to need it — you cannot tell by looking at a
   string whether it will lose something.
 - **`errors="replace"` is not a safe default when the string is an identity.** Two different
-  undecodable paths decode to the same string, so a rename map built through `run_git` would collapse
-  two renames into one entry and assert that two different files are the same file. Paths that are
-  identity are decoded with `surrogateescape`, the way `os` decodes filenames.
+  undecodable paths decode to the same string, so a rename map built through `run_git` would
+  collapse two renames into one entry and assert that two different files are the same file.
+  Paths that are identity are decoded with `surrogateescape`, the way `os` decodes filenames.
 
 ---
 
@@ -383,16 +396,19 @@ clang spells them `…@Ua`. `internal_linkage_residue` is 0 on most real renames
 as a smoke test; a fixture commit has to be chosen by first checking the renamed file for a
 namespace-scope `static` or an anonymous namespace.
 
-The first two are what the leveldb row in §2 is made of, and they are the most serious open items.
+Two more are not below at all — exposure losing to blast radius, and a compression denominator
+blind to submodule content — because when they were fixed they became §2's leveldb prose. A sentence
+here went on calling them "the most serious open items" through seven later commits that edited
+this file, which is the drift the paragraph below names, caught on this file by this file.
 
 Three more are closed below that were listed open until now: the `merge_edge` attribute merge and
 the cache sweep were fixed by commits that did not touch this file, and the self-edge item was never
 a defect in the stage it named. A tracker drifts by omission, not by error — the fix landed, the
 line stayed — so an item here is only as current as the last commit that thought to edit it.
 
-Five more are struck this pass — the render label, member function templates, `--workers`,
-`cache.notes()` and `CPPSD_RESOURCE_DIR` — which takes PLAN-003's §B tail down to its last row, the
-exposure-endpoint decision below.
+Five more were struck last pass — the render label, member function templates, `--workers`,
+`cache.notes()` and `CPPSD_RESOURCE_DIR` — and the exposure-endpoint decision below was the last row
+of PLAN-003's §B, so that tail is empty: all seven of its items are committed.
 
 - [ ] **`internal_linkage_residue` is still computed over the whole model**, vendored included —
       the last metric that does not distinguish what `rank/exposure.py` classifies. leveldb is
@@ -433,12 +449,46 @@ below.
       that actually caused it is: a dependency adds an overload and every call site moves to it,
       leaving the old overload declared but uncalled. `call-moved-to-another-overload` links those
       to the `EdgeAdded`, which chains to the new overload's `NodeAdded`. leveldb `HEAD~10`:
-      **39 top-level → 11**, and fmt and spdlog unchanged to the digit, which is the check that it
-      did not over-link. A call genuinely dropped between two survivors still has no cause and is
-      still shown — that is the design (`test_classify.py`), not a gap.
-- [ ] **Exposure takes the max over both edge endpoints** while blast radius and decomposition now
-      take the source. Contained by the cause bound today, but an `EdgeAdded` from test code into
-      public API with *no* cause link is still scored as public. Decide it deliberately.
+      **39 first-party top-level → 11**, and fmt and spdlog unchanged to the digit, which is the
+      check that it did not over-link. A call genuinely dropped between two survivors still has no
+      cause and is still shown — that is the design (`test_classify.py`), not a gap.
+- [x] ~~**Exposure takes the max over both edge endpoints** while blast radius and decomposition
+      now take the source.~~ **Decided: the max is kept.** No behaviour changed; the reasoning is
+      in `rank/score.py` and two tests in `tests/test_rank.py` fail if someone makes exposure
+      follow `subject_home`. The distinction is what the two questions are: `subject_home` answers
+      *attribution* — whose text changed, whose behaviour changed, what is coupled — and the source
+      is right for all three, while ARCH-001 §7 asks exposure whether the subject is reachable from
+      a public header, which is a property of the *pair* an edge names. Measured on all three
+      fixtures rather than argued: spdlog `HEAD~30` (9 edge events) and leveldb `HEAD~10` (2,351)
+      produce **field-for-field identical documents** under both rules — not one event changes
+      class, score, rank, component or high-risk status — because all 116 of leveldb's edge events
+      that cross the vendored boundary cross *into* vendored (114 `test → vendored`, 2
+      `public → vendored`), where the source is already the more exposed end and the two rules
+      agree by construction. fmt `HEAD~12` holds the only two divergences and they argue for the
+      max: both are `contains` edges putting the commit's two new partial specializations
+      (`is_named_arg`, `is_static_named_arg`, declared in `include/fmt/base.h`) into
+      `namespace fmt::v12::detail`, and a `contains` edge's source is the *container* — a deduped
+      namespace node carrying one arbitrary location, here `test/scan.h`, which is precisely the
+      instability `exposure.py`'s docstring says it will not rely on. Source-only relabels them
+      PUBLIC→TEST and drops them from ranks 5–6 to 9–10, below four test-code removals, while the
+      `NodeAdded` they belong to stays PUBLIC at ranks 1–2: one change split across the demotion on
+      the strength of which header last reopened a namespace.
+      **Two claims in the item as written were wrong, and the correction is the part worth
+      keeping.** "Contained by the cause bound" is false — both divergences carry
+      `bounded_by: null` and the bound never fires. What actually happens is that the cause
+      (`NodeAdded`, 0.7176) already outscores the edge (0.5708), so the discrepancy is invisible
+      against its own cause and visible only against unrelated churn; "contained" named a mechanism
+      that was not operating. And the item's hypothetical — test code reaching into public API,
+      with source-only as the safe reading — is the mirror image of the only shape that occurs,
+      where source-only is the *unsafe* reading. Across all three fixtures, **zero** edge events
+      are scored on their non-source endpoint *and* have no cause link, and no endpoint was
+      unresolved on any fixture.
+      What is *not* guarded: the max cannot pull a first-party event into the vendored block §2
+      measures, but the reverse is open — an `EdgeAdded(gtest_helper → leveldb::Status)` would
+      score PUBLIC and escape the partition on the strength of an endpoint its source did not
+      write. Zero instances exist across the fixtures, so it is named in `score.py`'s docstring
+      with the trigger to revisit — a divergence whose source is VENDORED — rather than guarded
+      speculatively.
 - [ ] **No cause rule links `NodeAttrChanged(virtual)` to the `EdgeAttrChanged` on every call edge
       into it.** A method gaining `virtual` with N callers is N+1 top-level events.
 - [x] ~~**`merge_edge` merges edge attrs with `setdefault`**~~ — the merge now takes the
@@ -615,8 +665,8 @@ below.
   path convention is undecided; no exposure logic was changed.
 - **`diff.renameLimit` can silently truncate the rename map.** Git skips *inexact* rename detection
   on large diffs and says so on stderr, which `run_git` discards on success — so the map would be
-  incomplete with no signal, exactly the ARCH §11 case that wants the limit stated. `-l0` removes the
-  cap but is potentially quadratic on the large refactor where it matters. Neither answer is
+  incomplete with no signal, exactly the ARCH §11 case that wants the limit stated. `-l0` removes
+  the cap but is potentially quadratic on the large refactor where it matters. Neither answer is
   obviously right, and the fixtures are too small to force the choice.
 
 ---
