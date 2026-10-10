@@ -569,18 +569,18 @@ class TestTheRuleTableIsExplicit:
     def test_every_rule_says_where_it_comes_from(self) -> None:
         for rule in CAUSE_RULES:
             assert rule.note, f"{rule.name} has no rationale"
-            assert rule.arch or rule.status is RuleStatus.ACTIVE, (
-                f"{rule.name} cites no ARCH section and is not an active pipeline fact"
-            )
+            assert rule.arch, f"{rule.name} cites no ARCH section"
 
     def test_only_the_dormant_and_unreachable_rows_cannot_fire(self) -> None:
         """Two of §6.3's rows cannot fire. Both are in the table -- deleting them would lose
         the argument about why -- and every other row is reachable from the events this
         pipeline emits."""
-        statuses = [r.status for r in CAUSE_RULES]
-        assert statuses.count(RuleStatus.DORMANT) == 1
-        assert statuses.count(RuleStatus.UNREACHABLE) == 1
-        assert statuses.count(RuleStatus.ACTIVE) == len(CAUSE_RULES) - 2
+        cannot_fire = {
+            "rename-retargets-edges": RuleStatus.UNREACHABLE,
+            "signature-change-breaks-callers": RuleStatus.DORMANT,
+        }
+        for rule in CAUSE_RULES:
+            assert rule.status is cannot_fire.get(rule.name, RuleStatus.ACTIVE), rule.name
 
     def test_every_rule_cites_its_arch_row(self) -> None:
         """ADR-023: §6.3 is the whole table, so a rule that cites no row is one the design

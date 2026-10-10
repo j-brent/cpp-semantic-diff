@@ -291,7 +291,7 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     ),
     CauseRule(
         name="rename-retargets-edges",
-        arch="§6.3: NodeRenamed(F) causes every EdgeRetargeted whose endpoint is F",
+        arch="§6.3: NodeRenamed(F) causes EdgeRetargeted at F",
         cause=EventKind.NODE_RENAMED,
         consequence=EventKind.EDGE_RETARGETED,
         subjects=_renamed_endpoint_of_retarget,
