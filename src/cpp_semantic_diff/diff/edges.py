@@ -9,12 +9,11 @@ correspondence. Comparing raw ids instead would report every edge on every renam
 removed and re-added -- and once tiers 2-4 land, a single renamed function would produce
 hundreds of edge events where the correct answer is none.
 
-That has a consequence worth stating, because it contradicts a rule ARCH-001 §6.3's first draft gave
-as an example: "`NodeRenamed(F)` causes every `EdgeRetargeted` whose endpoint is F". That rule
-presumes edges keyed on raw ids, where a rename really does move 200 edges. Under
-correspondence-mapped endpoints those 200 events never exist rather than being collapsed
-under a cause, which is the better answer to the same problem -- but the cause rule in §6.3
-is then describing something this stage cannot emit. §6.3 now marks it unreachable.
+That has a consequence worth stating: ARCH-001 §6.3's rule "`NodeRenamed(F)` causes every
+`EdgeRetargeted` whose endpoint is F" can never fire. It presumes edges keyed on raw ids, where
+a rename really does move 200 edges. Under correspondence-mapped endpoints those 200 events
+never exist rather than being collapsed under a cause, which is the better answer to the same
+problem -- and it is why §6.3 marks the rule unreachable.
 
 **`EdgeRetargeted` is not emitted, and not because it is unimplemented.** It would mean:
 this base edge and that head edge are the same edge, whose destination changed from B to C.

@@ -8,8 +8,8 @@ and nothing else. That is what keeps delivery surfaces out of the analysis core,
 carry, the fix is to put it here**, never to hand the view a `Model`.
 
 §10 gives seven top-level keys and this module gives those seven, plus `scores` and
-`components`. Where §10 is a
-sketch rather than a spec, the choice made is recorded on the field:
+`components`. Where §10 is a sketch rather than a spec, the choice made is recorded on the
+field:
 
 - **`ranking`** is `[event id]` verbatim, so a consumer that only wants reading order gets
   it without parsing scores. But a view that must *explain* the order needs the factors,

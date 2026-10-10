@@ -92,15 +92,12 @@ EDGE_KINDS: frozenset[EventKind] = frozenset(
 
 DERIVED_KINDS: frozenset[EventKind] = frozenset(EventKind) - NODE_KINDS - EDGE_KINDS
 
-#: What v0 actually emits. ARCH-001 §13 lists "node add/remove/attr/body and edge
-#: add/remove/kind/attr"; its first draft said only "edge add/remove" and understated
-#: the stage: `EdgeKindChanged` and `EdgeAttrChanged` are both reachable on tier-1 input.
-#: The reason is one argument applied twice (§6.1, `diff/edges.py`) -- an edge's endpoints
-#: are identity and belong to the matcher, while its kind and its attrs are diffable state,
-#: so between two entities tier 1 has already paired, a relation that changed kind or
-#: changed `access` needs no new identity claim from this stage. Understating this made the
-#: constant a *floor* on what v0 emits rather than the description it is read as, and the
-#: test that asserts a v0 delta stays inside it was passing for the wrong reason.
+#: What v0 actually emits: ARCH-001 §13's "node add/remove/attr/body and edge
+#: add/remove/kind/attr". `EdgeKindChanged` and `EdgeAttrChanged` are reachable on tier-1
+#: input for one argument applied twice (§6.1, `diff/edges.py`) -- an edge's endpoints are
+#: identity and belong to the matcher, while its kind and its attrs are diffable state, so
+#: between two entities tier 1 has already paired, a relation that changed kind or changed
+#: `access` needs no new identity claim from this stage.
 #:
 #: What stays out is what v0 genuinely cannot reach: `NodeRenamed` and `NodeMoved` need a
 #: tier past 1 (the USR encodes name and scope, so a matched pair agrees on both by
