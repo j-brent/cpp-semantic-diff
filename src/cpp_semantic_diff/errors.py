@@ -7,9 +7,31 @@ they are raised before any analysis runs and are never caught to produce a degra
 
 from __future__ import annotations
 
+import shlex
+from enum import IntEnum
+
+
+class ExitCode(IntEnum):
+    """What `cppsd` exits with, one code per kind of failure, so a caller can branch on it.
+
+    1 is left to Python: an uncaught exception is a defect in this tool, and its traceback is
+    the report. 2 is what Click already uses for a malformed command line, so an invalid
+    setting reached through the environment shares it -- both are input the caller can fix.
+    """
+
+    OK = 0
+    INTERNAL = 1  #: an uncaught exception -- a bug in this tool
+    USAGE = 2  #: a malformed command line, option value or environment setting
+    REPOSITORY = 3  #: the repository or the revisions cannot be compared
+    BUILD = 4  #: no usable compile database at a revision
+    TOOLCHAIN = 5  #: no parser that can be trusted
+    FAILED = 6  #: an operation failed while running: git, a worker pool, writing output
+
 
 class SemanticDiffError(Exception):
     """Base for every error this package raises."""
+
+    exit_code: ExitCode = ExitCode.FAILED
 
 
 class PreconditionError(SemanticDiffError):
@@ -19,6 +41,27 @@ class PreconditionError(SemanticDiffError):
     evidence must not be presented as evidence of absence.
     """
 
+    exit_code = ExitCode.REPOSITORY
+
+
+class InvalidSettingError(PreconditionError):
+    """An option or environment value that cannot be used as given.
+
+    Refused rather than replaced with a default where the value decides the answer, because
+    running with a setting other than the one asked for is a quiet disagreement (ARCH-001 §11).
+    """
+
+    exit_code = ExitCode.USAGE
+
+
+class GitNotFoundError(PreconditionError):
+    def __init__(self) -> None:
+        super().__init__("git is not installed, or not on PATH.")
+
+
+class EmptyComparisonError(PreconditionError):
+    """Head is the merge base, so there is no second point to analyze."""
+
 
 class ShallowRepositoryError(PreconditionError):
     """No second point exists, so no two-point analysis is possible."""
@@ -26,7 +69,7 @@ class ShallowRepositoryError(PreconditionError):
     def __init__(self, repo: str) -> None:
         super().__init__(
             f"{repo} is a shallow clone, so there is no history to diff against.\n"
-            f"Fix with:  git -C {repo} fetch --unshallow"
+            f"Fix with:  git -C {shlex.quote(repo)} fetch --unshallow"
         )
 
 
@@ -54,6 +97,8 @@ class NotAGitRepositoryError(PreconditionError):
 class CompileDatabaseError(PreconditionError):
     """ARCH-001 §3.1: a compile database is required at both revisions."""
 
+    exit_code = ExitCode.BUILD
+
     def __init__(self, rev: str, path: str, detail: str) -> None:
         super().__init__(
             f"No usable compile database for {rev} (looked in {path}).\n"
@@ -65,6 +110,8 @@ class CompileDatabaseError(PreconditionError):
 
 class ConfigureError(PreconditionError):
     """The base did not configure. ARCH-001 §3.1 treats this as terminal by design."""
+
+    exit_code = ExitCode.BUILD
 
     def __init__(self, rev: str, detail: str) -> None:
         super().__init__(
@@ -80,6 +127,8 @@ class ClangToolchainError(PreconditionError):
     raising, which yields two models that agree on the same missing declarations -- an
     analysis that is confidently, invisibly wrong.
     """
+
+    exit_code = ExitCode.TOOLCHAIN
 
     def __init__(
         self,
@@ -118,6 +167,8 @@ class ToolchainMismatchError(PreconditionError):
     §11's failures are missed changes, and this one is an invented change.
     """
 
+    exit_code = ExitCode.TOOLCHAIN
+
     def __init__(self, base: str, head: str, *, differs: list[str]) -> None:
         self.base = base
         self.head = head
@@ -149,3 +200,7 @@ class GitError(SemanticDiffError):
         self.code = code
         self.stderr = stderr
         super().__init__(f"git {' '.join(argv)} failed ({code}): {stderr.strip()}")
+
+
+class OutputError(SemanticDiffError):
+    """The document was produced but could not be written where it was asked for."""
