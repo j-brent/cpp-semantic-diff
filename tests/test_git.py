@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from conftest import commit, git, require_fixture
+from cpp_semantic_diff.acquire import git as git_module
 from cpp_semantic_diff.acquire.git import (
     RENAME_SIMILARITY_ENV,
     RevPair,
@@ -15,6 +16,7 @@ from cpp_semantic_diff.acquire.git import (
     detect_default_branch,
     diff_line_count,
     file_changes,
+    is_git_repository,
     is_shallow,
     resolve_rename_similarity,
     resolve_revs,
@@ -22,6 +24,9 @@ from cpp_semantic_diff.acquire.git import (
 from cpp_semantic_diff.acquire.workspace import materialize_submodules
 from cpp_semantic_diff.errors import (
     CompileDatabaseError,
+    GitError,
+    GitNotFoundError,
+    InvalidSettingError,
     NotAGitRepositoryError,
     ShallowRepositoryError,
     UnknownRefError,
@@ -76,6 +81,16 @@ class TestPreconditions:
     def test_unknown_ref_is_rejected(self, diverged_repo: Path) -> None:
         with pytest.raises(UnknownRefError, match="no-such-branch"):
             resolve_revs(diverged_repo, base_ref="no-such-branch")
+
+    def test_a_missing_git_is_not_reported_as_a_missing_repository(
+        self, diverged_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Told "not a git repository", the user inspects a checkout that is fine."""
+        monkeypatch.setenv("PATH", str(tmp_path / "empty-bin"))
+        with pytest.raises(GitNotFoundError):
+            resolve_revs(diverged_repo)
+        with pytest.raises(GitNotFoundError):
+            is_git_repository(diverged_repo)
 
 
 class TestDefaultBranchDetection:
@@ -258,12 +273,27 @@ class TestRenamesAreResolvedFromGit:
     ) -> None:
         """Unlike `$CPPSD_WORKERS`, this one changes the answer rather than the speed."""
         monkeypatch.setenv(RENAME_SIMILARITY_ENV, "half")
-        with pytest.raises(ValueError, match="not a percentage"):
+        with pytest.raises(InvalidSettingError, match="not a percentage"):
             resolve_rename_similarity()
+
+        monkeypatch.setenv(RENAME_SIMILARITY_ENV, "0")
+        with pytest.raises(InvalidSettingError, match="percentage in 1"):
+            resolve_rename_similarity()
+        with pytest.raises(InvalidSettingError, match="percentage in 1"):
+            resolve_rename_similarity(101)
 
         monkeypatch.setenv(RENAME_SIMILARITY_ENV, "50")
         assert resolve_rename_similarity() == 50
         assert resolve_rename_similarity(90) == 90, "an explicit request outranks the environment"
+
+    def test_a_truncated_record_is_refused_not_shortened(
+        self, diverged_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A rename record missing its destination would understate what changed."""
+        revs = resolve_revs(diverged_repo)
+        monkeypatch.setattr(git_module, "run_git_z", lambda repo, *args: ["M", "a.cpp", "R100"])
+        with pytest.raises(GitError, match="mid-record"):
+            file_changes(diverged_repo, revs)
 
     def test_two_undecodable_paths_do_not_collapse_into_one(self, bare_repo: Path) -> None:
         """Why the rename query needs its own runner rather than `run_git`.

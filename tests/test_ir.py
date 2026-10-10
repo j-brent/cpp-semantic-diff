@@ -282,9 +282,11 @@ class TestGeneratorSelection:
     one. Leaving the choice to CMake is the failure; the tool has to pick.
     """
 
-    def test_picks_ninja_when_no_generator_given(self) -> None:
+    def test_picks_ninja_when_no_generator_given(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from cpp_semantic_diff.acquire.workspace import select_generator
 
+        # A generator named in the environment is a choice too, and is respected.
+        monkeypatch.delenv("CMAKE_GENERATOR", raising=False)
         assert select_generator(None) == ["-G", "Ninja"]
         assert select_generator([]) == ["-G", "Ninja"]
 
