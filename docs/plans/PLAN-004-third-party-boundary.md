@@ -78,11 +78,10 @@ list misses, so today it is modeled as spdlog's public API.
 
 **Untracked files inside the worktree.** The build directory lives inside the worktree
 (`acquire/workspace.py` configures into `<worktree>/build`). It can hold generated headers and
-FetchContent downloads (`build/_deps`). These are not contained in the repository. **Proposed:**
-only files git tracks at that revision are modeled, and everything else gets the label
-`untracked`. Step 1 measures how much of each fixture's model this affects before it is decided.
-**Measured:** no fixture has an untracked node ([step 1 report §2](../../reports/2026-10-10--plan-004-baseline/measurements.md#2--nodes-per-label)). Not
-yet decided.
+FetchContent downloads (`build/_deps`). These are not contained in the repository. **Decided**
+([ADR-037](../adr/ADR-037-only-tracked-files-are-modelled.md)): only files git tracks at that revision are modeled, and everything else gets
+the label `untracked`. No fixture has an untracked node
+([step 1 report §2](../../reports/2026-10-10--plan-004-baseline/measurements.md#2--nodes-per-label)).
 
 ### 3.2 · Refusing a changed third-party dependency
 
@@ -97,8 +96,8 @@ This runs before worktree creation so that the refusal is immediate and costs no
 ### 3.3 · Extraction
 
 `produce/extract.py` currently prunes a cursor when `_relative` returns `None` (outside the
-repository). Extend that prune to third-party paths and, if step 1 confirms it, to untracked
-files. Also:
+repository). Extend that prune to third-party paths and to untracked
+files ([ADR-037](../adr/ADR-037-only-tracked-files-are-modelled.md)). Also:
 
 - **Third-party translation units are not parsed.** Compile-database entries whose source is
   third-party are excluded in `build_model`, with a note stating the count. This mirrors how
@@ -174,6 +173,7 @@ Each step is one commit, and the suite passes after each one.
 
    Record the numbers here. Decide §3.1's untracked question from them.
    **Measured** in a [frozen report](../../reports/2026-10-10--plan-004-baseline/measurements.md), with the baseline outputs §5 compares against.
+   The untracked question is decided in [ADR-037](../adr/ADR-037-only-tracked-files-are-modelled.md).
 2. **The third-party set.** Submodule discovery, `--third-party`, the missing-path refusal and
    folder-name hints. Not wired into extraction yet. Tests use temporary git repositories, like
    `tests/test_git.py`.

@@ -8,9 +8,10 @@ so the probe below sees every cursor) and reports:
 2. edges whose target is declared in a file under the repository root but resolves to no
    node: the "unresolved in-repository callees" §3.3 claims are all compiler-generated.
 
-Fixture clones are expected at ~/fixtures/<name>. Prints one JSON object per fixture; measure.json
-is the three merged. Run from the repository root:
-  uv run python reports/2026-10-10--plan-004-baseline/measure.py fmt spdlog leveldb
+Fixture clones are expected at ~/fixtures/<name>. Prints one JSON object per fixture. Run from the
+repository root; measure.json is made with:
+  uv run python reports/2026-10-10--plan-004-baseline/measure.py leveldb spdlog fmt \
+    | jq -s add > reports/2026-10-10--plan-004-baseline/measure.json
 """
 
 from __future__ import annotations

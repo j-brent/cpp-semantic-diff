@@ -43,6 +43,11 @@ NO_COLOR=1 COLUMNS=160 uv run cppsd diff ~/fixtures/<name> --base <base> [--head
 
 The change-event counts equal the [v0 tracker](../2026-08-01--v0-build/STATUS.md) §2. The JSON's timings differ from run to run, the rest does not.
 
+**Expected difference after PLAN-004, spdlog `HEAD~30` with `--third-party include/spdlog/fmt/bundled`:**
+3 fewer change events. The three `EdgeRemoved` nested under `NodeRemoved spdlog::details::to_string_view`
+lead into bundled fmt (`basic_string_view::basic_string_view`, `buffer::size`, `buffer::data`, all in
+`include/spdlog/fmt/bundled/base.h`) and become crossings. Every other first-party change event stays.
+
 leveldb `HEAD~10` is not kept. §5 expects it to be refused, so there is nothing to compare, and
 its JSON is 7.9 MB (134 change events, 3,660 more in bundled code).
 
@@ -93,6 +98,8 @@ targets, grouped by what the declaration is:
 
 spdlog's and leveldb's head sides differ from their bases by at most three targets per row.
 Both sides of every range are in [`measure.json`](measure.json), with examples of each group.
+The probe also had a group for instantiations whose template *is* a node. It never occurs on any
+fixture, because such an edge resolves to the template.
 
 **The claim does not hold.** Implicit special members are 19 % of fmt's first-party targets.
 The rest are:
@@ -122,5 +129,6 @@ which is where clang places members it generates. "Tracked" means listed by
 `git ls-tree -r` at that revision.
 
 ```
-uv run python reports/2026-10-10--plan-004-baseline/measure.py fmt spdlog leveldb
+uv run python reports/2026-10-10--plan-004-baseline/measure.py leveldb spdlog fmt \
+  | jq -s add > reports/2026-10-10--plan-004-baseline/measure.json
 ```
