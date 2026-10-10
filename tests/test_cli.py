@@ -36,9 +36,20 @@ def _cache_in_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CPPSD_CACHE_DIR", str(tmp_path / "cppsd-cache"))
 
 
+#: An ANSI SGR sequence: bold, dim, a colour. What a message says is the contract; how a
+#: terminal is asked to style it is not.
+_ANSI_STYLE = re.compile(r"\x1b\[[0-9;]*m")
+
+
 def flat(text: str) -> str:
-    """`text` with its whitespace collapsed, since rich wraps long lines at the console width."""
-    return " ".join(text.split())
+    """`text` as plain words: styling removed and whitespace collapsed.
+
+    Both vary with the environment rather than with the code. Rich wraps long lines at the
+    console width, and Typer styles its usage errors whenever `GITHUB_ACTIONS`, `FORCE_COLOR`
+    or `PY_COLORS` is set -- even under `NO_COLOR`, which drops colour but keeps bold -- which
+    splits an option name like `--workers` across escape codes.
+    """
+    return " ".join(_ANSI_STYLE.sub("", text).split())
 
 
 def assert_reported(result: Result, code: ExitCode, *fragments: str) -> None:
