@@ -23,18 +23,16 @@ docker info >/dev/null 2>&1 || {
   exit 2
 }
 
-# The two pins, read from where they are written, so this script cannot disagree with CI.
-base=$(sed -n 's/^ *image: *\(ubuntu:[^ ]*@sha256:[0-9a-f]\{64\}\) *$/\1/p' .github/workflows/ci.yml)
+# The ubuntu digest is in the Dockerfile itself. uv's version is pinned in pyproject.toml
+# and read from there, so this script cannot disagree with CI about either.
 uv_version=$(sed -n 's/^required-version = "==\([0-9.]*\)"$/\1/p' pyproject.toml)
-[[ -n "$base" ]] || { echo "precondition: no digest-pinned ubuntu image in ci.yml" >&2; exit 2; }
 [[ -n "$uv_version" ]] || { echo "precondition: no exact uv required-version in pyproject.toml" >&2; exit 2; }
 
 image=cppsd-ci:local
 docker build --quiet \
-  --build-arg "BASE=$base" \
   --build-arg "UV_VERSION=$uv_version" \
   --tag "$image" \
-  --file scripts/ci.Dockerfile scripts >/dev/null
+  --file scripts/Dockerfile scripts >/dev/null
 
 # What a checkout of the current state would contain: tracked files and new ones git does
 # not ignore. A tracked file deleted in the working tree is skipped rather than failing tar.

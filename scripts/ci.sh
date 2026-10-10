@@ -7,7 +7,7 @@ set -euo pipefail
 #
 # Precondition:  uv on PATH; system packages from scripts/ci-deps.sh installed.
 # Arguments:     step names to run, in order; none runs every step. Steps:
-#                sync format lint mypy pyright test doctor guard
+#                pins sync format lint mypy pyright test doctor guard
 # Side effects:  `sync` creates or updates .venv. `test` writes pytest's cache. Nothing
 #                outside the repository except uv's own cache and Python downloads.
 # Postcondition: every requested step passed.
@@ -18,11 +18,29 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$SCRIPT_DIR/.." || exit 2
 
-ALL_STEPS=(sync format lint mypy pyright test doctor guard)
+ALL_STEPS=(pins sync format lint mypy pyright test doctor guard)
 
 # Log readability only. Test results do not depend on these: tests/conftest.py removes them
 # and every other ambient setting before a test runs.
 export NO_COLOR=1 COLUMNS=160
+
+# The ubuntu image is pinned twice, because each place can hold only a literal: ci.yml's
+# `container:` (what the job runs in) and scripts/Dockerfile's FROM (what Dependabot updates,
+# and what scripts/ci-local.sh builds). A Dependabot bump changes only the Dockerfile, so it
+# must fail here until ci.yml is changed to match, rather than leave CI and local apart.
+step_pins() {
+  local workflow dockerfile
+  workflow=$(sed -n 's/^ *image: *\(ubuntu:[^ ]*\) *$/\1/p' .github/workflows/ci.yml)
+  dockerfile=$(sed -n 's/^FROM *\(ubuntu:[^ ]*\) *$/\1/p' scripts/Dockerfile)
+  if [[ -z "$workflow" || "$workflow" != "$dockerfile" ]]; then
+    echo "ubuntu image pins disagree:" >&2
+    echo "  .github/workflows/ci.yml  ${workflow:-<none>}" >&2
+    echo "  scripts/Dockerfile        ${dockerfile:-<none>}" >&2
+    echo "Set both to the same digest-pinned image." >&2
+    return 1
+  fi
+  echo "$workflow"
+}
 
 step_sync() {
   # --locked: a lockfile that disagrees with pyproject.toml is a failure, not an update.

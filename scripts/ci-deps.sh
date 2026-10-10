@@ -3,7 +3,7 @@ set -euo pipefail
 
 #######################################
 # Install the system packages CI needs: the one list, used by the CI workflow, by the
-# local CI image (scripts/ci.Dockerfile) and by the demo workflow.
+# local CI image (scripts/Dockerfile) and by the demo workflow.
 #
 # Precondition:  Debian/Ubuntu with apt-get; root, or sudo available.
 # Arguments:     none.

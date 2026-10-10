@@ -15,9 +15,9 @@ jobs:
     runs-on: ubuntu-24.04
     # Inside a base image pinned by digest, not on the runner image itself. GitHub updates
     # `ubuntu-24.04` about weekly and it cannot be pinned, so its packages move under a run
-    # that has not changed; this image does not. It is also the image `scripts/ci-local.sh`
-    # builds from -- it reads the digest from this line -- so a local run and this job start
-    # from the same bytes.
+    # that has not changed; this image does not. scripts/Dockerfile, which
+    # `scripts/ci-local.sh` builds, starts from the same digest, and the `pins` step fails
+    # if the two ever differ.
     container:
       image: ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
     defaults:
@@ -38,6 +38,8 @@ jobs:
 
       # Each check is defined once, in scripts/ci.sh; these steps only name them, so the
       # job and `scripts/ci-local.sh` cannot run different commands.
+      - name: Pins agree
+        run: scripts/ci.sh pins
       - name: Sync dependencies
         run: scripts/ci.sh sync
       - name: Format

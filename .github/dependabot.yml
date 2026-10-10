@@ -1,0 +1,25 @@
+# Proposes updates to what CI pins, so a pin is a decision with a review rather than a
+# version that quietly ages. Covers the actions (by commit hash) and the ubuntu base image
+# digest in scripts/Dockerfile. It cannot reach the copy of that digest in ci.yml, uv's
+# `required-version`, or `.python-version`; `scripts/ci.sh pins` makes a Dockerfile bump
+# fail until ci.yml is changed to match.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /scripts
+    schedule:
+      interval: weekly
+    ignore:
+      # Stay on 24.04: the toolchain is LLVM 18 from 24.04's archive (scripts/ci-deps.sh),
+      # and Ubuntu's numbered tags would otherwise read as newer versions to move to. A new
+      # digest of 24.04 itself -- security updates to the same release -- still comes through.
+      - dependency-name: ubuntu
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
