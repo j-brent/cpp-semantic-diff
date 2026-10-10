@@ -8,6 +8,7 @@ other people merged while the branch was open to the branch under review.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -15,6 +16,8 @@ from pathlib import Path
 
 from cpp_semantic_diff.errors import (
     GitError,
+    GitNotFoundError,
+    InvalidSettingError,
     NoMergeBaseError,
     NotAGitRepositoryError,
     ShallowRepositoryError,
@@ -35,14 +38,28 @@ DEFAULT_RENAME_SIMILARITY = 50
 RENAME_SIMILARITY_ENV = "CPPSD_RENAME_SIMILARITY"
 
 
+def _run(argv: Sequence[str], *, errors: str = "replace") -> subprocess.CompletedProcess[str]:
+    """Run a git command, and report a missing git as exactly that.
+
+    Without the translation a missing git surfaces as `FileNotFoundError`, and the caller
+    that probes whether a directory is a repository cannot tell it from "not a repository".
+    The user is then told their checkout is not a checkout, and goes looking for the wrong
+    problem.
+    """
+    try:
+        return subprocess.run(
+            list(argv),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors=errors,
+        )
+    except FileNotFoundError as exc:
+        raise GitNotFoundError() from exc
+
+
 def _git(repo: Path, args: Sequence[str], *, check: bool, errors: str) -> str:
-    proc = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors=errors,
-    )
+    proc = _run(["git", "-C", str(repo), *args], errors=errors)
     if check and proc.returncode != 0:
         raise GitError(list(args), proc.returncode, proc.stderr)
     return proc.stdout
@@ -67,9 +84,10 @@ def run_git_z(repo: Path, *args: str) -> list[str]:
 
 
 def is_git_repository(repo: Path) -> bool:
+    """Whether `repo` is inside a work tree. A missing git raises rather than answering no."""
     try:
         return run_git(repo, "rev-parse", "--is-inside-work-tree") == "true"
-    except (GitError, FileNotFoundError):
+    except GitError:
         return False
 
 
@@ -78,11 +96,7 @@ def is_shallow(repo: Path) -> bool:
 
 
 def ref_exists(repo: Path, ref: str) -> bool:
-    proc = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
-        capture_output=True,
-        text=True,
-    )
+    proc = _run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"])
     return proc.returncode == 0
 
 
@@ -110,11 +124,7 @@ def detect_default_branch(repo: Path) -> str:
 
 
 def merge_base(repo: Path, base_ref: str, head_ref: str) -> str:
-    proc = subprocess.run(
-        ["git", "-C", str(repo), "merge-base", base_ref, head_ref],
-        capture_output=True,
-        text=True,
-    )
+    proc = _run(["git", "-C", str(repo), "merge-base", base_ref, head_ref])
     if proc.returncode != 0 or not proc.stdout.strip():
         raise NoMergeBaseError(base_ref, head_ref)
     return proc.stdout.strip()
@@ -150,6 +160,10 @@ def resolve_revs(
     Shallow clones are rejected outright: a two-point analysis with one point available is
     not a degraded analysis, it is no analysis (ARCH-001 §2).
     """
+    # Checked first and by name, so the first thing a machine without git reports is that,
+    # not a consequence of it.
+    if shutil.which("git") is None:
+        raise GitNotFoundError()
     repo = repo.resolve()
     if not is_git_repository(repo):
         raise NotAGitRepositoryError(str(repo))
@@ -179,7 +193,7 @@ def resolve_rename_similarity(requested: int | None = None) -> int:
     """
     if requested is None and (override := os.environ.get(RENAME_SIMILARITY_ENV, "").strip()):
         if not override.isdigit():
-            raise ValueError(
+            raise InvalidSettingError(
                 f"{RENAME_SIMILARITY_ENV}={override!r} is not a percentage. It decides which "
                 f"files count as renamed, so it is not guessed at."
             )
@@ -187,7 +201,9 @@ def resolve_rename_similarity(requested: int | None = None) -> int:
     if requested is None:
         return DEFAULT_RENAME_SIMILARITY
     if not 1 <= requested <= 100:
-        raise ValueError(f"rename similarity must be a percentage in 1..100, got {requested}")
+        raise InvalidSettingError(
+            f"rename similarity must be a percentage in 1..100, got {requested}"
+        )
     return requested
 
 
@@ -284,9 +300,13 @@ def file_changes(
             # A truncated record understates what changed. Refusing beats reporting a
             # smaller diff than git did -- the same reasoning as declining to cache rather
             # than serving a weak key (ARCH-001 §9).
-            raise ValueError(
-                f"git diff --name-status -z ended mid-record: {fields[i:]!r}. "
-                f"Expected {needed} fields for status {token!r}."
+            # It is git's output that cannot be read, so this is a failed run rather than a
+            # precondition the user could have met.
+            raise GitError(
+                ["diff", "--name-status", "-z"],
+                0,
+                f"output ended mid-record: {fields[i:]!r}. Expected {needed} fields for "
+                f"status {token!r}, so the list of changed files cannot be trusted.",
             )
         if wants_two:
             changes.append(

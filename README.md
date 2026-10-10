@@ -103,13 +103,23 @@ given.
 
 | Environment variable | Effect |
 |---|---|
-| `CPPSD_LIBCLANG` | Use this library instead of discovering one |
+| `CPPSD_LIBCLANG` | Use this library instead of discovering one. A path that is not a usable library is refused, never replaced |
 | `CPPSD_RESOURCE_DIR` | Override the clang resource directory. An escape hatch: it turns the per-TU cache off unless the include closure already covers the directory |
-| `CPPSD_SCAN_DEPS` | Use this `clang-scan-deps` instead of discovering one |
+| `CPPSD_SCAN_DEPS` | Use this `clang-scan-deps` (a path) instead of discovering one. If it is unusable the per-TU cache is off, and the run says why |
 | `CPPSD_WORKERS` | Parser processes when `--workers` is absent (default: cores, capped at 8). `1` takes the serial path |
-| `CPPSD_CACHE_DIR` | Where worktrees and cached models live (default: `$XDG_CACHE_HOME/cpp-semantic-diff`, else `~/.cache/cpp-semantic-diff`) |
+| `CPPSD_CACHE_DIR` | Where worktrees and cached models live (default: `$XDG_CACHE_HOME/cpp-semantic-diff`, else `~/.cache/cpp-semantic-diff`). A relative `XDG_CACHE_HOME` is ignored |
 | `CPPSD_RENAME_SIMILARITY` | Git's rename-detection threshold, a percentage (default: 50, git's own `-M` default) |
 | `CPPSD_FIXTURE_ROOT` | Where the test fixture clones live (default: `~/fixtures`) |
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Internal error: a bug in `cppsd`, reported with its traceback |
+| 2 | Bad command line, option value or environment setting |
+| 3 | The repository or revisions cannot be compared |
+| 4 | No usable compile database at a revision |
+| 5 | No trustworthy parser |
+| 6 | An operation failed while running: git, a worker pool, writing output |
 
 Development conventions are in [`CONTRIBUTING.md`](CONTRIBUTING.md). Tests marked
 `fixtures` need real clones under `CPPSD_FIXTURE_ROOT`; they skip without them.

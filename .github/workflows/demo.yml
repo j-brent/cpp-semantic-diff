@@ -82,19 +82,17 @@ jobs:
       matrix:
         target: ${{ fromJSON(needs.targets.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # `libclang-common-18-dev` is the load-bearing one: it carries the builtin headers.
-      # Without them libclang returns truncated ASTs and raises nothing, and two truncated
-      # models agree with each other perfectly (ARCH-001 §11). `cppsd doctor` is what
-      # catches it, and its output is the first thing the summary prints.
+      # The same package list CI installs, from the one script that holds it. Its
+      # load-bearing entry is libclang-common-18-dev, the builtin headers: without them
+      # libclang returns truncated ASTs and raises nothing, and two truncated models agree
+      # with each other perfectly (ARCH-001 §11). `cppsd doctor` is what catches it, and its
+      # output is the first thing the summary prints.
       - name: Install toolchain
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            libclang1-18 libclang-common-18-dev llvm-18 cmake ninja-build
+        run: scripts/ci-deps.sh
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
 
@@ -292,7 +290,7 @@ jobs:
       # kept beside it so a failed run can be read without rerunning it.
       - name: Upload JSON document and rendered views
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: demo-${{ matrix.target.name }}
           path: ${{ runner.temp }}/out

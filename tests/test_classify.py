@@ -14,11 +14,13 @@ fixture clone, which is the point of the stage being a pure function (§3).
 from __future__ import annotations
 
 import itertools
+from typing import Any
 
 from cpp_semantic_diff.classify import CAUSE_RULES, RuleStatus, classify_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.match import Correspondence, Match, match_models
 from cpp_semantic_diff.model import (
+    AttrValue,
     Confidence,
     Edge,
     EdgeKind,
@@ -39,12 +41,12 @@ F = NodeId("c:@F@f#")
 G = NodeId("c:@F@g#")
 
 
-def node(usr: str, name: str = "f", **kw) -> Node:
+def node(usr: str, name: str = "f", **kw: Any) -> Node:
     defaults = {"kind": NodeKind.FUNCTION, "name": name, "qualified_name": name}
     return Node(id=NodeId(usr), **{**defaults, **kw})
 
 
-def model(rev: str, *nodes: Node, edges: list[Edge] | None = None, **kw) -> Model:
+def model(rev: str, *nodes: Node, edges: list[Edge] | None = None, **kw: Any) -> Model:
     m = Model(rev=rev, edges=edges or [], **kw)
     for n in nodes:
         m.add_node(n)
@@ -94,7 +96,7 @@ def roots_at(events: list[Event], event: Event) -> Event:
     return event
 
 
-def synthetic(kind: EventKind, subject: str, **payload) -> Event:
+def synthetic(kind: EventKind, subject: str, **payload: AttrValue) -> Event:
     """An event the pipeline cannot currently produce.
 
     The dormant and unreachable rules in the table (§6.3) have no reachable input, and the

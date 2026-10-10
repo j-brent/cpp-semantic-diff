@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -23,7 +24,7 @@ from cpp_semantic_diff.model import (
 )
 
 
-def node(id_: str, **kwargs) -> Node:
+def node(id_: str, **kwargs: Any) -> Node:
     defaults = {
         "kind": NodeKind.FUNCTION,
         "name": id_,
@@ -36,11 +37,11 @@ class TestAttributesStayScalar:
     """ARCH-001 §4.3 -- an attribute diff must stay mechanical."""
 
     @pytest.mark.parametrize("value", ["public", 3, 3.5, True, None])
-    def test_scalars_are_accepted(self, value) -> None:
+    def test_scalars_are_accepted(self, value: object) -> None:
         assert node("f", attrs={"k": value}).attrs["k"] == value
 
     @pytest.mark.parametrize("value", [{"nested": 1}, ["a"], (1, 2)])
-    def test_structures_are_rejected(self, value) -> None:
+    def test_structures_are_rejected(self, value: object) -> None:
         with pytest.raises(ValidationError, match="must be scalar"):
             node("f", attrs={"k": value})
 
@@ -282,9 +283,11 @@ class TestGeneratorSelection:
     one. Leaving the choice to CMake is the failure; the tool has to pick.
     """
 
-    def test_picks_ninja_when_no_generator_given(self) -> None:
+    def test_picks_ninja_when_no_generator_given(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from cpp_semantic_diff.acquire.workspace import select_generator
 
+        # A generator named in the environment is a choice too, and is respected.
+        monkeypatch.delenv("CMAKE_GENERATOR", raising=False)
         assert select_generator(None) == ["-G", "Ninja"]
         assert select_generator([]) == ["-G", "Ninja"]
 

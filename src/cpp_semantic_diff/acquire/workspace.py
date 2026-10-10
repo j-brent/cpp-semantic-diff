@@ -8,6 +8,7 @@ shortfall as incompleteness rather than parsing the remainder silently.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shlex
@@ -19,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from cpp_semantic_diff.acquire.git import run_git
-from cpp_semantic_diff.errors import CompileDatabaseError, ConfigureError
+from cpp_semantic_diff.errors import CompileDatabaseError, ConfigureError, GitNotFoundError
 
 #: Where a compile database usually turns up, in search order.
 COMPILE_DB_LOCATIONS = ("build/compile_commands.json", "compile_commands.json")
@@ -35,8 +36,15 @@ COMPILE_DB_GENERATORS = ("Ninja", "Ninja Multi-Config", "Unix Makefiles", "MinGW
 
 
 def select_generator(extra_args: list[str] | None) -> list[str]:
-    """Choose a generator that can emit a compile database, unless the caller picked one."""
+    """Choose a generator that can emit a compile database, unless the caller picked one.
+
+    `CMAKE_GENERATOR` in the environment counts as picking one. CMake reads it natively, and
+    an explicit `-G Ninja` from here would silently override what the user set. If their
+    choice cannot emit a compile database, `configure` says so after the run.
+    """
     if extra_args and any(a == "-G" or a.startswith("-G") for a in extra_args):
+        return []
+    if os.environ.get("CMAKE_GENERATOR"):
         return []
     if shutil.which("ninja"):
         return ["-G", "Ninja"]
@@ -67,16 +75,29 @@ def is_rooted(path: str) -> bool:
 
 
 def cache_root() -> Path:
-    """Where worktrees and cached models live.
+    """Where worktrees and cached models live. Always an absolute path.
 
     Honours `XDG_CACHE_HOME` before falling back to `~/.cache`, which is the same
     fallback the XDG spec itself defines. A user who has redirected their cache -- onto a
     bigger disk, or off a synced home directory -- means it, and this cache grows by a
     full worktree per revision.
+
+    The result must be absolute because two programs read it from two places: Python checks
+    the worktree against the process's working directory, while `git -C <repo> worktree add`
+    resolves a relative path against the repository. A relative root sends them to
+    different directories.
+
+    The two variables are made absolute differently, on purpose. A relative
+    `XDG_CACHE_HOME` is ignored, because the XDG spec says relative values are invalid and
+    must be, and other programs on the machine already treat it that way. `CPPSD_CACHE_DIR`
+    belongs to this tool alone and is usually set by hand for one run, where `./cache`
+    plainly means "here", so a relative value is resolved against the working directory
+    rather than refused.
     """
     if override := os.environ.get("CPPSD_CACHE_DIR"):
-        return Path(override)
-    if xdg := os.environ.get("XDG_CACHE_HOME"):
+        return Path(override).resolve()
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    if xdg and Path(xdg).is_absolute():
         return Path(xdg) / "cpp-semantic-diff"
     return Path.home() / ".cache" / "cpp-semantic-diff"
 
@@ -101,19 +122,51 @@ class CompileDatabase:
         return len(self.entries)
 
     @classmethod
-    def load(cls, path: Path) -> CompileDatabase:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+    def load(cls, path: Path, *, rev: str | None = None) -> CompileDatabase:
+        """Read a compile database, refusing one that does not follow the format.
+
+        `rev` only labels the error. A database is often hand-made or produced by a tool
+        other than CMake, so a malformed one is an input problem the user can fix, and it
+        is reported as one rather than as a traceback from the JSON parser.
+        """
+        label = rev or str(path)
+
+        def refuse(detail: str) -> CompileDatabaseError:
+            return CompileDatabaseError(label, str(path), detail)
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            raise refuse(f"{path.name} could not be read as JSON: {exc}") from exc
+        if not isinstance(raw, list):
+            raise refuse(f"{path.name} is not a JSON array of compile commands.")
+
         entries: list[CompileEntry] = []
-        for item in raw:
-            directory = Path(item["directory"])
-            raw_file = item["file"]
+        for index, item in enumerate(raw):
+            if not isinstance(item, dict):
+                raise refuse(f"Entry {index} is not an object.")
+            raw_directory, raw_file = item.get("directory"), item.get("file")
+            if not isinstance(raw_directory, str) or not isinstance(raw_file, str):
+                raise refuse(f"Entry {index} lacks a `directory` or `file` string.")
+            directory = Path(raw_directory)
             file = Path(raw_file) if is_rooted(raw_file) else directory / raw_file
             if "arguments" in item:
+                if not isinstance(item["arguments"], list) or not all(
+                    isinstance(a, str) for a in item["arguments"]
+                ):
+                    raise refuse(f"Entry {index} has an `arguments` that is not a string list.")
                 arguments = list(item["arguments"])
-            else:
+            elif isinstance(item.get("command"), str):
                 # The spec defines `command` as shell-quoted, and CMake writes it with
                 # POSIX quoting regardless of host.
-                arguments = shlex.split(item.get("command", ""), posix=True)
+                try:
+                    arguments = shlex.split(item["command"], posix=True)
+                except ValueError as exc:
+                    raise refuse(f"Entry {index} has an unparseable `command`: {exc}") from exc
+            else:
+                # An entry with no command would be parsed with no flags at all -- no
+                # include paths, no defines -- and the model would be quietly wrong.
+                raise refuse(f"Entry {index} has neither `arguments` nor `command`.")
             entries.append(CompileEntry(file=file, directory=directory, arguments=arguments))
         return cls(path=path, entries=entries)
 
@@ -140,6 +193,14 @@ def configure(worktree: Path, rev: str, extra_args: list[str] | None = None) -> 
             "Non-CMake builds need one generated by Bear, compiledb, or the build system.",
         )
 
+    if shutil.which("cmake") is None:
+        raise CompileDatabaseError(
+            rev,
+            str(worktree),
+            "CMake is not installed, or not on PATH. It is required to generate a compile "
+            "database when the revision does not carry one.",
+        )
+
     build_dir = worktree / "build"
     generator = select_generator(extra_args)
 
@@ -159,14 +220,19 @@ def configure(worktree: Path, rev: str, extra_args: list[str] | None = None) -> 
         *generator,
         *(extra_args or []),
     ]
-    proc = subprocess.run(
-        argv,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=CONFIGURE_TIMEOUT_SECONDS,
-    )
+    try:
+        proc = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=CONFIGURE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ConfigureError(
+            rev, f"CMake configure did not finish within {CONFIGURE_TIMEOUT_SECONDS} seconds."
+        ) from exc
     if proc.returncode != 0:
         tail = "\n".join((proc.stderr or proc.stdout).splitlines()[-15:])
         raise ConfigureError(rev, tail)
@@ -179,8 +245,8 @@ def configure(worktree: Path, rev: str, extra_args: list[str] | None = None) -> 
             str(worktree),
             f"CMake configured successfully with {used}, but emitted no "
             f"compile_commands.json. Only these generators support it: "
-            f"{', '.join(COMPILE_DB_GENERATORS)}. Install Ninja, or pass an explicit "
-            f"generator through --configure-arg.",
+            f"{', '.join(COMPILE_DB_GENERATORS)}. Install Ninja, or set the "
+            f"CMAKE_GENERATOR environment variable to one of them.",
         )
     return database
 
@@ -234,13 +300,16 @@ def materialize_submodules(worktree: Path, rev: str) -> None:
     if not (worktree / ".gitmodules").is_file():
         return
 
-    result = subprocess.run(
-        ["git", "-C", str(worktree), "submodule", "update", "--init", "--recursive"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(worktree), "submodule", "update", "--init", "--recursive"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except FileNotFoundError as exc:
+        raise GitNotFoundError() from exc
     if result.returncode != 0:
         raise CompileDatabaseError(
             rev,
@@ -255,6 +324,61 @@ def materialize_submodules(worktree: Path, rev: str) -> None:
         )
 
 
+def require_this_checkout(database: CompileDatabase, worktree: Path, rev: str) -> None:
+    """Refuse a database whose C++ sources all lie outside `worktree`.
+
+    A `compile_commands.json` committed to a repository records the absolute paths of the
+    machine that generated it. Read in a worktree, every translation unit then names a file
+    somewhere else, so every declaration is pruned as not belonging to the project, while
+    each translation unit still reports that it parsed. The result is an empty model that
+    claims to be complete -- two of them agree perfectly, and the review says nothing
+    changed.
+
+    Only "none inside" is refused. Some entries outside is ordinary (a build that compiles a
+    file from a sibling checkout), and that partial case is visible in the output.
+    """
+    cpp = [e for e in database.entries if e.is_cpp]
+    if not cpp:
+        return
+    root = worktree.resolve()
+    if any(e.file.resolve().is_relative_to(root) for e in cpp):
+        return
+    raise CompileDatabaseError(
+        rev,
+        str(database.path),
+        f"None of its {len(cpp)} C++ entries is inside this checkout (the first names "
+        f"{cpp[0].file}). It describes a different checkout -- paths from another machine "
+        f"or another clone, usually because it was committed. Delete it from the revision, "
+        f"or generate one at build/compile_commands.json, which is searched first.",
+    )
+
+
+@contextmanager
+def _exclusive(lock_path: Path) -> Iterator[None]:
+    """Hold an exclusive advisory lock on `lock_path` for the duration of the block.
+
+    `flock` is released by the kernel when the process exits, however it exits, so a run
+    that is killed cannot leave the cache locked.
+    """
+    with lock_path.open("a", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _discard_worktree(repo: Path, worktree: Path) -> None:
+    """Remove whatever is at `worktree`, whether or not git still knows about it."""
+    if worktree.exists():
+        run_git(repo, "worktree", "remove", "--force", str(worktree), check=False)
+    if worktree.exists():
+        # Git did not know it -- a leftover from a deleted clone, or a removal that failed.
+        shutil.rmtree(worktree)
+    # Forget registrations whose directory is gone, or `worktree add` refuses the path.
+    run_git(repo, "worktree", "prune", check=False)
+
+
 @contextmanager
 def checkout(
     repo: Path,
@@ -267,25 +391,48 @@ def checkout(
 
     Worktrees are kept by default and keyed by SHA, so the base -- which is shared by every
     review against it -- is configured once rather than once per run (ARCH-001 §9).
+
+    **A worktree is trusted only if it was finished.** A `<rev>.complete` marker beside it is
+    written last, after the worktree, its submodules and a loadable compile database all
+    exist. A directory without one is a run that failed or was interrupted part way -- most
+    dangerously after `git worktree add` but before the submodules, which leaves a tree that
+    may still configure and silently lacks whatever they provide. It is discarded and built
+    again. The marker sits outside the worktree so it never shows up as an untracked file in
+    the checkout. Worktrees cached before the marker existed have none, and are rebuilt once.
+
+    **Runs sharing a cache take turns at building it.** A `<rev>.lock` beside the worktree is
+    held while it is checked, created and configured, so two runs cannot both create it or
+    one read a compile database the other is still writing. It is released before the
+    checkout is handed out: analysis only reads the tree, and holding the lock for a whole
+    run would serialize every review against the same base.
     """
+    # `Path(".").name` is empty, which would key every repository's worktrees together.
+    repo = repo.resolve()
     worktree = cache_root() / "worktrees" / repo.name / rev
-    created = not worktree.exists()
+    marker = worktree.with_name(f"{rev}.complete")
+    worktree.parent.mkdir(parents=True, exist_ok=True)
 
-    if created:
-        worktree.parent.mkdir(parents=True, exist_ok=True)
-        run_git(repo, "worktree", "add", "--detach", "--quiet", str(worktree), rev)
-        materialize_submodules(worktree, rev)
+    with _exclusive(worktree.with_name(f"{rev}.lock")):
+        created = not (marker.is_file() and worktree.is_dir())
+        if created:
+            marker.unlink(missing_ok=True)
+            _discard_worktree(repo, worktree)
+            run_git(repo, "worktree", "add", "--detach", "--quiet", str(worktree), rev)
+            materialize_submodules(worktree, rev)
 
-    try:
         database_path = find_compile_database(worktree)
         database_path = database_path or configure(worktree, rev, configure_args)
-        yield Checkout(
-            rev=rev,
-            path=worktree,
-            compile_db=CompileDatabase.load(database_path),
-        )
+        database = CompileDatabase.load(database_path, rev=rev)
+        require_this_checkout(database, worktree, rev)
+
+        if created:
+            marker.write_text(f"{rev}\n", encoding="utf-8")
+
+    try:
+        yield Checkout(rev=rev, path=worktree, compile_db=database)
     finally:
         if not keep and created:
+            marker.unlink(missing_ok=True)
             run_git(repo, "worktree", "remove", "--force", str(worktree), check=False)
 
 

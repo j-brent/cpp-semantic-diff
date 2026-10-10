@@ -27,23 +27,25 @@ import time
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 import cpp_semantic_diff.produce.cache as cache_module
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileDatabase, cache_root
-from cpp_semantic_diff.errors import PreconditionError
-from cpp_semantic_diff.model.ir import Model
+from cpp_semantic_diff.errors import InvalidSettingError, PreconditionError
+from cpp_semantic_diff.model.ir import Model, Node
 from cpp_semantic_diff.produce.build import build_model
 from cpp_semantic_diff.produce.cache import (
     GENERATIONS,
+    TEMPORARY_FLOOR_SECONDS,
     TuCache,
     collect,
     dumps,
     find_scanner,
     loads,
 )
-from cpp_semantic_diff.produce.extract import extract
+from cpp_semantic_diff.produce.extract import TuExtract, extract
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -447,6 +449,54 @@ class TestStorage:
         for path in store(tmp_path).rglob("*.json.gz"):
             loads(path.read_bytes())  # raises if any entry is not a whole one
 
+    @pytest.mark.parametrize("failure", [KeyboardInterrupt, OSError])
+    def test_a_write_that_never_lands_leaves_no_temporary(
+        self,
+        tmp_path: Path,
+        toolchain: Toolchain,
+        monkeypatch: pytest.MonkeyPatch,
+        failure: type[BaseException],
+    ) -> None:
+        """Nothing but `collect` looks for a temporary once its writer is gone, so one left
+        by a failed rename or a Ctrl-C would sit in the store indefinitely. An interrupt
+        still propagates -- cleaning up is not the same as swallowing it."""
+        checkout = project(tmp_path / "w", SHARED, ("b.cpp",))
+        partial = extract(checkout.cpp_entries[0], root=checkout.path, toolchain=toolchain)
+        cache = TuCache(root=checkout.path, toolchain=toolchain, store=store(tmp_path), closures={})
+
+        def interrupted(src: object, dst: object) -> None:
+            raise failure()
+
+        monkeypatch.setattr("cpp_semantic_diff.produce.cache.os.replace", interrupted)
+        if failure is OSError:
+            cache.save("ab" * 8, "k" * 16, partial)
+        else:
+            with pytest.raises(KeyboardInterrupt):
+                cache.save("ab" * 8, "k" * 16, partial)
+
+        assert not list(store(tmp_path).rglob("*.tmp"))
+        assert not list(store(tmp_path).rglob("*.json.gz"))
+        assert cache.stats.stored == 0
+
+    def test_a_write_that_fills_the_disk_leaves_no_temporary(
+        self, tmp_path: Path, toolchain: Toolchain, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A partial write is the case that matters most: leaving it keeps the disk full."""
+        checkout = project(tmp_path / "w", SHARED, ("b.cpp",))
+        partial = extract(checkout.cpp_entries[0], root=checkout.path, toolchain=toolchain)
+        cache = TuCache(root=checkout.path, toolchain=toolchain, store=store(tmp_path), closures={})
+        real_write = Path.write_bytes
+
+        def disk_full(self: Path, data: bytes) -> int:
+            real_write(self, data[: len(data) // 2])
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(Path, "write_bytes", disk_full)
+        cache.save("ab" * 8, "k" * 16, partial)
+        monkeypatch.undo()
+
+        assert not list(store(tmp_path).rglob("*.tmp"))
+
     def test_an_entry_from_a_future_format_is_a_miss_not_a_crash(
         self, tmp_path: Path, toolchain: Toolchain
     ) -> None:
@@ -509,6 +559,48 @@ class TestDecliningToCache:
         # Slow, but not wrong: the model is the one a full parse produces.
         monkeypatch.undo()
         assert model.fingerprint() == build(checkout, toolchain, tmp_path)[0].fingerprint()
+
+    def test_a_missing_scanner_override_is_named_not_replaced(
+        self, tmp_path: Path, toolchain: Toolchain, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A scanner that works is on this host (the module skips otherwise), so falling
+        back would succeed -- and would run a scanner the user did not choose without
+        saying so. The cache goes off instead, and the reason names the setting."""
+        missing = tmp_path / "no-such-clang-scan-deps"
+        monkeypatch.setenv("CPPSD_SCAN_DEPS", str(missing))
+
+        scanner, reason = find_scanner(toolchain)
+        assert scanner is None
+        assert f"CPPSD_SCAN_DEPS={missing}" in reason
+        assert "does not exist" in reason
+
+        checkout = project(tmp_path / "w", SHARED, ("a.cpp",))
+        model, cache = build(checkout, toolchain, tmp_path)
+        assert cache.disabled == reason
+        notes = " ".join(model.completeness.notes)
+        assert f"CPPSD_SCAN_DEPS={missing}" in notes
+        assert "unset it" in notes, "the remedy is the override, not a package install"
+
+    def test_a_scanner_override_that_is_not_executable_is_named(
+        self, tmp_path: Path, toolchain: Toolchain, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        inert = tmp_path / "clang-scan-deps"
+        inert.write_text("", encoding="utf-8")
+        inert.chmod(0o644)
+        monkeypatch.setenv("CPPSD_SCAN_DEPS", str(inert))
+
+        scanner, reason = find_scanner(toolchain)
+        assert scanner is None
+        assert f"CPPSD_SCAN_DEPS={inert}" in reason
+
+    def test_a_working_scanner_override_is_used(
+        self, toolchain: Toolchain, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("CPPSD_SCAN_DEPS", raising=False)
+        found, _ = find_scanner(toolchain)
+        assert found is not None
+        monkeypatch.setenv("CPPSD_SCAN_DEPS", str(found))
+        assert find_scanner(toolchain) == (found, "")
 
     def test_a_tu_with_no_closure_is_parsed_and_not_stored(
         self, tmp_path: Path, toolchain: Toolchain
@@ -669,7 +761,7 @@ class TestThePathologicalCaseIsReported:
 # -- helpers ------------------------------------------------------------------------
 
 
-def _without_cache_hits(model: Model) -> dict:
+def _without_cache_hits(model: Model) -> dict[str, Any]:
     """A model's content, with the one field that is *meant* to differ removed."""
     dump = model.model_dump()
     for result in dump["completeness"]["tus"]:
@@ -735,6 +827,62 @@ class TestCollectingSupersededGenerations:
         assert collect(tmp_path / "nothing-here").removed == 0
 
 
+class TestCollectingAbandonedWrites:
+    """A write killed mid-flight leaves a temporary that no key names and no run reads.
+    `collect` is the only thing that can find one, so it has to look -- without touching a
+    temporary that another run is writing right now."""
+
+    def temporary(self, store: Path, *, age_seconds: float) -> Path:
+        path = store / "aa" / "aaaaaa" / f".key.{os.getpid()}.{age_seconds:.0f}.tmp"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x" * 512)
+        stamp = time.time() - age_seconds
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def test_an_old_temporary_goes_and_a_fresh_one_stays(self, tmp_path: Path) -> None:
+        old = self.temporary(tmp_path, age_seconds=90 * 86400)
+        fresh = self.temporary(tmp_path, age_seconds=60)
+
+        sweep = collect(tmp_path, max_age_days=30)
+
+        assert not old.exists()
+        assert fresh.exists()
+        assert (sweep.abandoned, sweep.abandoned_freed) == (1, 512)
+        assert sweep.total == 0, "a temporary was never an entry"
+
+    def test_age_zero_still_spares_a_write_in_progress(self, tmp_path: Path) -> None:
+        """`max_age_days=0` means every entry, and a live temporary is not an entry."""
+        live = self.temporary(tmp_path, age_seconds=60)
+        abandoned = self.temporary(tmp_path, age_seconds=TEMPORARY_FLOOR_SECONDS + 60)
+
+        sweep = collect(tmp_path, max_age_days=0)
+
+        assert live.exists()
+        assert not abandoned.exists()
+        assert sweep.abandoned == 1
+
+    def test_a_dry_run_counts_temporaries_without_removing_them(self, tmp_path: Path) -> None:
+        old = self.temporary(tmp_path, age_seconds=90 * 86400)
+        sweep = collect(tmp_path, max_age_days=30, dry_run=True)
+        assert old.exists()
+        assert sweep.abandoned == 1
+
+
+class TestANegativeAgeIsRefused:
+    def test_a_negative_age_raises_and_deletes_nothing(self, tmp_path: Path) -> None:
+        """A cutoff in the future reads as "collect everything" -- the whole cache gone on a
+        typo. Zero stays allowed: it is a real request, for everything not in use now."""
+        entry = tmp_path / "aa" / "aaaaaa" / "aaaaaa.json.gz"
+        entry.parent.mkdir(parents=True)
+        entry.write_bytes(b"x")
+
+        with pytest.raises(InvalidSettingError, match="max_age_days"):
+            collect(tmp_path, max_age_days=-1)
+        assert entry.exists()
+        collect(tmp_path, max_age_days=0)
+
+
 class TestAHitKeepsAnEntryAlive:
     """`collect` sweeps on mtime, so a read has to refresh it.
 
@@ -760,7 +908,7 @@ class TestAHitKeepsAnEntryAlive:
         assert path.stat().st_mtime > stale, "a served entry must not look unused"
 
 
-def _partial_dump(partial) -> dict:
+def _partial_dump(partial: TuExtract) -> dict[str, object]:
     return {
         "path": partial.path,
         "result": partial.result.model_dump(exclude={"cache_hit"}),
@@ -793,7 +941,7 @@ def _scanner_resource_dir(cache: TuCache) -> Path | None:
     return None
 
 
-def _named(model: Model, qualified: str) -> list:
+def _named(model: Model, qualified: str) -> list[Node]:
     return [n for n in model.nodes.values() if n.qualified_name == qualified]
 
 

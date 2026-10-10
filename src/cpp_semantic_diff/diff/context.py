@@ -54,9 +54,10 @@ class DiffContext:
         matched there is no tier to report -- not a default one -- and None is exactly what
         `Confidence.tier` means by unmatched residue.
         """
-        if any(t is None for t in tiers):
+        present = [t for t in tiers if t is not None]
+        if len(present) < len(tiers):
             return None
-        return max(tiers, key=lambda t: TIER_ORDER.index(t))  # type: ignore[arg-type]
+        return max(present, key=TIER_ORDER.index)
 
 
 def node_hunks(*sides: tuple[Side, Node]) -> list[Hunk]:

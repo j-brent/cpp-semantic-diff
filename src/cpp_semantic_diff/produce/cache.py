@@ -1,12 +1,10 @@
 """The per-TU model cache -- what makes the performance budget reachable.
 
 ARCH-001 §9 sets the budget: **a review touching <= 20 TUs completes in under 30 s on a warm
-cache**. A cold `fmt` model, 50 TUs, took from half a minute to nearly two on 2026-08-02,
-depending on the worker count (v0 tracker §4, reports/2026-08-01--v0-build/STATUS.md), so the
-budget is not a matter of parsing faster; it is a matter of not parsing what has not changed.
-Those measurements are deliberately not restated here, and `notes()` reports the cost of the
-build in hand rather than quoting any of them -- a per-TU cost asserted in prose was correct
-when it was written and went stale without anyone editing the line.
+cache**. The budget is not a matter of parsing faster; it is a matter of not parsing what has
+not changed. `notes()` reports the cost of the build in hand rather than quoting a measured one
+-- a per-TU cost asserted in prose was correct when it was written and went stale without
+anyone editing the line.
 
 **The unit is the translation unit, not the commit.** Caching whole models would mean the
 first review against any new base pays full price, and the base is exactly what every
@@ -89,6 +87,7 @@ import clang.cindex as ci
 import cpp_semantic_diff.model.ir as ir
 import cpp_semantic_diff.produce.extract as extract_module
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileEntry, cache_root
+from cpp_semantic_diff.errors import InvalidSettingError
 from cpp_semantic_diff.model.ir import Edge, Node, NodeId, TuResult
 from cpp_semantic_diff.produce.extract import TuExtract, extract, parse_arguments
 from cpp_semantic_diff.produce.toolchain import (
@@ -184,13 +183,13 @@ def candidate_scanners(toolchain: Toolchain) -> list[Path]:
     it is the same distribution decision: Ubuntu ships `clang-scan-deps-18` and no bare
     `clang-scan-deps`, so looking only for the unsuffixed name on PATH finds nothing on
     the systems this most needs to work on. Ordered by how much the host is being *asked*
-    rather than guessed at -- override, PATH under both names, llvm-config's own bindir,
-    the directory the loaded library came from, and only then patterns.
+    rather than guessed at -- PATH under both names, llvm-config's own bindir, the
+    directory the loaded library came from, and only then patterns.
+
+    `CPPSD_SCAN_DEPS` is not among them: an override replaces the search rather than
+    heading it, and `find_scanner` handles it on its own.
     """
     candidates: list[Path] = []
-
-    if override := os.environ.get("CPPSD_SCAN_DEPS"):
-        candidates.append(Path(override))
 
     # The toolchain's own major first: a scanner and a parser that disagree about the
     # header search compute closures for two different compilations.
@@ -240,12 +239,22 @@ def find_scanner(toolchain: Toolchain) -> tuple[Path | None, str]:
     parser can report a *smaller* closure than the parser actually reads -- which is not a
     miss, it is a hit on an entry that ignores a header. Refusing costs every review a
     full parse and says why; accepting costs correctness silently (ARCH-001 §9, §11).
+
+    `CPPSD_SCAN_DEPS`, when set, is the only scanner considered. One that is missing, does
+    not run, or does not match is reported as the reason the cache is off, rather than
+    quietly replaced by whatever the search turns up next: a user who named a scanner and
+    got a different one has been told nothing, which is the disagreement `toolchain.load`
+    refuses for `CPPSD_LIBCLANG`. Here it disables the cache instead of failing the run,
+    because a build without a cache is slow and never wrong.
     """
+    if override := os.environ.get("CPPSD_SCAN_DEPS"):
+        return _override_scanner(Path(override), toolchain)
+
     candidates = candidate_scanners(toolchain)
     if not candidates:
         return None, (
-            f"no {SCAN_DEPS_NAME} found (looked at $CPPSD_SCAN_DEPS, PATH including "
-            f"versioned names, llvm-config --bindir, and beside {toolchain.library})"
+            f"no {SCAN_DEPS_NAME} found (looked at PATH including versioned names, "
+            f"llvm-config --bindir, and beside {toolchain.library})"
         )
     mismatched: list[str] = []
     for path in candidates:
@@ -258,6 +267,21 @@ def find_scanner(toolchain: Toolchain) -> tuple[Path | None, str]:
     return None, (
         f"no {SCAN_DEPS_NAME} matching {toolchain.id}: {', '.join(mismatched) or 'none ran'}"
     )
+
+
+def _override_scanner(path: Path, toolchain: Toolchain) -> tuple[Path | None, str]:
+    """`find_scanner` for an explicit `CPPSD_SCAN_DEPS`: this scanner, or the reason not."""
+    named = f"CPPSD_SCAN_DEPS={path}"
+    if not path.exists():
+        return None, f"{named} does not exist"
+    if not path.is_file() or not os.access(path, os.X_OK):
+        return None, f"{named} is not an executable file"
+    release = scanner_release(path)
+    if release is None:
+        return None, f"{named} did not report a version"
+    if release.split(".")[0] != str(toolchain.major):
+        return None, f"{named} is {release}, which does not match {toolchain.id}"
+    return path, ""
 
 
 # -- the include closure ------------------------------------------------------------
@@ -405,6 +429,15 @@ def loads(blob: bytes) -> TuExtract:
 #: disk, so the default errs toward keeping.
 DEFAULT_MAX_AGE_DAYS = 30
 
+#: The youngest a leftover temporary file can be and still be collected, whatever
+#: `max_age_days` says. A temporary is either a write in progress or the debris of one that
+#: was interrupted, and the two look identical on disk; age is the only way to tell them
+#: apart. An entry is safe to collect at any age because removing it costs a reparse, but
+#: removing a live temporary makes another run's `os.replace` fail and drops its write --
+#: so `max_age_days=0` ("everything not in use right now") must still leave a margin no
+#: real write takes anywhere near.
+TEMPORARY_FLOOR_SECONDS = 3600
+
 
 @dataclass(frozen=True)
 class Sweep:
@@ -414,6 +447,13 @@ class Sweep:
     freed: int = 0
     kept: int = 0
     held: int = 0
+    #: Temporaries left by interrupted writes, and their bytes. Counted apart from entries
+    #: because they never were entries: no key names them and no run could read them, so
+    #: folding them into `removed` would overstate how much cached work a sweep threw away.
+    #: Not in `freed` either, for the same reason. Fresh temporaries are in-flight writes
+    #: and appear nowhere.
+    abandoned: int = 0
+    abandoned_freed: int = 0
 
     @property
     def total(self) -> int:
@@ -453,34 +493,63 @@ def collect(
     Safe by construction: an entry this removes is reparsed on the next run that wants it.
     Declining to cache is slow and never wrong, and that applies to a cache entry this deleted
     exactly as it applies to one that was never written.
+
+    It also removes the temporaries `TuCache.save` leaves when a process dies mid-write,
+    which nothing else would ever reach -- but never one younger than
+    `TEMPORARY_FLOOR_SECONDS`, since that may be another run's write in progress.
+
+    A negative age is refused rather than clamped: it puts the cutoff in the future, which
+    reads as "collect everything" and empties the cache, which no one asking for an age
+    meant (ARCH-001 §11).
     """
+    if max_age_days < 0:
+        raise InvalidSettingError(
+            f"max_age_days must be 0 or more, not {max_age_days}: a negative age would "
+            f"collect every entry in the cache."
+        )
     root = root or store_root()
-    cutoff = time.time() - max_age_days * 86400
-    sweep = Sweep()
+    now = time.time()
+    cutoff = now - max_age_days * 86400
+    temporary_cutoff = min(cutoff, now - TEMPORARY_FLOOR_SECONDS)
+    removed = freed = kept = held = abandoned = abandoned_freed = 0
     if not root.is_dir():
-        return sweep
+        return Sweep()
 
     for entry in root.rglob("*.json.gz"):
         try:
             stat = entry.stat()
         except OSError:  # pragma: no cover - vanished under us, which is fine
             continue
-        if stat.st_mtime < cutoff:
-            if not dry_run:
-                try:
-                    entry.unlink()
-                except OSError:  # pragma: no cover - permissions, read-only store
-                    sweep = Sweep(
-                        sweep.removed, sweep.freed, sweep.kept + 1, sweep.held + stat.st_size
-                    )
-                    continue
-            sweep = Sweep(sweep.removed + 1, sweep.freed + stat.st_size, sweep.kept, sweep.held)
+        if stat.st_mtime < cutoff and _remove(entry, dry_run=dry_run):
+            removed += 1
+            freed += stat.st_size
         else:
-            sweep = Sweep(sweep.removed, sweep.freed, sweep.kept + 1, sweep.held + stat.st_size)
+            kept += 1
+            held += stat.st_size
+
+    for temporary in root.rglob(".*.tmp"):
+        try:
+            stat = temporary.stat()
+        except OSError:  # pragma: no cover - renamed into place under us, which is fine
+            continue
+        if stat.st_mtime < temporary_cutoff and _remove(temporary, dry_run=dry_run):
+            abandoned += 1
+            abandoned_freed += stat.st_size
 
     if not dry_run:
         _prune_empty(root)
-    return sweep
+    return Sweep(removed, freed, kept, held, abandoned, abandoned_freed)
+
+
+def _remove(path: Path, *, dry_run: bool) -> bool:
+    """Whether `path` is gone (or would be): False when it could not be removed."""
+    if dry_run:
+        return True
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:  # pragma: no cover - permissions, read-only store
+        return False
+    return True
 
 
 def _prune_empty(root: Path) -> None:
@@ -586,12 +655,21 @@ class TuCache:
         store = store or cache_root() / "tu-models" / f"v{ENTRY_FORMAT}"
         scanner, reason = find_scanner(toolchain)
         if scanner is None:
+            # The default remedy says to install a package, which is the wrong advice to
+            # someone who named a scanner: theirs is the problem, not a missing install.
+            remedy = (
+                f"Point CPPSD_SCAN_DEPS at a {SCAN_DEPS_NAME} matching {toolchain.id}, or "
+                f"unset it to search, to restore it."
+                if os.environ.get("CPPSD_SCAN_DEPS")
+                else ""
+            )
             return cls(
                 root=checkout.path,
                 toolchain=toolchain,
                 store=store,
                 closures={},
                 disabled=reason,
+                remedy=remedy,
             )
         closures = include_closures(scanner, checkout.compile_db.path)
         if not closures:
@@ -812,20 +890,33 @@ class TuCache:
 
         Written to a unique temporary name in the same directory and renamed into place:
         `os.replace` is atomic, so a concurrent reader sees either the previous entry or
-        this one, and an interrupted write leaves a temporary file that no key names.
+        this one. A write that fails or is interrupted removes its temporary on the way out;
+        one that cannot (the process was killed) leaves it for `collect`.
         """
         directory = self._directory(identity)
+        # Set while a temporary exists that no key names; cleared once it is renamed.
+        temporary: Path | None = None
         try:
             directory.mkdir(parents=True, exist_ok=True)
+            blob = dumps(partial)
             temporary = directory / f".{key}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
-            temporary.write_bytes(dumps(partial))
+            temporary.write_bytes(blob)
             os.replace(temporary, self._path(identity, key))
+            temporary = None
             self.stats.stored += 1
             self._evict(directory)
         except OSError:
             # A cache that cannot be written is a slow build. Nothing about the model
             # depends on the write having happened.
             return
+        finally:
+            # Removed on every way out that skipped the rename -- a full disk, a failed
+            # rename, or an interrupt, which propagates once this has run. Otherwise
+            # each one leaves a file no key names and only `collect` would ever find,
+            # and a disk-full failure would keep the disk full.
+            if temporary is not None:
+                with contextlib.suppress(OSError):
+                    temporary.unlink(missing_ok=True)
 
     def _evict(self, directory: Path) -> None:
         """Keep the newest `GENERATIONS` entries for this TU."""

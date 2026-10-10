@@ -111,4 +111,7 @@ record) in `docs/adr/`, one per file, numbered in the order decisions were made.
   the code in a frozen report; every finding in the
   [v0 tracker's §5](reports/2026-08-01--v0-build/STATUS.md#5--findings-worth-keeping) was a real bug
   in waiting.
-- Run `uv run ruff format . && uv run ruff check . && uv run pytest -q` before committing.
+- Before committing, run `scripts/ci.sh`: every check CI runs, defined once. `scripts/ci.sh lint
+  test` runs only the steps named.
+- Before pushing, run `scripts/ci-local.sh`: the same checks inside the image CI runs in, against
+  the working tree. A pass on your machine alone does not show the checks pass on a clean host.

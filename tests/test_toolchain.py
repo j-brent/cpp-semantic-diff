@@ -8,6 +8,7 @@ truncated AST that no later stage can detect.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -26,7 +27,7 @@ def test_release_rejects_unparseable() -> None:
     assert tc.parse_release("no version here") is None
 
 
-def toolchain(release: str = "18.1.3", **kw) -> tc.Toolchain:
+def toolchain(release: str = "18.1.3", **kw: Any) -> tc.Toolchain:
     defaults = {
         "library": Path("/a"),
         "version": f"clang version {release}",
@@ -169,6 +170,59 @@ def test_env_override_is_preferred(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     fake.write_bytes(b"")
     monkeypatch.setenv("CPPSD_LIBCLANG", str(fake))
     assert tc.candidate_libraries()[0] == fake
+
+
+@pytest.fixture
+def unloaded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`load()` memoizes per process; clear the memo for this test only.
+
+    Safe for the tests that use it because each raises before `Config.set_library_file`,
+    which is the call that can only happen once per process.
+    """
+    monkeypatch.setattr(tc, "_loaded", None)
+
+
+@pytest.mark.usefixtures("unloaded")
+@pytest.mark.parametrize("kind", ["missing", "directory"])
+def test_an_unusable_override_is_refused_not_replaced(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kind: str
+) -> None:
+    """A user who set CPPSD_LIBCLANG and got some other library has been told nothing --
+    and the parser is what every model depends on. Refused even on a host where discovery
+    would find a working library, which is exactly when a fallback would go unnoticed."""
+    target = tmp_path / "libclang.so.1"
+    if kind == "directory":
+        target.mkdir()
+    monkeypatch.setenv("CPPSD_LIBCLANG", str(target))
+
+    with pytest.raises(ClangToolchainError, match="CPPSD_LIBCLANG") as raised:
+        tc.load()
+    assert str(target) in str(raised.value)
+    assert raised.value.exit_code == 5
+
+
+@pytest.mark.usefixtures("unloaded")
+def test_an_override_naming_libclang_cpp_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Discovery skips libclang-cpp by name; an override must not slip it past that."""
+    wrong = tmp_path / "libclang-cpp.so.18"
+    wrong.write_bytes(b"")
+    monkeypatch.setenv("CPPSD_LIBCLANG", str(wrong))
+    with pytest.raises(ClangToolchainError, match="libclang-cpp"):
+        tc.load()
+
+
+def test_a_usable_override_is_the_only_candidate_load_considers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A worker pinned to its parent's library must get that library, not a search."""
+    fake = tmp_path / "libclang.so.1"
+    fake.write_bytes(b"")
+    monkeypatch.setenv("CPPSD_LIBCLANG", str(fake))
+    assert tc.library_override() == fake
+    monkeypatch.delenv("CPPSD_LIBCLANG")
+    assert tc.library_override() is None
 
 
 def test_discovery_asks_the_system_before_guessing(monkeypatch: pytest.MonkeyPatch) -> None:

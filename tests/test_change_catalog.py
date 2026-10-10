@@ -26,6 +26,8 @@ from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.errors import PreconditionError
 from cpp_semantic_diff.match import match_models
 from cpp_semantic_diff.model import (
+    AnyId,
+    AttrValue,
     Confidence,
     Edge,
     EdgeKind,
@@ -83,7 +85,8 @@ class Outcome:
     events: list[Event]
 
     def name(self, node_id: str) -> str:
-        node = self.head.nodes.get(node_id) or self.base.nodes.get(node_id)
+        key = NodeId(node_id)
+        node = self.head.nodes.get(key) or self.base.nodes.get(key)
         return node.qualified_name if node else node_id
 
     def subject(self, event: Event) -> str:
@@ -192,9 +195,11 @@ def not_replaced(name: str) -> Expect:
 
     def kinds(o: Outcome, of: frozenset[EventKind], model: Model) -> set[str]:
         return {
-            model.nodes[e.subject].kind
+            model.nodes[NodeId(e.subject)].kind
             for e in o.events
-            if e.kind in of and e.subject in model.nodes and model.nodes[e.subject].name == name
+            if e.kind in of
+            and e.subject in model.nodes
+            and model.nodes[NodeId(e.subject)].name == name
         }
 
     return Expect(
@@ -524,7 +529,7 @@ def hand_built(nodes: list[Node], edges: list[Edge], *events: Event) -> Outcome:
     return Outcome(side("a"), side("b"), list(events))
 
 
-def event(kind: EventKind, subject: str, **payload: object) -> Event:
+def event(kind: EventKind, subject: AnyId, **payload: AttrValue) -> Event:
     return Event(
         kind=kind,
         subject=subject,

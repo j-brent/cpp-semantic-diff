@@ -126,9 +126,9 @@ def _configure_worker(library: str, resource_dir: str, expected_id: str) -> None
 
     The parent has already paid for discovery and the builtin-header probe (ARCH-001 §13).
     Pinning `CPPSD_LIBCLANG` hands that answer over so the worker does not re-derive it --
-    `candidate_libraries()` puts the override first -- while still going through
-    `toolchain.load()`, which is the only function permitted to call `Config.set_library_file`
-    and the only one that runs the probe.
+    `load()` takes a set override as the only candidate and skips the search -- while still
+    going through `toolchain.load()`, which is the only function permitted to call
+    `Config.set_library_file` and the only one that runs the probe.
 
     Re-probing per worker is deliberate. It costs ~0.6 s once per process against ~2 s per TU
     (measured 2026-08-02: v0 tracker §6, reports/2026-08-01--v0-build/STATUS.md, and commit
@@ -137,11 +137,11 @@ def _configure_worker(library: str, resource_dir: str, expected_id: str) -> None
     inherited and `load()` returns it immediately, so the check below is free and still true;
     under `spawn` it is the check that stops an unverified libclang from ever parsing.
 
-    Almost all of that is `candidate_libraries()` shelling out to `llvm-config` and `ldconfig`
-    -- the probe parse itself is negligible. `toolchain.py` has no way to say "this library is
-    already known good, verify it and skip the search", and adding one would take worker
-    startup to about the cost of an import. That is the only thing worth changing here, and it
-    is a change to a module this one is not allowed to touch.
+    That figure was mostly `candidate_libraries()` shelling out to `llvm-config` and
+    `ldconfig`; the probe parse itself is negligible. `load()` no longer searches when the
+    override is set, so the pinned library is verified without being rediscovered. A pin that
+    names no file is refused rather than replaced, so a library deleted between the parent's
+    load and a worker's start fails the build instead of quietly swapping parsers.
     """
     global _toolchain, _index
 

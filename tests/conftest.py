@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,63 @@ import pytest
 #: Real C++ repositories used for measurement and end-to-end tests. Full history is
 #: required -- a shallow clone has no second point and the tool rejects it by design.
 FIXTURE_ROOT = Path(os.environ.get("CPPSD_FIXTURE_ROOT", Path.home() / "fixtures"))
+
+#: Variables that change what the code under test does or prints, removed for every test so
+#: a result cannot depend on whose shell, which CI runner, or which git hook ran the suite.
+#: A test that wants one sets it itself. `CPPSD_FIXTURE_ROOT` is not among them: it says
+#: where the fixture clones are, not how the tool behaves.
+AMBIENT = (
+    # Terminal and styling: Typer forces rich styling under GITHUB_ACTIONS or FORCE_COLOR,
+    # and rich wraps at COLUMNS.
+    "CI",
+    "GITHUB_ACTIONS",
+    "FORCE_COLOR",
+    "PY_COLORS",
+    "NO_COLOR",
+    "CLICOLOR",
+    "CLICOLOR_FORCE",
+    "TERM",
+    "COLUMNS",
+    "LINES",
+    # Where the tool keeps state, and how CMake configures a test project.
+    "XDG_CACHE_HOME",
+    "CMAKE_GENERATOR",
+    "CC",
+    "CXX",
+    "CFLAGS",
+    "CXXFLAGS",
+    "CPPFLAGS",
+    "LDFLAGS",
+)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Run every test in the same environment, whoever runs the suite and wherever.
+
+    A hook rather than a fixture, because it has to happen before collection: `cli.py`
+    builds its rich consoles when it is imported, and a console reads the environment once,
+    when it is built. A fixture would clean the environment after the consoles had already
+    read it.
+
+    Every `CPPSD_*` setting is the tool's own input, so one exported in a developer's shell
+    would silently change what a test exercises. Git reads `~/.gitconfig` and the system
+    config, and any `GIT_*` variable a hook exports (`GIT_DIR` above all) redirects every git
+    call a test makes. The locale decides the language of git's messages. The cache goes to
+    a directory of this run's own, so no test reads or writes the developer's.
+    """
+    for name in list(os.environ):
+        if (
+            name in AMBIENT
+            or name.startswith("GIT_")
+            or (name.startswith("CPPSD_") and name != "CPPSD_FIXTURE_ROOT")
+        ):
+            del os.environ[name]
+    cache = tempfile.mkdtemp(prefix="cppsd-test-cache-")
+    config.add_cleanup(lambda: shutil.rmtree(cache, ignore_errors=True))
+    os.environ["CPPSD_CACHE_DIR"] = cache
+    os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
+    os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
+    os.environ["LC_ALL"] = "C.UTF-8"
 
 
 def git(repo: Path, *args: str) -> str:
