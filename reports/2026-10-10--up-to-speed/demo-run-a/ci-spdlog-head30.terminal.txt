@@ -1,0 +1,285 @@
+comparing HEAD~30...HEAD  (bfde7d3711d5 -> d6c93f38a08b)
+building base model 8 TUs
+building head model 8 TUs
+wrote /home/runner/work/_temp/out/diff.json
+subject  HEAD~30...HEAD  (bfde7d3711d5 -> d6c93f38a08b)
+
+this model is incomplete — read what follows knowing it
+  head 7 of 8 cached translation units were invalidated and reparsed, so this build cost close to a cold one: 8.3 s to produce its partial models, 1.2 s per 
+translation unit parsed. The usual cause is a change to a widely-included header, which invalidates every TU that includes it (ARCH-001 §9)
+  base 8/8 TUs · head 8/8 TUs · libclang 18.1.3 x86_64-pc-linux-gnu
+  base 1,202 of 5,345 distinct edges (22.5%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit special
+members). Expected, and a lower bound on the call graph, not a defect.
+  head 1,219 of 5,389 distinct edges (22.6%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit special
+members). Expected, and a lower bound on the call graph, not a defect.
+
+2,161 lines changed -> 171 semantic events, 36 high-risk
+  12.6 lines per event · 59 top-level, 112 nested under a cause · 17 components · 105 files (95 C++) · 21.9s
+
+component 0 · 62 events
+  0.79 ● NodeRemoved  - spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, bool, const 
+spdlog::file_event_handlers &)]  include/spdlog/sinks/basic_file_sink.h:45
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 5 dependent(s), 4 direct, base model
+         5 consequence(s) nested below
+     0.64 · └ EdgeRemoved  spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, bool, 
+const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.55 · └ EdgeRemoved  basic_example -> spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, bool, const spdlog::file_event_handlers &)]
+     0.55 · └ EdgeRemoved  replace_default_logger_example -> spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, bool, const spdlog::file_event_handlers &)]
+     0.55 · └ EdgeRemoved  async_example -> spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, bool, const spdlog::file_event_handlers &)]
+     0.50 · └ EdgeRemoved  spdlog -> spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &,
+bool, const spdlog::file_event_handlers &)]
+  0.76 ● NodeRemoved  - spdlog::daily_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, int, 
+bool, unsigned short, const spdlog::file_event_handlers &)]  include/spdlog/sinks/daily_file_sink.h:206
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 3 dependent(s), 2 direct, base model
+         3 consequence(s) nested below
+     0.61 · └ EdgeRemoved  spdlog::daily_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, int,
+bool, unsigned short, const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.55 · └ EdgeRemoved  daily_example -> spdlog::daily_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, int, int, bool, unsigned short, const spdlog::file_event_handlers &)]
+     0.50 · └ EdgeRemoved  spdlog -> spdlog::daily_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &,
+int, int, bool, unsigned short, const spdlog::file_event_handlers &)]
+  0.76 ● NodeRemoved  - spdlog::rotating_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, unsigned 
+long, unsigned long, bool, const spdlog::file_event_handlers &)]  include/spdlog/sinks/rotating_file_sink.h:69
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 3 dependent(s), 2 direct, base model
+         3 consequence(s) nested below
+     0.61 · └ EdgeRemoved  spdlog::rotating_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, 
+unsigned long, unsigned long, bool, const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.55 · └ EdgeRemoved  rotating_example -> spdlog::rotating_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, unsigned long, unsigned long, bool, const spdlog::file_event_handlers &)]
+     0.50 · └ EdgeRemoved  spdlog -> spdlog::rotating_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char>
+&, unsigned long, unsigned long, bool, const spdlog::file_event_handlers &)]
+  0.75 ● NodeAdded  + spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, bool, const 
+spdlog::file_event_handlers &, unsigned long)]  include/spdlog/sinks/basic_file_sink.h:48
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 5 dependent(s), 4 direct, head model
+         5 consequence(s) nested below
+     0.62 · └ EdgeAdded  spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, bool, const
+spdlog::file_event_handlers &, unsigned long)] -> spdlog::file_event_handlers::file_event_handlers
+     0.54 · └ EdgeAdded  replace_default_logger_example -> spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, bool, const spdlog::file_event_handlers &, unsigned long)]
+     0.54 · └ EdgeAdded  async_example -> spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, bool, const spdlog::file_event_handlers &, unsigned long)]
+     0.54 · └ EdgeAdded  basic_example -> spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, bool, const spdlog::file_event_handlers &, unsigned long)]
+     0.49 · └ EdgeAdded  spdlog -> spdlog::basic_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, 
+bool, const spdlog::file_event_handlers &, unsigned long)]
+  0.72 ● NodeAdded  + spdlog::daily_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, int, 
+bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]  include/spdlog/sinks/daily_file_sink.h:218
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 2 direct, head model
+         3 consequence(s) nested below
+     0.59 · └ EdgeAdded  spdlog::daily_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, int, 
+bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)] -> spdlog::file_event_handlers::file_event_handlers
+     0.54 · └ EdgeAdded  daily_example -> spdlog::daily_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, int, int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]
+     0.49 · └ EdgeAdded  spdlog -> spdlog::daily_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, 
+int, int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]
+  0.72 ● NodeAdded  + spdlog::rotating_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, unsigned 
+long, unsigned long, bool, const spdlog::file_event_handlers &, unsigned long)]  include/spdlog/sinks/rotating_file_sink.h:73
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 2 direct, head model
+         3 consequence(s) nested below
+     0.59 · └ EdgeAdded  spdlog::rotating_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, unsigned
+long, unsigned long, bool, const spdlog::file_event_handlers &, unsigned long)] -> spdlog::file_event_handlers::file_event_handlers
+     0.54 · └ EdgeAdded  rotating_example -> spdlog::rotating_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, unsigned long, unsigned long, bool, const spdlog::file_event_handlers &, unsigned long)]
+     0.49 · └ EdgeAdded  spdlog -> spdlog::rotating_logger_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> 
+&, unsigned long, unsigned long, bool, const spdlog::file_event_handlers &, unsigned long)]
+  0.70 ● NodeRemoved  - spdlog::daily_logger_format_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, 
+int, bool, unsigned short, const spdlog::file_event_handlers &)]  include/spdlog/sinks/daily_file_sink.h:243
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, base model
+         2 consequence(s) nested below
+     0.55 · └ EdgeRemoved  spdlog::daily_logger_format_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, 
+int, int, bool, unsigned short, const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.50 · └ EdgeRemoved  spdlog -> spdlog::daily_logger_format_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, int, int, bool, unsigned short, const spdlog::file_event_handlers &)]
+  0.70 ● NodeRemoved  - spdlog::basic_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, bool, const 
+spdlog::file_event_handlers &)]  include/spdlog/sinks/basic_file_sink.h:54
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, base model
+         2 consequence(s) nested below
+     0.55 · └ EdgeRemoved  spdlog::basic_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, bool, 
+const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.50 · └ EdgeRemoved  spdlog -> spdlog::basic_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &,
+bool, const spdlog::file_event_handlers &)]
+  0.70 ● NodeRemoved  - spdlog::daily_logger_format_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, 
+int, bool, unsigned short, const spdlog::file_event_handlers &)]  include/spdlog/sinks/daily_file_sink.h:218
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, base model
+         2 consequence(s) nested below
+     0.55 · └ EdgeRemoved  spdlog::daily_logger_format_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, 
+int, int, bool, unsigned short, const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.50 · └ EdgeRemoved  spdlog -> spdlog::daily_logger_format_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, int, int, bool, unsigned short, const spdlog::file_event_handlers &)]
+  0.70 ● NodeRemoved  - spdlog::rotating_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, unsigned 
+long, unsigned long, bool, const spdlog::file_event_handlers &)]  include/spdlog/sinks/rotating_file_sink.h:80
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, base model
+         2 consequence(s) nested below
+     0.55 · └ EdgeRemoved  spdlog::rotating_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, 
+unsigned long, unsigned long, bool, const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.50 · └ EdgeRemoved  spdlog -> spdlog::rotating_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char>
+&, unsigned long, unsigned long, bool, const spdlog::file_event_handlers &)]
+  0.70 ● NodeRemoved  - spdlog::daily_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, int, 
+bool, unsigned short, const spdlog::file_event_handlers &)]  include/spdlog/sinks/daily_file_sink.h:231
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, base model
+         2 consequence(s) nested below
+     0.55 · └ EdgeRemoved  spdlog::daily_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, int,
+bool, unsigned short, const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.50 · └ EdgeRemoved  spdlog -> spdlog::daily_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &,
+int, int, bool, unsigned short, const spdlog::file_event_handlers &)]
+  0.67 ● NodeAdded  + spdlog::daily_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, int, 
+bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]  include/spdlog/sinks/daily_file_sink.h:246
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.54 · └ EdgeAdded  spdlog::daily_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, int, 
+bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)] -> spdlog::file_event_handlers::file_event_handlers
+     0.49 · └ EdgeAdded  spdlog -> spdlog::daily_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, 
+int, int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]
+  0.67 ● NodeAdded  + spdlog::rotating_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, unsigned 
+long, unsigned long, bool, const spdlog::file_event_handlers &, unsigned long)]  include/spdlog/sinks/rotating_file_sink.h:86
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.54 · └ EdgeAdded  spdlog::rotating_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, unsigned
+long, unsigned long, bool, const spdlog::file_event_handlers &, unsigned long)] -> spdlog::file_event_handlers::file_event_handlers
+     0.49 · └ EdgeAdded  spdlog -> spdlog::rotating_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> 
+&, unsigned long, unsigned long, bool, const spdlog::file_event_handlers &, unsigned long)]
+  0.67 ● NodeAdded  + spdlog::flush_all  include/spdlog/spdlog-inl.h:54
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, head model
+         3 consequence(s) nested below
+     0.54 · └ EdgeAdded  spdlog::flush_all -> spdlog::details::registry::instance
+     0.54 · └ EdgeAdded  spdlog::flush_all -> spdlog::details::registry::flush_all
+     0.49 · └ EdgeAdded  spdlog -> spdlog::flush_all
+  0.67 ● NodeAdded  + spdlog::daily_logger_format_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, 
+int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]  include/spdlog/sinks/daily_file_sink.h:260
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.54 · └ EdgeAdded  spdlog::daily_logger_format_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int,
+int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)] -> spdlog::file_event_handlers::file_event_handlers
+     0.49 · └ EdgeAdded  spdlog -> spdlog::daily_logger_format_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, int, int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]
+  0.67 ● NodeAdded  + spdlog::basic_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, bool, const 
+spdlog::file_event_handlers &, unsigned long)]  include/spdlog/sinks/basic_file_sink.h:58
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.54 · └ EdgeAdded  spdlog::basic_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, bool, const
+spdlog::file_event_handlers &, unsigned long)] -> spdlog::file_event_handlers::file_event_handlers
+     0.49 · └ EdgeAdded  spdlog -> spdlog::basic_logger_st [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, 
+bool, const spdlog::file_event_handlers &, unsigned long)]
+  0.67 ● NodeAdded  + spdlog::daily_logger_format_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int, 
+int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]  include/spdlog/sinks/daily_file_sink.h:232
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.54 · └ EdgeAdded  spdlog::daily_logger_format_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const std::basic_string<char> &, int,
+int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)] -> spdlog::file_event_handlers::file_event_handlers
+     0.49 · └ EdgeAdded  spdlog -> spdlog::daily_logger_format_mt [std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, const 
+std::basic_string<char> &, int, int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]
+
+component 1 · 86 events
+  0.76 ● NodeRemoved  - spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &)]  include/spdlog/sinks/daily_file_sink.h:72
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, base model
+         9 consequence(s) nested below
+     0.61 · └ EdgeRemoved  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &)] -> spdlog::throw_spdlog_ex [void (std::basic_string<char>)]
+     0.61 · └ EdgeRemoved  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.61 · └ EdgeRemoved  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &)] -> spdlog::details::file_helper::file_helper
+     0.61 · └ EdgeRemoved  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &)] -> spdlog::sinks::daily_file_sink::now_tm
+     0.61 · └ EdgeRemoved  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &)] -> spdlog::sinks::daily_file_sink::init_filenames_q_
+     0.61 · └ EdgeRemoved  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &)] -> spdlog::details::file_helper::open
+     0.61 · └ EdgeRemoved  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &)] -> spdlog::sinks::daily_file_sink::next_rotation_tp_
+     0.61 · └ EdgeRemoved  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &)] -> spdlog::details::circular_q::circular_q<T>
+     0.58 · └ EdgeRemoved  spdlog::sinks::daily_file_sink -> spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void 
+(std::basic_string<char>, int, int, bool, unsigned short, const spdlog::file_event_handlers &)]
+  0.76 ● NodeRemoved  - spdlog::sinks::basic_file_sink::basic_file_sink<Mutex> [void (const std::basic_string<char> &, bool, const spdlog::file_event_handlers 
+&)]  include/spdlog/sinks/basic_file_sink-inl.h:17
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, base model
+         4 consequence(s) nested below
+     0.61 · └ EdgeRemoved  spdlog::sinks::basic_file_sink::basic_file_sink<Mutex> [void (const std::basic_string<char> &, bool, const 
+spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.61 · └ EdgeRemoved  spdlog::sinks::basic_file_sink::basic_file_sink<Mutex> [void (const std::basic_string<char> &, bool, const 
+spdlog::file_event_handlers &)] -> spdlog::details::file_helper::file_helper
+     0.61 · └ EdgeRemoved  spdlog::sinks::basic_file_sink::basic_file_sink<Mutex> [void (const std::basic_string<char> &, bool, const 
+spdlog::file_event_handlers &)] -> spdlog::details::file_helper::open
+     0.58 · └ EdgeRemoved  spdlog::sinks::basic_file_sink -> spdlog::sinks::basic_file_sink::basic_file_sink<Mutex> [void (const std::basic_string<char> &, 
+bool, const spdlog::file_event_handlers &)]
+  0.76 ● NodeRemoved  - spdlog::sinks::rotating_file_sink::rotating_file_sink<Mutex> [void (std::basic_string<char>, unsigned long, unsigned long, bool, const 
+spdlog::file_event_handlers &)]  include/spdlog/sinks/rotating_file_sink-inl.h:26
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, base model
+         8 consequence(s) nested below
+     0.61 · └ EdgeRemoved  spdlog::sinks::rotating_file_sink::rotating_file_sink<Mutex> [void (std::basic_string<char>, unsigned long, unsigned long, bool, 
+const spdlog::file_event_handlers &)] -> spdlog::sinks::rotating_file_sink::calc_filename
+     0.61 · └ EdgeRemoved  spdlog::sinks::rotating_file_sink::rotating_file_sink<Mutex> [void (std::basic_string<char>, unsigned long, unsigned long, bool, 
+const spdlog::file_event_handlers &)] -> spdlog::throw_spdlog_ex [void (std::basic_string<char>)]
+     0.61 · └ EdgeRemoved  spdlog::sinks::rotating_file_sink::rotating_file_sink<Mutex> [void (std::basic_string<char>, unsigned long, unsigned long, bool, 
+const spdlog::file_event_handlers &)] -> spdlog::details::file_helper::size
+     0.61 · └ EdgeRemoved  spdlog::sinks::rotating_file_sink::rotating_file_sink<Mutex> [void (std::basic_string<char>, unsigned long, unsigned long, bool, 
+const spdlog::file_event_handlers &)] -> spdlog::details::file_helper::file_helper
+     0.61 · └ EdgeRemoved  spdlog::sinks::rotating_file_sink::rotating_file_sink<Mutex> [void (std::basic_string<char>, unsigned long, unsigned long, bool, 
+const spdlog::file_event_handlers &)] -> spdlog::details::file_helper::open
+     0.61 · └ EdgeRemoved  spdlog::sinks::rotating_file_sink::rotating_file_sink<Mutex> [void (std::basic_string<char>, unsigned long, unsigned long, bool, 
+const spdlog::file_event_handlers &)] -> spdlog::file_event_handlers::file_event_handlers
+     0.61 · └ EdgeRemoved  spdlog::sinks::rotating_file_sink::rotating_file_sink<Mutex> [void (std::basic_string<char>, unsigned long, unsigned long, bool, 
+const spdlog::file_event_handlers &)] -> spdlog::sinks::rotating_file_sink::rotate_
+     0.58 · └ EdgeRemoved  spdlog::sinks::rotating_file_sink -> spdlog::sinks::rotating_file_sink::rotating_file_sink<Mutex> [void (std::basic_string<char>, 
+unsigned long, unsigned long, bool, const spdlog::file_event_handlers &)]
+  0.72 ● NodeAdded  + spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, const
+spdlog::file_event_handlers &, unsigned long)]  include/spdlog/sinks/daily_file_sink.h:72
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model
+         10 consequence(s) nested below
+     0.59 · └ EdgeAdded  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &, unsigned long)] -> spdlog::throw_spdlog_ex [void (std::basic_string<char>)]
+     0.59 · └ EdgeAdded  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &, unsigned long)] -> spdlog::sinks::daily_file_sink::next_rotation_tp_
+     0.59 · └ EdgeAdded  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &, unsigned long)] -> spdlog::details::file_helper::file_helper
+     0.59 · └ EdgeAdded  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &, unsigned long)] -> spdlog::file_event_handlers::file_event_handlers
+     0.59 · └ EdgeAdded  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &, unsigned long)] -> spdlog::details::circular_q::circular_q<T>
+     0.59 · └ EdgeAdded  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &, unsigned long)] -> spdlog::details::file_helper::open
+     0.59 · └ EdgeAdded  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &, unsigned long)] -> spdlog::details::file_helper::set_buffer_size
+     0.59 · └ EdgeAdded  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &, unsigned long)] -> spdlog::sinks::daily_file_sink::init_filenames_q_
+     0.59 · └ EdgeAdded  spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, int, int, bool, unsigned short, 
+const spdlog::file_event_handlers &, unsigned long)] -> spdlog::sinks::daily_file_sink::now_tm
+     0.57 · └ EdgeAdded  spdlog::sinks::daily_file_sink -> spdlog::sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> [void (std::basic_string<char>, 
+int, int, bool, unsigned short, const spdlog::file_event_handlers &, unsigned long)]
+  0.72 ● NodeAdded  + spdlog::sinks::basic_file_sink::buffer_size  include/spdlog/sinks/basic_file_sink-inl.h:44
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.59 · └ EdgeAdded  spdlog::sinks::basic_file_sink::buffer_size -> spdlog::details::file_helper::buffer_size
+     0.57 · └ EdgeAdded  spdlog::sinks::basic_file_sink -> spdlog::sinks::basic_file_sink::buffer_size
+  0.72 ● NodeAdded  + spdlog::sinks::basic_file_sink::set_buffer_size  include/spdlog/sinks/basic_file_sink-inl.h:38
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.59 · └ EdgeAdded  spdlog::sinks::basic_file_sink::set_buffer_size -> spdlog::details::file_helper::set_buffer_size
+     0.57 · └ EdgeAdded  spdlog::sinks::basic_file_sink -> spdlog::sinks::basic_file_sink::set_buffer_size
+  0.72 ● NodeAdded  + spdlog::sinks::rotating_file_sink::buffer_size  include/spdlog/sinks/rotating_file_sink-inl.h:121
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.59 · └ EdgeAdded  spdlog::sinks::rotating_file_sink::buffer_size -> spdlog::details::file_helper::buffer_size
+     0.57 · └ EdgeAdded  spdlog::sinks::rotating_file_sink -> spdlog::sinks::rotating_file_sink::buffer_size
+  0.72 ● NodeAdded  + spdlog::sinks::rotating_file_sink::set_buffer_size  include/spdlog/sinks/rotating_file_sink-inl.h:115
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.59 · └ EdgeAdded  spdlog::sinks::rotating_file_sink::set_buffer_size -> spdlog::details::file_helper::set_buffer_size
+     0.57 · └ EdgeAdded  spdlog::sinks::rotating_file_sink -> spdlog::sinks::rotating_file_sink::set_buffer_size
+
+… 34 more top-level events (--limit 0 for all, or --json for every one)
+
+identity: tier declared only (ARCH-001 §13, STATUS §6)
+  2,466 matched · 11 base / 24 head unmatched
+  git found no renames; one it could not detect would read here as a removal plus an addition
+  at most 11 of those are pairs tiers 2-4 could match; that is the upper bound on what rename detection would remove
+
+true of every run:
+  One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not 
+implied.
+  Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.

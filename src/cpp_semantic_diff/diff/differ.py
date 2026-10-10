@@ -7,13 +7,13 @@ cheaply: two models with the same `Model.fingerprint()` must produce an empty li
 
 Three things this stage deliberately does *not* do.
 
-**It does not decide identity.** Every "these two are the same entity" judgement arrives in
-the `Correspondence`. v0 runs tier 1 alone (ARCH-001 §13), so a renamed function arrives as
-one unmatched base node and one unmatched head node and leaves here as `NodeRemoved` plus
+**It does not decide identity.** Every "these two are the same entity" judgement arrives in the
+`Correspondence`. v0 runs tier 1 alone (ARCH-001 §13), so a renamed function arrives as one
+unmatched base node and one unmatched head node and leaves here as `NodeRemoved` plus
 `NodeAdded`. That reads badly on purpose: the size of that residue is the measurement that
-decides whether tiers 2-4 are worth building (STATUS §6), and any softening here -- a
-name-based fallback, a similarity guess -- would both destroy the measurement and put an
-identity decision somewhere nobody would think to look for one.
+decides whether tiers 2-4 are worth building, and any softening here -- a name-based fallback,
+a similarity guess -- would both destroy the measurement and put an identity decision somewhere
+nobody would think to look for one.
 
 **It does not collapse cascades.** Removing a class emits the removal of the class, of
 every member, and of every edge that touched them. ARCH-001 §6.3 puts collapse at render

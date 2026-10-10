@@ -12,7 +12,8 @@ Two things it deliberately does not do.
 list in the order the diff stage emitted it. Collapse is a view concern (§6.3, `collapse.py`)
 and this document is what the views agree on.
 
-**It does not improve the numerator.** `summary.events_reported` is `len(events)`. §10 makes
+**It does not improve the numerator.** `summary.events_reported` is `len(events)`, and the
+numerator is its first-party part (schema 1.2; `compression_sentence` says why). §10 makes
 the compression ratio the experiment this project runs on itself, and there is no filter,
 bucket or threshold here that could flatter it.
 """
@@ -137,9 +138,8 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int, vendor
     flattering one: aligning the universes made leveldb's ratio finite but still inverted,
     which is the honest result.
 
-    `summary.events_reported` is untouched and remains the complete set. STATUS §2 exists
-    because that is the one figure nobody can audit from outside, and it may not shrink
-    because a dependency moved.
+    `summary.events_reported` is untouched and remains the complete set. It is the one figure
+    nobody can audit from outside, and it may not shrink because a dependency moved.
     """
     head = (
         f"{lines_changed:,} lines changed -> {events:,} semantic event{'' if events == 1 else 's'}"
@@ -186,10 +186,10 @@ def _entities(events: Sequence[Event], base: Model, head: Model) -> dict[NodeId,
         in_head = head.nodes.get(node_id)
         node = in_head or in_base
         if node is None:
-            # An id neither model carries. Real, and not a defect to hide: the builder
-            # drops edges whose endpoint no TU declared (STATUS §3) but their ids can still
-            # reach an event through a subject. Omitting the summary is honest -- the view
-            # falls back to the raw id, which is all that is actually known about it.
+            # An id neither model carries. Real, and not a defect to hide: the builder drops
+            # edges whose endpoint no TU declared but their ids can still reach an event
+            # through a subject. Omitting the summary is honest -- the view falls back to the
+            # raw id, which is all that is actually known about it.
             continue
         out[node_id] = _summary(node, in_base is not None, in_head is not None)
     return out

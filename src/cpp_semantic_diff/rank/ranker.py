@@ -1,6 +1,6 @@
 """The rank stage (ARCH-001 §3, §7): events plus two models in, an order out.
 
-RESEARCH-002 §4 is the argument this stage rests on: every question in §3 assumes the
+RESEARCH-002 §4 is the argument this stage rests on: every question in RESEARCH-002 §3 assumes the
 reviewer is already looking at the right thing, and *the higher-value output is telling them
 what to look at*. That is why ranking is a stage rather than a sort in the renderer -- the
 ordering and the decomposition are analysis, derived from the two models, and `cli.py` must
@@ -50,9 +50,9 @@ class Ranking(BaseModel):
         """Events in bundled dependencies, which sort last as a block.
 
         Reported so the partition is visible. A view that shows the top N and says nothing
-        would be silently dropping 96 % of the delta on a dependency bump, and "the tool
-        found almost nothing" and "the tool set almost everything aside" have to be told
-        apart from the output alone.
+        would be silently dropping most of the delta on a dependency bump, and "the tool found
+        almost nothing" and "the tool set almost everything aside" have to be told apart from
+        the output alone.
         """
         return sum(1 for s in self.scores if s.exposure is Exposure.VENDORED)
 
@@ -60,10 +60,11 @@ class Ranking(BaseModel):
     def first_party_count(self) -> int:
         """Events in the reviewer's own code -- everything except bundled dependencies.
 
-        The numerator of §10's compression ratio. The denominator is lines of *text diff*,
-        and git shows a submodule bump as two lines rather than the hundred thousand inside
-        it, so a ratio taken over every modelled event compares a first-party denominator
-        against a whole-world numerator. On leveldb that read 0.0 lines per event.
+        The numerator of §10's compression ratio. The denominator is lines of *text diff*, and
+        git shows a submodule bump as two lines rather than the hundred thousand inside it, so
+        a ratio taken over every modelled event compares a first-party denominator against a
+        whole-world numerator. On leveldb that read 0.0 lines per event (commit `8046af5`,
+        2026-08-04).
         """
         return sum(1 for s in self.scores if s.exposure is not Exposure.VENDORED)
 
@@ -76,11 +77,11 @@ class Ranking(BaseModel):
         high-risk threshold on their own, with the tool's uncertainty about the match kept
         out of the count even though it is kept in the order (`RiskScore.is_high_risk`).
 
-        First-party for the same reason the ratio is: this is a headline count of changes
-        the reviewer should look at, and they are not looking at bundled googletest. On
-        leveldb 16 of 21 high-risk events were vendored, so the unpartitioned count would
-        have promised sixteen dangerous changes that the view does not show and the reviewer
-        did not write.
+        First-party for the same reason the ratio is: this is a headline count of changes the
+        reviewer should look at, and they are not looking at bundled googletest. On leveldb 16
+        of 21 high-risk events were vendored (commit `562921c`, 2026-08-04), so the
+        unpartitioned count would have promised sixteen dangerous changes that the view does
+        not show and the reviewer did not write.
         """
         return sum(1 for s in self.scores if s.is_high_risk and s.exposure is not Exposure.VENDORED)
 
@@ -173,18 +174,18 @@ def rank_events(events: Sequence[Event], base: Model, head: Model) -> Ranking:
 
     **Vendored code sorts after everything first-party, whatever the scores say.** A reviewer
     is reviewing their own code; a bumped dependency is context, not the subject. Exposure was
-    a weighted term and that was not enough -- measured on leveldb, where a submodule bump made
-    the top 12 events and 44 of the top 50 vendored googletest. The arithmetic: exposure is
-    capped at `W_EXPOSURE` (0.25), so the VENDORED-to-PUBLIC gap is worth 0.2375 of score,
-    while blast radius (0.35) and novelty (0.25) together are 0.60 -- so a removed gtest node
-    with 241 dependents (0.76) beat a changed public attribute (~0.44).
+    a weighted term and that was not enough -- measured on leveldb on 2026-08-04 (commit
+    `562921c`), where a submodule bump made the top 12 events and 44 of the top 50 vendored
+    googletest. The arithmetic: exposure is capped at `W_EXPOSURE` (0.25), so the
+    VENDORED-to-PUBLIC gap is worth 0.2375 of score, while blast radius (0.35) and novelty
+    (0.25) together are 0.60 -- so a removed gtest node with 241 dependents (0.76) beat a
+    changed public attribute (~0.44).
 
     A partition rather than a bigger weight, deliberately. Raising `W_EXPOSURE` until leveldb
-    looked right would fossilize a number against one repository (STATUS §9) and would still
-    lose to a large enough blast radius on the next one. The claim being encoded is not
-    "vendored is 4x less interesting", it is "vendored is not what is being reviewed", and
-    that is an ordering, not a quantity. The weight stays for ordering vendored events
-    *among themselves*.
+    looked right would fossilize a number against one repository and would still lose to a
+    large enough blast radius on the next one. The claim being encoded is not "vendored is 4x
+    less interesting", it is "vendored is not what is being reviewed", and that is an ordering,
+    not a quantity. The weight stays for ordering vendored events *among themselves*.
 
     Only VENDORED is partitioned. The project's own tests are the reviewer's code and keep
     their weighted demotion -- `db/db_test.cc` is theirs to fix, `third_party/googletest` is

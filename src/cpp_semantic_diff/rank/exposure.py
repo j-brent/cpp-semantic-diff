@@ -1,11 +1,11 @@
 """Is the subject reachable from a public header, or internal? ARCH-001 §7's second factor.
 
-This is the factor that decides whether the ranking works on a real repository or only on
-the fixtures, and the reason is a measurement rather than a theory. The model built from
-`fmt` is **80.6 % test code** -- 48.9 % under `test/`, 31.7 % vendored `test/gtest`
-(3,347 nodes) -- and 19.2 % library. Extraction is right to include all of it: those TUs
-are in the compile database and their entities are real. But a ranking that scores by
-change shape alone puts a modified assertion helper in bundled googletest above a modified
+This is the factor that decides whether the ranking works on a real repository or only on the
+fixtures, and the reason is a measurement rather than a theory. The model built from `fmt` was
+**80.6 % test code**, 31.7 % of it vendored `test/gtest`, measured 2026-08-02 (v0 tracker §5,
+reports/2026-08-01--v0-build/STATUS.md). Extraction is right to include all of it: those TUs
+are in the compile database and their entities are real. But a ranking that scores by change
+shape alone puts a modified assertion helper in bundled googletest above a modified
 `fmt::format`, and a reviewer who is shown that once will not look at the second page.
 
 So exposure is, first and foremost, a **demotion** of code that is in the model without
@@ -16,21 +16,23 @@ classes, ordered:
 
 **The heuristic is path convention plus containment, and nothing else.** That is a real
 limitation and it is stated rather than hidden. The model carries `Node.location.file`
-(repository-relative, forward slashes), `Node.symbol`, `Node.tu` and the edge graph.
-`symbol` says an entity has linkage, not that anyone outside the library may use it.
-`Node.tu` is populated now, but only where the USR is file-scoped *and* the declaration is in
-the TU's own primary source (STATUS §6) -- file-scoped USRs are 1.5 % of fmt's nodes and 10.3 %
-of leveldb's, and `tu` is set on a subset of those, so it is `None` for almost every node this
-rule has to classify. It is a fact about internal linkage rather than a key exposure could work
-from, and this rule does not read it; whether it should is STATUS §7. The `target` node kind and
-`includes` edges in §4.2 -- which is what would let this be answered from the build system
-instead of from directory names -- are outside v0's extraction scope (§13). Directory convention
-is what is left.
+(repository-relative, forward slashes), `Node.symbol`, `Node.tu` and the edge graph. `symbol`
+says an entity has linkage, not that anyone outside the library may use it. `Node.tu` is
+populated now, but only where the USR is file-scoped *and* the declaration is in the TU's own
+primary source. File-scoped USRs were 1.5 % of fmt's nodes and 10.3 % of leveldb's, measured
+2026-08-04 (v0 tracker §3, reports/2026-08-01--v0-build/STATUS.md), and `tu` is set on a subset
+of those, so it is `None` for almost every node this rule has to classify. It is a fact about
+internal linkage rather than a key exposure could work from, and this rule does not read it.
+Whether it should sharpen the INTERNAL/PUBLIC boundary where it is set -- an entity nobody
+outside one TU can name is internal by the language, not by directory convention -- is
+undecided. The `target` node kind and `includes` edges in §4.2 -- which is what would let this
+be answered from the build system instead of from directory names -- are outside v0's
+extraction scope (§13). Directory convention is what is left.
 
 **Failure modes, plainly.**
 
 - *A library that publishes from `src/` and keeps private headers under `include/internal`*
-  is read backwards. The convention list below is the calibration surface; STATUS §5
+  is read backwards. The convention list below is the calibration surface; ARCH-001 §14
   already expects per-repository calibration for the tier-4 threshold, and this needs the
   same treatment for the same reason.
 - *A project whose subject matter is testing* -- googletest, Catch2, a fuzzing harness --
@@ -82,9 +84,9 @@ EXPOSURE_ORDER: tuple[Exposure, ...] = (
 )
 
 #: Path components that mean "not this project's code". Checked first and unconditionally:
-#: bundled googletest lives under `test/gtest`, and its headers are headers, so any rule
-#: that asked about the file extension before asking about the directory would classify
-#: 3,347 of fmt's nodes as public API.
+#: bundled googletest lives under `test/gtest`, and its headers are headers, so any rule that
+#: asked about the file extension before asking about the directory would classify all of fmt's
+#: bundled googletest as public API.
 VENDOR_SEGMENTS: frozenset[str] = frozenset(
     {
         "3rdparty",

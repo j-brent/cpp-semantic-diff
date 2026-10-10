@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playground B · demo run 38044461310</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .section-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 34px 0 4px; }
+  .section-h h2 { margin: 0; }
+  .grid2 { margin-top: 12px; }
+  .card-link h3 { display: flex; align-items: center; font-size: 16px; margin-bottom: 8px; }
+  .card-link p { font-size: 14px; color: var(--ink-2); margin: 0 0 6px; }
+  .tool { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="crumbs"><span class="kicker">cpp-semantic-diff · playground B</span></div>
+    <div id="theme-slot"></div>
+  </div>
+  <h1>What demo run <a id="run-link"></a> says, drawn</h1>
+  <p class="lede">One-off views of the <code>demo</code> workflow's summary for <span id="subjects"></span>, built from the run's two
+    artifacts (<code>demo-fmt</code>, <code>demo-spdlog</code>). Every number comes from those files. They will not update with
+    later runs.</p>
+
+  <div class="section-h"><span class="kicker product">Product</span><h2>What changed in the code under review</h2></div>
+  <p class="note">Output about fmt and spdlog themselves: what the semantic diff found, and how it ranked it.</p>
+  <div class="grid2">
+    <a class="card-link" href="product/A-signature-churn.html"><div class="panel">
+      <h3><span class="letter product">A</span>The top component, before and after</h3>
+      <p>Base and head call graphs overlaid. In both repositories the top-ranked change is a signature that gained a parameter.
+        Tier-1 identity reports it as a removal plus an addition.</p>
+      <div class="tool">archify · architecture compare</div></div></a>
+    <a class="card-link" href="product/C-compression.html"><div class="panel">
+      <h3><span class="letter product">C</span>How much smaller the change gets</h3>
+      <p>Lines changed against semantic events, top-level and high-risk, and which event kinds make up the total.</p>
+      <div class="tool">hand-built chart</div></div></a>
+    <a class="card-link" href="product/D-risk-factors.html"><div class="panel">
+      <h3><span class="letter product">D</span>Why each event ranks where it does</h3>
+      <p>Every top-level event's score split into blast radius, exposure, novelty and uncertainty, with the high-risk call
+        shown separately.</p>
+      <div class="tool">hand-built chart</div></div></a>
+  </div>
+
+  <div class="section-h"><span class="kicker process">Process</span><h2>How the tool ran, and whether to trust it</h2></div>
+  <p class="note">Output about cppsd itself: its pipeline, its timings, and the preconditions the product pages rest on.</p>
+  <div class="grid2">
+    <a class="card-link" href="process/B-pipeline/pipeline.html"><div class="panel">
+      <h3><span class="letter process">B</span>Pipeline and where the time went</h3>
+      <p>The eight stages with each one's in-process time for both targets. Producing the two models is 90–98% of it.
+        <code>enrich</code> is not built yet.</p>
+      <div class="tool">archify · architecture</div></div></a>
+    <a class="card-link" href="process/E-trust.html"><div class="panel">
+      <h3><span class="letter process">E</span>Can this run be believed?</h3>
+      <p>Parser health, translation units modelled, cache, edges leaving the model, identity residue, findings, and the
+        standing limits. One tile each, with a status.</p>
+      <div class="tool">hand-built status tiles</div></div></a>
+  </div>
+
+  <h2>Where things are</h2>
+  <div class="panel note">
+    <p><code>data/run-38044461310.json</code> (and <code>.js</code>) is what the hand-built pages read. It is produced by
+      <code>scripts/extract.py</code> from the downloaded artifacts (<code>gh run download 38044461310</code>).</p>
+    <p><code>product/A-*/base.json</code>, <code>head.json</code> are written by <code>scripts/gen_*_component0.py</code>. The diagram is
+      <code>archify compare architecture base.json head.json</code>. <code>process/B-pipeline/pipeline.json</code> is hand-written and goes
+      through <code>archify finalize</code>.</p>
+  </div>
+</main>
+<script src="data/run-38044461310.js"></script>
+<script src="assets/common.js"></script>
+<script>
+const a = document.getElementById("run-link");
+a.href = D.run.url; a.textContent = D.run.id;
+document.getElementById("subjects").textContent =
+  D.targets.map((t) => `${t.name} (${t.base_ref}...HEAD)`).join(" and ");
+</script>
+</body>
+</html>

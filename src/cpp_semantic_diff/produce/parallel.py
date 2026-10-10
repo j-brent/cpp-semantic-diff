@@ -1,34 +1,34 @@
 """Parsing translation units in worker processes -- the other half of ARCH-001 §9.
 
-The cache answers "do not parse what has not changed". It has nothing to say about the TUs
-that *did* change, and those are what the budget is actually about: **a review touching
-<= 20 TUs completes in under 30 s on a warm cache**. Measured on fmt: a fully warm build is
-6.5 s, and a review that touched 20 sources invalidated 24 TUs and took **55 s** serially --
-48 s of it inside `index.parse`, with seven of this host's eight cores idle throughout. The
-same build over eight worker processes is **19 s**, which is the difference between meeting
-the budget and missing it by a factor of two.
+The cache answers "do not parse what has not changed". It has nothing to say about the TUs that
+*did* change, and those are what the budget is actually about: **a review touching <= 20 TUs
+completes in under 30 s on a warm cache**. Measured on fmt on 2026-08-02 (v0 tracker §4,
+reports/2026-08-01--v0-build/STATUS.md): a review that touched 20 sources invalidated 24 TUs
+and took **55 s** serially, with seven of the host's eight cores idle throughout. The same
+build over eight worker processes took **19 s**, which is the difference between meeting the
+budget and missing it by a factor of two.
 
 So this module is a third producer of the same `Iterable[TuExtract]` that `build.py`'s parse
 loop and `TuCache.extracts` produce, plugged into the same seam. `assemble` cannot tell
 which one ran, and that is the whole reason the seam exists.
 
-**Processes, not threads.** Measured, not assumed: four of fmt's TUs take 10.4 s in one
-thread and 8.9 s in four -- 1.16x for four cores. `ctypes` does drop the GIL around the
-call into `index.parse`, which is where the 16 % comes from, but the extraction half of the
-work (32 % of the time) is Python walking cursors and holds the GIL throughout, and clang's
-own state is not shared across parses anyway. A thread pool buys a rounding error; a
-process pool buys the cores.
+**Processes, not threads.** Measured, not assumed: four of fmt's TUs took 10.4 s in one thread
+and 8.9 s in four -- 1.16x for four cores (measured 2026-08-02, v0 tracker §5,
+reports/2026-08-01--v0-build/STATUS.md). `ctypes` does drop the GIL around the call into
+`index.parse`, which is where that gain comes from, but the extraction half of the work is
+Python walking cursors and holds the GIL throughout, and clang's own state is not shared across
+parses anyway. A thread pool buys a rounding error; a process pool buys the cores.
 
-**Every worker parses with the verified toolchain, or refuses to parse.** A fresh process
-has an unconfigured `clang.cindex`, and a `Config` that defaults to the bundled wheel
-library returns *truncated ASTs without raising* (ARCH-001 §13) -- one worker silently
-producing partial models is the failure this project exists to prevent, arriving through a
-back door. `_configure_worker` therefore pins `CPPSD_LIBCLANG` to the library the parent
-already proved and calls `toolchain.load()`, which is the only place allowed to call
-`Config.set_library_file` (STATUS §3). The probe runs once per *worker*, not once per TU:
-0.6 s each, all eight in parallel (0.9 s wall), and only on a build that has something to
-parse. A worker whose verified toolchain is not the parent's is a hard failure, not a
-fallback -- two models built by two parsers are two different models.
+**Every worker parses with the verified toolchain, or refuses to parse.** A fresh process has
+an unconfigured `clang.cindex`, and a `Config` that defaults to the bundled wheel library
+returns *truncated ASTs without raising* (ARCH-001 §13) -- one worker silently producing
+partial models is the failure this project exists to prevent, arriving through a back door.
+`_configure_worker` therefore pins `CPPSD_LIBCLANG` to the library the parent already proved
+and calls `toolchain.load()`, which is the only place allowed to call
+`Config.set_library_file`. The probe runs once per *worker*, not once per TU, all workers in
+parallel, and only on a build that has something to parse. A worker whose verified toolchain is
+not the parent's is a hard failure, not a fallback -- two models built by two parsers are two
+different models.
 
 **Order in is order out.** Futures are collected by entry index, never by completion, so
 `Completeness.tus` lists TUs in compile-database order exactly as the serial path does.
@@ -66,11 +66,11 @@ from cpp_semantic_diff.produce.toolchain import Toolchain, load
 #: rather keep a core. `1` is the serial path, unchanged.
 WORKERS_ENV = "CPPSD_WORKERS"
 
-#: A ceiling on the *default*, never on an explicit request. Each worker holds one
-#: translation unit's AST, which for fmt's larger TUs is a few hundred megabytes, so the
-#: default has to be bounded by something other than the core count on a host with many
-#: cores and ordinary memory. Past this the budget is met anyway: 20 TUs over 8 workers is
-#: three rounds of ~1.6 s.
+#: A ceiling on the *default*, never on an explicit request. Each worker holds one translation
+#: unit's AST, which for fmt's larger TUs is a few hundred megabytes, so the default has to be
+#: bounded by something other than the core count on a host with many cores and ordinary
+#: memory. Past this the budget is met anyway: 20 TUs over 8 workers is three rounds of
+#: parsing.
 MAX_DEFAULT_WORKERS = 8
 
 #: How many times a dead pool is rebuilt before the whole build is declared a failure.
@@ -127,20 +127,21 @@ def _configure_worker(library: str, resource_dir: str, expected_id: str) -> None
     The parent has already paid for discovery and the builtin-header probe (ARCH-001 §13).
     Pinning `CPPSD_LIBCLANG` hands that answer over so the worker does not re-derive it --
     `candidate_libraries()` puts the override first -- while still going through
-    `toolchain.load()`, which is the only function permitted to call
-    `Config.set_library_file` (STATUS §3) and the only one that runs the probe.
+    `toolchain.load()`, which is the only function permitted to call `Config.set_library_file`
+    and the only one that runs the probe.
 
-    Re-probing per worker is deliberate. It costs ~0.6 s once per process against ~2 s per
-    TU, and it is what makes the guarantee a property of *this* process rather than an
+    Re-probing per worker is deliberate. It costs ~0.6 s once per process against ~2 s per TU
+    (measured 2026-08-02: v0 tracker §6, reports/2026-08-01--v0-build/STATUS.md, and commit
+    `33681d8`), and it is what makes the guarantee a property of *this* process rather than an
     inference about how it was started. Under `fork` the parent's memoized toolchain is
-    inherited and `load()` returns it immediately, so the check below is free and still
-    true; under `spawn` it is the check that stops an unverified libclang from ever parsing.
+    inherited and `load()` returns it immediately, so the check below is free and still true;
+    under `spawn` it is the check that stops an unverified libclang from ever parsing.
 
-    Almost all of that 0.6 s is `candidate_libraries()` shelling out to `llvm-config` and
-    `ldconfig` -- the probe parse itself is 24 ms. `toolchain.py` has no way to say "this
-    library is already known good, verify it and skip the search", and adding one would
-    take worker startup to about the cost of an import. That is the only thing worth
-    changing here, and it is a change to a module this one is not allowed to touch.
+    Almost all of that is `candidate_libraries()` shelling out to `llvm-config` and `ldconfig`
+    -- the probe parse itself is negligible. `toolchain.py` has no way to say "this library is
+    already known good, verify it and skip the search", and adding one would take worker
+    startup to about the cost of an import. That is the only thing worth changing here, and it
+    is a change to a module this one is not allowed to touch.
     """
     global _toolchain, _index
 
@@ -233,11 +234,11 @@ class _Pool:
 
     def _start(self) -> ProcessPoolExecutor:
         # `spawn` rather than the platform default. A forked child inherits the parent's
-        # already-loaded libclang, which is convenient and is exactly why it is the wrong
-        # thing to rely on: the guarantee would hold by accident of start method, silently
-        # stop holding wherever the default is `spawn`, and fork a process that has native
-        # library state and possibly threads in it. The initializer makes the guarantee
-        # explicit and costs 0.9 s once for eight workers.
+        # already-loaded libclang, which is convenient and is exactly why it is the wrong thing
+        # to rely on: the guarantee would hold by accident of start method, silently stop
+        # holding wherever the default is `spawn`, and fork a process that has native library
+        # state and possibly threads in it. The initializer makes the guarantee explicit and is
+        # paid once per pool, not per TU.
         return ProcessPoolExecutor(
             max_workers=self.workers,
             mp_context=mp.get_context("spawn"),
@@ -324,15 +325,17 @@ class _Producer:
         self.root = root
         self.cache = cache
         self.pool = _Pool(workers, toolchain)
-        # How far ahead of the consumer keys are computed and work dispatched. Enough to
-        # keep every worker fed while one slow TU sits at the head of the queue, and small
-        # enough that the partials waiting behind it are bounded -- fmt's average partial
-        # is ~3 MB, so this window is tens of megabytes and not the whole model twice.
+        # How far ahead of the consumer keys are computed and work dispatched. Enough to keep
+        # every worker fed while one slow TU sits at the head of the queue, and small enough
+        # that the partials waiting behind it are bounded -- fmt's partials pickled to 2.6-4.3
+        # MB each (commit `33681d8`, 2026-08-02), so this window is tens of megabytes and not
+        # the whole model twice.
         self.window = max(workers * 2, workers + 4)
-        #: Keys already claimed by an earlier entry of this build. fmt's compile database
-        #: has 50 entries and 35 distinct compilations, so 15 TUs are parsed by the serial
-        #: path and then served from the entry the *same run* just wrote. Dispatching those
-        #: to workers would parse them a second time and lose 15 x 1.56 s on a cold build.
+        #: Keys already claimed by an earlier entry of this build. fmt's compile database had
+        #: 50 entries and 35 distinct compilations (measured 2026-08-02, v0 tracker §5,
+        #: reports/2026-08-01--v0-build/STATUS.md), so 15 TUs are parsed by the serial path and
+        #: then served from the entry the *same run* just wrote. Dispatching those to workers
+        #: would parse them a second time and lose fifteen parses on a cold build.
         self.claimed: set[tuple[str, str]] = set()
 
     def _prepare(self, entry: CompileEntry) -> _Slot:
@@ -454,12 +457,12 @@ class _Producer:
         try:
             while True:
                 self._recover(buffered, emitted)
-                # Read ahead only while the next partial to yield is not already in hand.
-                # A fully warm build is every TU a cache hit, and reading a window ahead
-                # there would hold twenty partials alive to hand out one -- measured at
-                # 8.2 s against the serial path's 7.4 s on fmt, which is a regression on the
-                # case ARCH-001 §9 cares most about. Work is dispatched when there is
-                # something to wait for, and not otherwise.
+                # Read ahead only while the next partial to yield is not already in hand. A
+                # fully warm build is every TU a cache hit, and reading a window ahead there
+                # would hold twenty partials alive to hand out one -- measured slower than the
+                # serial path on fmt, which is a regression on the case ARCH-001 §9 cares most
+                # about. Work is dispatched when there is something to wait for, and not
+                # otherwise.
                 head = buffered.get(emitted)
                 while (
                     not exhausted

@@ -110,13 +110,13 @@ class RiskScore(BaseModel):
     def is_high_risk(self) -> bool:
         """ARCH-001 §10's `summary.high_risk_count`, one event at a time.
 
-        On `impact`, not on `total`, and the reason is structural rather than a retune. In
-        v0 (tier-1 identity only, §13) every add and every remove is unmatched residue, so
-        the uncertainty factor is pinned at its maximum for that whole population -- a
-        constant offset, carrying no information *within* it. Against a fixed threshold that
-        offset is decisive: a public `NodeAdded` with no dependents at all scored
-        0.25 + 0.2125 + 0.15 = 0.6125 and cleared 0.6 on the strength of being new. On fmt
-        at `HEAD~100` that made 133 of 335 events (40 %) "high risk", which is a measurement
+        On `impact`, not on `total`, and the reason is structural rather than a retune. In v0
+        (tier-1 identity only, §13) every add and every remove is unmatched residue, so the
+        uncertainty factor is pinned at its maximum for that whole population -- a constant
+        offset, carrying no information *within* it. Against a fixed threshold that offset is
+        decisive: a public `NodeAdded` with no dependents at all scored 0.25 + 0.2125 + 0.15 =
+        0.6125 and cleared 0.6 on the strength of being new. On fmt at `HEAD~100` that made 133
+        of 335 events (40 %) "high risk" (commit `ef2daff`, 2026-08-02), which is a measurement
         of how much of the diff is new, not of how much of it is dangerous.
 
         Dropping uncertainty from the *count* is not the inversion §7 forbids. §7's rule is
@@ -194,15 +194,15 @@ def _blast_radius(event: Event, ctx: ScoringContext) -> Factor:
     rather than assumed, because "40 things used to depend on this" and "40 things depend on
     this" are different claims.
 
-    An edge subject is measured from its **source only** -- `graph.subject_home`, which
-    carries the argument. Taking the larger of the two endpoints, as this did, answers a
-    question nobody asked: for `EdgeAdded(A -> B)` the thing that changed is A's behaviour,
-    and B's fan-in is a fact about B that this change did not touch. On fmt at `HEAD~100`
-    that put ten `EdgeAdded` events at 0.84-0.57 above the `NodeAdded(fmt::v12::vprintln)`
-    at 0.70 that *caused* them, with the risk attributed to `detail::buffer::size` -- an
-    entity not in the diff. `_bound_by_cause` in `ranker.py` is the second half of the fix
-    and covers the case where classify has linked the consequence; this half has to work
-    when it has not, because rank must not depend on classify having run.
+    An edge subject is measured from its **source only** -- `graph.subject_home`, which carries
+    the argument. Taking the larger of the two endpoints, as this did, answers a question
+    nobody asked: for `EdgeAdded(A -> B)` the thing that changed is A's behaviour, and B's
+    fan-in is a fact about B that this change did not touch. On fmt at `HEAD~100` that put
+    `EdgeAdded` events above the `NodeAdded(fmt::v12::vprintln)` that *caused* them, with the
+    risk attributed to `detail::buffer::size` -- an entity not in the diff (commit `ef2daff`,
+    2026-08-02). `_bound_by_cause` in `ranker.py` is the second half of the fix and covers the
+    case where classify has linked the consequence; this half has to work when it has not,
+    because rank must not depend on classify having run.
     """
     home = subject_home(event.subject)
 
@@ -243,7 +243,8 @@ def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
     property of the pair an edge names, not of one end of it, and for a `contains` edge the
     source is the *container* -- the one node whose location this model cannot pin down.
 
-    Measured on all three fixtures, max against source-only:
+    Measured on all three fixtures on 2026-09-20, max against source-only (v0 tracker §6,
+    reports/2026-08-01--v0-build/STATUS.md):
 
     - **spdlog `HEAD~30` (9 edge events) and leveldb `HEAD~10` (2,351) are identical.** Not
       one event changes class, score, rank, component or high-risk status. On leveldb every
@@ -260,11 +261,11 @@ def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
       `NodeAdded` they belong to stays PUBLIC at ranks 1-2. One change, split across the
       demotion, on the strength of which header happened to reopen a namespace last.
 
-    So of STATUS §8's two decisions, *"low confidence ranks up"* wins over *"the reviewer is
-    reviewing their own code"*. The second is a claim about attribution and it is already
-    spent -- `subject_home` applies it everywhere the question is what changed. Exposure is
-    not that question, and max is the reading that cannot hide: it only ever moves an event
-    toward the reviewer, never out of sight.
+    So of two settled decisions, *"low confidence ranks up"* wins over *"the reviewer is
+    reviewing their own code"*. The second is a claim about attribution and it is already spent
+    -- `subject_home` applies it everywhere the question is what changed. Exposure is not that
+    question, and max is the reading that cannot hide: it only ever moves an event toward the
+    reviewer, never out of sight.
 
     **The one direction max can err in, named rather than guarded.** It never pulls a
     first-party event into `ranker.py`'s vendored block, but the reverse is open: an

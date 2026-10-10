@@ -264,11 +264,11 @@ class TestNothingVanishes:
 
 
 class TestTheVerifiedToolchainReachesEveryWorker:
-    """ARCH-001 §13 and STATUS §3. The parent proves one libclang can reach the compiler's
-    builtin headers before any model is built; a worker process starts with none of that.
-    An unverified library does not raise -- it returns a truncated AST -- so a worker with
-    the wrong one produces partial models that are quietly missing declarations, and they
-    get merged in as if they agreed."""
+    """ARCH-001 §13. The parent proves one libclang can reach the compiler's builtin headers
+    before any model is built; a worker process starts with none of that. An unverified library
+    does not raise -- it returns a truncated AST -- so a worker with the wrong one produces
+    partial models that are quietly missing declarations, and they get merged in as if they
+    agreed."""
 
     def test_a_worker_parses_builtin_headers(self, tmp_path: Path, toolchain: Toolchain) -> None:
         """End to end, through the same door a review comes in by. `size_t` and `va_list`
@@ -364,8 +364,8 @@ class TestOneWorkerAndTheWorkerCount:
 
 
 class TestTheCacheStillDoesItsWork:
-    """ARCH-001 §9. The parallelism that matters is over the invalidated set -- a hit is
-    0.08 s and a miss 1.56 s -- so a pool that dispatched cached TUs to workers would be
+    """ARCH-001 §9. The parallelism that matters is over the invalidated set -- a hit costs a
+    small fraction of a miss -- so a pool that dispatched cached TUs to workers would be
     parallelizing the part that was already free."""
 
     def test_a_cached_translation_unit_is_not_reparsed_by_a_worker(

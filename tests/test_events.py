@@ -162,7 +162,7 @@ class TestTheShapeIsArch62:
         }
 
     def test_nothing_in_the_schema_can_hide_an_event(self) -> None:
-        """ARCH-001 §6.3, STATUS §6: collapse happens at render, never at diff.
+        """ARCH-001 §6.3: collapse happens at render, never at diff.
 
         A `suppressed`/`collapsed` flag here would let the diff stage decide what a reviewer
         never sees. The JSON carries the full set; the view hides consequences under causes.

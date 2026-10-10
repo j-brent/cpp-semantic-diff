@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compression · fmt and spdlog</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; }
+  .flow .arrow { align-self: center; font-size: 22px; color: var(--muted); }
+  .hero { font-size: 40px; font-weight: 700; line-height: 1; }
+  .bars { width: 100%; height: auto; display: block; }
+  .kindbar rect:hover, .bars rect.hit:hover { cursor: default; }
+  @media (max-width: 560px) { .flow { grid-template-columns: 1fr; } .flow .arrow { transform: rotate(90deg); justify-self: center; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="crumbs"><a href="../index.html">Playground B</a> <span>/</span> <span class="kicker product">Product</span> <span>/</span> <span>C</span></div>
+    <div id="theme-slot"></div>
+  </div>
+  <h1>C · How much smaller the change gets</h1>
+  <p class="lede">The project's headline claim: the text diff a reviewer reads today (the <em>denominator</em>, from
+    <code>cppsd plan</code>) against the semantic events <code>cppsd diff</code> reports (the <em>numerator</em>).
+    Lines and events are different units, so they are never drawn on the same axis. The ratio connects them.</p>
+
+  <div class="grid2" id="panels"></div>
+
+  <h2>Which kinds of event make up the total</h2>
+  <p class="note">Every event in each document, by kind. The colour follows the kind on both repositories.
+    Hover a segment for its count.</p>
+  <div class="legend" id="kind-legend"></div>
+  <div class="grid2" id="kinds"></div>
+
+  <h2>Read with care</h2>
+  <div class="panel note">
+    <p><b>Lines per event is not a quality score.</b> It goes up when more of the change is outside what was modelled.
+      spdlog's compile database has 8 translation units against 105 changed files. Lines in files that no modelled
+      translation unit reaches cannot produce an event, so they count in the denominator only.</p>
+    <p><b>High-risk is computed from <code>impact</code>, not the ranking total.</b> Impact leaves out the uncertainty factor
+      (<code>rank/score.py</code>, <code>is_high_risk</code>), so the count is not inflated by unmatched add/remove pairs.
+      Page D shows both.</p>
+    <p><b>Top-level</b> means an event with no <code>caused_by</code>; the other events are nested under a cause
+      (ARCH-001 §6.3).</p>
+  </div>
+
+  <h2>Table view</h2>
+  <div class="panel scroll-x"><table class="data" id="table"></table></div>
+  <p class="note muted">Source: <code>summary</code> and <code>events</code> of each <code>diff.json</code>, and <code>plan.txt</code>, in the
+    artifacts of <a id="run-link">the run</a>.</p>
+</main>
+<script src="../data/run-38044461310.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+const KINDS = [
+  ["NodeAdded", "var(--s1)"], ["NodeRemoved", "var(--s2)"], ["NodeBodyChanged", "var(--s3)"],
+  ["EdgeAdded", "var(--s4)"], ["EdgeRemoved", "var(--s5)"],
+];
+const MAXE = Math.max(...D.targets.map((t) => t.summary.events_reported));
+document.getElementById("run-link").href = D.run.url;
+document.getElementById("run-link").textContent = "run " + D.run.id;
+
+for (const t of D.targets) {
+  const s = t.summary;
+  const panel = el("section", { class: "panel" },
+    el("h3", {}, el("span", { class: "mono", text: t.name }), "  ",
+      el("span", { class: "muted mono", text: `${t.base_ref}...HEAD  (${t.revs[0]} → ${t.revs[1]})` })),
+    el("div", { class: "flow", style: "margin:12px 0" },
+      el("div", { class: "tile" },
+        el("div", { class: "l", text: "a reviewer reads today" }),
+        el("div", { class: "v num", text: fmtN(t.plan.lines_changed) }),
+        el("div", { class: "l", text: `lines · ${t.plan.files_changed} files (${t.plan.cpp_files} C++)` })),
+      el("div", { class: "arrow", "aria-hidden": "true", text: "→" }),
+      el("div", { class: "tile" },
+        el("div", { class: "l", text: "cppsd reports" }),
+        el("div", { class: "v num", text: fmtN(s.events_reported) }),
+        el("div", { class: "l", text: `semantic events in ${s.components} components` }))),
+    el("div", { style: "display:flex;align-items:baseline;gap:10px;margin:6px 0 2px" },
+      el("span", { class: "hero num", text: (Math.round(s.compression_ratio * 10) / 10).toFixed(1) }),
+      el("span", { class: "note", text: "lines changed per semantic event" })),
+    eventBars(t));
+  document.getElementById("panels").append(panel);
+}
+
+// Single-series bars on a scale shared by both panels, so the two repositories compare directly.
+function eventBars(t) {
+  const s = t.summary;
+  const rows = [
+    ["all events", s.events_reported, "every event in the document"],
+    ["top-level", s.top_level_events, "after cascade collapse: events with no cause"],
+    ["high-risk", s.high_risk_count, "impact ≥ 0.6 (blast radius, exposure, novelty)"],
+  ];
+  const W = 480, L = 86, R = 44, rowH = 34, H = rows.length * rowH + 24;
+  const x = (v) => L + (v / MAXE) * (W - L - R);
+  const svg = el("svg:svg", { class: "bars", viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": `${t.name}: ${rows.map((r) => `${r[0]} ${r[1]}`).join(", ")}` });
+  for (const tick of [0, 50, 100, 150]) {
+    if (tick > MAXE) continue;
+    svg.append(el("svg:line", { class: "grid", x1: x(tick), x2: x(tick), y1: 4, y2: H - 18, "stroke-width": 1 }),
+      el("svg:text", { x: x(tick), y: H - 4, "text-anchor": "middle", "font-size": 10, class: "muted", text: tick }));
+  }
+  rows.forEach(([label, v, help], i) => {
+    const y = 8 + i * rowH, h = 18;
+    const w = Math.max(2, x(v) - L);
+    svg.append(
+      el("svg:text", { x: L - 8, y: y + 13, "text-anchor": "end", "font-size": 12, text: label }),
+      el("svg:path", { d: barPath(L, y, w, h), fill: "var(--s1)" }),
+      el("svg:text", { x: L + w + 6, y: y + 13, "font-size": 12, class: "ink num", "font-weight": 600, text: v }),
+      el("svg:rect", { class: "hit", x: 0, y: y - 6, width: W, height: rowH, fill: "transparent",
+        onmousemove: (e) => tip.show(e, el("div", {}, el("div", { class: "t", text: `${t.name} · ${label}: ${v}` }), el("div", { class: "note", text: help }))),
+        onmouseleave: () => tip.hide() }));
+  });
+  svg.append(el("svg:line", { class: "axis", x1: L, x2: L, y1: 2, y2: H - 18, "stroke-width": 1 }));
+  return svg;
+}
+
+// Horizontal bar with 4px rounding on the data end only, anchored square at the baseline.
+function barPath(x0, y, w, h) {
+  const r = Math.min(4, w / 2, h / 2);
+  return `M${x0},${y}H${x0 + w - r}Q${x0 + w},${y} ${x0 + w},${y + r}V${y + h - r}Q${x0 + w},${y + h} ${x0 + w - r},${y + h}H${x0}Z`;
+}
+
+const legend = document.getElementById("kind-legend");
+for (const [k, c] of KINDS) legend.append(el("span", {}, el("span", { class: "sw", style: `background:${c}` }), k));
+
+for (const t of D.targets) {
+  const total = t.summary.events_reported;
+  const W = 480, H = 64, L = 0, R = 0, bh = 26, gap = 2;
+  const scale = (W - L - R) / MAXE;
+  const svg = el("svg:svg", { class: "bars kindbar", viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": `${t.name} events by kind: ` + KINDS.map(([k]) => `${k} ${t.kinds[k] || 0}`).join(", ") });
+  let x = L;
+  KINDS.forEach(([k, c]) => {
+    const v = t.kinds[k] || 0;
+    if (!v) return;
+    const w = v * scale;
+    svg.append(el("svg:rect", { x: x, y: 18, width: Math.max(1, w - gap), height: bh, rx: 2, fill: c,
+      onmousemove: (e) => tip.show(e, el("div", {}, el("div", { class: "t", text: `${t.name} · ${k}` }),
+        el("div", { class: "num", text: `${v} of ${total} events (${pct(v, total)})` }))),
+      onmouseleave: () => tip.hide() }));
+    if (w > 34) svg.append(el("svg:text", { x: x + 6, y: 35, "font-size": 11, class: "ink num", "font-weight": 600, text: v, "pointer-events": "none",
+      style: "fill:#0b0b0b" }));
+    x += w;
+  });
+  svg.append(el("svg:text", { x: 0, y: 12, "font-size": 12, class: "ink", "font-weight": 600, text: `${t.name} · ${total} events` }));
+  document.getElementById("kinds").append(el("div", { class: "panel" }, svg));
+}
+
+const table = document.getElementById("table");
+table.append(el("thead", {}, el("tr", {}, el("th", { text: "" }), ...D.targets.map((t) => el("th", { class: "r mono", text: t.name })))));
+const rowsT = [
+  ["lines changed", (t) => fmtN(t.plan.lines_changed)],
+  ["files changed (C++)", (t) => `${t.plan.files_changed} (${t.plan.cpp_files})`],
+  ["semantic events", (t) => t.summary.events_reported],
+  ["top-level events", (t) => t.summary.top_level_events],
+  ["high-risk events", (t) => t.summary.high_risk_count],
+  ["components", (t) => t.summary.components],
+  ["lines per event", (t) => t.summary.compression_ratio.toFixed(2)],
+  ...KINDS.map(([k]) => [k, (t) => t.kinds[k] || 0]),
+];
+const tb = el("tbody");
+for (const [label, f] of rowsT) tb.append(el("tr", {}, el("td", { text: label }), ...D.targets.map((t) => el("td", { class: "r", text: f(t) }))));
+table.append(tb);
+</script>
+</body>
+</html>

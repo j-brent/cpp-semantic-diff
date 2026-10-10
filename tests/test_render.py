@@ -8,14 +8,14 @@ thing under test and the contract the thing that quietly changed.
 The claims that carry the most weight, in the order they would hurt most if broken:
 
 1. **The document carries the complete event set even when the view collapses cascades.**
-   §6.3 and STATUS §6 put collapse at render precisely so this can be true, and it is the
-   easiest thing in this stage to get wrong -- a collapse that filtered the list instead of
-   nesting ids would look identical on screen and delete changes from the product.
+   §6.3 puts collapse at render precisely so this can be true, and it is the easiest thing in
+   this stage to get wrong -- a collapse that filtered the list instead of nesting ids would
+   look identical on screen and delete changes from the product.
 2. **An event with no cause is never hidden.** §6.3: when cause attribution is uncertain,
    default to showing.
 3. **The view derives everything from the document and nothing from the models.**
 4. **The compression summary counts what it claims to count.**
-5. **An incomplete model produces a visible warning, above the events.** §11.2.
+5. **An incomplete model produces a visible warning, above the events.** §11 rule 2.
 6. **The document round-trips**, because "JSON is the product" is otherwise aspirational.
 
 Documents are built by hand. Nothing here needs libclang, a compile database or a fixture
@@ -168,7 +168,7 @@ def clean() -> Completeness:
 
 
 class TestDocumentCarriesEverything:
-    """**The JSON is complete even when the view collapses.** ARCH-001 §6.3, STATUS §6.
+    """**The JSON is complete even when the view collapses.** ARCH-001 §6.3.
 
     This is the invariant the whole stage is arranged around, and the one whose violation
     is invisible: a collapse that filtered rather than nested would render identically and
@@ -419,7 +419,8 @@ class TestCompressionCountsWhatItClaims:
         )
 
     def test_the_ratio_does_not_straddle_two_universes(self) -> None:
-        """Measured on leveldb: 52 lines changed, 3,794 events, 0.0 lines per event.
+        """Measured on leveldb: 52 lines changed, 3,794 events, 0.0 lines per event (commits
+        `2651354` and `8046af5`, 2026-08-04).
 
         The denominator is lines of *text diff*, and git renders a submodule bump as two
         lines rather than the hundred thousand inside it. Dividing that by every modelled
@@ -461,8 +462,9 @@ class TestCompressionCountsWhatItClaims:
         assert "no semantic change" not in doc.summary.compression
 
     def test_high_risk_does_not_count_what_the_reviewer_is_not_shown(self) -> None:
-        """On leveldb 16 of 21 high-risk events were vendored. A headline promising sixteen
-        dangerous changes the view never shows is worse than no headline."""
+        """On leveldb 16 of 21 high-risk events were vendored (commit `562921c`, 2026-08-04). A
+        headline promising sixteen dangerous changes the view never shows is worse than no
+        headline."""
         dependents = [node(f"c:@F@x{i}#", file="third_party/gtest/gtest.cc") for i in range(40)]
         base = model(
             "a",
@@ -487,7 +489,7 @@ class TestCompressionCountsWhatItClaims:
 
 
 class TestIncompletenessIsVisible:
-    """ARCH-001 §11.2: "any output built on an incomplete model states what was missing, at
+    """ARCH-001 §11 rule 2: "any output built on an incomplete model states what was missing, at
     the top, not in a log." """
 
     def _doc(self, base_c: Completeness, head_c: Completeness) -> DiffDocument:
@@ -505,7 +507,7 @@ class TestIncompletenessIsVisible:
         assert "src/b.cpp" in out and "stddef.h not found" in out
 
     def test_the_reason_a_tu_failed_reaches_the_page_whole(self) -> None:
-        """§11.2 asks for what was missing, which makes a mangled reason worse than a loud
+        """§11 rule 2 asks for what was missing, which makes a mangled reason worse than a loud
         one. A clang diagnostic quotes C++ and C++ is bracketed -- `[[nodiscard]]`, a
         template argument list, clang's own `[note]` -- and the terminal's markup parser
         drops a bracketed run it cannot style. So the disclosure arrived with the cause
@@ -521,7 +523,7 @@ class TestIncompletenessIsVisible:
         assert carried in draw(doc), "the view printed less than the document gave it"
 
     def test_the_warning_precedes_the_events(self) -> None:
-        """Order is the whole of §11.2's claim: a reader who reaches the events first has
+        """Order is the whole of §11 rule 2's claim: a reader who reaches the events first has
         already formed a belief the caveat then has to undo."""
         doc = self._doc(incomplete(), clean())
         out = draw(doc)
@@ -548,8 +550,9 @@ class TestIncompletenessIsVisible:
 class TestTheGraphBoundaryIsStatedNumerically:
     """**The gap this class exists for**, and the shape of the fix.
 
-    `Completeness.is_complete` counts TU parse success *only*. On real fmt the builder drops
-    5,113 of 26,071 distinct edges per side -- an endpoint that no declaration in the
+    `Completeness.is_complete` counts TU parse success *only*. On real fmt the builder dropped
+    5,113 of 26,071 distinct edges per side, measured 2026-08-02 (v0 tracker §5,
+    reports/2026-08-01--v0-build/STATUS.md) -- an endpoint that no declaration in the
     repository owns -- and `is_complete` is still True. That loss used to reach the output as
     one English sentence in `Completeness.notes`, which meant two things at once: a consumer
     could report it only by matching on prose (ARCH-001 §10 makes the JSON the product), and
@@ -617,10 +620,10 @@ class TestTheGraphBoundaryIsStatedNumerically:
         assert doc.completeness.boundaries == []
 
     def test_the_percentage_is_what_makes_the_count_readable(self) -> None:
-        """5,113 dropped is routine against 26,071 and a catastrophe against 6,000. There is
-        deliberately no threshold at which this becomes a warning -- STATUS §5 says a
-        threshold with no calibration behind it is a guess presented as a policy -- so the
-        ratio has to carry that judgement to the reader instead."""
+        """One dropped count is routine against a large graph and a catastrophe against a small
+        one. There is deliberately no threshold at which this becomes a warning -- a threshold
+        with no calibration behind it is a guess presented as a policy -- so the ratio has to
+        carry that judgement to the reader instead."""
         out = draw(self._doc(self._lossy(total=6_000, dropped=5_113), self._lossy()))
         assert "85.2%" in out
 
@@ -649,7 +652,7 @@ class TestTheGraphBoundaryIsStatedNumerically:
 
 
 class TestTheResidueIsReported:
-    """STATUS §6: v0 ships tier-1 identity only, and *measuring the damage* is the
+    """ARCH-001 §13: v0 ships tier-1 identity only, and *measuring the damage* is the
     deliverable. A measurement that appears only as an inflated event count is not one."""
 
     def test_a_rename_reads_as_a_removal_plus_an_addition_and_says_so(self) -> None:
@@ -670,9 +673,10 @@ class TestTheResidueIsReported:
         assert "removal plus an addition" in out
 
     def test_bundled_dependency_churn_is_named_not_hidden(self) -> None:
-        """A dependency bump can be 96 % of the delta (leveldb, STATUS §2). Ranking puts it
-        last, so a top-N view stops showing it -- which means the count has to be stated, or
-        "almost nothing changed" and "almost everything was set aside" look identical."""
+        """A dependency bump can be 96 % of the delta (leveldb, measured 2026-08-04, v0 tracker
+        §2, reports/2026-08-01--v0-build/STATUS.md). Ranking puts it last, so a top-N view
+        stops showing it -- which means the count has to be stated, or "almost nothing changed"
+        and "almost everything was set aside" look identical."""
         own = node("c:@F@own#", name="own", file="src/lib.cc")
         dep = node("c:@F@dep#", name="dep", file="third_party/gtest/gtest.cc")
         doc = pipeline(model("a", own, dep), model("b", own))
@@ -682,9 +686,9 @@ class TestTheResidueIsReported:
         assert "bundled dependencies" in doc.summary.compression
 
     def test_the_numerator_never_shrinks_when_a_dependency_moves(self) -> None:
-        """STATUS §2: this is the one figure nobody can audit from outside. Naming vendored
-        churn beside it is honest; subtracting it would be the redefinition that stops the
-        metric measuring anything."""
+        """This is the one figure nobody can audit from outside. Naming vendored churn beside
+        it is honest; subtracting it would be the redefinition that stops the metric measuring
+        anything."""
         deps = [
             node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(5)
         ]
@@ -822,10 +826,11 @@ class TestTheDocumentIsTheContract:
 
 # -- 6 · a label is not an identity, and must not pretend to be one ------------------------
 
-#: The two fmt entities STATUS §5's misfiled defect was written from: a class template and a
-#: partial specialization of it, with the `inherits` edge between them. Real USRs, because
-#: the distinction between them survives in the USR and nowhere else on the summary -- both
-#: are `struct`, both have no signature, and `qualified_name` is the same string.
+#: The two fmt entities a misfiled defect was once written from (v0 tracker §5,
+#: reports/2026-08-01--v0-build/STATUS.md): a class template and a partial specialization of
+#: it, with the `inherits` edge between them. Real USRs, because the distinction between them
+#: survives in the USR and nowhere else on the summary -- both are `struct`, both have no
+#: signature, and `qualified_name` is the same string.
 TEMPLATE_USR = "c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg"
 PARTIAL_USR = "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0"
 SHARED_NAME = "fmt::v12::detail::is_named_arg"
@@ -848,7 +853,7 @@ def specialization_document(*nodes: Node) -> DiffDocument:
 
 
 class TestALabelNamesOneEntity:
-    """**Two entities never share a display name.** STATUS §6, §5.
+    """**Two entities never share a display name.**
 
     The claim is about the *design of the rule*, not about the words it produces, so nothing
     below pins a formatted label. What is defended is that the rule separates entities the
@@ -916,10 +921,10 @@ class TestALabelNamesOneEntity:
         assert doc.entity_name(NodeId(one.id)) != doc.entity_name(NodeId(two.id))
 
     def test_nothing_that_varies_by_host_reaches_a_label(self) -> None:
-        """STATUS §5: the extractor once leaked an absolute worktree path into identity, and
-        worktrees are named by SHA, so 32 fmt nodes differed on every comparison of any two
-        revisions. A label derived from a path must be derived from the repository-relative
-        one, or that shape comes back through the view."""
+        """The extractor once leaked an absolute worktree path into identity, and worktrees are
+        named by SHA, so nodes differed on every comparison of any two revisions. A label
+        derived from a path must be derived from the repository-relative one, or that shape
+        comes back through the view."""
         doc = specialization_document(
             record(TEMPLATE_USR, line=1056), record(PARTIAL_USR, line=1062)
         )

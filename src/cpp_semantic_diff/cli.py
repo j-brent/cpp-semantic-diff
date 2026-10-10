@@ -5,8 +5,8 @@ handling, orchestration and error reporting; it holds no presentation and no ana
 
 `cppsd diff` is the shape the rest should converge on: it runs the pipeline, hands the
 stage outputs to `render.build_document`, and then either prints that document or hands it
-to `render.render`. Not one number on the page is computed here. STATUS §4 flags the older
-commands' inline `rich` tables as the wrong shape for exactly this reason; migrating them is
+to `render.render`. Not one number on the page is computed here. The older
+commands' inline `rich` tables are the wrong shape for exactly this reason; migrating them is
 a separate change, and doing it inside the one that introduces `render` would make both
 harder to review.
 """

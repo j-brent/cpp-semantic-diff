@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "skipped",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.json",
+    "sha256": "b8cf93f0c204e08f650cbca63aff00b006154fcbc19b2638974543ba22b6c24a",
+    "bytes": 6374
+  },
+  "artifact": {
+    "path": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+    "sha256": "fc92ed0fda83c5426affbf43d35d6f734b29fb1728e6ae7983a3ec8a3e4fa1b6",
+    "bytes": 771221
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "skipped"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/chrome-unavailable",
+      "severity": "warning",
+      "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+      "subject": {
+        "artifact": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html"
+      },
+      "evidence": {
+        "executable": null
+      },
+      "supportedFixes": [
+        "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.finalize.json",
+    "summaryReceipt": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.finalize-summary.json",
+    "browserCheckReceipt": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.0.1",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-10T10:49:52.071Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 581
+}

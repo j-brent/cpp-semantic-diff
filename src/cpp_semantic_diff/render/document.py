@@ -7,7 +7,8 @@ and nothing else. That is what keeps delivery surfaces out of the analysis core,
 `terminal.py` and worth repeating here: **if a view needs a number this document does not
 carry, the fix is to put it here**, never to hand the view a `Model`.
 
-§10 gives seven top-level keys and this module gives exactly those seven. Where §10 is a
+§10 gives seven top-level keys and this module gives those seven, plus `scores` and
+`components`. Where §10 is a
 sketch rather than a spec, the choice made is recorded on the field:
 
 - **`ranking`** is `[event id]` verbatim, so a consumer that only wants reading order gets
@@ -16,13 +17,14 @@ sketch rather than a spec, the choice made is recorded on the field:
   `scores` sits beside it, keyed by event id -- an addition to §10, not a reinterpretation
   of it.
 - **`entities`** carries only the nodes events reference. §10 says "for events to
-  reference"; fmt's model has 10,574 nodes and a review touches tens of them, and a
+  reference"; a real model has thousands of nodes and a review touches tens of them, and a
   document that inlined the whole node set would be a model dump with a delta attached.
 - **`completeness`** carries the two systematic limits of §11 as data rather than as prose
   in one view, because §11 requires them stated "in the output itself, every time" -- and
   the output is this document, not the terminal.
-- **`summary`** carries §10's four keys plus the tier-1 residue. STATUS §6 makes measuring
-  rename damage a v0 deliverable, and a measurement that lives only in a log is not one.
+- **`summary`** carries §10's four keys plus others, the tier-1 residue among them. ARCH-001
+  §13 makes measuring rename damage a v0 deliverable, and a measurement that lives only in a
+  log is not one.
 
 Nothing here computes anything from a `Model`. `build.py` assembles this from the stage
 outputs; this module is the shape and the invariants.
@@ -101,13 +103,13 @@ class CompletenessReport(BaseModel):
     taints `Confidence.models_complete` on every event.
 
     *Boundary* -- `edges_dropped` of `edges_total` -- is relations whose endpoint no
-    declaration in the repository owns: `std::`, libc, implicit special members. It is
-    ~20 % of fmt's distinct edges on a completely healthy run, so it is **stated on every
-    run and alarming on none**: an alarm that is always on is one nobody reads, and the
+    declaration in the repository owns: `std::`, libc, implicit special members. It is a
+    sizeable share of a real model's edges on a completely healthy run, so it is **stated on
+    every run and alarming on none**: an alarm that is always on is one nobody reads, and the
     reader who needs to know how much of the graph is missing needs the number, not an
-    adjective. There is deliberately no threshold at which it becomes a warning -- a knob
-    with no calibration data behind it (STATUS §5) would be a guess presented as a policy.
-    The percentage is printed instead, so a residue of 90 % reads as 90 %.
+    adjective. There is deliberately no threshold at which it becomes a warning -- a knob with
+    no calibration data behind it would be a guess presented as a policy. The percentage is
+    printed instead, so a residue of 90 % reads as 90 %.
 
     Both are numbers a consumer can quote. That is the point: this record used to carry the
     edge loss only as an English sentence in `notes`, which meant every view either parsed
@@ -220,7 +222,7 @@ class CompletenessReport(BaseModel):
 
     @property
     def warnings(self) -> list[str]:
-        """What must appear above the events on this side (ARCH-001 §11.2).
+        """What must appear above the events on this side (ARCH-001 §11, rule 2).
 
         Coverage only, plus whatever the builder put in `notes`. The boundary residue is
         *not* here: it is on every real run, and a caveat that fires every time trains the
@@ -280,7 +282,7 @@ class CompletenessBlock(BaseModel):
 
     @property
     def degraded(self) -> bool:
-        """Whether §11.2's "any output built on an incomplete model must say so" applies.
+        """Whether §11 rule 2's "any output built on an incomplete model must say so" applies.
 
         **Coverage, not boundary.** `tus_complete` on both sides plus anything either
         builder recorded in `notes`. The dropped-edge residue is excluded because it is
@@ -384,7 +386,7 @@ class Meta(BaseModel):
 
 
 class Residue(BaseModel):
-    """What tier 1 could not pair -- the measurement STATUS §6 calls a v0 deliverable.
+    """What tier 1 could not pair -- the measurement ARCH-001 §13 calls a v0 deliverable.
 
     v0 ships tier-1 identity only, so a renamed function is a removal plus an addition and
     the tool looks worse than it is. That is deliberate: the damage is supposed to be
@@ -489,10 +491,11 @@ class Summary(BaseModel):
 
 # -- naming: telling apart two entities that share a qualified name ----------------------
 #
-# Identity is the USR (ARCH-001 §5), so an ambiguity here is only ever in the *label*.
-# STATUS §5 records what it costs to leave one in place: a rendered name that collapsed a
-# partial specialization and its primary template into one string was read as a self-edge,
-# filed as a producer defect, and sat in §6 for weeks against a producer that was right.
+# Identity is the USR (ARCH-001 §5), so an ambiguity here is only ever in the *label*. Leaving
+# one in place has cost a misdiagnosis (v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md):
+# a rendered name that collapsed a partial specialization and its primary template into one
+# string was read as a self-edge, filed as a producer defect, and sat in the defect list for
+# weeks against a producer that was right.
 #
 # A *discriminator* is a pure function of one entity that returns the annotation to bracket
 # after its name, or None when it has nothing to say. `entity_names` tries them in the order
@@ -505,9 +508,9 @@ class Summary(BaseModel):
 #   identically and so do two machines. The group is a *set* of entities sharing a name, and
 #   the choice of rule is a function of that set's contents, never of how it was built.
 # - **Repository-relative, never absolute.** `_by_location` leans on `Location.file` being
-#   repo-relative. STATUS §5's worst identity bug was the extractor leaking a worktree path --
-#   and worktrees are named by SHA -- which made 32 fmt nodes differ on every comparison.
-#   That shape must not come back through the label.
+#   repo-relative. The worst identity bug this project has had was the extractor leaking a
+#   worktree path -- and worktrees are named by SHA -- which made nodes differ on every
+#   comparison. That shape must not come back through the label.
 
 
 def _by_signature(node_id: NodeId, entity: EntitySummary) -> str | None:
@@ -587,8 +590,8 @@ def _by_location(node_id: NodeId, entity: EntitySummary) -> str | None:
 def _by_id(node_id: NodeId, entity: EntitySummary) -> str | None:
     """The USR. Exact, ugly, and guaranteed to work, because it is the key this entity is
     stored under and `entities` is a dict. Unreadable as a name -- but it is the string that
-    takes the reader to the same entity in the JSON, which STATUS §5 makes the first move on
-    anything surprising seen in the terminal."""
+    takes the reader to the same entity in the JSON, which is the first move on anything
+    surprising seen in the terminal: the view trades identities for names, on purpose."""
     return node_id
 
 
@@ -606,11 +609,11 @@ _DISCRIMINATORS: tuple[Callable[[NodeId, EntitySummary], str | None], ...] = (
 class DiffDocument(BaseModel):
     """ARCH-001 §10's document. The product.
 
-    The invariant that outranks every other property of this type: **`events` is complete
-    and uncollapsed**. `caused_by` is a link and never a deletion (§6.3, STATUS §6), so a
-    view may nest but the document always carries every event the diff produced. A view
-    that hides a consequence is a choice a reader can undo; a document that never carried
-    it is a change nobody can recover.
+    The invariant that outranks every other property of this type: **`events` is complete and
+    uncollapsed**. `caused_by` is a link and never a deletion (§6.3), so a view may nest but
+    the document always carries every event the diff produced. A view that hides a consequence
+    is a choice a reader can undo; a document that never carried it is a change nobody can
+    recover.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -657,11 +660,10 @@ class DiffDocument(BaseModel):
 
     @property
     def by_id(self) -> dict[EventId, Event]:
-        # Recomputed per access rather than cached: `DiffDocument` is not frozen (pydantic
-        # would have to deep-freeze `Event`, which classify copies), and a cached index on a
-        # mutable model is the kind of staleness this project spends its whole design
-        # budget avoiding. Documents are built once and read tens of times; the cost is a
-        # dict comprehension over a list a reviewer could read.
+        # Recomputed per access rather than cached: `DiffDocument` is not frozen, and a cached
+        # index on a mutable model is the kind of staleness this project spends its whole
+        # design budget avoiding. Documents are built once and read tens of times; the cost is
+        # a dict comprehension over a list a reviewer could read.
         return {e.id: e for e in self.events}
 
     def ranked(self) -> list[Event]:
@@ -741,12 +743,12 @@ class DiffDocument(BaseModel):
                 out.update({i: f"{name} [{m}]" for i, m in zip(ids, marks, strict=True)})
                 break
             else:
-                # Unreachable: `_by_id` returns the key each entity is stored under, and a
-                # dict cannot hold two. Written anyway because the alternative is a label
-                # that is ambiguous while the code believes it disambiguated -- the exact
-                # failure this method exists to prevent -- and a defect that announces
-                # itself in the output costs one reader a confusing line, where a silent
-                # one cost STATUS §5 a misfiled bug against the wrong stage.
+                # Unreachable: `_by_id` returns the key each entity is stored under, and a dict
+                # cannot hold two. Written anyway because the alternative is a label that is
+                # ambiguous while the code believes it disambiguated -- the exact failure this
+                # method exists to prevent -- and a defect that announces itself in the output
+                # costs one reader a confusing line, where a silent one once cost a bug report
+                # filed against the wrong stage.
                 out.update({i: f"{name} [ambiguous: {i}]" for i in ids})
         return out
 

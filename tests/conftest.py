@@ -146,13 +146,13 @@ def shallow_repo(tmp_path: Path, bare_repo: Path) -> Path:
     return clone
 
 
-#: The TU-identity hazards, in the smallest C++ that produces them (STATUS §6).
+#: The TU-identity hazards, in the smallest C++ that produces them.
 #:
-#: These shapes exist in no fixture repository. fmt has 250 file-scoped USRs at `da256982`
-#: and *one* of them is header-declared, so the narrow-vs-broad `Node.tu` rule would be
-#: decided there on a sample of one; its four repeated compile-database basenames are all
-#: the same file recompiled, so the collision below has no instance at all. A rule cannot be
-#: chosen against a repository that does not contain the case it is about.
+#: These shapes exist in no fixture repository. fmt has 250 file-scoped USRs at `da256982` and
+#: *one* of them is header-declared (commit `028460d`, 2026-08-04), so the narrow-vs-broad
+#: `Node.tu` rule would be decided there on a sample of one; its four repeated compile-database
+#: basenames are all the same file recompiled, so the collision below has no instance at all. A
+#: rule cannot be chosen against a repository that does not contain the case it is about.
 #:
 #: Two hazards, and they pull in opposite directions:
 #:

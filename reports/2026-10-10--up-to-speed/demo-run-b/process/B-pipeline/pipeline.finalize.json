@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "skipped",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-10T10:50:47.764Z",
+  "specification": {
+    "path": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.json",
+    "sha256": "b8cf93f0c204e08f650cbca63aff00b006154fcbc19b2638974543ba22b6c24a",
+    "bytes": 6374
+  },
+  "artifact": {
+    "path": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+    "sha256": "fc92ed0fda83c5426affbf43d35d6f734b29fb1728e6ae7983a3ec8a3e4fa1b6",
+    "bytes": 771221
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "/home/jbrent/.nvm/versions/node/v22.22.0/bin/node",
+        "/home/jbrent/.claude/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.json",
+        "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/home/jbrent/dev/cpp-semantic-diff",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "b8cf93f0c204e08f650cbca63aff00b006154fcbc19b2638974543ba22b6c24a",
+          "bytes": 6374
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 222,
+      "command": [
+        "/home/jbrent/.nvm/versions/node/v22.22.0/bin/node",
+        "/home/jbrent/.claude/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.json",
+        "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/home/jbrent/dev/cpp-semantic-diff",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "ec354705-0aca-40b9-bec7-9e6a3956a805",
+        "ok": true,
+        "command": "deliver",
+        "type": "architecture",
+        "input": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.json",
+        "output": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+        "specification": {
+          "sha256": "b8cf93f0c204e08f650cbca63aff00b006154fcbc19b2638974543ba22b6c24a",
+          "bytes": 6374
+        },
+        "artifact": {
+          "sha256": "fc92ed0fda83c5426affbf43d35d6f734b29fb1728e6ae7983a3ec8a3e4fa1b6",
+          "bytes": 771221
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        },
+        "evidence": {
+          "verified": true,
+          "repository": "https://github.com/j-brent/cpp-semantic-diff",
+          "revision": "4d8e3671cb464690ce3059773d5b4390001d550b",
+          "references": 10
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 86,
+      "command": [
+        "/home/jbrent/.nvm/versions/node/v22.22.0/bin/node",
+        "/home/jbrent/.claude/skills/archify/bin/archify.mjs",
+        "check",
+        "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+        "artifact": {
+          "sha256": "fc92ed0fda83c5426affbf43d35d6f734b29fb1728e6ae7983a3ec8a3e4fa1b6",
+          "bytes": 771221
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "showcase",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 0
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 0,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 68.1,
+            "desktopReadabilityIssues": 0,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 6.148760330578512,
+            "maxBends": 2,
+            "routesOverSuggestedBends": 0,
+            "maxStretch": 1,
+            "routesOverSuggestedStretch": 0,
+            "minSegmentPx": 55,
+            "minInteriorSegmentPx": 150.9,
+            "shortSegmentCount": 0,
+            "shortEndpointSegmentCount": 0,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [],
+            "detours": []
+          },
+          "leadingSpace": {
+            "measured": true,
+            "emptyTopPx": 90,
+            "emptyTopRatio": 0.103,
+            "occupiedTop": 90,
+            "viewBoxTop": 0,
+            "canvasHeight": 870,
+            "typicalNodeHeight": 72,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "legacy-930",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 930,
+            "actualBudgetPx": 930,
+            "limit": "legacy",
+            "requestedTargetPx": 7.5,
+            "requestedTargetMet": false,
+            "hardFloorPx": 6,
+            "hardFloorMet": true,
+            "minimumOwner": {
+              "kind": "edge",
+              "id": "a-pb",
+              "from": "acquire",
+              "to": "prod_base"
+            },
+            "minimumSourceTextPx": 8,
+            "minimumProjectedTextPx": 6.148760330578512,
+            "semanticTextCount": 34
+          },
+          "issues": []
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "ec354705-0aca-40b9-bec7-9e6a3956a805"
+      }
+    },
+    "browser-check": {
+      "status": "skipped",
+      "exitCode": 2,
+      "durationMs": 10,
+      "command": [
+        "/home/jbrent/.nvm/versions/node/v22.22.0/bin/node",
+        "/home/jbrent/.claude/skills/archify/bin/archify.mjs",
+        "browser-check",
+        "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+        "--json",
+        "--require-provenance"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "skipped",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "ec354705-0aca-40b9-bec7-9e6a3956a805",
+        "artifact": {
+          "path": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+          "sha256": "fc92ed0fda83c5426affbf43d35d6f734b29fb1728e6ae7983a3ec8a3e4fa1b6",
+          "bytes": 771221
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "unavailable",
+          "executable": null
+        },
+        "diagnostics": [
+          {
+            "code": "viewer/chrome-unavailable",
+            "severity": "warning",
+            "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+            "subject": {
+              "artifact": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html"
+            },
+            "evidence": {
+              "executable": null
+            },
+            "supportedFixes": [
+              "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+            ]
+          }
+        ],
+        "containment": {
+          "status": "skipped",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": []
+        },
+        "themeStates": {
+          "status": "skipped",
+          "viewports": []
+        },
+        "readability": {
+          "status": "skipped",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": []
+        },
+        "viewerChrome": {
+          "status": "skipped",
+          "viewports": []
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "receipt": "pipeline.browser-check.json",
+          "files": []
+        },
+        "error": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path."
+      }
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "viewer/chrome-unavailable",
+      "severity": "warning",
+      "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+      "subject": {
+        "artifact": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html"
+      },
+      "evidence": {
+        "executable": null
+      },
+      "supportedFixes": [
+        "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.finalize.json",
+    "summaryReceipt": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.finalize-summary.json",
+    "browserCheckReceipt": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "browser-check",
+  "finishedAt": "2026-10-10T10:50:48.346Z",
+  "durationMs": 581,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.0.1",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-10T10:49:52.071Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

@@ -70,9 +70,10 @@ class TestTheLanguageModeIsRecorded:
     """A determinant of the AST that nothing else in `Completeness` captures.
 
     Raising `CMAKE_CXX_STANDARD` is one line of CMake and changes which declarations exist.
-    Measured on leveldb `HEAD~9..~1` (11 → 17): 117 entities appear in vendored googletest
-    that no source change explains, and in the delta they are indistinguishable from new
-    code. Reported so the reviewer can reach the right conclusion (STATUS §5).
+    Measured 2026-08-04 on leveldb `HEAD~9..~1` (11 → 17): 117 events appear in vendored
+    googletest that no source change explains, and in the delta they are indistinguishable from
+    new code (v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md). Reported so the reviewer
+    can reach the right conclusion.
     """
 
     SOURCES: ClassVar[dict[str, str]] = {"a.cpp": "int a() { return 1; }\n"}
@@ -157,10 +158,9 @@ SHARED = {
 
 
 class TestDedupAcrossTranslationUnits:
-    """ARCH-001 §5. Every header is reparsed once per TU that includes it, so the same
-    entity arrives once per includer -- 15,656 method cursors for 161 classes in FTXUI.
-    Getting this wrong inflates node counts by two orders of magnitude and changes no
-    other observable thing."""
+    """ARCH-001 §5. Every header is reparsed once per TU that includes it, so the same entity
+    arrives once per includer. Getting this wrong inflates node counts by orders of magnitude
+    and changes no other observable thing."""
 
     def test_a_header_entity_is_one_node_however_many_tus_include_it(
         self, tmp_path: Path, toolchain: Toolchain
@@ -240,10 +240,10 @@ class TestTemplates:
     def test_a_call_to_an_instantiation_lands_on_the_template(
         self, tmp_path: Path, toolchain: Toolchain
     ) -> None:
-        """Nothing calls a template. Calls resolve to an instantiation whose USR belongs to
-        no declaration anyone wrote -- 10,158 of fmt's call edges, a third of the graph.
-        Left unaliased they all drop, and the model reports a call graph with a hole
-        exactly where the generic code is."""
+        """Nothing calls a template. Calls resolve to an instantiation whose USR belongs to no
+        declaration anyone wrote -- 10,158 of fmt's call edges, a third of the graph (commit
+        `8080f19`, 2026-08-01). Left unaliased they all drop, and the model reports a call
+        graph with a hole exactly where the generic code is."""
         model = build(
             tmp_path,
             toolchain,

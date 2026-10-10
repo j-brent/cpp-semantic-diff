@@ -5,18 +5,27 @@ status: not started
 author: Brent Runyan
 created: 2026-08-04
 dependencies: [ARCH-001]
+kind: living
 -->
 
 # Bitcoin Core as a scale-and-shape probe
 
+*Living document: kept current until it is done, then deleted.*
+
 Adding a fourth verification repository — and the reasons it must not be wired in like the first
 three.
 
-`STATUS.md` §3 records why fmt and spdlog were one and a half samples and what leveldb fixed. This
+The [v0 tracker](../../reports/2026-08-01--v0-build/STATUS.md) §3 records why fmt and spdlog were one and a half samples and what leveldb fixed. This
 plan is the next question: those three are all **libraries**, all small, all dependency-free. Every
 number the project publishes was taken on that one class of repository.
 
-Delete this file when the measurements are in `STATUS.md` §3 and §4.
+Delete this file when the measurements are in a frozen report and the roadmap item is closed.
+
+**Since written (2026-10-10).** [PLAN-004](PLAN-004-third-party-boundary.md) replaces the VENDORED exposure
+class with declared third-party paths and refuses a comparison where third-party code changed.
+§2's second point and §6.3 measure the class it removes; reconcile them with PLAN-004 before
+running. This plan was written against `STATUS.md`, which is now the frozen v0 tracker: where it
+says to record a result there, record it in a new frozen report instead. `cppsd` still has no option to pass CMake arguments (§5; [`ROADMAP.md`](../../ROADMAP.md) §3.5).
 
 ---
 
@@ -29,7 +38,7 @@ The `fixtures` marker means "a test that needs a real clone and runs in the norm
 of those — base and head. Wiring it into `conftest.require_fixture` alongside the others makes
 `uv run pytest -q` unusable, which is a worse outcome than not having the fixture.
 
-It is a **probe**: run by hand, measured once per question, recorded in `STATUS.md`. If it later
+It is a **probe**: run by hand, measured once per question, recorded in a frozen report. If it later
 earns a place in CI it will be as a separate marked-slow job with its own budget, and that is a
 decision to make *after* the numbers exist, not before.
 
@@ -47,7 +56,7 @@ INTERNAL. Bitcoin Core has no `include/`. Everything is under `src/`. So the pre
 the failure mode `exposure.py`'s own docstring names — *"A library that publishes from `src/` and
 keeps private headers under `include/internal` is read backwards"* — in its extreme form: nothing
 is public at all. leveldb *validates* the convention (it has `include/leveldb`); this is the first
-fixture that can break it. `STATUS.md` §3's exposure-composition table is the artifact to extend.
+fixture that can break it. v0 tracker §3's exposure-composition table is the artifact to extend.
 
 **Five vendored subtrees with no conventional directory name.** `src/secp256k1`, `src/crc32c`,
 `src/leveldb`, `src/minisketch`, `src/univalue` are third-party code sitting in first-party paths.
@@ -109,7 +118,7 @@ Find the boundary once, before choosing any revision pair:
 git -C ~/fixtures/bitcoin log --oneline --diff-filter=A -- CMakeLists.txt
 ```
 
-Both `--base` and `--head` must be above it. Record the boundary commit in `STATUS.md` §3 so the
+Both `--base` and `--head` must be above it. Record the boundary commit in v0 tracker §3 so the
 next agent does not rediscover it.
 
 ---
@@ -126,7 +135,7 @@ No submodules: the third-party code is subtrees, already in the tree.
 
 `acquire` passes extra CMake arguments through, and the configure this fixture needs is
 `-DENABLE_WALLET=OFF`. Confirm how to supply it from the CLI before assuming it can be; if it
-cannot, that is a finding about `acquire`'s interface and belongs in `STATUS.md` §6, not a reason
+cannot, that is a finding about `acquire`'s interface and belongs in v0 tracker §6, not a reason
 to hand-configure a worktree and work around it.
 
 ---
@@ -146,10 +155,10 @@ clock and peak RSS. `produce/build.py:assemble` consumes partials as a stream, b
 set is held whole, and fmt reaches 10,574 entities from 134,366 raw nodes. The open question is
 whether the merge survives a repository twenty times larger, and the honest possible answer is that
 it does not. **An OOM or a wildly-blown budget here is a successful outcome of this plan** — it is
-the §9 budget meeting a real repository, which is exactly what `STATUS.md` §2 says this project
+the §9 budget meeting a real repository, which is exactly what v0 tracker §2 says this project
 must surface early. Record it in §4's performance table and stop.
 
-**6.3 · Exposure composition.** Extend `STATUS.md` §3's four-class table with a bitcoin row. The
+**6.3 · Exposure composition.** Extend v0 tracker §3's four-class table with a bitcoin row. The
 prediction in §2 is that INTERNAL is near 100 % of first-party and the five subtrees are
 misclassified as first-party rather than VENDORED. Record what actually happens. If the prediction
 holds, `exposure.py`'s vocabulary list is the calibration surface — but **do not edit it in this
@@ -163,7 +172,7 @@ measurement of what an external template dependency costs the model's completene
 **6.5 · One real review.** A revision pair from actual project history where the change is
 semantic and the line diff is large. This is the only step that tests the product claim rather than
 the machinery. Report events, top-level-after-collapse, and the line-diff denominator, in
-`STATUS.md` §2's format.
+v0 tracker §2's format.
 
 ---
 
@@ -172,11 +181,11 @@ the machinery. Report events, top-level-after-collapse, and the line-diff denomi
 | | Commit | Note |
 |---|---|---|
 | 1 | docs: README clone block and the §2 rationale | the durable part; mirrors how leveldb landed |
-| 2 | docs: `STATUS.md` §3 and §4 rows from §6's measurements | one commit per question answered is fine |
+| 2 | docs: v0 tracker §3 and §4 rows from §6's measurements | one commit per question answered is fine |
 | 3 | docs: fold in and delete this file | |
 
 No source changes are planned. **If this plan produces a code commit, something has gone wrong with
-its scope** — findings go to `STATUS.md` §6 as defects, and fixing them is separate work with its
+its scope** — findings go to v0 tracker §6 as defects, and fixing them is separate work with its
 own plan. The exception is `acquire`'s CMake-argument interface (§5), if it turns out not to have
 one.
 

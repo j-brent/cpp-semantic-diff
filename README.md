@@ -1,4 +1,13 @@
+<!-- metadata
+type: readme
+kind: living
+author: Brent Runyan
+created: 2026-08-01
+-->
+
 # cpp-semantic-diff
+
+*Living document: kept true as the code changes.*
 
 Meaningful diffs for C++ code review.
 
@@ -15,7 +24,8 @@ model is an ordered list of lines.
 ## Status
 
 The pipeline runs end to end. Seven of eight stages exist; `enrich` (the evidence layer) is deferred
-past v0 by design — see [`STATUS.md`](STATUS.md) for the tracker and the known defects.
+past v0 by design. Where things stand, the known problems and the work ahead are in
+[`ROADMAP.md`](ROADMAP.md).
 
 | Stage | State |
 |---|---|
@@ -25,26 +35,13 @@ past v0 by design — see [`STATUS.md`](STATUS.md) for the tracker and the known
 | `diff` · `classify` · `rank` · `render` | done |
 | `enrich` — evidence adapters | post-v0 |
 
-What it prints on real repositories:
+What the tool reports on real repositories, and how much it compresses a review, is measured in the
+[v0 tracker, §2](reports/2026-08-01--v0-build/STATUS.md#2--the-measurement-this-project-exists-to-take).
+Compression is real on some commits and inverted on others.
 
-```
-fmt     HEAD~12    179 lines changed  →  16 semantic events, 2 high-risk
-spdlog  HEAD~30    1,708 lines changed →  32 semantic events, 5 high-risk
-spdlog  HEAD~5     35 lines changed   →   0 semantic events
-leveldb HEAD~10    52 lines changed   → 134 semantic events, 5 high-risk
-                                         + 3,660 in bundled dependencies, ranked last
-```
-
-The spdlog `HEAD~5` row validates the others: thirty-five lines of CMake, comments and a
-Windows-only header, correctly reported as no semantic change — with the reason printed rather than
-implied.
-
-The leveldb row is the one that argues against the thesis, and it is here for that reason. Measured
-compression is **0.4:1 to 53:1** — that commit *decompresses*, turning 52 lines into 134 things to
-read, because bumping googletest moved a great deal of test code under it. Compression is real on
-some commits and inverted on others, and which is which appears to depend on repository shape more
-than on the tool: the two libraries that agree are both header-only and vendor by copying. See
-[`STATUS.md`](STATUS.md) §2.
+v0 requires third-party code to be identical at both points
+([ARCH-001 §13](docs/ARCH-001-architecture.md#13--v0)). The tool does not enforce this yet
+([PLAN-004](docs/plans/PLAN-004-third-party-boundary.md)).
 
 ## Requirements
 
@@ -81,7 +78,8 @@ headers before you trust a single result:
 libclang         /usr/lib/llvm-18/lib/libclang.so.1
 version          Ubuntu clang version 18.1.3 (1ubuntu1)
 builtin headers  parsed clean
-producer id      libclang 18.1.3
+target           x86_64-pc-linux-gnu
+producer id      libclang 18.1.3 x86_64-pc-linux-gnu
 ```
 
 Then, against a repository with full history:
@@ -97,9 +95,9 @@ uv run cppsd diff    ~/fixtures/fmt --base HEAD~12 --json --out delta.json
 set. The JSON is the product and always carries every event uncollapsed — the terminal is one
 consumer of it, and any incompleteness in either model is stated before the events, not in a log.
 
-A review touching ≤ 20 translation units completes in under 30 s on a warm cache; a cold `fmt`
-model is ~25 s across 8 workers. The first run against a new base pays for it and every later
-review against that base does not. `diff --workers N` (`-j N`) sets how many parser processes
+Models are cached per translation unit, so the first run against a new base pays for parsing and
+every later review against that base does not. Timings are in the
+[v0 tracker, §4](reports/2026-08-01--v0-build/STATUS.md#4--measured-performance). `diff --workers N` (`-j N`) sets how many parser processes
 that is for one run; `$CPPSD_WORKERS` sets it for every run, and the flag wins where both are
 given.
 
@@ -109,10 +107,11 @@ given.
 | `CPPSD_RESOURCE_DIR` | Override the clang resource directory. An escape hatch: it turns the per-TU cache off unless the include closure already covers the directory |
 | `CPPSD_SCAN_DEPS` | Use this `clang-scan-deps` instead of discovering one |
 | `CPPSD_WORKERS` | Parser processes when `--workers` is absent (default: cores, capped at 8). `1` takes the serial path |
-| `CPPSD_CACHE_DIR` | Where worktrees and cached models live (default: `$XDG_CACHE_HOME`) |
+| `CPPSD_CACHE_DIR` | Where worktrees and cached models live (default: `$XDG_CACHE_HOME/cpp-semantic-diff`, else `~/.cache/cpp-semantic-diff`) |
+| `CPPSD_RENAME_SIMILARITY` | Git's rename-detection threshold, a percentage (default: 50, git's own `-M` default) |
 | `CPPSD_FIXTURE_ROOT` | Where the test fixture clones live (default: `~/fixtures`) |
 
-Development: `uv run ruff format . && uv run ruff check . && uv run pytest -q`. Tests marked
+Development conventions are in [`CONTRIBUTING.md`](CONTRIBUTING.md). Tests marked
 `fixtures` need real clones under `CPPSD_FIXTURE_ROOT`; they skip without them.
 
 ```sh
@@ -125,18 +124,23 @@ git clone --recurse-submodules https://github.com/google/leveldb
 The third is not more of the same. fmt and spdlog are both effectively header-only and spdlog
 vendors fmt, so between them they cover one shape; leveldb is `.cc`-based with real internal
 linkage, keeps its tests beside the code they test, and pins submodules. Each of those exercises
-something the first two cannot — see [`STATUS.md`](STATUS.md) §3.
+something the first two cannot — see the
+[v0 tracker, §3](reports/2026-08-01--v0-build/STATUS.md#3--the-v0-identity-measurement--a-negative-result).
 
 ## Documents
 
-Read the first two before writing code.
+Every document says whether it is **living** (kept true as the code changes) or **frozen**
+(describes one moment, never edited). [`CONTRIBUTING.md`](CONTRIBUTING.md) has the rules.
 
-| Doc | What it is |
-|---|---|
-| [`docs/research/semantic-diff-for-review.md`](docs/research/semantic-diff-for-review.md) | **RESEARCH-002**, the founding document. The twelve questions a reviewer is actually trying to answer, the artifact and prior art for each, what this tool must build, the hard problems, and a staged plan. |
-| [`docs/architecture/overview.md`](docs/architecture/overview.md) | **ARCH-001.** Pipeline, IR, identity, delta events, ranking, caching, performance budget. Code comments cite its section numbers; keep doing that. |
-| [`docs/research/cpp-analysis-tool-landscape.md`](docs/research/cpp-analysis-tool-landscape.md) | **RESEARCH-001.** Inventory of C++ analysis tooling across source, IR, object and binary levels. The supply side; reference material for the evidence layer. |
-| [`STATUS.md`](STATUS.md) | What is built, what is next, and the decisions already settled — with the reason for each, so you can tell whether it still holds. |
+| Doc | Kind | What it is |
+|---|---|---|
+| [`ROADMAP.md`](ROADMAP.md) | living | Where things stand, the one ordered list of open work, and the decisions in force. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | living | Conventions for code, comments, documents and commits. |
+| [ARCH-001](docs/ARCH-001-architecture.md) | living | The design: pipeline, IR, identity, delta events, ranking, caching, performance budget. |
+| [`docs/plans/`](docs/plans/) | living while active | One plan per roadmap item being worked on, deleted when done. |
+| [RESEARCH-002](docs/research/RESEARCH-002-semantic-diff-for-review.md) | frozen | The founding document: the twelve questions a reviewer is trying to answer, the artifact and prior art for each, what this tool must build, the hard problems, and a staged plan. Read it before writing code. |
+| [RESEARCH-001](docs/research/RESEARCH-001-tool-landscape.md) | frozen | Inventory of C++ analysis tooling across source, IR, object and binary levels. Reference for the evidence layer. |
+| [`reports/`](reports/) | frozen | Reviews and measurements, one folder per date and topic. [`2026-08-01--v0-build/`](reports/2026-08-01--v0-build/STATUS.md) is the tracker of the original implementation; [`2026-10-10--up-to-speed/`](reports/2026-10-10--up-to-speed/project-review.md) is the review that produced the roadmap's confirmed work. |
 
 ## Relationship to CodeAtlas C++
 

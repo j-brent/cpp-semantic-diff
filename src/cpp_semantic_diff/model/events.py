@@ -50,15 +50,14 @@ class EventKind(StrEnum):
     EDGE_REMOVED = "EdgeRemoved"
     EDGE_RETARGETED = "EdgeRetargeted"
     EDGE_KIND_CHANGED = "EdgeKindChanged"
-    #: Not in §6.1's list, and added under §6.1's own rule that "new signals become new
+    #: Added after v0 shipped, under §6.1's own rule that "new signals become new
     #: event kinds, never free-text". §4.2 gives edges `attrs` and the producer fills them:
     #: `access` on `inherits`, `virtual` on `calls`. A base class going public -> private
     #: between two otherwise unchanged classes is a breaking change in C++, and without this
     #: kind the delta is silent about it -- the edge matches on both sides, so add/remove
     #: cannot express it either. The asymmetry argument §6.1 makes for `EdgeKindChanged`
     #: covers this exactly: the endpoints are identity and belong to the matcher, the attrs
-    #: are diffable state. ARCH-001 §6.1's prose still lists four edge kinds and needs the
-    #: fifth written into it.
+    #: are diffable state. §6.1 now lists it.
     EDGE_ATTR_CHANGED = "EdgeAttrChanged"
 
     # Derived -- computed from both models plus graph algorithms, not read off either.
@@ -94,7 +93,7 @@ EDGE_KINDS: frozenset[EventKind] = frozenset(
 DERIVED_KINDS: frozenset[EventKind] = frozenset(EventKind) - NODE_KINDS - EDGE_KINDS
 
 #: What v0 actually emits. ARCH-001 §13 lists "node add/remove/attr/body and edge
-#: add/remove", but that list was written against the four edge kinds of §6.1 and understates
+#: add/remove/kind/attr"; its first draft said only "edge add/remove" and understated
 #: the stage: `EdgeKindChanged` and `EdgeAttrChanged` are both reachable on tier-1 input.
 #: The reason is one argument applied twice (§6.1, `diff/edges.py`) -- an edge's endpoints
 #: are identity and belong to the matcher, while its kind and its attrs are diffable state,
@@ -122,9 +121,9 @@ V0_KINDS: frozenset[EventKind] = frozenset(
     }
 )
 
-#: The other half of what `V0_KINDS` says, stated positively so a test can assert it: kinds
-#: no amount of real v0 input can produce. A delta containing one of these means a later
-#: tier landed, or that some stage started inferring identity on its own (STATUS §6).
+#: The other half of what `V0_KINDS` says, stated positively so a test can assert it: kinds no
+#: amount of real v0 input can produce. A delta containing one of these means a later tier
+#: landed, or that some stage started inferring identity on its own.
 UNREACHABLE_IN_V0: frozenset[EventKind] = frozenset(EventKind) - V0_KINDS
 
 #: Payload keys a kind must carry, for the kinds ARCH-001 §6.1 names or directly implies.

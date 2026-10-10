@@ -47,10 +47,13 @@ jobs:
         # the script; `${{ }}` expansion happens before bash sees the line, so a crafted
         # ref would otherwise run as shell.
         #
-        # The default bases are the ones STATUS.md §2 tracks, so this page and the tracker
-        # can be compared digit for digit -- a demo that measured some other range would
-        # be a second, unreconciled set of numbers. leveldb is tracked there too but is
-        # not here: it needs submodules, which a plain clone does not fetch.
+        # The default bases are the ones the v0 build measured (v0 tracker §2,
+        # reports/2026-08-01--v0-build/STATUS.md). The ranges are not: this job clones
+        # upstream's current HEAD, while the tracker measured fixture clones made on
+        # 2026-08-01, so the two sets of numbers differ and are compared by the revisions each
+        # prints. leveldb is measured there too but is not here. (The reason first given,
+        # that a plain clone does not fetch submodules, does not hold: `acquire` checks out
+        # the submodules each revision pins, with network.)
         env:
           IN_REPO: ${{ inputs.repo }}
           IN_BASE: ${{ inputs.base }}
@@ -123,13 +126,14 @@ jobs:
           # Not `--no-cache`, which reparses every TU: that measures cache-*off*, which is
           # a different and slower thing. An empty cache root is the cold that a first
           # review against a new base actually pays, in-run hits included -- fmt's compile
-          # database has 50 entries but only 35 distinct compilations (STATUS §5), and
-          # pretending otherwise would overstate the cost being reported.
+          # database had 50 entries but only 35 distinct compilations (measured 2026-08-02,
+          # v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md), and pretending otherwise
+          # would overstate the cost being reported.
           export CPPSD_CACHE_DIR="$RUNNER_TEMP/cache"
 
-          # Parallelism has no flag; `$CPPSD_WORKERS` is the knob and its default is what
-          # the machine can run. Left unset on purpose so the timings below are what this
-          # runner does, and `nproc` is printed beside them so they can be read.
+          # Neither `--workers` nor `$CPPSD_WORKERS` is set, on purpose: the default is what
+          # the machine can run, so the timings below are what this runner does, and `nproc`
+          # is printed beside them so they can be read.
           cores=$(nproc)
 
           uv run cppsd doctor > "$OUT/doctor.txt" 2>&1

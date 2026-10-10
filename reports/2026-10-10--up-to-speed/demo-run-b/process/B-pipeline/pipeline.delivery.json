@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "ec354705-0aca-40b9-bec7-9e6a3956a805",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.json",
+  "output": "/home/jbrent/dev/cpp-semantic-diff/docs/playground-B/process/B-pipeline/pipeline.html",
+  "specification": {
+    "sha256": "b8cf93f0c204e08f650cbca63aff00b006154fcbc19b2638974543ba22b6c24a",
+    "bytes": 6374
+  },
+  "artifact": {
+    "sha256": "fc92ed0fda83c5426affbf43d35d6f734b29fb1728e6ae7983a3ec8a3e4fa1b6",
+    "bytes": 771221
+  }
+}

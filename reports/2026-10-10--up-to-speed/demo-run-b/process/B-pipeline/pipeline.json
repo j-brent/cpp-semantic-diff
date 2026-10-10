@@ -1,0 +1,369 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "cppsd diff · pipeline and where the time went (run 38044461310)",
+  "output": "docs/playground-B/process/B-pipeline/pipeline.html",
+  "quality_profile": "showcase",
+  "repository": {
+   "url": "https://github.com/j-brent/cpp-semantic-diff",
+   "provider": "github",
+   "revision": "4d8e3671cb464690ce3059773d5b4390001d550b"
+  },
+  "legend": {
+   "entries": {
+    "external": {
+     "label": "boundary stage (git in / not built)"
+    },
+    "backend": {
+     "label": "pipeline stage"
+    },
+    "database": {
+     "label": "store / document"
+    },
+    "frontend": {
+     "label": "view"
+    }
+   }
+  }
+ },
+ "components": [
+  {
+   "id": "acquire",
+   "type": "external",
+   "label": "acquire",
+   "sublabel": "fmt 2.1 s · spdlog 2.1 s",
+   "pos": [
+    40,
+    250
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "worktrees + compile db",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/acquire/workspace.py"
+    }
+   ]
+  },
+  {
+   "id": "prod_base",
+   "type": "backend",
+   "label": "produce · base",
+   "sublabel": "fmt 89.5 s · spdlog 11.1 s",
+   "pos": [
+    350,
+    90
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "51 TUs · 8 TUs",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/produce/build.py"
+    }
+   ]
+  },
+  {
+   "id": "cache",
+   "type": "database",
+   "label": "model cache",
+   "sublabel": "empty root, so a cold run",
+   "pos": [
+    350,
+    250
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "per-TU",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/produce/cache.py"
+    }
+   ]
+  },
+  {
+   "id": "prod_head",
+   "type": "backend",
+   "label": "produce · head",
+   "sublabel": "fmt 78.3 s · spdlog 8.6 s",
+   "pos": [
+    350,
+    410
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "51 TUs · 8 TUs",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/produce/build.py"
+    }
+   ]
+  },
+  {
+   "id": "match",
+   "type": "backend",
+   "label": "match",
+   "sublabel": "fmt 0.06 s · spdlog 0.01 s",
+   "pos": [
+    660,
+    250
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "tier 1 only",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/match/matcher.py"
+    }
+   ]
+  },
+  {
+   "id": "diff",
+   "type": "backend",
+   "label": "diff",
+   "sublabel": "fmt 0.18 s · spdlog 0.03 s",
+   "pos": [
+    660,
+    410
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "181 · 171 events",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/diff/differ.py"
+    }
+   ]
+  },
+  {
+   "id": "classify",
+   "type": "backend",
+   "label": "classify",
+   "sublabel": "fmt 0.12 s · spdlog 0.02 s",
+   "pos": [
+    660,
+    570
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "cause → cascade",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/classify/classifier.py"
+    }
+   ]
+  },
+  {
+   "id": "enrich",
+   "type": "external",
+   "label": "enrich",
+   "sublabel": "not built: post-v0 (§13)",
+   "pos": [
+    970,
+    410
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "findings = []"
+  },
+  {
+   "id": "rank",
+   "type": "backend",
+   "label": "rank",
+   "sublabel": "fmt 0.21 s · spdlog 0.05 s",
+   "pos": [
+    970,
+    570
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "+ blast radius",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/rank/ranker.py"
+    }
+   ]
+  },
+  {
+   "id": "json",
+   "type": "database",
+   "label": "diff.json",
+   "sublabel": "schema 1.2 · the product",
+   "pos": [
+    970,
+    730
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "artifact",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/render/document.py"
+    }
+   ]
+  },
+  {
+   "id": "term",
+   "type": "frontend",
+   "label": "terminal view",
+   "sublabel": "pasted into the run summary",
+   "pos": [
+    660,
+    730
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "--limit 25",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/render/terminal.py"
+    }
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "a-pb",
+   "from": "acquire",
+   "to": "prod_base",
+   "label": "base worktree",
+   "variant": "emphasis"
+  },
+  {
+   "id": "a-ph",
+   "from": "acquire",
+   "to": "prod_head",
+   "label": "head worktree",
+   "variant": "emphasis"
+  },
+  {
+   "id": "pb-c",
+   "from": "prod_base",
+   "to": "cache",
+   "label": "per-TU",
+   "variant": "dashed",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "ph-c",
+   "from": "prod_head",
+   "to": "cache",
+   "label": "per-TU",
+   "variant": "dashed",
+   "fromSide": "top",
+   "toSide": "bottom"
+  },
+  {
+   "id": "pb-m",
+   "from": "prod_base",
+   "to": "match",
+   "label": "base Model",
+   "variant": "emphasis"
+  },
+  {
+   "id": "ph-m",
+   "from": "prod_head",
+   "to": "match",
+   "label": "head Model",
+   "variant": "emphasis"
+  },
+  {
+   "id": "m-d",
+   "from": "match",
+   "to": "diff",
+   "label": "correspondence",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "d-c",
+   "from": "diff",
+   "to": "classify",
+   "label": "events",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "c-r",
+   "from": "classify",
+   "to": "rank",
+   "label": "caused_by links"
+  },
+  {
+   "id": "e-r",
+   "from": "enrich",
+   "to": "rank",
+   "label": "evidence (none)",
+   "variant": "dashed",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "r-j",
+   "from": "rank",
+   "to": "json",
+   "label": "scored, ordered",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "j-t",
+   "from": "json",
+   "to": "term",
+   "label": "rendered from"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "rose",
+   "title": "Where the time goes",
+   "items": [
+    "fmt: produce is 167.8 of 170.5 s (98%)",
+    "spdlog: produce is 19.6 of 21.9 s (90%)",
+    "Everything after produce: under 0.6 s on fmt, under 0.1 s on spdlog"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Why fmt is 8× slower",
+   "items": [
+    "51 TUs per side against spdlog's 8",
+    "About 2.5 s per TU parsed on fmt against 1.2 s on spdlog",
+    "Cold by design: a fresh cache root for every run"
+   ]
+  },
+  {
+   "dot": "slate",
+   "title": "Read with care",
+   "items": [
+    "Timings are meta.timings: in-process, cold, GitHub ubuntu-24.04 runner",
+    "No render timing is recorded; total minus stages is about 0.06 s on fmt",
+    "enrich is the one stage of eight not built; blast radius moved into rank"
+   ]
+  }
+ ]
+}

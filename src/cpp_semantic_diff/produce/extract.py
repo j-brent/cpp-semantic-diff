@@ -10,10 +10,9 @@ have to be taken apart again to cache it.
 Two consequences follow from that choice, and both are correctness issues rather than
 tidiness:
 
-**Every header is parsed once per TU that includes it.** A `TuExtract` therefore describes
-far more than its own file, and the same entity appears in every TU that sees its
-declaration. Nodes are keyed by USR so that merging is idempotent -- the CodeAtlas
-measurements found 15,656 method cursors collapsing to 161 classes in FTXUI (ARCH-001 §5).
+**Every header is parsed once per TU that includes it.** A `TuExtract` therefore describes far
+more than its own file, and the same entity appears in every TU that sees its declaration.
+Nodes are keyed by USR so that merging is idempotent (ARCH-001 §5).
 
 **A partial model has dangling edges by construction.** A call whose target is declared in
 a header this TU does not include still belongs in the graph; it just cannot be resolved
@@ -132,8 +131,8 @@ RECORD_KINDS = TEMPLATED_RECORD_KINDS | {
 }
 
 #: Function bodies are deliberately *not* skipped. `calls` edges and `body_hash` both need
-#: them, and the spike measured bodies at 61 % of parse time for only 2 % of the USRs --
-#: a real two-tier lever later, but not one v0 can pull.
+#: them, and the spike found bodies cost most of the parse time while yielding few of the USRs
+#: -- a real two-tier lever later, but not one v0 can pull.
 #:
 #: Compiler flags that are meaningless without a build and actively harmful to reuse:
 #: `-c`/`-o` name outputs, and `-Werror` turns a warning into a fatal diagnostic, which
@@ -161,9 +160,9 @@ def specialized_template_usr(cursor: ci.Cursor) -> str | None:
     """The template a cursor was instantiated from, if it is an instantiation.
 
     Nothing calls a template -- calls resolve to an *instantiation*, whose USR
-    (`...@F@ignore_unused<#L>#&1L#`) is not the template's (`...@FT@>1#T...`) and belongs to
-    no declaration anyone wrote. On fmt this is 10,158 call edges, roughly a third of the
-    graph, so treating it as a curiosity is not an option.
+    (`...@F@ignore_unused<#L>#&1L#`) is not the template's (`...@FT@>1#T...`) and belongs to no
+    declaration anyone wrote. On fmt this was 10,158 call edges, roughly a third of the graph
+    (commit `8080f19`, 2026-08-01), so treating it as a curiosity is not an option.
 
     The answer is deliberately *not* applied here. Explicit specializations are hand-written
     code with their own identity and must not be collapsed into their primary template
@@ -372,12 +371,12 @@ def parse_arguments(entry: CompileEntry, toolchain: Toolchain) -> list[str]:
 def language_mode(entry: CompileEntry) -> str | None:
     """The `-std=` this TU is compiled at, or None if the build does not say.
 
-    A determinant of the AST that the include closure's content hashing cannot see, and one
-    a reviewer cannot infer: raising `CMAKE_CXX_STANDARD` is one line of CMake and rewrites
-    part of the model, because a newer standard exposes declarations an older one hides and
-    changes what belongs to a function's type. Measured on leveldb `HEAD~9..~1`, which bumps
-    11 to 17: 117 entities appeared in vendored googletest alone, and in the residue they are
-    indistinguishable from new code (STATUS §5).
+    A determinant of the AST that the include closure's content hashing cannot see, and one a
+    reviewer cannot infer: raising `CMAKE_CXX_STANDARD` is one line of CMake and rewrites part
+    of the model, because a newer standard exposes declarations an older one hides and changes
+    what belongs to a function's type. Measured 2026-08-04 on leveldb `HEAD~9..~1`, which bumps
+    11 to 17: 117 events appeared in vendored googletest alone, and in the residue they are
+    indistinguishable from new code (v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md).
 
     So the mode is reported rather than left to be inferred. It is *not* folded into
     `Completeness.is_complete` -- a standards bump is not a hole in coverage, it is a
@@ -394,11 +393,10 @@ def language_mode(entry: CompileEntry) -> str | None:
     return None
 
 
-#: One entry per distinct (spelling, root, build directory). A translation unit asks about
-#: the same few hundred files thousands of times: three real fmt TUs together answered
-#: 14,981 questions about 208 distinct paths. Bounded rather than unbounded because a
-#: long-lived producer would otherwise accumulate an entry per file per revision it ever
-#: saw, and nothing here needs a hit rate better than one TU's worth of working set.
+#: One entry per distinct (spelling, root, build directory). A translation unit asks about the
+#: same few hundred files thousands of times. Bounded rather than unbounded because a
+#: long-lived producer would otherwise accumulate an entry per file per revision it ever saw,
+#: and nothing here needs a hit rate better than one TU's worth of working set.
 _RELATIVE_CACHE = 8192
 
 
@@ -412,12 +410,12 @@ def _relative(path: str, root: Path, base: Path) -> str | None:
     silently places it outside the repository, dropping every declaration in it from the
     model without a single diagnostic.
 
-    Memoized because `resolve()` is a realpath walk of a long absolute path, once per
-    *visited cursor*: measured at 20-32 % of extraction wall time on real fmt TUs, against a
-    30 s budget for 20 TUs (ARCH-001 §9). The key is all three arguments, not the path: the
-    same spelling means a different file under a different `base`, and base and head
-    worktrees differ in nothing *but* `root`, so a memo keyed on the path alone would answer
-    one revision's question with the other revision's answer.
+    Memoized because `resolve()` is a realpath walk of a long absolute path, once per *visited
+    cursor*, a large share of extraction wall time against a 30 s budget for 20 TUs (ARCH-001
+    §9). The key is all three arguments, not the path: the same spelling means a different file
+    under a different `base`, and base and head worktrees differ in nothing *but* `root`, so a
+    memo keyed on the path alone would answer one revision's question with the other revision's
+    answer.
     """
     candidate = Path(path)
     if not candidate.is_absolute():
@@ -516,10 +514,10 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
     # Keyed on the node kind rather than on the cursor kind, which is what lets a member
     # function template carry exactly what an ordinary method carries. Clang's
     # `clang_CXXMethod_*` predicates unwrap a FunctionTemplateDecl to the function it
-    # templates, so a member template answers them for real: an `explicit` constructor
-    # template reads explicit, a `static` one reads static, a `const` one reads const.
-    # `explicit` in particular had no other representation in the model -- there is no
-    # attribute a `function` carries that could hold it (STATUS §6).
+    # templates, so a member template answers them for real: an `explicit` constructor template
+    # reads explicit, a `static` one reads static, a `const` one reads const. `explicit` in
+    # particular had no other representation in the model -- there is no attribute a `function`
+    # carries that could hold it.
     if kind is NodeKind.METHOD:
         attrs["static"] = cursor.is_static_method()
         attrs["virtual"] = cursor.is_virtual_method()
@@ -636,9 +634,8 @@ def merge_node(nodes: dict[NodeId, Node], node: Node) -> None:
         nodes[node.id] = node
         return
     # The overwhelmingly common case, and the reason ranking is affordable: the same header
-    # declaration seen again through another include path or another TU. fmt collapses
-    # 134,366 arrivals into 10,574 entities, of which 4,778 are seen by more than one TU and
-    # only 435 are seen differently.
+    # declaration seen again through another include path or another TU. Many entities are seen
+    # by more than one TU, and very few of them are seen differently.
     if existing == node:
         return
     if _observation_rank(node) > _observation_rank(existing):
@@ -655,9 +652,9 @@ def merge_edge(
 ) -> None:
     """Merge by (src, kind, dst); a repeated call site is a location, not an edge.
 
-    Takes the parts rather than an `Edge` so that the object is built once per *distinct*
-    edge instead of once per arrival -- fmt extracts 224,571 arrivals for 28,470 edges --
-    and so that the merged graph never aliases a partial model's objects.
+    Takes the parts rather than an `Edge` so that the object is built once per *distinct* edge
+    instead of once per arrival -- an edge arrives once per TU that sees it -- and so that the
+    merged graph never aliases a partial model's objects.
 
     Attributes belong to the relation, not to the site (`virtual` is a property of the
     callee, `access` of the base specifier), so two translation units observing the same
@@ -784,11 +781,11 @@ class _Extractor:
         revision-flippable identity. Everywhere it declines, `tu` stays None and matching is
         exactly what it was before -- `DeclaredTier` already documents that fallback.
 
-        Repo-relative on both sides of the comparison, because both come from `_relative`
-        with this extractor's root. An absolute path would carry the SHA-named worktree
-        directory into every partial, base and head would never agree, and every
-        internal-linkage match would break on every comparison -- the class of bug STATUS §5
-        records as the extractor leaking the host path into identity.
+        Repo-relative on both sides of the comparison, because both come from `_relative` with
+        this extractor's root. An absolute path would carry the SHA-named worktree directory
+        into every partial, base and head would never agree, and every internal-linkage match
+        would break on every comparison -- the class of bug that once leaked the host path into
+        identity.
         """
         if usr_file(usr) is None:
             return None

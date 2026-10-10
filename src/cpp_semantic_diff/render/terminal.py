@@ -22,18 +22,18 @@ a standard-section citation, and every annotation `DiffDocument.label` appends. 
 is to say the rule cannot be applied by inspecting strings for danger -- it is positional.
 The *view* supplies the markup; everything it styles is data.
 
-This matters most exactly where §11.2 requires the output to say what was missing: half a
+This matters most exactly where §11's rule 2 requires the output to say what was missing: half a
 reason a model is incomplete reads as a whole one.
 
 The page is ordered by what §11 and §10 say must be seen first:
 
-1. **Completeness, at the top, never in a log** (§11.2). What was missing precedes what was
+1. **Completeness, at the top, never in a log** (§11, rule 2). What was missing precedes what was
    found, because a reader who scrolls past the events has already formed a belief.
 2. **The compression line** (§10). The product's own success metric, printed on every run.
 3. **The events**, in ranking order (§7), grouped by component and with consequences nested
    under their causes (§6.3, `collapse.py`).
-4. **The tier-1 residue** (STATUS §6). v0's deliberate rename damage, stated as a
-   measurement rather than left to be inferred from an inflated event count.
+4. **The tier-1 residue** (§13). v0's deliberate rename damage, stated as a measurement rather
+   than left to be inferred from an inflated event count.
 5. **§11's two systematic limits**, which are true of every run and are printed on every one.
 """
 
@@ -86,15 +86,15 @@ def _header(document: DiffDocument, console: Console) -> None:
 
 
 def _completeness(document: DiffDocument, console: Console) -> None:
-    """ARCH-001 §11.2: "any output built on an incomplete model states what was missing, at
+    """ARCH-001 §11, rule 2: "any output built on an incomplete model states what was missing, at
     the top, not in a log."
 
     Two blocks, because there are two kinds of missing and only one of them is news.
 
-    **Boundary** -- how many distinct edges lead outside the repository -- prints on every
-    run, degraded or not, from `CompletenessReport.edges_dropped` and `edges_total`. It is
-    ~20 % of fmt's graph when everything works, so it is a standing fact about what the
-    model can see. This view no longer reads it out of `Completeness.notes`: the number
+    **Boundary** -- how many distinct edges lead outside the repository -- prints on every run,
+    degraded or not, from `CompletenessReport.edges_dropped` and `edges_total`. It is a
+    sizeable share of a real graph when everything works, so it is a standing fact about what
+    the model can see. This view no longer reads it out of `Completeness.notes`: the number
     lives in the document (§10) and every consumer gets it as a number.
 
     **Coverage** -- `CompletenessBlock.degraded` -- is the yellow banner, and it fires only
@@ -127,7 +127,7 @@ def _completeness(document: DiffDocument, console: Console) -> None:
         # Escaped because a parse failure is a clang diagnostic quoting C++, and C++ is
         # bracketed: `[[nodiscard]]`, a template argument list, clang's own `[note]`. The
         # markup parser drops what it cannot style, so the sentence naming the cause used to
-        # arrive with the cause removed -- a §11.2 failure wearing the costume of a §11.2
+        # arrive with the cause removed -- a §11 rule 2 failure wearing the costume of a rule 2
         # disclosure, which is the worst place in this view for it to happen.
         for failure in report.failures[:5]:
             # `str()` rather than `or ""`: a detail-less failure has always printed "None"
@@ -148,9 +148,10 @@ def _language_mode(block: CompletenessBlock, console: Console) -> None:
     Silent when they agree, because a standard that did not move explains nothing and §11's
     limits are already the standing ones. Yellow when it moved, because that is a determinant
     of the AST which no other line accounts for: leveldb `HEAD~9..~1` raises
-    `CMAKE_CXX_STANDARD` from 11 to 17 in one line of CMake, and 117 entities appear in
-    vendored googletest that no source change explains. In the delta they read as plain
-    additions, so without this a reviewer has no way to reach the right conclusion.
+    `CMAKE_CXX_STANDARD` from 11 to 17 in one line of CMake, and 117 events appear in vendored
+    googletest that no source change explains (measured 2026-08-04, v0 tracker §5,
+    reports/2026-08-01--v0-build/STATUS.md). In the delta they read as plain additions, so
+    without this a reviewer has no way to reach the right conclusion.
     """
     base, head = block.base.language_modes, block.head.language_modes
     if base == head:
@@ -167,9 +168,9 @@ def _language_mode(block: CompletenessBlock, console: Console) -> None:
 def _boundary(block: CompletenessBlock, console: Console) -> None:
     """Where the modelled world ends, in numbers, on every run (ARCH-001 §11).
 
-    Dim rather than yellow: this is the standing scope of a static model of one repository,
-    not a fault. The percentage is what makes it readable -- 5,113 dropped edges is routine
-    against 26,071 and a catastrophe against 6,000, and only the ratio distinguishes them.
+    Dim rather than yellow: this is the standing scope of a static model of one repository, not
+    a fault. The percentage is what makes it readable: one dropped count is routine against a
+    large graph and a catastrophe against a small one, and only the ratio distinguishes them.
     """
     for side, sentence in block.boundaries:
         console.print(f"  [dim]{side.value:4} {escape(sentence)}[/]")
@@ -181,11 +182,11 @@ def _boundary(block: CompletenessBlock, console: Console) -> None:
 def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> None:
     """ARCH-001 §10's sentence, and the honest arithmetic around it.
 
-    The sentence is taken from `summary.compression` rather than rebuilt, so that the JSON
-    and the terminal cannot disagree about the one claim the project is testing. The line
-    below it separates the two counts that are easy to conflate: `events_reported` is the
-    complete delta and is the numerator; the collapsed count is what this view chose to
-    nest, and is never the numerator.
+    The sentence is taken from `summary.compression` rather than rebuilt, so that the JSON and the
+    terminal cannot disagree about the one claim the project is testing. The line below it separates
+    the two counts that are easy to conflate: `events_reported` is the complete delta, and its
+    first-party part is the numerator; the collapsed count is what this view chose to nest, and is
+    never the numerator.
     """
     s = document.summary
     console.print()
@@ -365,7 +366,7 @@ def _why(document: DiffDocument, node: CollapseNode, console: Console, *, indent
 
 
 def _residue(document: DiffDocument, console: Console) -> None:
-    """STATUS §6: v0 ships tier-1 identity only, and *measuring the damage* is the deliverable.
+    """v0 ships tier-1 identity only, and *measuring the damage* is the deliverable (§13).
 
     So the residue is printed on every run, not only when it is large, and it is printed as
     a limitation of the tool rather than as a property of the change. A reader who is not

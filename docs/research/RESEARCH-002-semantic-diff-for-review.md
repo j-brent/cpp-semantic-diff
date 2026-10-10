@@ -6,9 +6,13 @@ author: Brent Runyan
 created: 2026-08-01
 dependencies: [RESEARCH-001]
 origin: written during codeatlas-cpp research (RESEARCH-008 there); renumbered on move
+kind: frozen
+frozen: 2026-08-01
 -->
 
 # Semantic Diff for Code Review
+
+*Frozen document: research as of 2026-08-01. Not maintained.*
 
 A code reviewer reading a unified diff is doing compiler work by hand. They parse changed lines,
 reconstruct the surrounding context from memory, build a mental model of the before and after
@@ -20,7 +24,7 @@ units, what prior art exists for each, and what this tool would have to build to
 It is the founding document for the product.
 
 Survey compiled from tool documentation and literature, not measured. The general tool inventory
-it draws on is [`cpp-analysis-tool-landscape.md`](cpp-analysis-tool-landscape.md).
+it draws on is [`cpp-analysis-tool-landscape.md`](RESEARCH-001-tool-landscape.md).
 
 ---
 
@@ -387,7 +391,7 @@ Each answer in §3 comes from a different tool. The IR is the join key: attach `
 coverage, complexity delta, and size delta to the *nodes they concern*, so the reviewer sees
 "this class: ABI-incompatible, +2KB, 0% coverage on new members" rather than four separate reports
 to correlate by hand. This is also what makes the survey in
-[`cpp-analysis-tool-landscape.md`](cpp-analysis-tool-landscape.md) actionable rather than
+[`cpp-analysis-tool-landscape.md`](RESEARCH-001-tool-landscape.md) actionable rather than
 inventory — those tools become evidence producers feeding one model.
 
 ---

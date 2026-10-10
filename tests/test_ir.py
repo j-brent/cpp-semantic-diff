@@ -173,8 +173,9 @@ class TestTheTwoKindsOfIncompletenessAreDistinguished:
         assert self._parsed().edge_residue == 0.0
 
     def test_the_summary_states_both_numerically(self) -> None:
-        """§11's "state what was missing" means numbers. An adjective is not a measurement,
-        and 5,113 dropped edges is routine against 26,071 and a catastrophe against 6,000."""
+        """§11's "state what was missing" means numbers. An adjective is not a measurement, and
+        one dropped count is routine against a large graph and a catastrophe against a small
+        one."""
         c = self._parsed().model_copy(update={"edges_total": 26_071, "edges_dropped": 5_113})
         summary = c.summary()
         assert "1/1 TUs parsed" in summary

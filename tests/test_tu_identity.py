@@ -1,4 +1,4 @@
-"""What the defining TU does and does not decide -- ARCH-001 §5, STATUS §6.
+"""What the defining TU does and does not decide -- ARCH-001 §5.
 
 §5 says identity must include the translation unit for entities whose USR is file-scoped.
 `Node.tu` now carries it, under a rule narrower than §5's text: only where the declaration is
@@ -71,9 +71,8 @@ def project(tmp_path: Path, sources: dict[str, str], tus: Sequence[str]) -> Chec
 
 @pytest.fixture(scope="module")
 def hazards(tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> Model:
-    """Built once for the module: four TUs is ~1.5 s of real parsing, and every test here
-    reads the same model. Nothing mutates it -- the one test that needs a changed model
-    deep-copies first."""
+    """Built once for the module: four TUs is real parsing, and every test here reads the same
+    model. Nothing mutates it -- the one test that needs a changed model deep-copies first."""
     root = tmp_path_factory.mktemp("hazards")
     return build_model(project(root, TU_IDENTITY_HAZARDS, TU_IDENTITY_TUS), toolchain=toolchain)
 
@@ -119,10 +118,11 @@ class TestTwoSourcesSharingABasename:
         one node whether or not that node then records a TU. Half of these functions remain
         absent from the model and a body change in either produces no event.
 
-        What `tu` fixes is the *matching* half -- a base node from `a/` no longer pairs with
-        a head node from `b/` (`test_match.py`). Separating them in the model needs the node
-        dictionary keyed on `(usr, tu)`, which reaches every edge endpoint, every event and
-        the JSON contract. Recorded in STATUS §6 rather than half-done here.
+        What `tu` fixes is the *matching* half -- a base node from `a/` no longer pairs with a
+        head node from `b/` (`test_match.py`). Separating them in the model needs the node
+        dictionary keyed on `(usr, tu)`, which reaches every edge endpoint, every event and the
+        JSON contract. Recorded as a standing decision (v0 tracker §6,
+        reports/2026-08-01--v0-build/STATUS.md) rather than half-done here.
         """
         util = [i for i, f in scoped(hazards).items() if f == "util.cpp"]
         assert len(util) == 2, "two of the four survived; the other two are unreachable"
@@ -135,7 +135,7 @@ class TestTwoSourcesSharingABasename:
 
 
 class TestAStaticDeclaredInAHeader:
-    """The case that argues *against* setting `tu` unconditionally (STATUS §6).
+    """The case that argues *against* setting `tu` unconditionally.
 
     `common.h` is included by two TUs, so its static and its anonymous-namespace function
     are one entity per includer. USR dedup collapses them to one node, and any TU recorded
@@ -157,7 +157,7 @@ class TestAStaticDeclaredInAHeader:
 
 
 class TestTheProducerRecordsTheDefiningTu:
-    """ARCH-001 §5's "identity must include the TU", under the narrow rule (STATUS §6).
+    """ARCH-001 §5's "identity must include the TU", under the narrow rule.
 
     These two were characterization tests asserting the gap was open, written to *fail* when
     it closed -- the guard against the change silently doing nothing, which was its likeliest
@@ -184,9 +184,9 @@ class TestTheProducerRecordsTheDefiningTu:
         assert external and all(n.tu is None for n in external)
 
     def test_the_tu_is_repository_relative(self, hazards: Model) -> None:
-        """An absolute path would carry the SHA-named worktree directory into every partial,
-        so base and head would never agree and every internal-linkage match would break on
-        every comparison (STATUS §5)."""
+        """An absolute path would carry the SHA-named worktree directory into every partial, so
+        base and head would never agree and every internal-linkage match would break on every
+        comparison."""
         assert all(not n.tu.startswith("/") for n in hazards.nodes.values() if n.tu)
 
     def test_the_fingerprint_sees_the_tu_where_it_is_identity(self, hazards: Model) -> None:

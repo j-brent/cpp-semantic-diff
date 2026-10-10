@@ -1,10 +1,10 @@
 """The per-TU model cache -- what makes the performance budget reachable.
 
-ARCH-001 §9 sets the budget: **a review touching <= 20 TUs completes in under 30 s on a
-warm cache**. A cold `fmt` model is 50 TUs in anything from half a minute to two, depending
-on the host and the worker count, so the budget is not a matter of parsing faster; it is a
-matter of not parsing what has not changed. The measurements live in STATUS §4, dated and
-maintained; they are deliberately not restated here, and `notes()` reports the cost of the
+ARCH-001 §9 sets the budget: **a review touching <= 20 TUs completes in under 30 s on a warm
+cache**. A cold `fmt` model, 50 TUs, took from half a minute to nearly two on 2026-08-02,
+depending on the worker count (v0 tracker §4, reports/2026-08-01--v0-build/STATUS.md), so the
+budget is not a matter of parsing faster; it is a matter of not parsing what has not changed.
+Those measurements are deliberately not restated here, and `notes()` reports the cost of the
 build in hand rather than quoting any of them -- a per-TU cost asserted in prose was correct
 when it was written and went stale without anyone editing the line.
 
@@ -47,16 +47,15 @@ the standard library and clang's own builtin headers -- a TU including `<string>
 directory -- so libstdc++ 12 versus 14, or a different resource directory's `stddef.h`,
 already changes the key by content rather than by path.
 
-That last one holds only while the scanner and the parser read the *same* resource
-directory, which is the ordinary case and not a guaranteed one: `clang-scan-deps` runs the
-compile database's own command and never sees our `-resource-dir`, so under
-`CPPSD_RESOURCE_DIR` it reports the builtin headers of its own default directory while the
-parser reads the override's. The path is in the key (it is a parse argument) and the
-contents are not, which is a key that looks content-addressed and is not.
-`_uncovered_resource_dir` therefore checks whether the closure names any file under the
-override -- when it does, the override *is* the directory the scanner resolved and every
-builtin header the parser reads is content-hashed like any other closure member, and when
-it does not, the cache declines rather than key those headers by path (§8).
+That last one holds only while the scanner and the parser read the *same* resource directory,
+which is the ordinary case and not a guaranteed one: `clang-scan-deps` runs the compile
+database's own command and never sees our `-resource-dir`, so under `CPPSD_RESOURCE_DIR` it
+reports the builtin headers of its own default directory while the parser reads the override's.
+The path is in the key (it is a parse argument) and the contents are not, which is a key that
+looks content-addressed and is not. `_uncovered_resource_dir` therefore checks whether the
+closure names any file under the override -- when it does, the override *is* the directory the
+scanner resolved and every builtin header the parser reads is content-hashed like any other
+closure member, and when it does not, the cache declines rather than key those headers by path.
 
 **When the closure cannot be computed, nothing is cached.** `clang-scan-deps` is the only
 thing here that knows which headers a TU reads, and a key without them produces stale hits
@@ -110,12 +109,12 @@ ENTRY_FORMAT = 1
 def _producer_code_digest() -> str:
     """Version the *extraction code*, not just the parser it drives.
 
-    ARCH-001 §9 names "producer version" as a key component and STATUS §4 spells out why:
-    a model built by a different producer is a different model. `Toolchain.id` covers only
-    half of that. libclang supplies the AST; `extract.py` decides what becomes a node, what
-    a signature reads as, and which spellings are stable -- and `ir.py` fixes the shape all
-    of it is stored in. Change either and the same source under the same libclang yields a
-    different partial, so an entry written before the change is not valid after it.
+    ARCH-001 §9 names "producer version" as a key component, because a model built by a
+    different producer is a different model. `Toolchain.id` covers only half of that. libclang
+    supplies the AST; `extract.py` decides what becomes a node, what a signature reads as, and
+    which spellings are stable -- and `ir.py` fixes the shape all of it is stored in. Change
+    either and the same source under the same libclang yields a different partial, so an entry
+    written before the change is not valid after it.
 
     This is not hypothetical. Extraction was corrected today to stop leaking absolute
     worktree paths into `name`/`qualified_name`, to strip lazily-evaluated exception
@@ -330,14 +329,14 @@ def include_closures(
 ) -> dict[Path, list[Path]]:
     """Every TU's transitive include closure, in one scan of the whole database.
 
-    One invocation rather than one per TU: the scanner shares a preprocessing cache across
-    the database, which is what makes it cheap at scale (opencv's 1,292 TUs in 14.1 s; fmt
-    scans in 0.1 s).
+    One invocation rather than one per TU: the scanner shares a preprocessing cache across the
+    database, which is what makes it cheap at scale.
 
     A non-zero exit is *not* treated as total failure. The scanner reports per-TU errors on
-    stderr and keeps going, and against an unbuilt tree that is expected -- 9.2 % of
-    opencv's TUs include a header CMake emits during the build (ARCH-001 §3.1). Those TUs
-    simply have no closure, and a TU with no closure is not cached.
+    stderr and keeps going, and against an unbuilt tree that is expected -- 9.2 % of opencv's
+    TUs include a header CMake emits during the build (ARCH-001 §3.1; measured 2026-08-01,
+    v0 tracker §7, reports/2026-08-01--v0-build/STATUS.md). Those TUs simply have no closure,
+    and a TU with no closure is not cached.
     """
     try:
         proc = subprocess.run(
@@ -439,12 +438,12 @@ def collect(
     """Remove cache entries nothing has used lately, across every producer generation.
 
     **The hole this fills.** `TuCache._evict` trims within one TU's directory, keeping the
-    newest `GENERATIONS`. That is the right rule for a TU whose content keeps changing, and
-    it cannot reach the case that actually accumulates: `Cache.identity` hashes the producer
-    code digest, so changing `extract.py` or `ir.py` gives *every* TU a brand-new identity
-    directory and the previous generation is never written to again. `_evict` only runs on a
-    write, so directories nothing writes to are immortal. Every producer change has therefore
-    left a full copy of the cache behind since the cache was written (STATUS §6).
+    newest `GENERATIONS`. That is the right rule for a TU whose content keeps changing, and it
+    cannot reach the case that actually accumulates: `Cache.identity` hashes the producer code
+    digest, so changing `extract.py` or `ir.py` gives *every* TU a brand-new identity directory
+    and the previous generation is never written to again. `_evict` only runs on a write, so
+    directories nothing writes to are immortal. Every producer change has therefore left a full
+    copy of the cache behind since the cache was written.
 
     Age, because there is nothing better to key on. The alternative -- delete every identity
     that is not the current producer's -- needs a toolchain and a checkout to know what the
@@ -452,8 +451,8 @@ def collect(
     it against. Age needs neither and collects the same directories one generation later.
 
     Safe by construction: an entry this removes is reparsed on the next run that wants it.
-    Declining to cache is slow and never wrong (§8), and that applies to a cache entry this
-    deleted exactly as it applies to one that was never written.
+    Declining to cache is slow and never wrong, and that applies to a cache entry this deleted
+    exactly as it applies to one that was never written.
     """
     root = root or store_root()
     cutoff = time.time() - max_age_days * 86400
@@ -620,17 +619,16 @@ class TuCache:
         contents reach nothing, so changing them does not. That is a stale hit on every
         translation unit, of the kind ARCH-001 §9 calls confidently wrong output.
 
-        Checked rather than assumed, because the hazard is usually not live. The reason to
-        set the override at all is a libclang that cannot find its own builtin headers, and
-        what it is then pointed at is normally the directory the version-matched scanner
-        resolves for itself -- on this host `/usr/lib/clang/18` and
-        `/usr/lib/llvm-18/lib/clang/18` are one directory through a symlink, and `_relative`
-        resolves both spellings to the same file. Where that holds, the closure *names*
-        those headers and they are content-hashed like any other member, so a key component
-        covering the directory a second time would defend an already-defended hazard at the
-        cost of a mass invalidation (STATUS §8). The answer is therefore neither a wider key
-        nor a blanket refusal: look at what the closure already covers, and decline only the
-        case that escapes it.
+        Checked rather than assumed, because the hazard is usually not live. The reason to set
+        the override at all is a libclang that cannot find its own builtin headers, and what it
+        is then pointed at is normally the directory the version-matched scanner resolves for
+        itself -- on this host `/usr/lib/clang/18` and `/usr/lib/llvm-18/lib/clang/18` are one
+        directory through a symlink, and `_relative` resolves both spellings to the same file.
+        Where that holds, the closure *names* those headers and they are content-hashed like
+        any other member, so a key component covering the directory a second time would defend
+        an already-defended hazard at the cost of a mass invalidation. The answer is therefore
+        neither a wider key nor a blanket refusal: look at what the closure already covers, and
+        decline only the case that escapes it.
 
         A build whose sources reach no builtin header at all also has nothing under the
         override in any closure, and is declined as well. That is a synthetic project rather
@@ -685,9 +683,9 @@ class TuCache:
         same content key differently. A system header has no repo-relative path, and its
         absolute one is stable on the host the cache belongs to.
 
-        Memoized with the digests and for the same reason: fmt's 50 TUs name 495 distinct
-        files between them but 25,000 closure members in total, and `resolve()` is a
-        syscall per component. Unmemoized it cost 0.9 s of a 8 s warm build.
+        Memoized with the digests and for the same reason: TUs share most of their headers, so
+        the same few files recur across closures many times over, and `resolve()` is a syscall
+        per component.
         """
         if (known := self._relatives.get(path)) is not None:
             return known

@@ -320,7 +320,7 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
 
 
 class TestNothingIsCollapsed:
-    """ARCH-001 §6.3 and STATUS §6: collapse happens at render, never here.
+    """ARCH-001 §6.3: collapse happens at render, never here.
 
     The invariant that catches someone helpfully deduplicating. This stage adds links; the
     JSON always carries the full event set, and the view hides consequences under causes. A

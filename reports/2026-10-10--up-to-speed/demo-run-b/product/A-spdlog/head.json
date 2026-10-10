@@ -1,0 +1,268 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "spdlog \u00b7 component 0 \u00b7 head (d6c93f38a08b)",
+  "output": "docs/playground-B/product/A-spdlog/head.html",
+  "quality_profile": "showcase",
+  "legend": {
+   "entries": {
+    "frontend": {
+     "label": "caller (example/example.cpp)"
+    },
+    "backend": {
+     "label": "factory the change is about (_mt and _st drawn as one)"
+    },
+    "cloud": {
+     "label": "callee"
+    }
+   }
+  }
+ },
+ "components": [
+  {
+   "id": "ex_basic",
+   "type": "frontend",
+   "label": "basic_example",
+   "sublabel": "example.cpp:121",
+   "pos": [
+    40,
+    40
+   ],
+   "size": [
+    230,
+    60
+   ]
+  },
+  {
+   "id": "ex_async",
+   "type": "frontend",
+   "label": "async_example",
+   "sublabel": "example.cpp:165",
+   "pos": [
+    40,
+    130
+   ],
+   "size": [
+    230,
+    60
+   ]
+  },
+  {
+   "id": "ex_replace",
+   "type": "frontend",
+   "label": "replace_default_logger_example",
+   "sublabel": "example.cpp:374",
+   "pos": [
+    40,
+    220
+   ],
+   "size": [
+    250,
+    60
+   ]
+  },
+  {
+   "id": "ex_daily",
+   "type": "frontend",
+   "label": "daily_example",
+   "sublabel": "example.cpp:134",
+   "pos": [
+    40,
+    330
+   ],
+   "size": [
+    230,
+    60
+   ]
+  },
+  {
+   "id": "ex_rot",
+   "type": "frontend",
+   "label": "rotating_example",
+   "sublabel": "example.cpp:128",
+   "pos": [
+    40,
+    730
+   ],
+   "size": [
+    230,
+    60
+   ]
+  },
+  {
+   "id": "handlers",
+   "type": "cloud",
+   "label": "file_event_handlers",
+   "sublabel": "ctor ()",
+   "pos": [
+    860,
+    340
+   ],
+   "size": [
+    200,
+    200
+   ]
+  },
+  {
+   "id": "reg_inst",
+   "type": "cloud",
+   "label": "details::registry::instance",
+   "sublabel": "registry& ()",
+   "pos": [
+    860,
+    880
+   ],
+   "size": [
+    200,
+    60
+   ]
+  },
+  {
+   "id": "reg_flush",
+   "type": "cloud",
+   "label": "details::registry::flush_all",
+   "sublabel": "void ()",
+   "pos": [
+    860,
+    980
+   ],
+   "size": [
+    200,
+    60
+   ]
+  },
+  {
+   "id": "basic_new",
+   "type": "backend",
+   "label": "basic_logger_mt \u00b7 _st",
+   "sublabel": "(\u2026, handlers, unsigned long) \u00b7 basic_file_sink.h:48",
+   "pos": [
+    440,
+    124
+   ],
+   "size": [
+    290,
+    64
+   ],
+   "tag": "NodeAdded \u00d72 \u00b7 risk 0.75"
+  },
+  {
+   "id": "daily_new",
+   "type": "backend",
+   "label": "daily_logger_mt \u00b7 _st",
+   "sublabel": "(\u2026, handlers, unsigned long) \u00b7 daily_file_sink.h:218",
+   "pos": [
+    440,
+    334
+   ],
+   "size": [
+    290,
+    64
+   ],
+   "tag": "NodeAdded \u00d72 \u00b7 risk 0.72"
+  },
+  {
+   "id": "dfmt_new",
+   "type": "backend",
+   "label": "daily_logger_format_mt \u00b7 _st",
+   "sublabel": "(\u2026, handlers, unsigned long) \u00b7 daily_file_sink.h:232",
+   "pos": [
+    440,
+    534
+   ],
+   "size": [
+    290,
+    64
+   ],
+   "tag": "NodeAdded \u00d72 \u00b7 risk 0.67"
+  },
+  {
+   "id": "rot_new",
+   "type": "backend",
+   "label": "rotating_logger_mt \u00b7 _st",
+   "sublabel": "(\u2026, handlers, unsigned long) \u00b7 rotating_file_sink.h:73",
+   "pos": [
+    440,
+    734
+   ],
+   "size": [
+    290,
+    64
+   ],
+   "tag": "NodeAdded \u00d72 \u00b7 risk 0.72"
+  },
+  {
+   "id": "flush_all",
+   "type": "backend",
+   "label": "spdlog::flush_all",
+   "sublabel": "void () \u00b7 spdlog-inl.h:54",
+   "pos": [
+    440,
+    920
+   ],
+   "size": [
+    290,
+    64
+   ],
+   "tag": "NodeAdded \u00b7 risk 0.67"
+  }
+ ],
+ "connections": [
+  {
+   "id": "ex_basic-basic_new",
+   "from": "ex_basic",
+   "to": "basic_new"
+  },
+  {
+   "id": "ex_async-basic_new",
+   "from": "ex_async",
+   "to": "basic_new"
+  },
+  {
+   "id": "ex_replace-basic_new",
+   "from": "ex_replace",
+   "to": "basic_new"
+  },
+  {
+   "id": "ex_daily-daily_new",
+   "from": "ex_daily",
+   "to": "daily_new"
+  },
+  {
+   "id": "ex_rot-rot_new",
+   "from": "ex_rot",
+   "to": "rot_new"
+  },
+  {
+   "id": "basic_new-handlers",
+   "from": "basic_new",
+   "to": "handlers"
+  },
+  {
+   "id": "daily_new-handlers",
+   "from": "daily_new",
+   "to": "handlers"
+  },
+  {
+   "id": "dfmt_new-handlers",
+   "from": "dfmt_new",
+   "to": "handlers"
+  },
+  {
+   "id": "rot_new-handlers",
+   "from": "rot_new",
+   "to": "handlers"
+  },
+  {
+   "id": "flush-inst",
+   "from": "flush_all",
+   "to": "reg_inst"
+  },
+  {
+   "id": "flush-flush",
+   "from": "flush_all",
+   "to": "reg_flush"
+  }
+ ]
+}

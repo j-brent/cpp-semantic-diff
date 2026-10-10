@@ -1,8 +1,8 @@
 """Every number the rank stage tunes, in one file, each with the reason it is that number.
 
 ARCH-001 §7 names four inputs and does not weight them, because the weighting is what has
-to be calibrated against real repositories rather than argued from first principles. STATUS
-§5 says the same thing about the tier-4 similarity threshold and draws the right conclusion
+to be calibrated against real repositories rather than argued from first principles. ARCH-001
+§14 says the same thing about the tier-4 similarity threshold and draws the right conclusion
 -- *design the knob in early* -- so the knobs are here, named, together, and the scoring
 code reads them rather than spelling numbers inline. A ranking whose weights are scattered
 through three modules cannot be tuned, and one that cannot be tuned will be tuned by
@@ -40,9 +40,9 @@ from cpp_semantic_diff.rank.exposure import Exposure
 W_BLAST_RADIUS = 0.35
 
 #: Exposure is second because on a real repository it is doing filtering work rather than
-#: ordering work -- 80.6 % of fmt's model is test and vendored code (see `exposure.py`), and
-#: this is the term that keeps it off the first page. Under-weight it and the ranking is
-#: correct about everything except which repository it is ranking.
+#: ordering work -- most of fmt's model is test and vendored code (see `exposure.py`), and this
+#: is the term that keeps it off the first page. Under-weight it and the ranking is correct
+#: about everything except which repository it is ranking.
 W_EXPOSURE = 0.25
 
 #: Novelty at parity with exposure. It is the most locally *legible* signal -- a reviewer
@@ -65,15 +65,14 @@ FACTOR_WEIGHTS: dict[str, float] = {
 #: factor orders the page; only these three decide whether an event is counted as high risk
 #: (`RiskScore.is_high_risk`, which carries the argument).
 #:
-#: The reason is that a fixed threshold on a sum only means something if every term in the
-#: sum can discriminate, and in v0 one of them cannot. Tier-1-only identity (§13) makes
-#: *every* add and remove unmatched residue, so `UNCERTAINTY_BY_TIER[None]` applies to that
-#: whole population at once: not a measurement, a constant offset -- and at 0.15 it is
-#: exactly the offset that lifts a public addition with zero dependents from 0.4625 to
-#: 0.6125 and over the line. Measured on fmt at `HEAD~100`: 133 of 335 events (40 %)
-#: "high risk", 111 of them edge events. A number that says "40 % of this diff is
-#: dangerous" when it means "40 % of this diff is new" is worse than no number, and §10
-#: prints it on every run.
+#: The reason is that a fixed threshold on a sum only means something if every term in the sum
+#: can discriminate, and in v0 one of them cannot. Tier-1-only identity (§13) makes *every* add
+#: and remove unmatched residue, so `UNCERTAINTY_BY_TIER[None]` applies to that whole
+#: population at once: not a measurement, a constant offset -- and at 0.15 it is exactly the
+#: offset that lifts a public addition with zero dependents from 0.4625 to 0.6125 and over the
+#: line. Measured on fmt at `HEAD~100` on 2026-08-02: 133 of 335 events (40 %) "high risk"
+#: (commit `ef2daff`). A number that says "40 % of this diff is dangerous" when it means "40 %
+#: of this diff is new" is worse than no number, and §10 prints it on every run.
 IMPACT_FACTORS: frozenset[str] = frozenset({"blast_radius", "exposure", "novelty"})
 
 #: What `IMPACT_FACTORS` sums to, so the subtotal can be rescaled into [0, 1] and compared
@@ -102,10 +101,10 @@ BLAST_MAX_DEPTH = 3
 #: a leaf", the second says nothing a reviewer can act on differently.
 BLAST_SATURATION = 100.0
 
-#: Hard stop on one walk. §9's budget is per review, and a model with 28,470 edges has
-#: entities whose reverse cone is most of the graph; paying for it per event buys nothing,
-#: since anything past `BLAST_SATURATION` scores the same. Reported through
-#: `BlastResult.saturated` rather than silently truncated (§11).
+#: Hard stop on one walk. §9's budget is per review, and a real model has entities whose
+#: reverse cone is most of the graph; paying for it per event buys nothing, since anything past
+#: `BLAST_SATURATION` scores the same. Reported through `BlastResult.saturated` rather than
+#: silently truncated (§11).
 BLAST_VISIT_CAP = 2000
 
 # --------------------------------------------------------------------------------------
@@ -138,7 +137,7 @@ EXPOSURE_WEIGHT: dict[Exposure, float] = {
 #: weighting them like node events would let one edited function fill the page with its own
 #: call churn.
 #:
-#: The derived kinds (§6.1) are weighted high and none of them can fire in v0 (§13). They
+#: The derived kinds (§6.1) are mostly weighted high and none of them can fire in v0 (§13). They
 #: are computed conclusions rather than observations: an event that says "this became
 #: unreachable" has already done the reasoning a reviewer would otherwise have to do.
 NOVELTY_BY_KIND: dict[EventKind, float] = {
@@ -218,8 +217,8 @@ NOVELTY_BY_ATTR: dict[str, float] = {
 #: weaker claim is more worth a human's eye, not less.
 #:
 #: `None` -- unmatched residue -- is the maximum. It is also, in v0, every add, every remove
-#: and every rename (§13), which is precisely the population the tool is least sure about
-#: and STATUS §6 wants measured rather than hidden.
+#: and every rename (§13), which is precisely the population the tool is least sure about and
+#: the one v0 exists to measure rather than hide.
 UNCERTAINTY_BY_TIER: dict[MatchTier | None, float] = {
     None: 1.00,
     MatchTier.SIMILARITY: 0.75,

@@ -1,8 +1,8 @@
 """Cascade collapse: hiding consequences under their causes. ARCH-001 §6.3.
 
-**This is the only place in the pipeline that collapses anything.** The diff stage says so
-in its own docstring, classify says it "adds links and nothing else", and STATUS §6 records
-the decision with its reason: the JSON always carries the full event set and the view hides
+**This is the only place in the pipeline that collapses anything.** The diff stage says so in
+its own docstring, classify says it "adds links and nothing else", and §6.3 records the
+decision with its reason: the JSON always carries the full event set and the view hides
 consequences under causes. A stage that collapsed earlier would delete changes from the
 document every downstream view reads, with no way for any of them to know.
 

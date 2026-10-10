@@ -1,0 +1,374 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "compare",
+  "type": "architecture",
+  "comparatorVersion": 1,
+  "canonicalVersion": 1,
+  "completeness": "complete",
+  "proofLevel": "authored",
+  "base": {
+    "title": "fmt · component 0 · base (cdc27f91a007)",
+    "rawSha256": "1476a674489ffc3806652a71095031b55dc8e962b20caed9681ba87389baa241",
+    "semanticSha256": "06356c8e4d6aa14b4b589b862cf3abc625b8d3303610036a250612e28603f0a5",
+    "bytes": 4826
+  },
+  "head": {
+    "title": "fmt · component 0 · head (35c58f084e7c)",
+    "rawSha256": "3b8beaa34c4e19cc020e388319f433d7ca3bf0c6812514eae79141fbb46c20de",
+    "semanticSha256": "9e9cce1ff7950bc8629a1b029aa500f7bf91f323cacb6de4d57598a85659a848",
+    "bytes": 5152
+  },
+  "summary": {
+    "components": {
+      "added": 2,
+      "changed": 0,
+      "evidenceChanged": 0,
+      "removed": 1,
+      "moved": 0
+    },
+    "connections": {
+      "added": 11,
+      "changed": 0,
+      "removed": 10,
+      "rerouted": 0
+    },
+    "boundaries": {
+      "added": 0,
+      "changed": 0,
+      "removed": 0,
+      "geometryChanged": 0
+    },
+    "presentationChanged": true,
+    "provenanceChanged": false
+  },
+  "changes": {
+    "components": [
+      {
+        "id": "fill_n",
+        "headLabel": "detail::fill_n",
+        "status": "added",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "wb_new",
+        "headLabel": "detail::write_buffer",
+        "status": "added",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "wb_old",
+        "baseLabel": "detail::write_buffer",
+        "status": "removed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      }
+    ],
+    "connections": [
+      {
+        "id": "fill_n-ice",
+        "head": {
+          "from": "fill_n",
+          "to": "ice",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "print-wb_new",
+        "head": {
+          "from": "print",
+          "to": "wb_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "print-wb_old",
+        "base": {
+          "from": "print",
+          "to": "wb_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_max-buf_ctor",
+        "base": {
+          "from": "t_max",
+          "to": "buf_ctor",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_max-buf_data",
+        "head": {
+          "from": "t_max",
+          "to": "buf_data",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_max-max_value",
+        "base": {
+          "from": "t_max",
+          "to": "max_value",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_max-mem_buf",
+        "head": {
+          "from": "t_max",
+          "to": "mem_buf",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_max-sv_ctor",
+        "head": {
+          "from": "t_max",
+          "to": "sv_ctor",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_max-to_unsigned",
+        "base": {
+          "from": "t_max",
+          "to": "to_unsigned",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_max-wb_new",
+        "head": {
+          "from": "t_max",
+          "to": "wb_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_max-wb_old",
+        "base": {
+          "from": "t_max",
+          "to": "wb_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_write-wb_new",
+        "head": {
+          "from": "t_write",
+          "to": "wb_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "t_write-wb_old",
+        "base": {
+          "from": "t_write",
+          "to": "wb_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "vprint_c-wb_new",
+        "head": {
+          "from": "vprint_c",
+          "to": "wb_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "vprint_c-wb_old",
+        "base": {
+          "from": "vprint_c",
+          "to": "wb_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "vprint_w-wb_new",
+        "head": {
+          "from": "vprint_w",
+          "to": "wb_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "vprint_w-wb_old",
+        "base": {
+          "from": "vprint_w",
+          "to": "wb_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "wb_new-max_value",
+        "head": {
+          "from": "wb_new",
+          "to": "max_value",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "wb_new-to_unsigned",
+        "head": {
+          "from": "wb_new",
+          "to": "to_unsigned",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "wb_old-max_value",
+        "base": {
+          "from": "wb_old",
+          "to": "max_value",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "wb_old-to_unsigned",
+        "base": {
+          "from": "wb_old",
+          "to": "to_unsigned",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      }
+    ],
+    "boundaries": []
+  },
+  "identity": {
+    "components": "components[].id",
+    "connections": "connections[].id (required)",
+    "boundaries": "boundaries[].kind + boundaries[].label (derived)"
+  },
+  "view": {
+    "visualPreset": "classic"
+  },
+  "limitations": [
+    "Authored Architecture IR only; no runtime impact, causality, risk, or mergeability is inferred.",
+    "Boundary identity is conservatively derived from kind + label."
+  ],
+  "artifact": {
+    "sha256": "3b0c998cc1e4f0022ad30afa97faa5f9ea75b9ba094efb434d5beb61989c295f",
+    "bytes": 2163421
+  },
+  "validation": {
+    "checksPassed": 28,
+    "checkCount": 28,
+    "baseComposition": "pass",
+    "headComposition": "pass"
+  }
+}
