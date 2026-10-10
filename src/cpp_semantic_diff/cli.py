@@ -13,19 +13,30 @@ harder to review.
 
 from __future__ import annotations
 
+import functools
+import os
+import sys
+import tempfile
 import time
-from contextlib import ExitStack
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager, suppress
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from cpp_semantic_diff import __version__
 from cpp_semantic_diff.acquire import diff_line_count, file_changes, resolve_revs
 from cpp_semantic_diff.acquire.workspace import checkout
-from cpp_semantic_diff.errors import PreconditionError
+from cpp_semantic_diff.errors import (
+    EmptyComparisonError,
+    OutputError,
+    PreconditionError,
+    SemanticDiffError,
+)
 from cpp_semantic_diff.render import DEFAULT_LIMIT
 
 #: Suffixes counted as C++ for the summary's `cpp_files_changed`. A reporting figure only --
@@ -48,7 +59,9 @@ app.add_typer(cache_app)
 console = Console()
 err_console = Console(stderr=True)
 
-RepoArg = Annotated[Path, typer.Argument(help="Path to the C++ repository.")]
+# Resolved, because the document names the repository by its directory and `Path(".").name`
+# is the empty string: `cppsd diff .` would otherwise publish a document about no repository.
+RepoArg = Annotated[Path, typer.Argument(help="Path to the C++ repository.", resolve_path=True)]
 BaseOpt = Annotated[
     str | None,
     typer.Option("--base", "-b", help="Base ref. Defaults to the repository's main branch."),
@@ -56,21 +69,91 @@ BaseOpt = Annotated[
 HeadOpt = Annotated[str, typer.Option("--head", "-h", help="Head ref.")]
 
 
-def _fail(error: PreconditionError) -> None:
-    """Precondition failures are terminal and must be actionable (ARCH-001 §11)."""
-    err_console.print(f"[bold red]cannot analyze[/]\n{error}")
-    raise typer.Exit(code=2)
+def _reports_errors[**P, R](command: Callable[P, R]) -> Callable[P, R]:
+    """The one path by which this package's errors reach the user: a message and an exit code.
 
+    A precondition is reported as "cannot analyze", because no analysis ran and none is
+    implied (ARCH-001 §11); anything else this package raises failed while running. Each
+    error carries its own exit code, so a caller can branch on the kind of failure without
+    parsing the message.
 
-def _fail_message(detail: str) -> None:
-    """The same exit for a condition that eliminates the analysis without an exception.
-
-    ARCH-001 §11 is about the *condition*, not about how it was discovered: an empty
-    comparison has no second point, and printing an empty document for it would be degraded
-    output dressed as a result.
+    Only `SemanticDiffError` is caught. Any other exception is a defect in this tool, and its
+    traceback is the most useful report of it there is.
     """
-    err_console.print(f"[bold red]cannot analyze[/]\n{detail}")
-    raise typer.Exit(code=2)
+
+    @functools.wraps(command)
+    def reported(*args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return command(*args, **kwargs)
+        except SemanticDiffError as error:
+            heading = "cannot analyze" if isinstance(error, PreconditionError) else "failed"
+            # Escaped: messages carry paths, refs and labels like `f [void (int)]`, and rich
+            # silently drops a bracketed run it reads as a tag it cannot resolve.
+            err_console.print(f"[bold red]{heading}[/]\n{escape(str(error))}")
+            raise typer.Exit(code=int(error.exit_code)) from error
+
+    return reported
+
+
+@contextmanager
+def _stdout_may_close() -> Iterator[None]:
+    """Let the reader of stdout stop reading early, as `cppsd diff --json | head` does.
+
+    Exits 0, not 141 (128 + SIGPIPE): the reader closing the pipe is its choice and not a
+    failure of this tool, and under `set -o pipefail` a 141 would fail a pipeline that got
+    exactly what it asked for. Stdout is pointed at /dev/null first, because the interpreter
+    flushes it again on the way out and that flush would raise the same error.
+    """
+    try:
+        yield
+        sys.stdout.flush()
+    except BrokenPipeError:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        raise typer.Exit(code=0) from None
+
+
+def _write_atomically(path: Path, text: str) -> None:
+    """Write `text` to `path` so that a reader sees the old file or the new one, never half.
+
+    The temporary file is made beside the destination, because `os.replace` is only atomic
+    within one filesystem.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(text)
+            # `mkstemp` creates the file owner-only; the document should get the permissions
+            # any other file this user writes would, as it did before the write was atomic.
+            umask = os.umask(0)
+            os.umask(umask)
+            os.chmod(tmp, 0o666 & ~umask)
+            os.replace(tmp, path)
+        except BaseException:
+            with suppress(FileNotFoundError):
+                os.unlink(tmp)
+            raise
+    except OSError as error:
+        raise OutputError(f"Could not write {path}: {error.strerror or error}") from error
+
+
+def _tree_bytes(root: Path) -> int:
+    """The size of the files under `root`, tolerating a tree that changes while it is walked.
+
+    Another run may be adding or removing a worktree at the same time, so a file that has
+    vanished between being listed and being measured is skipped rather than fatal: this is
+    a report of roughly how much is held, not an inventory.
+    """
+    total = 0
+    for directory, _, names in os.walk(root):
+        for name in names:
+            try:
+                total += os.stat(os.path.join(directory, name)).st_size
+            except FileNotFoundError:
+                continue
+    return total
 
 
 @app.command()
@@ -79,6 +162,7 @@ def version() -> None:
 
 
 @app.command()
+@_reports_errors
 def doctor() -> None:
     """Check that this host can produce trustworthy models.
 
@@ -94,13 +178,12 @@ def doctor() -> None:
 
     try:
         tc = load()
-    except PreconditionError as error:
+    except PreconditionError:
         found = candidate_libraries()
         table.add_row("libclang", "[red]unusable[/]")
         table.add_row("candidates", str(len(found)))
         console.print(table)
-        _fail(error)
-        return
+        raise
 
     table.add_row("libclang", str(tc.library))
     table.add_row("version", tc.version)
@@ -120,6 +203,7 @@ def _megabytes(size: int) -> str:
 
 
 @cache_app.command("status")
+@_reports_errors
 def cache_status() -> None:
     """What the cache holds, and how much of it is reclaimable."""
     from cpp_semantic_diff.acquire.workspace import cache_root
@@ -127,7 +211,7 @@ def cache_status() -> None:
 
     sweep = collect(dry_run=True)
     worktrees = cache_root() / "worktrees"
-    worktree_bytes = sum(p.stat().st_size for p in worktrees.rglob("*") if p.is_file())
+    worktree_bytes = _tree_bytes(worktrees)
 
     table = Table(show_header=False, box=None, pad_edge=False)
     table.add_column(style="dim")
@@ -137,6 +221,13 @@ def cache_status() -> None:
     table.add_row(
         f"unused {DEFAULT_MAX_AGE_DAYS}d+", f"{sweep.removed:,} entries · {_megabytes(sweep.freed)}"
     )
+    if sweep.abandoned:
+        # Temporaries an interrupted write left behind. Not entries -- no key names them -- so
+        # they are counted apart, and `cache gc` removes them.
+        table.add_row(
+            "abandoned writes",
+            f"{sweep.abandoned:,} files · {_megabytes(sweep.abandoned_freed)}",
+        )
     # Reported but not swept: removing a worktree is `git worktree remove` against the
     # repository that owns it, and this command does not know which that is.
     table.add_row("worktrees", f"{_megabytes(worktree_bytes)} [dim](not collected)[/]")
@@ -145,10 +236,13 @@ def cache_status() -> None:
 
 
 @cache_app.command("gc")
+@_reports_errors
 def cache_gc(
     days: Annotated[
         int,
-        typer.Option("--older-than", help="Collect entries unused for this many days."),
+        # A negative age is in the future, so every entry is older than it: refused rather
+        # than allowed to empty the cache.
+        typer.Option("--older-than", min=0, help="Collect entries unused for this many days."),
     ] = 30,
     dry_run: Annotated[
         bool,
@@ -172,21 +266,22 @@ def cache_gc(
         f"{verb} [bold]{sweep.removed:,}[/] of {sweep.total:,} entries · "
         f"{_megabytes(sweep.freed)} freed · {_megabytes(sweep.held)} kept"
     )
+    if sweep.abandoned:
+        console.print(
+            f"{verb} {sweep.abandoned:,} abandoned writes · "
+            f"{_megabytes(sweep.abandoned_freed)} freed"
+        )
 
 
 @app.command()
+@_reports_errors
 def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     """Resolve what would be analyzed, without analyzing it.
 
     Reports the comparison the tool would make and the size of the text diff it has to
     beat -- the denominator of the compression metric (ARCH-001 §10).
     """
-    try:
-        revs = resolve_revs(repo, base_ref=base, head_ref=head)
-    except PreconditionError as error:
-        _fail(error)
-        return
-
+    revs = resolve_revs(repo, base_ref=base, head_ref=head)
     changes = file_changes(repo, revs)
     files = changes.paths
     lines = diff_line_count(repo, revs)
@@ -195,7 +290,7 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     table = Table(show_header=False, box=None, pad_edge=False)
     table.add_column(style="dim")
     table.add_column()
-    table.add_row("comparison", revs.describe())
+    table.add_row("comparison", escape(revs.describe()))
     table.add_row("base", f"merge-base({revs.base_ref}, {revs.head_ref})")
     table.add_row("files changed", str(len(files)))
     table.add_row("C++ files", str(len(cpp)))
@@ -212,29 +307,28 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
 
 
 @app.command()
+@_reports_errors
 def acquire(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     """Materialize both revisions and report their compile databases.
 
     Configure, not build. The base worktree is cached by SHA and shared across every
     review against it (ARCH-001 §9).
     """
-    try:
-        revs = resolve_revs(repo, base_ref=base, head_ref=head)
-        console.print(f"[dim]resolving[/] {revs.describe()}")
+    revs = resolve_revs(repo, base_ref=base, head_ref=head)
+    console.print(f"[dim]resolving[/] {escape(revs.describe())}")
 
-        for label, rev in (("base", revs.base_sha), ("head", revs.head_sha)):
-            with checkout(repo, rev) as co:
-                total = len(co.compile_db)
-                cpp = len(co.cpp_entries)
-                console.print(
-                    f"  [green]{label:4}[/] {rev[:12]}  "
-                    f"{cpp} C++ TUs of {total} entries  [dim]{co.path}[/]"
-                )
-    except PreconditionError as error:
-        _fail(error)
+    for label, rev in (("base", revs.base_sha), ("head", revs.head_sha)):
+        with checkout(repo, rev) as co:
+            total = len(co.compile_db)
+            cpp = len(co.cpp_entries)
+            console.print(
+                f"  [green]{label:4}[/] {rev[:12]}  "
+                f"{cpp} C++ TUs of {total} entries  [dim]{escape(str(co.path))}[/]"
+            )
 
 
 @app.command()
+@_reports_errors
 def diff(
     repo: RepoArg,
     base: BaseOpt = None,
@@ -249,7 +343,7 @@ def diff(
     ] = None,
     limit: Annotated[
         int,
-        typer.Option("--limit", help="Top-level events to show. 0 shows all."),
+        typer.Option("--limit", min=0, help="Top-level events to show. 0 shows all."),
     ] = DEFAULT_LIMIT,
     expand: Annotated[
         bool,
@@ -264,6 +358,9 @@ def diff(
         typer.Option(
             "--workers",
             "-j",
+            # A count below 1 is a mistake on the command line, and is reported as one rather
+            # than quietly run as 1.
+            min=1,
             help=(
                 "Parser processes. Default: $CPPSD_WORKERS, else this machine's cores "
                 "capped at 8. 1 parses in this process, which is the serial path."
@@ -290,52 +387,50 @@ def diff(
     timings = Timings()
     started = time.perf_counter()
 
-    try:
-        # The parser is a precondition, not a dependency (ARCH-001 §13). Verified before a
-        # worktree is materialized, so a host that cannot parse fails in a second rather
-        # than after a configure.
-        toolchain = load()
+    # The parser is a precondition, not a dependency (ARCH-001 §13). Verified before a
+    # worktree is materialized, so a host that cannot parse fails in a second rather
+    # than after a configure.
+    toolchain = load()
 
-        revs = resolve_revs(repo, base_ref=base, head_ref=head)
-        status.print(f"[dim]comparing[/] {revs.describe()}")
-        if revs.is_empty:
-            _fail_message(
-                f"{revs.head_ref} is the merge base of {revs.base_ref}; there is no second "
-                f"point to analyze.\nCheck out the branch under review, or pass --base."
-            )
-            return
+    revs = resolve_revs(repo, base_ref=base, head_ref=head)
+    status.print(f"[dim]comparing[/] {escape(revs.describe())}")
+    if revs.is_empty:
+        # ARCH-001 §11 is about the *condition*, not how it was discovered: an empty
+        # comparison has no second point, and an empty document for it would be degraded
+        # output dressed as a result.
+        raise EmptyComparisonError(
+            f"{revs.head_ref} is the merge base of {revs.base_ref}; there is no second "
+            f"point to analyze.\nCheck out the branch under review, or pass --base."
+        )
 
-        changes = file_changes(repo, revs)
-        files = changes.paths
-        lines = diff_line_count(repo, revs)
+    changes = file_changes(repo, revs)
+    files = changes.paths
+    lines = diff_line_count(repo, revs)
 
-        t = time.perf_counter()
-        # Both checkouts stay open for the whole run: `Checkout` owns the worktree the
-        # compile database's paths are relative to, and the models are built from it.
-        with ExitStack() as stack:
-            base_co = stack.enter_context(checkout(repo, revs.base_sha))
-            head_co = stack.enter_context(checkout(repo, revs.head_sha))
-            timings.acquire = time.perf_counter() - t
+    t = time.perf_counter()
+    # Both checkouts stay open for the whole run: `Checkout` owns the worktree the
+    # compile database's paths are relative to, and the models are built from it.
+    with ExitStack() as stack:
+        base_co = stack.enter_context(checkout(repo, revs.base_sha))
+        head_co = stack.enter_context(checkout(repo, revs.head_sha))
+        timings.acquire = time.perf_counter() - t
 
-            cache = not no_cache
-            models = {}
-            for label, co, slot in (
-                ("base", base_co, "produce_base"),
-                ("head", head_co, "produce_head"),
-            ):
-                status.print(f"[dim]building {label} model[/] {len(co.cpp_entries)} TUs")
-                t = time.perf_counter()
-                # `workers` is passed through as `None` when the flag is absent, never as
-                # a count computed here. `produce.parallel.worker_count` is the one place
-                # that resolves flag > $CPPSD_WORKERS > what this machine can run, and a
-                # default filled in at this layer would shadow the environment variable
-                # for every run -- two mechanisms for one knob, disagreeing silently.
-                models[label] = build_model(co, toolchain=toolchain, cache=cache, workers=workers)
-                setattr(timings, slot, time.perf_counter() - t)
-            base_model, head_model = models["base"], models["head"]
-    except PreconditionError as error:
-        _fail(error)
-        return
+        cache = not no_cache
+        models = {}
+        for label, co, slot in (
+            ("base", base_co, "produce_base"),
+            ("head", head_co, "produce_head"),
+        ):
+            status.print(f"[dim]building {label} model[/] {len(co.cpp_entries)} TUs")
+            t = time.perf_counter()
+            # `workers` is passed through as `None` when the flag is absent, never as
+            # a count computed here. `produce.parallel.worker_count` is the one place
+            # that resolves flag > $CPPSD_WORKERS > what this machine can run, and a
+            # default filled in at this layer would shadow the environment variable
+            # for every run -- two mechanisms for one knob, disagreeing silently.
+            models[label] = build_model(co, toolchain=toolchain, cache=cache, workers=workers)
+            setattr(timings, slot, time.perf_counter() - t)
+        base_model, head_model = models["base"], models["head"]
 
     # From here the pipeline is pure (ARCH-001 §3): four functions over what is already in
     # memory, each the input of the next, none of them touching the disk.
@@ -349,16 +444,10 @@ def diff(
     timings.match = time.perf_counter() - t
 
     t = time.perf_counter()
-    try:
-        events = diff_models(base_model, head_model, correspondence)
-    except PreconditionError as error:
-        # ARCH-001 §12.2's refusal reaches the user as the §11 treatment and not as a
-        # traceback. Unreachable from here today -- both models are built from the one
-        # `toolchain` resolved above -- but a precondition that is presented differently
-        # depending on which stage raised it is a presentation bug waiting for the first
-        # caller that can trip it.
-        _fail(error)
-        return
+    # ARCH-001 §12.2's refusal is raised here, and reaches the user through the same path as
+    # every other precondition. Unreachable today -- both models are built from the one
+    # `toolchain` resolved above -- but it is reported the same way whichever stage raises it.
+    events = diff_models(base_model, head_model, correspondence)
     timings.diff = time.perf_counter() - t
 
     t = time.perf_counter()
@@ -386,17 +475,16 @@ def diff(
     )
 
     if out is not None:
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(document.to_json(), encoding="utf-8")
-        status.print(f"[dim]wrote[/] {out}")
+        _write_atomically(out, document.to_json())
+        status.print(f"[dim]wrote[/] {escape(str(out))}")
 
-    if as_json:
-        # `print`, not `console.print`: rich would wrap and highlight the document, and a
-        # product piped into `jq` must be bytes rather than a rendering of bytes.
-        print(document.to_json())
-        return
-
-    render(document, console, collapse_cascades=not expand, limit=limit)
+    with _stdout_may_close():
+        if as_json:
+            # `print`, not `console.print`: rich would wrap and highlight the document, and a
+            # product piped into `jq` must be bytes rather than a rendering of bytes.
+            print(document.to_json())
+        else:
+            render(document, console, collapse_cascades=not expand, limit=limit)
 
 
 if __name__ == "__main__":

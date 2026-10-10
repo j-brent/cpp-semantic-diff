@@ -43,7 +43,8 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from cpp_semantic_diff.model import EventId, Side
+from cpp_semantic_diff.model import AnyId, EventId, Side
+from cpp_semantic_diff.rank import subject_endpoints
 from cpp_semantic_diff.rank.exposure import Exposure
 from cpp_semantic_diff.render.collapse import Collapsed, CollapseNode, collapse
 from cpp_semantic_diff.render.document import CompletenessBlock, DiffDocument
@@ -312,7 +313,7 @@ def _event(document: DiffDocument, node: CollapseNode, console: Console, *, dept
         _event(document, child, console, depth=depth + 1)
 
 
-def _subject(document: DiffDocument, subject: str) -> str:
+def _subject(document: DiffDocument, subject: AnyId) -> str:
     """The entity's name, marked with which side carries it.
 
     `sides` comes off the entity summary rather than off the event kind, which is what makes
@@ -327,7 +328,10 @@ def _subject(document: DiffDocument, subject: str) -> str:
     only the parts read off the document are escaped.
     """
     label = escape(document.label(subject))
-    entity = document.entities.get(subject)  # type: ignore[arg-type]
+    # Only a node subject has an entity summary to mark; an edge names two entities and is
+    # labelled by `document.label` without a side mark, since neither end alone is "it".
+    endpoints = subject_endpoints(subject)
+    entity = document.entities.get(endpoints[0]) if len(endpoints) == 1 else None
     if entity is None:
         return f"[cyan]{label}[/]"
     mark = {(True, False): "[red]-[/]", (False, True): "[green]+[/]"}.get(
