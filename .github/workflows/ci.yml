@@ -10,78 +10,47 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Rich renders to whatever it thinks the terminal is; in CI that means escape codes in
-  # the log and an 80-column wrap that mangles long cache paths.
-  NO_COLOR: "1"
-  COLUMNS: "160"
-
 jobs:
   test:
     runs-on: ubuntu-24.04
+    # Inside a base image pinned by digest, not on the runner image itself. GitHub updates
+    # `ubuntu-24.04` about weekly and it cannot be pinned, so its packages move under a run
+    # that has not changed; this image does not. It is also the image `scripts/ci-local.sh`
+    # builds from -- it reads the digest from this line -- so a local run and this job start
+    # from the same bytes.
+    container:
+      image: ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v7
+      # The image has no git yet, so checkout fetches the tree without history. Nothing in
+      # the checks reads this repository's history; tests build their own repositories.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # The tool refuses to run without a libclang that can reach the compiler's builtin
-      # headers, so CI has to install the -dev package that carries them. Installing only
-      # libclang1-18 reproduces the silent-truncation bug this project exists to avoid.
-      - name: Install LLVM
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            libclang1-18 libclang-common-18-dev llvm-18
+      - name: Install system packages
+        run: scripts/ci-deps.sh
 
-      - uses: astral-sh/setup-uv@v7
+      # Installs the uv version pinned by `required-version` in pyproject.toml.
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
 
+      # Each check is defined once, in scripts/ci.sh; these steps only name them, so the
+      # job and `scripts/ci-local.sh` cannot run different commands.
       - name: Sync dependencies
-        run: uv sync --locked --all-groups
-
+        run: scripts/ci.sh sync
       - name: Format
-        run: uv run ruff format --check .
-
+        run: scripts/ci.sh format
       - name: Lint
-        run: uv run ruff check .
-
+        run: scripts/ci.sh lint
       - name: Type check (mypy)
-        run: uv run mypy
-
+        run: scripts/ci.sh mypy
       - name: Type check (pyright)
-        run: uv run pyright
-
+        run: scripts/ci.sh pyright
       - name: Tests
-        run: uv run pytest -q
-
-      # Worth its own step on a machine that is not a developer's. Library discovery is
-      # the code most likely to be accidentally tuned to one host, and this is the only
-      # place it gets exercised somewhere else: different LLVM packaging, no
-      # /usr/lib/llvm-*/lib symlink farm, ldconfig as the only route to the library.
+        run: scripts/ci.sh test
       - name: Verify toolchain discovery on a foreign host
-        run: uv run cppsd doctor
-
-      # A libclang without builtin headers returns a truncated AST and raises nothing.
-      # The guard against that is the most load-bearing check in the project, so prove it
-      # fires rather than trusting that it would.
-      #
-      # Aimed at the wheel's bundled library specifically, rather than at an apt install
-      # with the -dev package withheld: the runner image already ships a complete LLVM, so
-      # withholding a package proves nothing. The wheel computes its resource directory
-      # relative to its own location in site-packages, so it fails regardless of what is
-      # installed system-wide -- which is exactly the bug this reproduces.
+        run: scripts/ci.sh doctor
       - name: Guard must reject a truncating libclang
-        run: |
-          set -uo pipefail
-          wheel=$(uv run python -c \
-            "import clang, pathlib; print(pathlib.Path(clang.__file__).parent / 'native' / 'libclang.so')")
-          if [ ! -f "$wheel" ]; then
-            echo "::notice::no bundled libclang at $wheel; nothing to guard against"
-            exit 0
-          fi
-          if CPPSD_LIBCLANG="$wheel" uv run cppsd doctor; then
-            echo "::error::doctor accepted a libclang that cannot parse stddef.h."
-            echo "::error::That is the silent-truncation failure mode -- models would be"
-            echo "::error::built from partial ASTs, agree with each other, and be wrong."
-            exit 1
-          fi
-          echo "doctor correctly refused the truncating toolchain."
+        run: scripts/ci.sh guard
