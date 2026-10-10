@@ -327,10 +327,10 @@ class TestInvalidation:
     def test_repackaging_the_same_compiler_does_not_invalidate(
         self, tmp_path: Path, toolchain: Toolchain
     ) -> None:
-        """The property that made the identity the *release* triple, kept while widening it
-        (STATUS §5). A distro rebuild changes the version string and the install path and
-        nothing a parse can observe; keying on either would invalidate every cached model
-        on every host, for nothing.
+        """The property that made the identity the *release* triple, kept while widening it. A
+        distro rebuild changes the version string and the install path and nothing a parse can
+        observe; keying on either would invalidate every cached model on every host, for
+        nothing.
         """
         checkout = project(tmp_path / "w", SHARED, ("a.cpp",))
         _, cache = build(checkout, toolchain, tmp_path)
@@ -543,11 +543,11 @@ class TestAnOverriddenResourceDirIsCoveredOrDeclined:
     def test_a_resource_dir_outside_every_closure_disables_the_cache(
         self, tmp_path: Path, toolchain: Toolchain
     ) -> None:
-        """The builtin headers this parse reads would be keyed by path, so nothing is
-        stored. A key that names a directory instead of hashing it invalidates when the
-        override is pointed somewhere else and hits after the directory's contents change
-        -- and the contents are what the parse reads (ARCH-001 §9; STATUS §8, declining to
-        cache beats a weaker key)."""
+        """The builtin headers this parse reads would be keyed by path, so nothing is stored. A
+        key that names a directory instead of hashing it invalidates when the override is
+        pointed somewhere else and hits after the directory's contents change -- and the
+        contents are what the parse reads (ARCH-001 §9; declining to cache beats a weaker
+        key)."""
         # A second resource directory, holding what this build's TUs need of one. Its
         # contents are irrelevant to the claim and its *path* is the whole point: the
         # hazard is builtin headers that the scanner never reported, whether or not they
@@ -573,11 +573,11 @@ class TestAnOverriddenResourceDirIsCoveredOrDeclined:
     ) -> None:
         """The other half of the same rule, and the reason the check is a check.
 
-        The ordinary use of the override is a libclang that cannot find its own builtin
-        headers being pointed at the ones the matching `clang-scan-deps` uses. Those
-        headers are then closure members like any other and are content-hashed already, so
-        refusing to cache -- or adding the directory to the key a second time -- would
-        spend a full reparse defending a hazard the key already defends (STATUS §8)."""
+        The ordinary use of the override is a libclang that cannot find its own builtin headers
+        being pointed at the ones the matching `clang-scan-deps` uses. Those headers are then
+        closure members like any other and are content-hashed already, so refusing to cache --
+        or adding the directory to the key a second time -- would spend a full reparse
+        defending a hazard the key already defends."""
         sources = {"a.cpp": "#include <cstddef>\nstd::size_t width() { return sizeof(int); }\n"}
         checkout = project(tmp_path / "w", sources, ("a.cpp",))
         scanned = _scanner_resource_dir(TuCache.open(checkout, toolchain=toolchain))
@@ -678,13 +678,14 @@ def _without_cache_hits(model: Model) -> dict:
 
 
 class TestCollectingSupersededGenerations:
-    """`_evict` cannot reach the thing that actually accumulates (STATUS §6).
+    """`_evict` cannot reach the thing that actually accumulates.
 
-    It trims within one TU's directory and only runs on a *write*. `Cache.identity` hashes
-    the producer code digest, so changing `extract.py` gives every TU a new identity
-    directory and nothing ever writes to the old ones again -- so nothing ever evicts them.
-    Every producer change has left a full copy of the cache behind. Measured on this machine
-    mid-session: 1,156 entries and 229 MB, of which 576 entries and 147 MB were unreachable.
+    It trims within one TU's directory and only runs on a *write*. `Cache.identity` hashes the
+    producer code digest, so changing `extract.py` gives every TU a new identity directory and
+    nothing ever writes to the old ones again -- so nothing ever evicts them. Every producer
+    change has left a full copy of the cache behind. Measured on 2026-08-04: 1,156 entries and
+    229 MB, of which 576 entries and 147 MB were unreachable (v0 tracker §6,
+    reports/2026-08-01--v0-build/STATUS.md).
     """
 
     def entry(self, store: Path, name: str, *, age_days: float) -> Path:

@@ -44,7 +44,7 @@ class Tier(Protocol):
 
 
 def default_tiers(renames: Mapping[str, str] | None = None) -> tuple[Tier, ...]:
-    """v0 runs tier 1 and nothing else (ARCH-001 §13, STATUS §3).
+    """v0 runs tier 1 and nothing else (ARCH-001 §13).
 
     Tiers 2-4 are excluded on purpose: a rename surfaces as a remove plus an add, and how
     badly that reads on real branches is a v0 deliverable. Softening it here -- a name-based

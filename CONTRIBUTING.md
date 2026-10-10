@@ -52,9 +52,12 @@ and a line under its title.
   A citation is a pointer for further reading, never the explanation.
 - **A comment may cite a frozen document, or ARCH-001** (`# ARCH-001 §4.3`), where a non-obvious
   choice traces to a design decision. **It never cites any other living document.**
+- **A bare `§n` means ARCH-001.** Any other document is named: `RESEARCH-002 §3`,
+  `v0 tracker §5 (reports/2026-08-01--v0-build/STATUS.md)`.
 - **ARCH-001's section numbers are permanent.** A section that is removed leaves a stub saying it
-  is retired and what replaced it. A test fails if a comment cites an ARCH-001 section that does
-  not exist. When a section's meaning changes, search the code for its citations.
+  is retired and what replaced it. `tests/test_doc_citations.py` fails if a comment cites a
+  section that does not exist, or cites a living document other than ARCH-001. When a section's
+  meaning changes, search the code for its citations.
 - **A measurement in a comment carries its date and the frozen report it comes from.** Otherwise
   it is reduced to the reasoning, and the number is dropped. A number asserted in prose has no
   owner and no expiry.

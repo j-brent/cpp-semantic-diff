@@ -81,9 +81,9 @@ def only(events: list[Event], kind: EventKind) -> Event:
 def paired(base: Model, head: Model, *pairs: tuple[str, str], tier: MatchTier) -> Correspondence:
     """A correspondence a later tier could produce -- tier 1 never will.
 
-    Renames and moves are unreachable in v0 (STATUS §6), and the temptation is to leave
-    their handling untested until tiers 2-4 land. Handing the stage the correspondence it
-    would then receive tests the handling now, without any of it leaking into the matcher.
+    Renames and moves are unreachable in v0 (ARCH-001 §13), and the temptation is to leave
+    their handling untested until tiers 2-4 land. Handing the stage the correspondence it would
+    then receive tests the handling now, without any of it leaking into the matcher.
     """
     matched_base = {b for b, _ in pairs}
     matched_head = {h for _, h in pairs}
@@ -133,7 +133,7 @@ class TestNothingChangedMeansNoEvents:
 
 
 class TestRenamesLookBadOnPurpose:
-    """STATUS §6 and ARCH-001 §13: v0 ships tier 1 only and measures the damage.
+    """ARCH-001 §13: v0 ships tier 1 only and measures the damage.
 
     This pins the decision at the stage most likely to soften it. A name-based fallback
     here would make the output look better and destroy the measurement that decides whether
@@ -520,7 +520,7 @@ class TestAnEdgeAttributeChangeIsAChange:
 
 
 class TestTheEventSetIsComplete:
-    """ARCH-001 §6.3 and STATUS §6: cascade collapse happens at render, never at diff.
+    """ARCH-001 §6.3: cascade collapse happens at render, never at diff.
 
     The JSON always carries the full set; the view hides consequences under causes. A
     hidden real change is a far worse failure than a redundant one, so this stage emits
@@ -791,8 +791,8 @@ class TestOneToolchainOrNoDiff:
 
 
 class TestTheDroppedEdgeAsymmetryIsInherited:
-    """STATUS §3: the builder drops edges whose endpoints it cannot resolve and records
-    only a count, in prose, in `Completeness.notes`.
+    """The builder drops edges whose endpoints it cannot resolve and records only a count, in
+    prose, in `Completeness.notes`.
 
     This stage cannot detect that -- a dropped edge leaves no trace in the model it was
     dropped from. What it can do is not make the asymmetry worse, and the shape of the

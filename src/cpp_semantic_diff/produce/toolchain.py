@@ -4,11 +4,11 @@ ARCH-001 §13 chose libclang over clangd. This module decides *which* libclang, 
 proves it works before any real parsing happens.
 
 The motivating failure: the `libclang` PyPI wheel ships the parsing engine but not the
-compiler's builtin headers (`stddef.h`, `stdarg.h`, ...), which live in Clang's own
-resource directory rather than in the OS. Without them the first `#include <stddef.h>`
-is a fatal error, clang abandons the rest of the file, and libclang returns a
-**truncated AST with no exception raised**. Measured on fmt's `src/format.cc`: 144,027
-cursors instead of 159,343, and 3,474 USRs instead of 3,818.
+compiler's builtin headers (`stddef.h`, `stdarg.h`, ...), which live in Clang's own resource
+directory rather than in the OS. Without them the first `#include <stddef.h>` is a fatal error,
+clang abandons the rest of the file, and libclang returns a **truncated AST with no exception
+raised**. Measured on fmt's `src/format.cc`: 144,027 cursors instead of 159,343, and 3,474 USRs
+instead of 3,818 (commit `8c60838`, 2026-08-01).
 
 That is the worst failure mode this project has. A two-point analysis built on models
 that are consistently missing the same declarations does not report an error -- it
@@ -203,10 +203,11 @@ def library_target(tu: ci.TranslationUnit) -> str | None:
 
     Three ways to answer this and only one of them is sound.
 
-    *Enumerating architecture macros* -- probe for `__x86_64__`, then `__aarch64__`, ... --
-    is a hand-maintained list of the architectures that existed when it was written. It
-    goes stale silently against a newer clang, which is the exact shape of the exception
-    specification bug (STATUS §5): the fix there was to stop enumerating cases.
+    *Enumerating architecture macros* -- probe for `__x86_64__`, then `__aarch64__`, ... -- is
+    a hand-maintained list of the architectures that existed when it was written. It goes stale
+    silently against a newer clang, which is the exact shape of the exception specification bug
+    (v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md): the fix there was to stop
+    enumerating cases.
 
     *Asking `llvm-config --host-target`* asks a sibling binary. `CPPSD_LIBCLANG` can point
     at a library with no relationship to the `llvm-config` on PATH, and `find_scanner`
@@ -307,14 +308,14 @@ class Toolchain:
         yield different `sizeof`s and different conditional declarations with byte-identical
         content digests, so without it two hosts write two models under one key.
 
-        The other four §12.1 determinants are covered by the key already and are
-        deliberately *not* repeated here. The standard library, the resource directory's
-        builtin headers, and anything `CPATH` drags in are content-hashed by
-        `TuCache.key()` as members of the `clang-scan-deps` include closure -- measured:
-        a TU including `<string>` and `<cstddef>` has a 151-file closure holding 68
-        libstdc++ headers and 14 out of clang's own resource directory. The extractor is
-        hashed by `_producer_code_digest`. A second, coarser statement of a fact the key
-        already holds by content adds no detection and one more thing to keep true.
+        The other four §12.1 determinants are covered by the key already and are deliberately
+        *not* repeated here. The standard library, the resource directory's builtin headers,
+        and anything `CPATH` drags in are content-hashed by `TuCache.key()` as members of the
+        `clang-scan-deps` include closure -- measured: a TU including `<string>`, `<cstddef>`
+        and `<stdarg.h>` has a 151-file closure holding 68 libstdc++ headers and 14 out of
+        clang's own resource directory (commit `9cdd2e3`, 2026-08-02). The extractor is hashed
+        by `_producer_code_digest`. A second, coarser statement of a fact the key already holds
+        by content adds no detection and one more thing to keep true.
 
         The builtin-header half of that is true because the scanner resolves the same
         resource directory this library does, which `CPPSD_RESOURCE_DIR` can break: the
@@ -390,12 +391,12 @@ def load() -> Toolchain:
             f"{library} is {version}, but LLVM {MINIMUM_MAJOR} or newer is required.",
         )
 
-    # An explicit resource dir is an escape hatch, not a fallback: the probe below runs
-    # either way, so a truncating toolchain cannot slip through by taking this branch.
-    # It has one cost beyond this module: `clang-scan-deps` builds cache keys from the
-    # compile database's command and never sees this flag, so an override the include
-    # closure does not already name turns the per-TU cache off rather than key builtin
-    # headers by path (`produce/cache.py`, STATUS §6 and §8).
+    # An explicit resource dir is an escape hatch, not a fallback: the probe below runs either
+    # way, so a truncating toolchain cannot slip through by taking this branch. It has one cost
+    # beyond this module: `clang-scan-deps` builds cache keys from the compile database's
+    # command and never sees this flag, so an override the include closure does not already
+    # name turns the per-TU cache off rather than key builtin headers by path
+    # (`produce/cache.py`).
     override = os.environ.get("CPPSD_RESOURCE_DIR")
     resource_dir = Path(override) if override else None
 

@@ -39,7 +39,7 @@ def test_producer_id_is_stable_across_repackaging() -> None:
     """Two libclangs of the same release produce interchangeable models (ARCH-001 §9).
 
     The distro version string is deliberately not identity: a package rebuild that changes
-    nothing a parse can observe must not invalidate every cached model (STATUS §5).
+    nothing a parse can observe must not invalidate every cached model.
     """
     ubuntu = toolchain(library=Path("/a"), version="Ubuntu clang 18.1.3 (1ubuntu1)")
     debian = toolchain(library=Path("/b"), version="Debian clang 18.1.3 (3)")
@@ -217,9 +217,10 @@ def test_the_library_reports_its_own_target() -> None:
     regression to `UNDETERMINED_TARGET` on a host where the symbol is right there shows up
     as a failure rather than as a quietly weaker cache key.
 
-    A list of architecture macros would pass this test today and go stale silently against
-    a newer clang, which is why the mechanism is a question put to the library (STATUS §5,
-    "the extractor hit exactly this shape of bug").
+    A list of architecture macros would pass this test today and go stale silently against a
+    newer clang, which is why the mechanism is a question put to the library. The
+    exception-specification bug had exactly this shape (v0 tracker §5,
+    reports/2026-08-01--v0-build/STATUS.md).
     """
     if not tc.candidate_libraries():
         pytest.skip("no system libclang on this host")

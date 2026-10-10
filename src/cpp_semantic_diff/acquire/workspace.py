@@ -209,10 +209,10 @@ def materialize_submodules(worktree: Path, rev: str) -> None:
     alarming and wrong: the base builds, the worktree was incomplete.
 
     Silent truncation is the alternative worth naming. Where a missing submodule does *not*
-    break configure -- an optional dependency, a vendored library only some targets use --
-    the compile database is simply smaller, both revisions lose the same entities, and the
-    two models agree with each other. That is the failure this project exists to argue
-    against (STATUS §5), reached by a different road than the libclang one.
+    break configure -- an optional dependency, a vendored library only some targets use -- the
+    compile database is simply smaller, both revisions lose the same entities, and the two
+    models agree with each other. That is the failure this project exists to argue against,
+    reached by a different road than the libclang one.
 
     The pinned commit is the right version by construction: it is what this revision
     recorded, so a commit that bumps a submodule is a real difference between the two

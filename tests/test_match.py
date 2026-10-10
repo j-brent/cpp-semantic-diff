@@ -175,7 +175,7 @@ class TestEveryMatchSaysHowItWasMade:
 
 
 class TestRenamesLookBadOnPurpose:
-    """STATUS §6 and ARCH-001 §13. v0 ships tier 1 only and measures the damage.
+    """ARCH-001 §13. v0 ships tier 1 only and measures the damage.
 
     This test exists to be *deleted* when tier 2 lands. Until then it pins the decision so
     that nobody softens it with a name-based fallback, which would destroy the measurement

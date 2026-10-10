@@ -44,13 +44,12 @@ from cpp_semantic_diff.model import AnyId, Edge, EdgeKind, Model, NodeId, NodeKi
 #: factor strengthens on its own the day the producer emits them, rather than needing this
 #: table found and edited.
 #:
-#: `inherits` and `overrides` are added, and the substitution is deliberate. They are the
-#: two relations the producer *does* emit that propagate a change with no interpretation
-#: required: change a base class and every derived class changes with it; change a virtual
-#: method's contract and every override is answerable to the new one. Leaving them out to
-#: match the doc's word list would mean a v0 blast radius computed over `calls` alone --
-#: which is to say, over 58 % of fmt's edges while ignoring the 2,138 that carry the C++
-#: mechanism most likely to make a change unsafe at a distance.
+#: `inherits` and `overrides` are added, and the substitution is deliberate. They are the two
+#: relations the producer *does* emit that propagate a change with no interpretation required:
+#: change a base class and every derived class changes with it; change a virtual method's
+#: contract and every override is answerable to the new one. Leaving them out to match the
+#: doc's word list would mean a v0 blast radius computed over `calls` alone, ignoring the edges
+#: that carry the C++ mechanism most likely to make a change unsafe at a distance.
 DEPENDENCY_EDGES: dict[EdgeKind, bool] = {
     # caller -> callee. The dependent is the caller: reverse it.
     EdgeKind.CALLS: True,
@@ -66,11 +65,11 @@ DEPENDENCY_EDGES: dict[EdgeKind, bool] = {
     EdgeKind.CONTAINS: True,
 }
 
-#: Kinds whose containment is a real coupling rather than a filing decision. A class and
-#: its methods change together; a namespace and the four hundred entities in it do not.
-#: Used by exposure promotion and by decomposition -- if `namespace fmt` counted as a
-#: shared container, every change in fmt would be one component and the §3.11 signal would
-#: be a constant.
+#: Kinds whose containment is a real coupling rather than a filing decision. A class and its
+#: methods change together; a namespace and the four hundred entities in it do not. Used by
+#: exposure promotion and by decomposition -- if `namespace fmt` counted as a shared container,
+#: every change in fmt would be one component and the RESEARCH-002 §3.11 signal would be a
+#: constant.
 COUPLING_CONTAINER_KINDS: frozenset[NodeKind] = frozenset(
     {NodeKind.CLASS, NodeKind.STRUCT, NodeKind.UNION}
 )
@@ -97,13 +96,13 @@ def subject_endpoints(subject: AnyId) -> tuple[NodeId, ...]:
 def subject_home(subject: AnyId) -> NodeId:
     """The **one** entity an event is about. A node is itself; an edge is its source.
 
-    ARCH-001 §6.2 gives an event one subject, but an edge subject names two entities, and
-    every consumer that treats both as "what changed" makes the same two mistakes. Blast
-    radius attributes a new call `A -> B` to whichever of A and B more of the codebase can
-    reach, so a new call into a popular utility inherits the *utility's* fan-in -- and the
-    utility did not change. Decomposition counts the event as belonging to both, so two
-    unrelated call sites into one untouched callee become one change; on fmt at `HEAD~100`
-    that welded 260 of 335 events into a single component through bundled googletest.
+    ARCH-001 §6.2 gives an event one subject, but an edge subject names two entities, and every
+    consumer that treats both as "what changed" makes the same two mistakes. Blast radius
+    attributes a new call `A -> B` to whichever of A and B more of the codebase can reach, so a
+    new call into a popular utility inherits the *utility's* fan-in -- and the utility did not
+    change. Decomposition counts the event as belonging to both, so two unrelated call sites
+    into one untouched callee become one change; on fmt at `HEAD~100` that welded most of the
+    events into a single component through bundled googletest.
 
     The source is the answer, and it is the answer classify already gives. `rules.py`'s
     `_removed_endpoints` picks the source over the destination because *an edge is written
@@ -125,9 +124,9 @@ def containers(model: Model, *, coupling_only: bool = False) -> dict[NodeId, Nod
     """Child -> containing node, from the `contains` edges (ARCH-001 §4.2).
 
     `coupling_only` drops containers that are namespaces (or any kind outside
-    `COUPLING_CONTAINER_KINDS`), which is what stops one enormous namespace from being
-    treated as a unit of coupling. A container the model does not carry a node for is
-    dropped too: an unresolved edge endpoint (STATUS §5) has no kind to test.
+    `COUPLING_CONTAINER_KINDS`), which is what stops one enormous namespace from being treated
+    as a unit of coupling. A container the model does not carry a node for is dropped too: an
+    unresolved edge endpoint has no kind to test.
     """
     parents: dict[NodeId, NodeId] = {}
     for edge in model.edges:
@@ -217,7 +216,7 @@ def _register(adjacency: dict[NodeId, set[NodeId]], edge: Edge, model: Model) ->
     if edge.kind not in DEPENDENCY_EDGES:
         return
     # An edge whose endpoints are not both nodes is an unresolved edge the builder counted
-    # rather than dropped (STATUS §5). It cannot contribute a dependent that exists.
+    # rather than dropped. It cannot contribute a dependent that exists.
     if edge.src not in model.nodes or edge.dst not in model.nodes:
         return
     if edge.src == edge.dst:

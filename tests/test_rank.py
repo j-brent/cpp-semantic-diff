@@ -1,11 +1,11 @@
 """Ranking and attention -- ARCH-001 §7, resting on RESEARCH-002 §4.
 
 Every class below names an **ordering claim the design makes** and defends that, not the
-arithmetic that currently satisfies it. No test pins a float. The weights in
-`rank/weights.py` exist to be calibrated against real repositories (STATUS §5 says so about
-the tier-4 threshold and the same reasoning applies here), and a suite that asserts
-`total == 0.377` fossilizes them: the next person to retune would have to choose between
-the numbers and the tests, and would pick the tests.
+arithmetic that currently satisfies it. No test pins a float. The weights in `rank/weights.py`
+exist to be calibrated against real repositories (ARCH-001 §14 says so about the tier-4
+threshold and the same reasoning applies here), and a suite that asserts `total == 0.377`
+fossilizes them: the next person to retune would have to choose between the numbers and the
+tests, and would pick the tests.
 
 The claims are stated as inequalities between events built to differ in exactly one factor,
 which is what makes a failure legible -- it says which of §7's four inputs stopped working.
@@ -149,8 +149,8 @@ class TestUncertaintyRanksUpNotDown:
         assert outranks(ranking, doubtful, certain)
 
     def test_unmatched_residue_outranks_every_tier(self) -> None:
-        """None is the maximum, not a missing value. In v0 (tier 1 only, §13) it is also
-        every add, remove and rename -- the population STATUS §6 wants measured."""
+        """None is the maximum, not a missing value. In v0 (tier 1 only, §13) it is also every
+        add, remove and rename -- the population v0 exists to measure."""
         events = [
             body("c:@F@f#", SURE),
             body("c:@F@g#", UNSURE),
@@ -240,10 +240,10 @@ class TestBlastRadiusIsWhatMakesThisWorthBuilding:
     def test_containment_does_not_make_every_member_of_a_namespace_catastrophic(self) -> None:
         """The hazard §7's word "contains" creates, and the reason the walk has a direction.
 
-        Reverse reachability that followed `contains` *downward* would give every entity in
-        a large namespace the blast radius of the whole namespace -- on fmt, 10,574 nodes
-        under `namespace fmt`. Containment is registered child -> container only: a changed
-        member reaches its class, and nothing ever reaches a sibling.
+        Reverse reachability that followed `contains` *downward* would give every entity in a
+        large namespace the blast radius of the whole namespace -- on fmt, most of the library
+        sits under `namespace fmt`. Containment is registered child -> container only: a
+        changed member reaches its class, and nothing ever reaches a sibling.
         """
         members = [node(f"c:@N@ns@F@f{i}#") for i in range(50)]
         head = model(
@@ -278,12 +278,11 @@ class TestBlastRadiusIsWhatMakesThisWorthBuilding:
 class TestAnEdgeEventIsAboutItsSourceNotItsBusiestEndpoint:
     """The bug the first real run found, and the one that mattered most.
 
-    Blast radius took the *larger* of an edge subject's two endpoint radii, so a new call
-    into a popular utility inherited the utility's fan-in. On fmt at `HEAD~100` that put ten
-    `EdgeAdded` events between 0.84 and 0.57 *above* the `NodeAdded(fmt::v12::vprintln)` at
-    0.70 that caused them, with the risk attributed to `detail::buffer::size` -- an entity
-    that did not change and is not in the diff. 174 of 279 cause-linked events outranked
-    their cause.
+    Blast radius took the *larger* of an edge subject's two endpoint radii, so a new call into
+    a popular utility inherited the utility's fan-in. On fmt at `HEAD~100` that put `EdgeAdded`
+    events *above* the `NodeAdded(fmt::v12::vprintln)` that caused them, with the risk
+    attributed to `detail::buffer::size` -- an entity that did not change and is not in the
+    diff. 174 of 279 cause-linked events outranked their cause (commit `ef2daff`, 2026-08-02).
 
     ARCH-001 §7's question is "how much of the codebase does this change put at risk", and
     for `EdgeAdded(A -> B)` the thing that changed is A's behaviour. `graph.subject_home`
@@ -516,10 +515,10 @@ class TestTheAttributeKeysAreAContractWithTheProducer:
 class TestVendoredAndTestCodeDoNotDrownTheLibrary:
     """The measured problem, not a hypothetical one.
 
-    The model built from `fmt` is 80.6 % test code -- 48.9 % `test/`, 31.7 % vendored
-    `test/gtest` (3,347 nodes) -- and 19.2 % library. Extraction is right to include it.
-    A ranking that puts a change to bundled googletest above a change to `fmt::format` is
-    useless, and a reviewer shown that once will not read the second page.
+    The model built from `fmt` was 80.6 % test code, 31.7 % of it vendored `test/gtest`,
+    measured 2026-08-02 (v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md). Extraction is
+    right to include it. A ranking that puts a change to bundled googletest above a change to
+    `fmt::format` is useless, and a reviewer shown that once will not read the second page.
     """
 
     def test_a_public_api_change_outranks_an_identical_change_to_vendored_test_code(
@@ -670,10 +669,10 @@ class TestAnEdgeIsAsExposedAsEitherOfItsEnds:
     an oversight, and `score.exposure_of` carries the measurement behind it.
 
     The short form: `subject_home` answers *attribution* -- whose text changed -- and the
-    source is right for that. ARCH-001 §7 asks exposure whether the subject is reachable from
-    a public header, which is a property of the pair an edge names. Of STATUS §8's two
-    decisions, "low confidence ranks up" wins over "the reviewer is reviewing their own
-    code": the latter is a claim about attribution, and `subject_home` already spends it.
+    source is right for that. ARCH-001 §7 asks exposure whether the subject is reachable from a
+    public header, which is a property of the pair an edge names. Of two settled decisions,
+    "low confidence ranks up" wins over "the reviewer is reviewing their own code": the latter
+    is a claim about attribution, and `subject_home` already spends it.
     """
 
     NAMESPACE = "c:@N@fmt@N@v12@N@detail"
@@ -716,9 +715,10 @@ class TestAnEdgeIsAsExposedAsEitherOfItsEnds:
     def test_it_outranks_unrelated_test_churn_that_the_source_rule_would_put_above_it(
         self,
     ) -> None:
-        """The ordering claim, which is what a reviewer sees. fmt `HEAD~12`: reading the
-        source drops these two events from ranks 5-6 to 9-10, below four test-code
-        removals, while the `NodeAdded` they belong to stays public at ranks 1-2."""
+        """The ordering claim, which is what a reviewer sees. fmt `HEAD~12`: reading the source
+        drops these two events from ranks 5-6 to 9-10, below four test-code removals, while the
+        `NodeAdded` they belong to stays public at ranks 1-2 (measured 2026-09-20, v0 tracker
+        §6, reports/2026-08-01--v0-build/STATUS.md)."""
         base, head = self.side(with_added=False), self.side(with_added=True)
         containment = edge_event(self.NAMESPACE, self.ADDED, edge_kind=EdgeKind.CONTAINS)
         churn = event(EventKind.NODE_REMOVED, self.OWN_TEST, RESIDUE)
@@ -849,11 +849,10 @@ class TestThreeDisconnectedChangesAreThreeChanges:
     def hub(self) -> Model:
         """One untouched utility that two unrelated new functions both start calling.
 
-        The measured shape. On fmt at `HEAD~100`, 110 of the giant component's 312
-        connections ran between `test/` and vendored `test/gtest`, because every new
-        `TEST_F` body calls `testing::internal::AssertHelper` and overrides
-        `testing::Test::TestBody` -- so twenty independent test additions across eight files
-        arrived as one change.
+        The measured shape. On fmt at `HEAD~100` the giant component was held together through
+        vendored `test/gtest`, because every new `TEST_F` body calls
+        `testing::internal::AssertHelper` and overrides `testing::Test::TestBody` -- so
+        independent test additions across many files arrived as one change.
         """
         return model(
             "m",
@@ -864,11 +863,11 @@ class TestThreeDisconnectedChangesAreThreeChanges:
         )
 
     def test_two_new_calls_into_one_unchanged_utility_are_two_changes(self) -> None:
-        """The rule the whole partition depended on and did not have. An entity with no
-        event of its own did not change; that two changes both reach it is a fact about the
-        utility, not evidence that they are one change. 260 of 335 events (78 %) landed in
-        one component on fmt at `HEAD~100` for want of this, and the numbers said so while
-        the output still looked like a partition."""
+        """The rule the whole partition depended on and did not have. An entity with no event
+        of its own did not change; that two changes both reach it is a fact about the utility,
+        not evidence that they are one change. 78 % of events landed in one component on fmt at
+        `HEAD~100` for want of this (commit `ef2daff`, 2026-08-02), and the numbers said so
+        while the output still looked like a partition."""
         head = self.hub()
         events = [
             edge_event("c:@F@a#", "c:@F@util#"),
@@ -935,12 +934,12 @@ class TestThreeDisconnectedChangesAreThreeChanges:
 
 class TestHighRiskCountsConsequencesNotNovelty:
     """ARCH-001 §10 prints `summary.high_risk_count` on every run, so it has to be a
-    measurement. As shipped it was 133 of 335 events (40 %) on fmt at `HEAD~100`, and that
-    was structural rather than a mis-tuned threshold: in v0 (tier-1 identity only, §13)
-    *every* add and remove is unmatched residue, so the uncertainty factor sits at its
-    maximum for that whole population -- a constant 0.15 offset, not a measurement -- and it
-    is exactly what lifted a public addition with no dependents at all from 0.4625 over the
-    0.6 line. The number meant "public and new".
+    measurement. As shipped it was 133 of 335 events (40 %) on fmt at `HEAD~100` (commit
+    `ef2daff`, 2026-08-02), and that was structural rather than a mis-tuned threshold: in v0
+    (tier-1 identity only, §13) *every* add and remove is unmatched residue, so the uncertainty
+    factor sits at its maximum for that whole population -- a constant 0.15 offset, not a
+    measurement -- and it is exactly what lifted a public addition with no dependents at all
+    from 0.4625 over the 0.6 line. The number meant "public and new".
 
     The fix is not to stop counting uncertainty, which §7 forbids: uncertainty still ranks
     an event **up**, and `TestUncertaintyRanksUpNotDown` still passes unchanged. It is to
@@ -973,8 +972,8 @@ class TestHighRiskCountsConsequencesNotNovelty:
 
     def test_the_matcher_does_not_decide_what_is_dangerous(self) -> None:
         """The property the old threshold lacked: an event's risk must not move when a tier
-        that has nothing to do with it starts or stops running. Tiers 2-4 are a v0
-        deliverable (STATUS §6), and `high_risk_count` must not swing when they land."""
+        that has nothing to do with it starts or stops running. Tiers 2-4 may land later, and
+        `high_risk_count` must not swing when they do."""
         tiers = [None, MatchTier.SIMILARITY, MatchTier.POSITIONAL, MatchTier.DECLARED]
         verdicts = {
             rank(

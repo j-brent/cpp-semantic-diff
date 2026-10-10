@@ -9,16 +9,15 @@ Everything turns on **what connects two events**, because the wrong answer makes
 a constant. Before the rules, the thing they are stated over:
 
 **Every event has exactly one home entity** -- `graph.subject_home`: the subject for a node
-event, the *source* for an edge event. This is the single decision the partition turned out
-to depend on. Counting an edge event as belonging to both of its endpoints made every new
-call into an untouched callee a connection between that callee's other callers, so unrelated
-changes were welded together through entities that never changed. Measured on fmt at
-`HEAD~100`: **260 of 335 events (78 %) in one component**, held together by bundled
-googletest -- 110 of the giant component's 312 connections ran between `test/` and
-`test/gtest`, because every new `TEST_F` body calls `testing::internal::AssertHelper` and
-overrides `testing::Test::TestBody`. Homing each event on one entity drops that to
-**60 of 335 (18 %) across 30 components**, and it is the same correction `score.py` makes
-for blast radius: an edge is written in its source's text, so the source is what changed.
+event, the *source* for an edge event. This is the single decision the partition turned out to
+depend on. Counting an edge event as belonging to both of its endpoints made every new call
+into an untouched callee a connection between that callee's other callers, so unrelated changes
+were welded together through entities that never changed. Measured on fmt at `HEAD~100` on
+2026-08-02 (commit `ef2daff`): **78 % of events in one component**, held together by bundled
+googletest, because every new `TEST_F` body calls `testing::internal::AssertHelper` and
+overrides `testing::Test::TestBody`. Homing each event on one entity drops that to **18 %
+across 30 components**, and it is the same correction `score.py` makes for blast radius: an
+edge is written in its source's text, so the source is what changed.
 
 Two rules that look like plausible fixes were measured and are *not* here, because after
 the home rule neither buys anything: suppressing high-degree hub entities as connectors
@@ -137,9 +136,9 @@ def partition(events: list[Event], base: Model, head: Model) -> dict[EventId, Ev
     union = _Union(ids)
     by_id = {e.id: e for e in events}
 
-    # Rule 1: one home entity per event (`graph.subject_home`), and events sharing it are
-    # one change. An edge event is homed on its source, never on both endpoints -- see the
-    # module docstring for the 78 %-in-one-component this cost.
+    # Rule 1: one home entity per event (`graph.subject_home`), and events sharing it are one
+    # change. An edge event is homed on its source, never on both endpoints -- see the module
+    # docstring for what that cost.
     at_home: dict[NodeId, list[EventId]] = defaultdict(list)
     for event in events:
         at_home[subject_home(event.subject)].append(event.id)

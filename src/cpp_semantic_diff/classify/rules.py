@@ -195,8 +195,8 @@ def _overload_the_caller_moved_to(ctx: ClassifyContext, event: Event) -> Iterato
     """The edge this caller gained to a *different overload of the same function*.
 
     The shape, measured on leveldb: googletest gave `AssertHelper::AssertHelper` a
-    `std::string_view` overload, and every `TEST` body stopped calling the `const char *`
-    one. That is 28 `EdgeRemoved` events whose endpoints both survive -- the old overload is
+    `std::string_view` overload, and every `TEST` body stopped calling the `const char *` one.
+    The result is `EdgeRemoved` events whose endpoints both survive -- the old overload is
     still declared, it is merely no longer called -- so neither `edge-lost-its-endpoint` nor
     anything else in this table reaches them, and they were the bulk of what was left at top
     level after every other cascade had collapsed.

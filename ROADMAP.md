@@ -274,7 +274,7 @@ Kept so that their closing is checked rather than assumed.
 
 | Item | Where |
 |---|---|
-| The terminal's `identity:` line cites the wrong tracker section, and it appears in the demo outputs | `render/terminal.py` |
+| Four runtime strings cite the old tracker `STATUS.md`, now frozen: the terminal's `identity:` line (also the wrong section), a JSON field description, the `cache gc` help text, and a line the demo workflow prints | `render/terminal.py`, `render/document.py`, `cli.py`, `.github/workflows/demo.yml` |
 | JSON field descriptions that are false: `vendored_events` ("never subtracted from the numerator"), `high_risk_count` (it counts first-party impact), and `model/ir.py`'s claim that USRs include the file path (they include the file name) | `render/document.py`, `model/ir.py` |
 | The demo summary's "semantic events (numerator)" row prints `events_reported`, which includes vendored events | `.github/workflows/demo.yml` |
 | Four cause rules are marked as missing from ARCH-001 §6.3, which now lists them; a test enforces the stale state | `classify/rules.py`, `tests/test_classify.py` |

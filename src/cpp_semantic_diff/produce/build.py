@@ -4,37 +4,37 @@
 sees all of them at once, and ARCH-001 puts three jobs here for exactly that reason:
 
 **Dedup across TUs.** `NodeId` *is* the USR, and every header is reparsed once per TU that
-includes it, so the same entity arrives once per includer -- fmt extracts 134,366 nodes for
-10,574 distinct entities. Merging is `extract.merge_node`, the same function the extractor
-uses within a TU, because "a declaration and its definition are one entity" has to mean the
-same thing at both scales (ARCH-001 §5).
+includes it, so the same entity arrives once per includer -- fmt extracted 134,366 nodes for
+10,574 distinct entities (commit `f64e12f`, 2026-08-02). Merging is `extract.merge_node`, the
+same function the extractor uses within a TU, because "a declaration and its definition are one
+entity" has to mean the same thing at both scales (ARCH-001 §5).
 
 **Resolve edges against the merged node set.** A partial model has dangling edges by
 construction, and some of them dangle only because the TU that declared the target was a
-different one. Template instantiations are resolved here too: nothing calls a template, so
-a third of fmt's call edges point at instantiation USRs that belong to no written
-declaration. The extractor offers the mapping; applying it needs the merged node set,
-because an *explicit* specialization is hand-written code with its own identity and must
-not be collapsed into its primary template.
+different one. Template instantiations are resolved here too: nothing calls a template, so many
+of a template library's call edges point at instantiation USRs that belong to no written
+declaration. The extractor offers the mapping; applying it needs the merged node set, because
+an *explicit* specialization is hand-written code with its own identity and must not be
+collapsed into its primary template.
 
 **Fill `Completeness` honestly.** One `TuResult` per TU including the ones that failed, the
 producer that ran, and the count of what could not be resolved (ARCH-001 §4.4, §11). The
 last of those is `edges_total`/`edges_dropped` -- two integers rather than a sentence,
 because §10 makes the JSON the product and a consumer cannot act on prose.
 
-Parsing dominates -- 68 % of extraction time, and a cold fmt model is ~125 s per side -- so
-the parse loop and the assembly are separate functions. `assemble` consumes an *iterable of
-partials* and never touches libclang or the disk, which is the seam the per-TU cache
-(ARCH-001 §9) plugs into: `TuCache.extracts` is a different producer of the same
-`Iterable[TuExtract]`, and nothing below this line knows which one ran.
+Parsing dominates extraction time, so the parse loop and the assembly are separate functions.
+`assemble` consumes an *iterable of partials* and never touches libclang or the disk, which is
+the seam the per-TU cache (ARCH-001 §9) plugs into: `TuCache.extracts` is a different producer
+of the same `Iterable[TuExtract]`, and nothing below this line knows which one ran.
 
 `parallel.parallel_extracts` is the third producer through that same seam, and the one that
 closes the budget. The cache removes the TUs that did not change; what remains is the
 invalidated set, which is serial libclang time and nothing else -- a warm fmt review that
 touched 20 sources reparsed 24 TUs and took 55 s against a 30 s budget, with seven of eight
-cores idle. Over eight workers the same build is 19 s. Which producer runs is decided here
-and is invisible below: `assemble` sorts, and the partials arrive in compile-database order
-whatever parsed them, so the model is the same one either way.
+cores idle, and 19 s over eight workers (measured 2026-08-02, v0 tracker §4,
+reports/2026-08-01--v0-build/STATUS.md). Which producer runs is decided here and is invisible
+below: `assemble` sorts, and the partials arrive in compile-database order whatever parsed
+them, so the model is the same one either way.
 """
 
 from __future__ import annotations
@@ -78,9 +78,9 @@ def tu_extracts(
     50 times over on fmt and buys nothing, since a TU is disposed as soon as its partial
     is built.
 
-    A generator rather than a list: partials are large (fmt's TUs average 2,700 nodes
-    each), `assemble` consumes each one exactly once, and streaming keeps only the edges
-    alive rather than every AST-derived dictionary at once.
+    A generator rather than a list: partials are large, `assemble` consumes each one exactly
+    once, and streaming keeps only the edges alive rather than every AST-derived dictionary at
+    once.
     """
     index = index or ci.Index.create()
     for entry in entries:
@@ -150,10 +150,9 @@ def assemble(
             aliases.setdefault(instantiation, template)
         pending.extend(tu.edges.values())
 
-    # Distinct dropped edges, not dropped arrivals. fmt yields 224,401 arrivals for 26,071
-    # distinct edges, and a count of arrivals would report a five-figure loss against a
-    # five-figure graph while both numbers mean something the other does not. The
-    # denominator this pairs with is `len(unresolved) + len(edges)`, so the ratio
+    # Distinct dropped edges, not dropped arrivals. An edge arrives once per TU that sees it,
+    # so a count of arrivals would divide one population by another, and the ratio would mean
+    # nothing. The denominator this pairs with is `len(unresolved) + len(edges)`, so the ratio
     # `Completeness.edge_residue` is over the same population on both sides of the bar.
     unresolved: set[str] = set()
 
@@ -162,28 +161,29 @@ def assemble(
         dst = resolve(edge.dst, nodes, aliases)
         if src is None or dst is None:
             # Dropped, and counted in `Completeness` rather than discarded quietly. An
-            # unresolvable endpoint is not a defect to hide: measured on fmt, 3,361 of
-            # these are genuinely external (`std::`, libc, builtins) and the rest are calls
-            # to implicit special members that no one declared. Synthesizing nodes for
-            # entities nobody wrote would put half a dozen phantoms on every class and make
-            # them diffable; reporting the count says what is true (ARCH-001 §11).
+            # unresolvable endpoint is not a defect to hide: most of these are genuinely
+            # external (`std::`, libc, builtins) and the rest are calls to implicit special
+            # members that no one declared. Synthesizing nodes for entities nobody wrote would
+            # put half a dozen phantoms on every class and make them diffable; reporting the
+            # count says what is true (ARCH-001 §11).
             unresolved.add(edge.id)
             continue
-        # Aliasing merges as well as resolves: two calls to two instantiations of one
-        # template are one call to the template, which is 2,399 of fmt's edges and the
-        # answer ARCH-001 §5 asks for -- an instantiation set that grows because someone
-        # called a template with a new type is not a change to review. `merge_edge` also
-        # swallows the src == dst this newly creates, when a template calls itself.
+        # Aliasing merges as well as resolves: two calls to two instantiations of one template
+        # are one call to the template, which is the answer ARCH-001 §5 asks for -- an
+        # instantiation set that grows because someone called a template with a new type is not
+        # a change to review. `merge_edge` also swallows the src == dst this newly creates,
+        # when a template calls itself.
         merge_edge(edges, src, dst, edge.kind, edge.locations, edge.attrs)
 
     completeness = Completeness(
         tus_total=len(results),
         tus=results,
-        # Counted, not narrated. The drop is real and large -- 5,113 of fmt's 26,071
-        # distinct edges -- and it used to reach the output as one English sentence in
-        # `notes`, which made every consumer either parse prose or claim a completeness it
-        # did not have (ARCH-001 §10, §11). These two integers are the whole fact; whether
-        # it is alarming is `Completeness.edges_closed`'s question and not this module's.
+        # Counted, not narrated. The drop is real and large -- 5,113 of fmt's 26,071 distinct
+        # edges, measured 2026-08-02 (v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md) --
+        # and it used to reach the output as one English sentence in `notes`, which made every
+        # consumer either parse prose or claim a completeness it did not have (ARCH-001 §10,
+        # §11). These two integers are the whole fact; whether it is alarming is
+        # `Completeness.edges_closed`'s question and not this module's.
         edges_total=len(unresolved) + len(edges),
         edges_dropped=len(unresolved),
         build_available=build_available,
@@ -243,10 +243,11 @@ def build_model(
     carries (ARCH-001 §4.4). A broken toolchain is the opposite kind of problem and is
     refused before this runs.
 
-    The cache is on by default and ships *with* the producer (ARCH-001 §9) -- a cold model
-    is ~117 s for fmt against a 30 s budget, so a producer without one is a producer that
-    misses its only stated performance requirement. `cache=False` forces every TU to be
-    parsed, which is what a measurement of the cold path needs.
+    The cache is on by default and ships *with* the producer (ARCH-001 §9) -- without it every
+    review reparses every TU, and the 30 s budget is for a review touching 20, so a producer
+    without one is a producer that misses its only stated performance requirement.
+    `cache=False` forces every TU to be parsed, which is what a measurement of the cold path
+    needs.
 
     `workers` defaults to what the machine can run (`$CPPSD_WORKERS` overrides it, and 1 is
     the serial path this function had before). The cache decides *what* gets parsed; the

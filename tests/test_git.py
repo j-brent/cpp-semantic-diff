@@ -109,8 +109,8 @@ class TestAWorktreeCarriesWhatTheRevisionPins:
     the base builds fine and it was the worktree that was incomplete.
 
     The quieter case is the one that matters more: where a missing submodule does *not* break
-    configure, both models lose the same entities and agree with each other. That is STATUS
-    §5's silent-truncation failure reached by a different road.
+    configure, both models lose the same entities and agree with each other. That is the
+    silent-truncation failure -- two models wrong in the same way -- by a different road.
     """
 
     def test_a_worktree_starts_without_the_submodule(
@@ -275,8 +275,8 @@ class TestRenamesAreResolvedFromGit:
         two different files are the same file. That is the confidently-wrong output ARCH-001
         §11 refuses, so the map is decoded with `surrogateescape` instead.
 
-        Linux-only, like the rest of the project (STATUS §8) -- these are legal filenames
-        here and not encodable on Windows at all.
+        Linux-only, like the rest of the project -- these are legal filenames here and not
+        encodable on Windows at all.
         """
         src = bare_repo / "src"
         src.mkdir()
@@ -300,7 +300,7 @@ class TestRenamesAreResolvedFromGit:
 
     @pytest.mark.fixtures
     def test_fmt_core_h_to_base_h(self) -> None:
-        """The commit the fix will be measured against (STATUS §3).
+        """The commit the fix will be measured against.
 
         `include/fmt/core.h` -> `include/fmt/base.h` is R100 -- byte-identical -- which is
         what makes it a clean experiment: the unnamed records in that header have USRs of
@@ -323,7 +323,7 @@ class TestRenamesAreResolvedFromGit:
 
     @pytest.mark.fixtures
     def test_fmt_posix_cc_to_os_cc(self) -> None:
-        """The commit that actually demonstrates the defect (STATUS §3).
+        """The commit that actually demonstrates the defect.
 
         Unlike the two below, this one renames a file that *contains* internal-linkage
         entities -- `convert_rwcount` in an anonymous namespace. Before the map was fed, it

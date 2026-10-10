@@ -121,9 +121,9 @@ V0_KINDS: frozenset[EventKind] = frozenset(
     }
 )
 
-#: The other half of what `V0_KINDS` says, stated positively so a test can assert it: kinds
-#: no amount of real v0 input can produce. A delta containing one of these means a later
-#: tier landed, or that some stage started inferring identity on its own (STATUS §3).
+#: The other half of what `V0_KINDS` says, stated positively so a test can assert it: kinds no
+#: amount of real v0 input can produce. A delta containing one of these means a later tier
+#: landed, or that some stage started inferring identity on its own.
 UNREACHABLE_IN_V0: frozenset[EventKind] = frozenset(EventKind) - V0_KINDS
 
 #: Payload keys a kind must carry, for the kinds ARCH-001 §6.1 names or directly implies.

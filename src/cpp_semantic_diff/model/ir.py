@@ -223,14 +223,14 @@ class Completeness(BaseModel):
     about entities in the TUs that did parse, because what is missing may be what would
     have contradicted them.
 
-    *Boundary* is what `edges_closed` measures: relations whose endpoint no declaration in
-    this repository owns, dropped by the builder because they cannot be nodes. Calls into
-    `std::`, into libc, and into implicit special members nobody wrote -- roughly half of
-    fmt's 5,113-edge residue is the first two. This is not a hole in coverage; it is where
-    the modelled world ends, and with full coverage every dropped edge points outside it by
-    construction. It is *expected*, it is large (~20 % of fmt's distinct edges), and it must
-    be stated as a number on every run rather than raised as an alarm on every run -- an
-    alarm that never turns off is one nobody reads.
+    *Boundary* is what `edges_closed` measures: relations whose endpoint no declaration in this
+    repository owns, dropped by the builder because they cannot be nodes. Calls into `std::`,
+    into libc, and into implicit special members nobody wrote. This is not a hole in coverage;
+    it is where the modelled world ends, and with full coverage every dropped edge points
+    outside it by construction. It is *expected*, it is large on any real repository
+    (`produce/build.py` gives fmt's figure), and it must be stated as a number on every run
+    rather than raised as an alarm on every run -- an alarm that never turns off is one nobody
+    reads.
 
     Both are carried as counts rather than as prose, because a consumer has to be able to
     state the fact numerically. ARCH-001 §10 makes the JSON the product, and a sentence in
@@ -312,9 +312,9 @@ class Completeness(BaseModel):
     def edge_residue(self) -> float:
         """Dropped share of the distinct edges, 0.0 when nothing was considered.
 
-        A ratio rather than a count because the count alone is unreadable: 5,113 dropped
-        edges is a catastrophe against a graph of 6,000 and the ordinary cost of doing
-        business against a graph of 26,071.
+        A ratio rather than a count because the count alone is unreadable: one dropped count is
+        a catastrophe against a small graph and the ordinary cost of doing business against a
+        large one.
         """
         return (self.edges_dropped / self.edges_total) if self.edges_total else 0.0
 

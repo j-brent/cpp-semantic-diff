@@ -286,9 +286,9 @@ SPLIT = {
 
 
 class TestMergingObservationsOfOneEntity:
-    """Every header is reparsed once per TU that includes it, and the observations disagree
-    -- 429 of fmt's 4,778 multi-TU entities. The merge decides what the model says, so it
-    has to be a rule and not an accident of arrival order (ARCH-001 §5, §9)."""
+    """Every header is reparsed once per TU that includes it, and the observations sometimes
+    disagree. The merge decides what the model says, so it has to be a rule and not an accident
+    of arrival order (ARCH-001 §5, §9)."""
 
     def observations(self, tmp_path: Path, toolchain: Toolchain) -> list[TuExtract]:
         return run_each(tmp_path, toolchain, SPLIT, "a.cpp", "b.cpp")
@@ -334,7 +334,7 @@ class TestMergingObservationsOfOneEntity:
 
 
 class TestMergingObservationsOfOneEdge:
-    """The same rule as for nodes, and it was missing here (STATUS §6).
+    """The same rule as for nodes, and it was missing here.
 
     An edge attribute belongs to the relation, so two TUs seeing one edge should agree. When
     they do not, one knew less -- `virtual` is `False` both for "not virtual" and for a
@@ -667,11 +667,11 @@ class TestAMemberFunctionTemplateIsAMethod:
     property of the scope, so the claim under test is about the scope: whatever the tag on
     the declaration, what decides is whether it was declared inside a class.
 
-    The kind is not identity and both sides of a diff got it wrong identically, so no delta
-    was ever corrupted. What was corrupted is everything downstream that reads a kind --
-    and, because `_attributes` is keyed on the node kind, the method attributes were absent
+    The kind is not identity and both sides of a diff got it wrong identically, so no delta was
+    ever corrupted. What was corrupted is everything downstream that reads a kind -- and,
+    because `_attributes` is keyed on the node kind, the method attributes were absent
     entirely. `explicit` is the one with nowhere else to live: a `function` has no attribute
-    that could carry it (STATUS §6)."""
+    that could carry it."""
 
     SOURCE = """
     namespace app {
@@ -751,9 +751,9 @@ class TestAMemberFunctionTemplateIsAMethod:
         assert self.kind(result, "app::befriend") is NodeKind.FUNCTION
 
     def test_explicit_survives_on_a_constructor_template(self, result: TuExtract) -> None:
-        """The attribute STATUS §6 records as lost with no other representation. It is not a
-        new attribute name: it is the one an ordinary explicit constructor already carries,
-        reaching a node that could not carry it while its kind said `function`."""
+        """The attribute that was lost, with no other representation. It is not a new attribute
+        name: it is the one an ordinary explicit constructor already carries, reaching a node
+        that could not carry it while its kind said `function`."""
         assert named(result, "app::Widget::Widget").attrs["explicit"] is True
         assert named(result, "app::Boxed::Boxed<T>").attrs["explicit"] is True
 
