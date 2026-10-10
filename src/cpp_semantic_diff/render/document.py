@@ -68,7 +68,12 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #: 1.1 consumer would read the new ratio as the old one and see a repository's compression
 #: apparently improve on precisely the commit where a dependency was bumped. `events_reported`
 #: is untouched and still the complete set -- the one number that may never quietly shrink.
-SCHEMA_VERSION = "1.2"
+#:
+#: 1.2 -> 2.0.dev: 2.0 is in development on `dev` for milestone v0. Every v0 change to the
+#: output lands under it, so a consumer sees one bump for the milestone rather than one per
+#: change. It becomes "2.0" when `dev` merges to `main`; until then the `.dev` suffix keeps a
+#: document from a moving schema from passing for a finished one.
+SCHEMA_VERSION = "2.0.dev"
 
 #: ARCH-001 §11: "Two systematic limits get stated in the output itself, every time."
 #: They are data on the document rather than a line in one view, because "every time"
