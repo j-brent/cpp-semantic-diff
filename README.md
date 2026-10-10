@@ -144,7 +144,7 @@ Every document says whether it is **living** (kept true as the code changes) or 
 
 | Doc | Kind | What it is |
 |---|---|---|
-| [`ROADMAP.md`](ROADMAP.md) | living | Where things stand, the one ordered list of open work, and the decisions in force. |
+| [`ROADMAP.md`](ROADMAP.md) | living | Scope, the order of work and the reasons for it, with links to the work on GitHub. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | living | Conventions for code, comments, documents and commits. |
 | [ARCH-001](docs/ARCH-001-architecture.md) | living | The design: pipeline, IR, identity, delta events, ranking, caching, performance budget. |
 | [`docs/plans/`](docs/plans/) | living while active | One plan per roadmap item being worked on, deleted when done. |

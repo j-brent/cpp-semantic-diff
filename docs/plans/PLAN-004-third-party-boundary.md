@@ -12,10 +12,10 @@ kind: living
 
 *Living document: kept current until it is done, then deleted.*
 
-Closes [known issue 7](../../ROADMAP.md#issue-7--the-tool-analyzes-third-party-code-instead-of-excluding-it).
+Closes [#3](https://github.com/j-brent/cpp-semantic-diff/issues/3), with [#4](https://github.com/j-brent/cpp-semantic-diff/issues/4) in the same schema change.
 
 Delete this file when every step below is done, the measurements are in a frozen report, and
-issue 7 is removed from `ROADMAP.md`.
+#3 and #4 are closed.
 
 ---
 
@@ -41,7 +41,7 @@ Decided 2026-10-10.
 | Third-party code changed between the two points | **Refuse.** v0 analyzes changes the repository controls directly. Third-party changes are deferred, not ignored. |
 | Third-party entities in the model | **None.** Relationships into third-party code are boundary crossings, like calls into `std::`. |
 | Boundary crossings | **Recorded, with a label naming where they lead.** For visualization only: the comparison and the ranking never read them. |
-| Output format | **One schema version change**, shared with known issue 3 ("event" → "change event"). |
+| Output format | **One schema version change**, shared with [#4](https://github.com/j-brent/cpp-semantic-diff/issues/4) ("event" → "change event"). |
 
 Boundary crossing labels:
 
@@ -151,7 +151,7 @@ Added to the JSON:
 - crossing counts per label, and the crossings themselves;
 - folder-name hints as structured notes, not prose.
 
-`SCHEMA_VERSION` becomes `2.0`. Known issue 3 lands under the same `2.0` before either change is
+`SCHEMA_VERSION` becomes `2.0`. #4 lands under the same `2.0` before either change is
 merged to `main`.
 
 `rank/exposure.py` is left with TEST, INTERNAL and PUBLIC. Its module notes about vendored
@@ -183,7 +183,7 @@ Each step is one commit, and the suite passes after each one.
 6. **Schema 2.0 and the demo.** Add `--third-party test/gtest` for fmt and
    `--third-party include/spdlog/fmt/bundled` for spdlog to `.github/workflows/demo.yml`, and
    replace the `vendored_events` row in its summary table with crossing counts.
-7. **Documents.** [`ROADMAP.md`](../../ROADMAP.md) (issue 7 and the decisions in force), the
+7. **Documents.** [`ROADMAP.md`](../../ROADMAP.md) (the order, once #3 is done), the
    `exposure.py` docstring, `README.md`, and a frozen report with the measurements from §5.
 
 ---

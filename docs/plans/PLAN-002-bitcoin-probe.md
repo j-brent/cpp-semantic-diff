@@ -12,6 +12,8 @@ kind: living
 
 *Living document: kept current until it is done, then deleted.*
 
+Deferred. Starts when the issues blocking [#23](https://github.com/j-brent/cpp-semantic-diff/issues/23) are closed.
+
 Adding a fourth verification repository — and the reasons it must not be wired in like the first
 three.
 
@@ -19,13 +21,13 @@ The [v0 tracker](../../reports/2026-08-01--v0-build/STATUS.md) §3 records why f
 plan is the next question: those three are all **libraries**, all small, all dependency-free. Every
 number the project publishes was taken on that one class of repository.
 
-Delete this file when the measurements are in a frozen report and the roadmap item is closed.
+Delete this file when the measurements are in a frozen report and #23 is closed.
 
 **Since written (2026-10-10).** [PLAN-004](PLAN-004-third-party-boundary.md) replaces the VENDORED exposure
 class with declared third-party paths and refuses a comparison where third-party code changed.
 §2's second point and §6.3 measure the class it removes; reconcile them with PLAN-004 before
 running. This plan was written against `STATUS.md`, which is now the frozen v0 tracker: where it
-says to record a result there, record it in a new frozen report instead. `cppsd` still has no option to pass CMake arguments (§5; [`ROADMAP.md`](../../ROADMAP.md) §3.5).
+says to record a result there, record it in a new frozen report instead. `cppsd` still has no option to pass CMake arguments (§5).
 
 ---
 

@@ -17,6 +17,10 @@ name: demo
 on:
   push:
     branches: [main, dev]
+  # A change to any workflow, such as a Dependabot bump of an action this file pins, is
+  # tested before merge rather than first run on main.
+  pull_request:
+    paths: [".github/workflows/**"]
   workflow_dispatch:
     inputs:
       repo:

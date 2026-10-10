@@ -632,7 +632,7 @@ against building them next, which is what asking the question early was for.
 On 2026-10-10 that answer was reopened for one case: a function whose parameters changed is
 reported as removed plus added, and on current upstream spdlog that is every removal in a 30-commit
 range. Pairing it with its old version was decided and is not built
-([issue 1](../ROADMAP.md#issue-1--a-function-whose-parameters-changed-is-reported-as-deleted-and-re-added)).
+([#8](https://github.com/j-brent/cpp-semantic-diff/issues/8)).
 
 ### Technology
 

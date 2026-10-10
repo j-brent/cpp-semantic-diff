@@ -32,7 +32,7 @@ Bitcoin Core as a scale-and-shape probe. Each says in its own header what it is 
 the way PLAN-001 was (§6). A plan is a plan; this file is the state it leaves behind.
 
 The 2026-10-10 review is in
-[`reports/2026-10-10--up-to-speed/`](../../ROADMAP.md#2--confirmed-work): seven known
+[`reports/2026-10-10--up-to-speed/`](https://github.com/j-brent/cpp-semantic-diff/issues/25): seven known
 issues, none fixed yet. Two of its decisions replace decisions recorded here, and both are marked
 where they stand: the tiers 2–4 verdict (§3, §7, §8) and the vendored partition (§2, §8).
 
@@ -202,7 +202,7 @@ removals that are all this case — file-logger factories and three sink constru
 buffer-size parameter, each reported as removed plus added — from an ordinary API change, not a
 refactor. Pairing them was decided on 2026-10-10 and is not built. The reasoning and the open
 questions (overloads, scope, templates) are
-[known issue 1](../../ROADMAP.md#2--confirmed-work).
+[known issue 1](https://github.com/j-brent/cpp-semantic-diff/issues/8).
 
 Caveat worth keeping: fmt and spdlog are stable libraries. A repository mid-refactor would look
 different, and the number to watch is `internal_linkage_residue` — statics and anonymous-namespace
@@ -469,7 +469,7 @@ Five more were struck last pass — the render label, member function templates,
 of PLAN-003's §B, so that tail is empty: all seven of its items are committed.
 
 The 2026-10-10 review recorded seven more, in
-[`known-issues.md`](../../ROADMAP.md#2--confirmed-work). None is fixed; PLAN-004
+[`known-issues.md`](https://github.com/j-brent/cpp-semantic-diff/issues/25). None is fixed; PLAN-004
 plans issue 7.
 
 - [ ] **`internal_linkage_residue` is still computed over the whole model**, vendored included —
