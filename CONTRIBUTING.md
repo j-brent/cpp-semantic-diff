@@ -111,4 +111,5 @@ record) in `docs/adr/`, one per file, numbered in the order decisions were made.
   the code in a frozen report; every finding in the
   [v0 tracker's §5](reports/2026-08-01--v0-build/STATUS.md#5--findings-worth-keeping) was a real bug
   in waiting.
-- Run `uv run ruff format . && uv run ruff check . && uv run pytest -q` before committing.
+- Before committing, run
+  `uv run ruff format . && uv run ruff check . && uv run mypy && uv run pyright && uv run pytest -q`.
