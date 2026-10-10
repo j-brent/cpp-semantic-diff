@@ -39,6 +39,9 @@ packages = ["src/cpp_semantic_diff"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+# Frozen documents are never edited, and that includes their scripts: a formatter run over the
+# repository must not rewrite the evidence a report was produced with.
+extend-exclude = ["reports"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
