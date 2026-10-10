@@ -11,7 +11,7 @@ Three things this stage deliberately does *not* do.
 the `Correspondence`. v0 runs tier 1 alone (ARCH-001 §13), so a renamed function arrives as
 one unmatched base node and one unmatched head node and leaves here as `NodeRemoved` plus
 `NodeAdded`. That reads badly on purpose: the size of that residue is the measurement that
-decides whether tiers 2-4 are worth building (STATUS §6), and any softening here -- a
+decides whether tiers 2-4 are worth building (STATUS §3), and any softening here -- a
 name-based fallback, a similarity guess -- would both destroy the measurement and put an
 identity decision somewhere nobody would think to look for one.
 

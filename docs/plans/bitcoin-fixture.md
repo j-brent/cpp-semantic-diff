@@ -18,6 +18,11 @@ number the project publishes was taken on that one class of repository.
 
 Delete this file when the measurements are in `STATUS.md` §3 and §4.
 
+**Since written (2026-10-10).** [PLAN-004](third-party-boundary.md) replaces the VENDORED exposure
+class with declared third-party paths and refuses a comparison where third-party code changed.
+§2's second point and §6.3 measure the class it removes; reconcile them with PLAN-004 before
+running. `cppsd` still has no option to pass CMake arguments (§5; PLAN-003 §4 E).
+
 ---
 
 ## 1 · The instruction that comes before all the others

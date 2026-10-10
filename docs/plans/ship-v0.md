@@ -16,6 +16,17 @@ disagree, that disagreement is the finding.
 Delete this file when sections A through C are done and the remainder has moved into `STATUS.md`
 §6 and §7 as ordinary tracked items.
 
+**Progress, 2026-10-10.** The body below is the 2026-09-07 assessment and is left as written.
+- **A is done.** `dev` and `main` are both at `4d8e367` on `origin`; CI and the rewritten demo
+  (`be49b1e`) have run on GitHub-hosted runners since 2026-09-07, most recently runs 38044461291
+  and 38044461310.
+- **B is done.** All seven items are committed (`STATUS.md` §6).
+- **C is not started.** All four items are open in `STATUS.md` §6 and §7.
+- **D** is still an unchecked box in `STATUS.md` §6, worded as a standing decision.
+- **E is not started.** `cppsd` still has no option to pass CMake arguments.
+- **Since written:** the 2026-10-10 review reopened part of the tiers 2–4 verdict (known issue 1)
+  and planned PLAN-004. Neither is part of this plan.
+
 ---
 
 ## 1 · Verified state
@@ -34,7 +45,7 @@ numbers exactly rather than approximately.
 
 That last row is the one worth noticing: it matches `STATUS.md` §3 to the digit, five weeks and one
 machine-state later. The JSON document is at schema 1.2 and carries the completeness and residue
-blocks ARCH §11.2 requires. 9,515 lines of source, ~7,700 of tests, 463 test functions.
+blocks ARCH §11 rule 2 requires. 9,515 lines of source, ~7,700 of tests, 463 test functions.
 
 The engineering claim "the hard part is done" holds.
 
@@ -114,6 +125,8 @@ workflow to the default branch.
   map, so the placement decision comes before the code. ~½ day.
 - **`Toolchain.adopt(library, expected_id)`** to kill the ~0.6 s per-worker rediscovery, which also
   cuts `test_toolchain.py`'s share of the 145 s suite. One fix, two payoffs. ~½ day.
+  *Withdrawn in part:* `test_toolchain.py` takes 6.3 s of the suite, so the second payoff does not
+  exist (`STATUS.md` §6).
 - **`diff.renameLimit` can silently truncate the rename map.** `-l0` removes the cap and is
   potentially quadratic exactly where it matters; neither answer is obviously right and the
   fixtures are too small to force it. ~½ day, most of it judgement.

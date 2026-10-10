@@ -56,7 +56,7 @@ contents are not, which is a key that looks content-addressed and is not.
 `_uncovered_resource_dir` therefore checks whether the closure names any file under the
 override -- when it does, the override *is* the directory the scanner resolved and every
 builtin header the parser reads is content-hashed like any other closure member, and when
-it does not, the cache declines rather than key those headers by path (§8).
+it does not, the cache declines rather than key those headers by path (STATUS §8).
 
 **When the closure cannot be computed, nothing is cached.** `clang-scan-deps` is the only
 thing here that knows which headers a TU reads, and a key without them produces stale hits
@@ -110,7 +110,7 @@ ENTRY_FORMAT = 1
 def _producer_code_digest() -> str:
     """Version the *extraction code*, not just the parser it drives.
 
-    ARCH-001 §9 names "producer version" as a key component and STATUS §4 spells out why:
+    ARCH-001 §9 names "producer version" as a key component and STATUS §5 spells out why:
     a model built by a different producer is a different model. `Toolchain.id` covers only
     half of that. libclang supplies the AST; `extract.py` decides what becomes a node, what
     a signature reads as, and which spellings are stable -- and `ir.py` fixes the shape all
@@ -452,7 +452,7 @@ def collect(
     it against. Age needs neither and collects the same directories one generation later.
 
     Safe by construction: an entry this removes is reparsed on the next run that wants it.
-    Declining to cache is slow and never wrong (§8), and that applies to a cache entry this
+    Declining to cache is slow and never wrong (STATUS §8), and that applies to a cache entry this
     deleted exactly as it applies to one that was never written.
     """
     root = root or store_root()

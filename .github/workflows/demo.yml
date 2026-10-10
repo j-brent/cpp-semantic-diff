@@ -47,10 +47,12 @@ jobs:
         # the script; `${{ }}` expansion happens before bash sees the line, so a crafted
         # ref would otherwise run as shell.
         #
-        # The default bases are the ones STATUS.md §2 tracks, so this page and the tracker
-        # can be compared digit for digit -- a demo that measured some other range would
-        # be a second, unreconciled set of numbers. leveldb is tracked there too but is
-        # not here: it needs submodules, which a plain clone does not fetch.
+        # The default bases are the ones STATUS.md §2 tracks. The ranges are not: this job
+        # clones upstream's current HEAD, while STATUS §2 measures fixture clones made on
+        # 2026-08-01, so the two sets of numbers differ and are compared by the revisions
+        # each prints. leveldb is tracked there too but is not here. (The reason first given,
+        # that a plain clone does not fetch submodules, does not hold: `acquire` checks out
+        # the submodules each revision pins, with network.)
         env:
           IN_REPO: ${{ inputs.repo }}
           IN_BASE: ${{ inputs.base }}
@@ -127,9 +129,9 @@ jobs:
           # pretending otherwise would overstate the cost being reported.
           export CPPSD_CACHE_DIR="$RUNNER_TEMP/cache"
 
-          # Parallelism has no flag; `$CPPSD_WORKERS` is the knob and its default is what
-          # the machine can run. Left unset on purpose so the timings below are what this
-          # runner does, and `nproc` is printed beside them so they can be read.
+          # Neither `--workers` nor `$CPPSD_WORKERS` is set, on purpose: the default is what
+          # the machine can run, so the timings below are what this runner does, and `nproc`
+          # is printed beside them so they can be read.
           cores=$(nproc)
 
           uv run cppsd doctor > "$OUT/doctor.txt" 2>&1

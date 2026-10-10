@@ -1,8 +1,8 @@
 """Every number the rank stage tunes, in one file, each with the reason it is that number.
 
 ARCH-001 §7 names four inputs and does not weight them, because the weighting is what has
-to be calibrated against real repositories rather than argued from first principles. STATUS
-§5 says the same thing about the tier-4 similarity threshold and draws the right conclusion
+to be calibrated against real repositories rather than argued from first principles. ARCH-001
+§14 says the same thing about the tier-4 similarity threshold and draws the right conclusion
 -- *design the knob in early* -- so the knobs are here, named, together, and the scoring
 code reads them rather than spelling numbers inline. A ranking whose weights are scattered
 through three modules cannot be tuned, and one that cannot be tuned will be tuned by
@@ -138,7 +138,7 @@ EXPOSURE_WEIGHT: dict[Exposure, float] = {
 #: weighting them like node events would let one edited function fill the page with its own
 #: call churn.
 #:
-#: The derived kinds (§6.1) are weighted high and none of them can fire in v0 (§13). They
+#: The derived kinds (§6.1) are mostly weighted high and none of them can fire in v0 (§13). They
 #: are computed conclusions rather than observations: an event that says "this became
 #: unreachable" has already done the reasoning a reviewer would otherwise have to do.
 NOVELTY_BY_KIND: dict[EventKind, float] = {
@@ -219,7 +219,7 @@ NOVELTY_BY_ATTR: dict[str, float] = {
 #:
 #: `None` -- unmatched residue -- is the maximum. It is also, in v0, every add, every remove
 #: and every rename (§13), which is precisely the population the tool is least sure about
-#: and STATUS §6 wants measured rather than hidden.
+#: and STATUS §3 wants measured rather than hidden.
 UNCERTAINTY_BY_TIER: dict[MatchTier | None, float] = {
     None: 1.00,
     MatchTier.SIMILARITY: 0.75,

@@ -71,7 +71,7 @@ class ClassifyContext:
             head=head,
             correspondence=correspondence,
             # Reused from the diff stage rather than re-derived. `contains` follows the
-            # *semantic* parent (STATUS §2), so an out-of-line definition belongs to its
+            # *semantic* parent (`diff/nodes.py`), so an out-of-line definition belongs to its
             # class; a second copy of that rule here would drift from the one the diff
             # stage compares parents with, and the two stages would disagree about what
             # "contained" means while both looked right.

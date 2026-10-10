@@ -25,7 +25,7 @@ library returns *truncated ASTs without raising* (ARCH-001 §13) -- one worker s
 producing partial models is the failure this project exists to prevent, arriving through a
 back door. `_configure_worker` therefore pins `CPPSD_LIBCLANG` to the library the parent
 already proved and calls `toolchain.load()`, which is the only place allowed to call
-`Config.set_library_file` (STATUS §3). The probe runs once per *worker*, not once per TU:
+`Config.set_library_file` (STATUS §8). The probe runs once per *worker*, not once per TU:
 0.6 s each, all eight in parallel (0.9 s wall), and only on a build that has something to
 parse. A worker whose verified toolchain is not the parent's is a hard failure, not a
 fallback -- two models built by two parsers are two different models.
@@ -128,7 +128,7 @@ def _configure_worker(library: str, resource_dir: str, expected_id: str) -> None
     Pinning `CPPSD_LIBCLANG` hands that answer over so the worker does not re-derive it --
     `candidate_libraries()` puts the override first -- while still going through
     `toolchain.load()`, which is the only function permitted to call
-    `Config.set_library_file` (STATUS §3) and the only one that runs the probe.
+    `Config.set_library_file` (STATUS §8) and the only one that runs the probe.
 
     Re-probing per worker is deliberate. It costs ~0.6 s once per process against ~2 s per
     TU, and it is what makes the guarantee a property of *this* process rather than an

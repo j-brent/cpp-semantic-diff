@@ -12,7 +12,7 @@ a node whose name or parent differs from its match's does not exist -- the pair 
 have been matched. `NodeRenamed` and `NodeMoved` are therefore written against what a later
 tier will produce and are unreachable until one runs. Softening that here -- pairing a
 removed node with an added one because the names look related -- would move an identity
-decision out of the matcher and destroy the measurement v0 exists to take (STATUS §6).
+decision out of the matcher and destroy the measurement v0 exists to take (STATUS §3).
 """
 
 from __future__ import annotations

@@ -124,8 +124,8 @@ def assemble(
 ) -> Model:
     """Merge partial models into the model of one revision.
 
-    Pure: no parsing, no disk, no order dependence. Whatever produces the partials -- this
-    module's parse loop today, a cache or a worker pool later -- hands them here, and the
+    Pure: no parsing, no disk, no order dependence. Whatever produces the partials -- this module's
+    parse loop, `TuCache.extracts` or `parallel.parallel_extracts` -- hands them here, and the
     result is the same model for the same set.
     """
     nodes: dict[NodeId, Node] = {}

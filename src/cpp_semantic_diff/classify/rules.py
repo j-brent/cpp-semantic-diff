@@ -6,8 +6,8 @@ the kind that explains it, and a small locator saying which subject to look for.
 to be read side by side with §6.3 and agreed or disagreed with. Nothing outside this module
 decides what causes what.
 
-**Where this table and §6.3's example table differ, and why.** §6.3 was written before the
-diff stage existed, and two of its decisions moved the ground under it:
+**Two rows that cannot fire, and why.** §6.3's first draft was written before the diff
+stage existed, and two of its decisions moved the ground under it:
 
 1. §6.3's "NodeRenamed(F) causes every EdgeRetargeted whose endpoint is F" describes
    something this pipeline cannot produce, twice over. `EdgeRetargeted` is refused by design
@@ -28,8 +28,8 @@ diff stage existed, and two of its decisions moved the ground under it:
    plus graph algorithms) into the stage whose whole contract is relabeling, and would put
    an event in the JSON that no stage claims to own.
 
-Two rules §6.3 does not name are the ones that carry v0's actual cascades, and both were
-anticipated by the diff stage in comments rather than by the architecture: an edge event on
+Two rules §6.3's first draft did not name are the ones that carry v0's actual cascades, and both
+were anticipated by the diff stage in comments rather than by the architecture: an edge event on
 an endpoint that was added or removed. `diff/edges.py` emits those "rather than folding
 [them] into the `NodeRemoved` for that endpoint ... a consequence is linked to its cause by
 classify, never dropped here". Without them, removing one class leaves every containment and
@@ -117,10 +117,10 @@ def _removed_container(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
 def _added_container(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
     """The mirror of `_removed_container`, on the head side.
 
-    Not in §6.3, which names only the removal direction. The relation is the same one: a new
-    class arrives with its methods, and the methods are consequences of the class in exactly
-    the sense §6.3 means. Omitting it would make a large addition read as N unexplained
-    top-level events while the identical removal read as one.
+    Missing from §6.3's first draft, which named only the removal direction. The relation is
+    the same one: a new class arrives with its methods, and the methods are consequences of the
+    class in exactly the sense §6.3 means. Omitting it would make a large addition read as N
+    unexplained top-level events while the identical removal read as one.
     """
     parent = ctx.head_parents.get(NodeId(event.subject))
     if parent is not None and ctx.added(parent):

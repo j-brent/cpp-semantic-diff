@@ -7,7 +7,8 @@ and nothing else. That is what keeps delivery surfaces out of the analysis core,
 `terminal.py` and worth repeating here: **if a view needs a number this document does not
 carry, the fix is to put it here**, never to hand the view a `Model`.
 
-§10 gives seven top-level keys and this module gives exactly those seven. Where §10 is a
+§10 gives seven top-level keys and this module gives those seven, plus `scores` and
+`components`. Where §10 is a
 sketch rather than a spec, the choice made is recorded on the field:
 
 - **`ranking`** is `[event id]` verbatim, so a consumer that only wants reading order gets
@@ -21,8 +22,9 @@ sketch rather than a spec, the choice made is recorded on the field:
 - **`completeness`** carries the two systematic limits of §11 as data rather than as prose
   in one view, because §11 requires them stated "in the output itself, every time" -- and
   the output is this document, not the terminal.
-- **`summary`** carries §10's four keys plus the tier-1 residue. STATUS §6 makes measuring
-  rename damage a v0 deliverable, and a measurement that lives only in a log is not one.
+- **`summary`** carries §10's four keys plus others, the tier-1 residue among them. STATUS §3
+  makes measuring rename damage a v0 deliverable, and a measurement that lives only in a log is
+  not one.
 
 Nothing here computes anything from a `Model`. `build.py` assembles this from the stage
 outputs; this module is the shape and the invariants.
@@ -106,7 +108,7 @@ class CompletenessReport(BaseModel):
     run and alarming on none**: an alarm that is always on is one nobody reads, and the
     reader who needs to know how much of the graph is missing needs the number, not an
     adjective. There is deliberately no threshold at which it becomes a warning -- a knob
-    with no calibration data behind it (STATUS §5) would be a guess presented as a policy.
+    with no calibration data behind it would be a guess presented as a policy.
     The percentage is printed instead, so a residue of 90 % reads as 90 %.
 
     Both are numbers a consumer can quote. That is the point: this record used to carry the
@@ -220,7 +222,7 @@ class CompletenessReport(BaseModel):
 
     @property
     def warnings(self) -> list[str]:
-        """What must appear above the events on this side (ARCH-001 §11.2).
+        """What must appear above the events on this side (ARCH-001 §11, rule 2).
 
         Coverage only, plus whatever the builder put in `notes`. The boundary residue is
         *not* here: it is on every real run, and a caveat that fires every time trains the
@@ -280,7 +282,7 @@ class CompletenessBlock(BaseModel):
 
     @property
     def degraded(self) -> bool:
-        """Whether §11.2's "any output built on an incomplete model must say so" applies.
+        """Whether §11 rule 2's "any output built on an incomplete model must say so" applies.
 
         **Coverage, not boundary.** `tus_complete` on both sides plus anything either
         builder recorded in `notes`. The dropped-edge residue is excluded because it is
@@ -384,7 +386,7 @@ class Meta(BaseModel):
 
 
 class Residue(BaseModel):
-    """What tier 1 could not pair -- the measurement STATUS §6 calls a v0 deliverable.
+    """What tier 1 could not pair -- the measurement STATUS §3 calls a v0 deliverable.
 
     v0 ships tier-1 identity only, so a renamed function is a removal plus an addition and
     the tool looks worse than it is. That is deliberate: the damage is supposed to be
@@ -607,7 +609,7 @@ class DiffDocument(BaseModel):
     """ARCH-001 §10's document. The product.
 
     The invariant that outranks every other property of this type: **`events` is complete
-    and uncollapsed**. `caused_by` is a link and never a deletion (§6.3, STATUS §6), so a
+    and uncollapsed**. `caused_by` is a link and never a deletion (§6.3, STATUS §8), so a
     view may nest but the document always carries every event the diff produced. A view
     that hides a consequence is a choice a reader can undo; a document that never carried
     it is a change nobody can recover.
@@ -657,11 +659,10 @@ class DiffDocument(BaseModel):
 
     @property
     def by_id(self) -> dict[EventId, Event]:
-        # Recomputed per access rather than cached: `DiffDocument` is not frozen (pydantic
-        # would have to deep-freeze `Event`, which classify copies), and a cached index on a
-        # mutable model is the kind of staleness this project spends its whole design
-        # budget avoiding. Documents are built once and read tens of times; the cost is a
-        # dict comprehension over a list a reviewer could read.
+        # Recomputed per access rather than cached: `DiffDocument` is not frozen, and a cached
+        # index on a mutable model is the kind of staleness this project spends its whole
+        # design budget avoiding. Documents are built once and read tens of times; the cost is
+        # a dict comprehension over a list a reviewer could read.
         return {e.id: e for e in self.events}
 
     def ranked(self) -> list[Event]:

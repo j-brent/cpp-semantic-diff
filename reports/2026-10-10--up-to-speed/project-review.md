@@ -18,9 +18,10 @@ Problems found during the review are recorded separately, in [`known-issues.md`]
 The examples show the desired behavior. Where the tool differs today is listed at the end of
 this section.
 
-> **Assumption: third-party code does not change.** In v0, all third-party and vendored code is
-> taken to be static. The only changes analyzed are to code this repository owns and contains.
-> The tool does not work this way yet ([known issue 7](known-issues.md)).
+> **Prerequisite: third-party code does not change.** In v0, third-party and vendored code must be
+> identical at both points ([ARCH-001 §13](../../docs/architecture/overview.md#13--v0)). The only
+> changes analyzed are to code this repository owns and contains. The tool does not work this way
+> yet ([known issue 7](known-issues.md)).
 
 ### Step 0 · A codebase at two points in time
 

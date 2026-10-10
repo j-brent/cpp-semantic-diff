@@ -7,10 +7,16 @@ each working session. Started 2026-08-01 as a handover note; kept as a tracker b
 Setup, requirements and the commands that work today are in [`README.md`](README.md). Design is
 [ARCH-001](docs/architecture/overview.md); this file is state, not design.
 
-Active plans: [PLAN-003](docs/plans/ship-v0.md) — what remains before v0 ships, measured rather
-than estimated from this file; [PLAN-002](docs/plans/bitcoin-fixture.md) — Bitcoin Core as a
-scale-and-shape probe. Each says in its own header what it is deleted into here, the way PLAN-001
-was (§6). A plan is a plan; this file is the state it leaves behind.
+Active plans: [PLAN-004](docs/plans/third-party-boundary.md) — third-party code outside the model,
+decided 2026-10-10 and not started; [PLAN-003](docs/plans/ship-v0.md) — what remains before v0
+ships, measured rather than estimated from this file; [PLAN-002](docs/plans/bitcoin-fixture.md) —
+Bitcoin Core as a scale-and-shape probe. Each says in its own header what it is deleted into here,
+the way PLAN-001 was (§6). A plan is a plan; this file is the state it leaves behind.
+
+The 2026-10-10 review is in
+[`reports/2026-10-10--up-to-speed/`](reports/2026-10-10--up-to-speed/known-issues.md): seven known
+issues, none fixed yet. Two of its decisions replace decisions recorded here, and both are marked
+where they stand: the tiers 2–4 verdict (§3, §7, §8) and the vendored partition (§2, §8).
 
 ---
 
@@ -27,7 +33,8 @@ Eight stages (ARCH §3). **Seven exist; `enrich` is deferred post-v0 by design.*
   - [x] per-TU cache keyed on content + headers + flags + producer version
   - [x] parallel parsing — what makes the §9 budget reachable
   - [x] `Completeness` filled in from real parse failures
-- [x] **match** — two `Model`s → `Correspondence` (tier 1 only, deliberately)
+- [x] **match** — two `Model`s → `Correspondence` (tier 1 only, deliberately; pairing a changed
+  signature was decided 2026-10-10 and is not built — §3)
 - [x] **diff** — → `Event` list
 - [x] **classify** — cause and cascade links
 - [ ] **enrich** — evidence adapters *(post-v0; blast radius shipped inside `rank`)*
@@ -57,11 +64,26 @@ leveldb HEAD~10   52 lines changed   → 134 semantic events, 5 high-risk
                   11 first-party top-level · 142 components · first vendored at rank 135
 ```
 
+Re-measured 2026-10-10 at `b934fc1`: every number above reproduces to the digit. The fixture
+clones have not been fetched since they were made, so the ranges are fixed: `HEAD` is fmt
+`e2243a6a`, spdlog `989d28dd` and leveldb `7ee830d0`. The demo workflow clones upstream's current
+`HEAD`, so its `HEAD~12` and `HEAD~30` are different commits and its numbers are not these: run
+38044461310 reads fmt `cdc27f91..35c58f08` 580 lines → 181 events, 7 high-risk, and spdlog
+`bfde7d37..d6c93f38` 2,161 lines → 171 events, 36 high-risk.
+
 **The leveldb row is what a third fixture was for.** The commit bumps `third_party/googletest` and
 `third_party/benchmark`, and on the first run the top 12 events and 44 of the top 50 were bundled
 googletest — the exact failure `rank/exposure.py` was written to prevent. Vendored code now sorts
 after everything first-party as a block (§6, and `ranker.py` carries the arithmetic), so the top
 event is `DBImpl::TEST_CompactMemTable` — which is what the commit says it does.
+
+**Measured 2026-10-10 at `b934fc1`, it is third in the ranking.** Whether it was first when this
+was written (`562921c`) was not checked. The JSON's `ranking` opens with
+`NodeAdded leveldb::Slice::end` and `Slice::begin` (0.70 each, from `2cc36eb` in the range), then
+`NodeBodyChanged DBImpl::TEST_CompactMemTable` (0.68). The terminal prints `TEST_CompactMemTable`
+first because it lists events by component, and components are numbered by their highest score
+*including vendored events*: component 0 tops out at a vendored 0.76, while the `Slice` pair is
+component 3. That is an open defect (§6).
 
 | | before | after |
 |---|---|---|
@@ -99,6 +121,11 @@ produced 134 first-party semantic events — mostly test-code entities that move
 moved under them. The tool is not compressing here; it is reporting that a two-line dependency bump
 had 134 consequences in this repository's own code, which is a real finding and the opposite of the
 thesis on this commit. Worth keeping visible rather than averaging away.
+
+**Since 2026-10-10 this comparison is outside v0.** ARCH §13 now requires third-party code to be
+identical at both points, and leveldb `HEAD~10` bumps two submodules. Once PLAN-004 is built the
+tool refuses it; today it still runs and produces the numbers above. The measurement stays, as
+what the tool did on a comparison v0 no longer accepts.
 
 Nothing else moved: fmt `HEAD~12` (11.2 lines/event) and spdlog `HEAD~30` (53.4) are unchanged to
 the digit, which is the check that the numerator was aligned rather than shrunk.
@@ -150,6 +177,14 @@ is exactly what ARCH §10 asks the design to surface in week one rather than mon
 of a deliberately different shape, and the answer got *stronger* rather than weaker. What would
 reopen it is a repository mid-refactor — none of these four comparisons renames anything
 substantial, and `internal_linkage_residue` remains the number to watch.
+
+**Reopened 2026-10-10, in part.** The measurement above stands; the verdict no longer does for a
+function whose parameters changed. Current upstream spdlog, in demo run 38044461310, has 11
+removals that are all this case — file-logger factories and three sink constructors gaining a
+buffer-size parameter, each reported as removed plus added — from an ordinary API change, not a
+refactor. Pairing them was decided on 2026-10-10 and is not built. The reasoning and the open
+questions (overloads, scope, templates) are
+[known issue 1](reports/2026-10-10--up-to-speed/known-issues.md).
 
 Caveat worth keeping: fmt and spdlog are stable libraries. A repository mid-refactor would look
 different, and the number to watch is `internal_linkage_residue` — statics and anonymous-namespace
@@ -238,7 +273,8 @@ member function template fix (§6). A value that moves between two runs of the s
 defect, and it is the only thing this number is for. Phrasing it as "fmt reads X" inverted that —
 it made the literal the claim, which is how a wrong literal survived unnoticed while the property
 it stood for was holding the whole time. The current value was verified identical across cold/warm
-and 1/8 workers by the commit that produced it, and reproduced exactly in a separate run.
+and 1/8 workers by the commit that produced it, and reproduced exactly in a separate run. Reproduced
+again on 2026-10-10 at `b934fc1`, at 1 and at 8 workers.
 
 The fingerprint reaches nobody. It appears in no CLI output and in no JSON field; outside
 `differ.py`'s docstring its only callers are tests and ad-hoc scripts. That is a large part of why
@@ -253,7 +289,7 @@ as agreeing *on* is the part that did not survive re-measurement.
 
 **The numbers below were taken on 2026-08-02 (`7dad880`) and have not been re-taken.** Six commits
 have touched `extract.py` or `ir.py` since — `93b0d04`, `3c71f8a`, `4cb9290`, `9118830`, `07ed88b`,
-`826209c` — and every one of them gives every TU a fresh `Cache.identity`, including `3c71f8a`,
+`826209c` — and every one of them gives every TU a fresh `TuCache.identity`, including `3c71f8a`,
 which changed two comments. That is §8's hash-the-source decision working as designed, and it means
 the store these warm rows were served from is superseded whole: "fully warm" is a state this
 machine would have to re-earn before the row could be reproduced. The extraction half has also
@@ -268,6 +304,9 @@ seconds describe a producer that no longer exists.
 | fully warm | 0 | 6.3 s | 6.4 s *(no pool started)* |
 | warm, 10 sources touched | 13 | 30.7 s | **14.2 s** |
 | warm, 20 sources touched | 24 | 55.0 s | **19.4 s** |
+
+One row re-taken on 2026-10-10 at `b934fc1`, same machine: **cold, cache on, 8 workers — 23.4 s**
+for the base model and 25.3 s for the head, from an empty cache root. The other rows have not.
 
 **ARCH §9's budget — ≤ 20 TUs under 30 s warm — was met when this was taken**, and at 24
 invalidated TUs rather than 20, so the stated case had more headroom than the number shows. At one
@@ -324,7 +363,8 @@ synthetic fixtures.
 - **The `-std` hazard is real, and it was found by a one-line CMake diff.** §6 predicted that a
   `CMAKE_CXX_STANDARD` bump "rewrites 6 % of the model"; leveldb `HEAD~9..~1` does exactly that —
   `11 → 17`, 45 lines of diff, and **117 events in vendored googletest** (49 `NodeAdded`, 67
-  `EdgeAdded`) from declarations C++17 exposes and C++11 did not. Two things worth keeping. The
+  `EdgeAdded`, and 1 `NodeAttrChanged` this breakdown omitted until 2026-10-10) from
+  declarations C++17 exposes and C++11 did not. Two things worth keeping. The
   first-party events on that range are **6, all real** and all traceable to the commits in it, so
   the artifact did not contaminate what the reviewer reads — the vendored partition contained it,
   which is that decision earning its place a second time. And the artifact is invisible in the
@@ -362,7 +402,7 @@ synthetic fixtures.
   naming the wrong stage; this is the view removing the evidence. `_subject` interpolated entity
   labels into rich markup unescaped and `[` opens a markup tag, so an overload disambiguation that
   was correct in the document never once reached a screen, and the identical hole in `_completeness`
-  was shortening the parse-failure detail ARCH §11.2 requires to be stated. **Absence in the
+  was shortening the parse-failure detail ARCH §11 rule 2 requires to be stated. **Absence in the
   terminal is not evidence of absence in the product** — which is the failure ARCH §11 opens by
   naming, arriving one stage past where §11 looks for it, in the view rather than in the analysis.
   It is also the harder half of the pair: a wrong name provokes a defect report, a silent deletion
@@ -410,11 +450,25 @@ Five more were struck last pass — the render label, member function templates,
 `cache.notes()` and `CPPSD_RESOURCE_DIR` — and the exposure-endpoint decision below was the last row
 of PLAN-003's §B, so that tail is empty: all seven of its items are committed.
 
+The 2026-10-10 review recorded seven more, in
+[`known-issues.md`](reports/2026-10-10--up-to-speed/known-issues.md). None is fixed; PLAN-004
+plans issue 7.
+
 - [ ] **`internal_linkage_residue` is still computed over the whole model**, vendored included —
       the last metric that does not distinguish what `rank/exposure.py` classifies. leveldb is
       52.8 % vendored by node count. `compression_ratio` and `high_risk_count` were fixed; this one
       lives on `Correspondence`, which is upstream of `rank` and has no exposure map, so it needs a
-      decision about where the classification belongs rather than a one-line change.
+      decision about where the classification belongs rather than a one-line change. PLAN-004 takes
+      third-party code out of the model, which would settle this for every third-party path it
+      recognizes.
+- [ ] **Components are numbered by a top score that includes vendored events.** Found 2026-10-10.
+      `rank/components.py` sorts components by the highest score among *all* their events, while
+      the ranking puts every vendored event after every first-party one. So the terminal, which
+      lists by component, can open with a first-party event that is not the highest ranked. On
+      leveldb `HEAD~10`, component 0 tops out at a vendored 0.76 and its best first-party event is
+      0.68; the two highest-ranked events (0.70, `Slice::begin`/`end`) are in component 3 and print
+      after it. `render/terminal.py` states the opposite ("component 0 still leads with the
+      highest-risk event in the delta"). PLAN-004 removes the vendored class, and this with it.
 
 The renames-and-defining-TU work is complete; PLAN-001 was folded into this file and deleted, as
 its own header instructed. Its measurements are in §2 and §3, and the one claim it got wrong is
@@ -526,7 +580,7 @@ below.
       markup tag, so `f [void (int)]` has printed as `f` since the bracketing was written — **the
       overload disambiguation had never once reached a terminal**, on any review, in any fixture.
       The same hole in `_completeness` was deleting part of the reason a model is incomplete
-      (`[[nodiscard]]` rendering as `[]`), which is what ARCH §11.2 requires to be shown.
+      (`[[nodiscard]]` rendering as `[]`), which is what ARCH §11 rule 2 requires to be shown.
       `git log -S` puts both defects in `f6cf2a6`, the commit that introduced the bracketing:
       neither is a regression, they shipped broken together. The escape is positional and the
       whole file was
@@ -536,7 +590,7 @@ below.
 - [x] ~~**Superseded cache identities are never reclaimed.**~~ `cppsd cache gc [--older-than N]
       [--dry-run]`, with `cppsd cache status` as the command that makes the number checkable
       before it is acted on. The hole was structural rather than a leak: `_evict` keeps the newest
-      generations *within one TU directory* and only runs on a write, while `Cache.identity`
+      generations *within one TU directory* and only runs on a write, while `TuCache.identity`
       hashes the producer code digest — so every change to `extract.py` or `ir.py` gives every TU
       a brand-new identity directory, and a directory nothing writes to again is immortal.
       Measured when it shipped: **1,156 entries / 229 MB, of which 576 entries / 147 MB were
@@ -629,7 +683,9 @@ below.
   threshold is.
 - ~~**Whether tiers 2–4 are worth building at all.**~~ **Answered: no.** The third repository is in
   and the pairable bound on leveldb is **0** (§3). Still unknown on a repository mid-refactor, which
-  is the one condition that would reopen it.
+  is the one condition that would reopen it. **Reopened 2026-10-10 by a different condition:** an
+  ordinary signature change on current upstream spdlog (§3, known issue 1). How to pair a changed
+  signature is open.
 - **Where the reviewer actually reads this.** CLI is right for v0 and probably wrong as the
   product. The JSON-first contract defers the decision without prejudging it.
 - **Unnamed (not anonymous) records have an unstable USR** — file basename plus a byte offset that
@@ -682,7 +738,7 @@ below.
 | Compile database required at **both** revs | Hard precondition, not a degradation path. Configure is seconds, so it is affordable. |
 | Base that does not build ⇒ hard failure | The base is main. A main that does not build is a different problem, not this tool's. |
 | JSON is the product, terminal is a consumer | Keeps delivery surfaces out of the analysis core — the mistake that made CodeAtlas TypeScript. `render`'s signature admits no `Model`. |
-| v0 ships **tier-1 identity only** | Renames look bad on purpose. Measure the damage before building tiers 2–4. Done — see §3. |
+| v0 ships **tier-1 identity only** | Renames look bad on purpose. Measure the damage before building tiers 2–4. Done — see §3. **Partly reopened 2026-10-10:** a function whose parameters changed is to be paired with its old version (§3, known issue 1). Not built. |
 | Identity tiers are one-to-one | Splits and merges surface as unmatched residue rather than being forced into a match. Enforced in the type, not just the matcher: a double-pairing does not crash, it produces a delta that reads perfectly and describes a change nobody made. |
 | Cascade collapse at render, never at diff | JSON always carries the full event set; the view hides consequences under causes. When cause attribution is uncertain, show rather than hide. |
 | `EdgeRetargeted` is refused, not deferred | An edge's id *is* `src\|kind\|dst`, so "retargeted from B to C" claims B and C are the same entity — a node-identity judgement the one-to-one matcher already declined. |
@@ -693,7 +749,7 @@ below.
 | Check what the whole key already covers before widening an identity | The stdlib and builtin headers turned out to be content-keyed via the include closure. Every redundant key component costs a mass invalidation to defend against a defended hazard. |
 | Workers use `spawn`, not `fork` | A forked child inherits the parent's verified libclang, so the toolchain guarantee would hold *by accident of start method* and stop holding silently if that default changed. |
 | Low confidence ranks **up** | Uncertainty is a reason for a human to look, not a reason to hide (ARCH §7). Guarded by mutation-tested cases. |
-| Vendored code is **partitioned** out of the ranking, not merely down-weighted | The reviewer is reviewing their own code; a bumped dependency is context, not the subject. As a weighted term it lost — measured on leveldb, where blast radius plus novelty (0.60) beat all of exposure (0.25) and put googletest in the top 12. Raising the weight would fossilize a number against one repository and still lose on the next. The claim is "not what is being reviewed", which is an ordering, not a quantity. Only VENDORED — the project's own tests are its code and keep the weighted demotion. |
+| Vendored code is **partitioned** out of the ranking, not merely down-weighted | The reviewer is reviewing their own code; a bumped dependency is context, not the subject. As a weighted term it lost — measured on leveldb, where blast radius plus novelty (0.60) beat all of exposure (0.25) and put googletest in the top 12. Raising the weight would fossilize a number against one repository and still lose on the next. The claim is "not what is being reviewed", which is an ordering, not a quantity. Only VENDORED — the project's own tests are its code and keep the weighted demotion. **Superseded 2026-10-10** by ARCH §13's prerequisite: third-party code must not change and is not modelled ([PLAN-004](docs/plans/third-party-boundary.md), known issue 7). Until PLAN-004 is built, the partition is what the code does. |
 
 ---
 
@@ -704,7 +760,7 @@ below.
 - **Cite ARCH sections in code comments** where a non-obvious choice traces to a design decision
   (`# ARCH-001 §4.3`). It is how the reasoning survives.
 - **Docs carry a metadata block** — `id`, `type`, `status`, `author`, `created`, `dependencies`.
-  IDs are `RESEARCH-00x` and `ARCH-00x`, unique, never recycled.
+  IDs are `RESEARCH-00x`, `ARCH-00x` and `PLAN-00x`, unique, never recycled.
 - **Commit messages** say what changed and *why it matters*. Record findings discovered by running
   the code; every finding in §5 was a real bug in waiting.
 - **Tests assert the design, not the implementation.** The merge-base test exists because getting it

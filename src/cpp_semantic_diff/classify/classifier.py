@@ -2,7 +2,7 @@
 
 ARCH-001 §3, §6.3. This stage **adds links and nothing else**. It removes no event, merges
 none, groups none and suppresses none, and it returns exactly as many events as it was
-given. §6.3 and STATUS §6 put cascade collapse at render: the JSON always carries the full
+given. §6.3 and STATUS §8 put cascade collapse at render: the JSON always carries the full
 event set and the view hides consequences under causes, because a hidden real change is a
 far worse failure than a redundant one. A stage that deduplicated here -- and the temptation
 is real, since 200 consequences under one cause look like 199 events too many -- would

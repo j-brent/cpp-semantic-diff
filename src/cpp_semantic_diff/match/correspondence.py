@@ -36,7 +36,7 @@ class Correspondence(BaseModel):
 
     The residue is a first-class output, not leftovers. ARCH-001 §5: splits and merges are
     *not* forced into a match; they surface here as correlated add/remove residue. In v0 so
-    do renames, on purpose (STATUS §6) -- the size of this residue is the measurement that
+    do renames, on purpose (STATUS §3) -- the size of this residue is the measurement that
     decides whether tiers 2-4 are worth building.
     """
 

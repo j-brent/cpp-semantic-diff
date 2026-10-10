@@ -30,7 +30,7 @@ is what is left.
 **Failure modes, plainly.**
 
 - *A library that publishes from `src/` and keeps private headers under `include/internal`*
-  is read backwards. The convention list below is the calibration surface; STATUS §5
+  is read backwards. The convention list below is the calibration surface; ARCH-001 §14
   already expects per-repository calibration for the tier-4 threshold, and this needs the
   same treatment for the same reason.
 - *A project whose subject matter is testing* -- googletest, Catch2, a fuzzing harness --

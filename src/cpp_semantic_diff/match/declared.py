@@ -88,10 +88,11 @@ class DeclaredTier:
     Matching them to each other would report a body change where there are two different
     functions; the TU is what says they are not the same entity.
 
-    Where `tu` is unset the key falls back to the USR alone, which is what the producer
-    yields today. Two known ways the TU can be arbitrary: a static defined in a header, and
-    the same-USR collision above within one side, both of which USR dedup collapses to a
-    single node holding whichever TU won. If that winner flips between revisions the match is
+    Where `tu` is unset the key falls back to the USR alone. The producer sets it only for a
+    file-scoped USR declared in its TU's own primary source (`extract._defining_tu`), so a
+    static defined in a header has none. The known way the TU can be arbitrary is the
+    same-USR collision above within one side, which USR dedup collapses to a single node
+    holding whichever TU won. If that winner flips between revisions the match is
     lost. That is the *safe* direction to fail -- a lost match becomes add + remove residue,
     which over-reports; dropping the TU instead would under-report by making two entities
     look like one, and confident-and-wrong is the failure mode this design refuses.

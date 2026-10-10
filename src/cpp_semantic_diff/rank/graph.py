@@ -127,7 +127,7 @@ def containers(model: Model, *, coupling_only: bool = False) -> dict[NodeId, Nod
     `coupling_only` drops containers that are namespaces (or any kind outside
     `COUPLING_CONTAINER_KINDS`), which is what stops one enormous namespace from being
     treated as a unit of coupling. A container the model does not carry a node for is
-    dropped too: an unresolved edge endpoint (STATUS §3) has no kind to test.
+    dropped too: an unresolved edge endpoint (STATUS §5) has no kind to test.
     """
     parents: dict[NodeId, NodeId] = {}
     for edge in model.edges:
@@ -217,7 +217,7 @@ def _register(adjacency: dict[NodeId, set[NodeId]], edge: Edge, model: Model) ->
     if edge.kind not in DEPENDENCY_EDGES:
         return
     # An edge whose endpoints are not both nodes is an unresolved edge the builder counted
-    # rather than dropped (STATUS §3). It cannot contribute a dependent that exists.
+    # rather than dropped (STATUS §5). It cannot contribute a dependent that exists.
     if edge.src not in model.nodes or edge.dst not in model.nodes:
         return
     if edge.src == edge.dst:

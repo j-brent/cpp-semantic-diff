@@ -12,7 +12,8 @@ Two things it deliberately does not do.
 list in the order the diff stage emitted it. Collapse is a view concern (§6.3, `collapse.py`)
 and this document is what the views agree on.
 
-**It does not improve the numerator.** `summary.events_reported` is `len(events)`. §10 makes
+**It does not improve the numerator.** `summary.events_reported` is `len(events)`, and the
+numerator is its first-party part (schema 1.2; `compression_sentence` says why). §10 makes
 the compression ratio the experiment this project runs on itself, and there is no filter,
 bucket or threshold here that could flatter it.
 """
@@ -187,7 +188,7 @@ def _entities(events: Sequence[Event], base: Model, head: Model) -> dict[NodeId,
         node = in_head or in_base
         if node is None:
             # An id neither model carries. Real, and not a defect to hide: the builder
-            # drops edges whose endpoint no TU declared (STATUS §3) but their ids can still
+            # drops edges whose endpoint no TU declared (STATUS §5) but their ids can still
             # reach an event through a subject. Omitting the summary is honest -- the view
             # falls back to the raw id, which is all that is actually known about it.
             continue

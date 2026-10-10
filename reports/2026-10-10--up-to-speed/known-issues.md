@@ -157,9 +157,12 @@ side.
 
 ## 7 · The tool analyzes third-party code instead of excluding it
 
-**Status:** open. Decided 2026-10-10: in v0, all third-party and vendored code is assumed static.
-Only code this repository owns and contains is analyzed. See the assumption before step 0
-in [`project-review.md`](project-review.md).
+**Status:** open. Decided 2026-10-10: in v0, third-party and vendored code must not change.
+Only code this repository owns and contains is analyzed. This prerequisite is recorded in
+[ARCH-001 §13](../../docs/architecture/overview.md#13--v0).
+
+**Planned:** [`docs/plans/third-party-boundary.md`](../../docs/plans/third-party-boundary.md)
+(PLAN-004). The three planning questions below were decided there on 2026-10-10.
 
 **What the tool does today.**
 - **It analyzes third-party code like the project's own.** It models, compares and scores
@@ -169,7 +172,7 @@ in [`project-review.md`](project-review.md).
   (`VENDOR_SEGMENTS` in [`rank/exposure.py`](../../src/cpp_semantic_diff/rank/exposure.py)). It then
   ranks those change events last instead of leaving them out. That was a recorded decision
   (`STATUS.md` §8, "Vendored code is partitioned out of the ranking, not merely down-weighted"),
-  and the assumption above replaces it.
+  and the prerequisite above replaces it.
 - **The output still carries them.** The JSON's `vendored_events` field and the terminal's
   "… more in bundled dependencies, ranked last" summary both report these change events.
 
@@ -181,7 +184,7 @@ benchmark libraries produced 3,660 change events in that bundled code: 96 % of t
 - **Parsing.** Third-party code still has to be parsed, because the project's own code calls
   into it, for example tests calling googletest. Should third-party entities stay in the model
   only as the far end of relationships, and never produce change events of their own?
-- **A violated assumption.** What should the tool do when third-party code does change between the
+- **A broken prerequisite.** What should the tool do when third-party code does change between the
   two points, as in the leveldb case: refuse, warn, or ignore the change? That same leveldb
   update also produced 134 change events in leveldb's own test code. The project's code was
   unchanged, but the googletest code it uses had changed underneath it.

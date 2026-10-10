@@ -7,9 +7,9 @@ tier-1 lookup -- is the part that is expensive to retrofit. Tier 1 is a keyed in
 if the driver did it inline, every later tier would arrive as a rewrite of this module
 instead of an entry in a list.
 
-The package is named for the pipeline stage (§3) rather than ARCH's `identity/` sketch in
-§13, for the same reason `acquire`/`produce` are: stages are the vocabulary everything else
-uses.
+The package is named for the pipeline stage (§3) rather than the earlier draft's `identity/`
+(ARCH-001 §13), for the same reason `acquire`/`produce` are: stages are the vocabulary everything
+else uses.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ class Tier(Protocol):
 
 
 def default_tiers(renames: Mapping[str, str] | None = None) -> tuple[Tier, ...]:
-    """v0 runs tier 1 and nothing else (ARCH-001 §13, STATUS §6).
+    """v0 runs tier 1 and nothing else (ARCH-001 §13, STATUS §3).
 
     Tiers 2-4 are excluded on purpose: a rename surfaces as a remove plus an add, and how
     badly that reads on real branches is a v0 deliverable. Softening it here -- a name-based

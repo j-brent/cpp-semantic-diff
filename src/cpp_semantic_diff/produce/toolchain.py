@@ -302,7 +302,7 @@ class Toolchain:
         Two components, for the two ARCH-001 §12.1 determinants that nothing else in the
         key can see. The **release triple** identifies the parser -- and it is the release
         rather than the library's own version string precisely so a distro rebuild that
-        changes nothing observable does not invalidate every cached model (STATUS §5). The
+        changes nothing observable does not invalidate every cached model. The
         **target triple** identifies the parse: the same headers under a different target
         yield different `sizeof`s and different conditional declarations with byte-identical
         content digests, so without it two hosts write two models under one key.

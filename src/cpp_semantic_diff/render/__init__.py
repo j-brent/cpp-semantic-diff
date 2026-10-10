@@ -13,7 +13,7 @@ neither of them imports `terminal`. That is what makes the next view -- HTML, a 
 annotation, an editor plugin -- an addition rather than a refactor, and it is the property
 §10 says the whole contract exists to protect.
 
-Cascade collapse lives here and only here (§6.3, STATUS §6). Every earlier stage is
+Cascade collapse lives here and only here (§6.3, STATUS §8). Every earlier stage is
 forbidden from it: diff says so, classify says so, and the reason both say so is that the
 document must carry the complete event set for the views that choose *not* to collapse.
 """

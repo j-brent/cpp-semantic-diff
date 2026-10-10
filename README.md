@@ -15,17 +15,20 @@ model is an ordered list of lines.
 ## Status
 
 The pipeline runs end to end. Seven of eight stages exist; `enrich` (the evidence layer) is deferred
-past v0 by design — see [`STATUS.md`](STATUS.md) for the tracker and the known defects.
+past v0 by design — see [`STATUS.md`](STATUS.md) for the tracker and the known defects, and the
+[2026-10-10 review](reports/2026-10-10--up-to-speed/project-review.md) for what the tool does step
+by step and the [known issues](reports/2026-10-10--up-to-speed/known-issues.md) it found.
 
 | Stage | State |
 |---|---|
 | `acquire` — worktrees + compile databases at both revs | done |
 | `produce` — worktree → `Model`, cached per TU, parsed in parallel | done |
-| `match` — two models → `Correspondence` | done, tier 1 only |
+| `match` — two models → `Correspondence` | done, tier 1 only; pairing a changed signature decided 2026-10-10, not built |
 | `diff` · `classify` · `rank` · `render` | done |
 | `enrich` — evidence adapters | post-v0 |
 
-What it prints on real repositories:
+What it prints on the fixture clones (re-measured 2026-10-10; the clones date from 2026-08-01, so
+`HEAD` is fmt `e2243a6a`, spdlog `989d28dd`, leveldb `7ee830d0`):
 
 ```
 fmt     HEAD~12    179 lines changed  →  16 semantic events, 2 high-risk
@@ -45,6 +48,11 @@ read, because bumping googletest moved a great deal of test code under it. Compr
 some commits and inverted on others, and which is which appears to depend on repository shape more
 than on the tool: the two libraries that agree are both header-only and vendor by copying. See
 [`STATUS.md`](STATUS.md) §2.
+
+Since 2026-10-10, v0 requires third-party code to be identical at both points
+([ARCH-001 §13](docs/architecture/overview.md#13--v0)). The leveldb commit bumps two submodules, so
+it is outside v0, and the tool will refuse it once [PLAN-004](docs/plans/third-party-boundary.md) is
+built. Today it still runs it.
 
 ## Requirements
 
@@ -81,7 +89,8 @@ headers before you trust a single result:
 libclang         /usr/lib/llvm-18/lib/libclang.so.1
 version          Ubuntu clang version 18.1.3 (1ubuntu1)
 builtin headers  parsed clean
-producer id      libclang 18.1.3
+target           x86_64-pc-linux-gnu
+producer id      libclang 18.1.3 x86_64-pc-linux-gnu
 ```
 
 Then, against a repository with full history:
@@ -97,8 +106,9 @@ uv run cppsd diff    ~/fixtures/fmt --base HEAD~12 --json --out delta.json
 set. The JSON is the product and always carries every event uncollapsed — the terminal is one
 consumer of it, and any incompleteness in either model is stated before the events, not in a log.
 
-A review touching ≤ 20 translation units completes in under 30 s on a warm cache; a cold `fmt`
-model is ~25 s across 8 workers. The first run against a new base pays for it and every later
+A review touching ≤ 20 translation units completes in under 30 s on a warm cache (measured
+2026-08-02, not re-taken since — [`STATUS.md`](STATUS.md) §4); a cold `fmt` model is ~25 s across
+8 workers (23.4 s, 2026-10-10). The first run against a new base pays for it and every later
 review against that base does not. `diff --workers N` (`-j N`) sets how many parser processes
 that is for one run; `$CPPSD_WORKERS` sets it for every run, and the flag wins where both are
 given.
@@ -109,7 +119,8 @@ given.
 | `CPPSD_RESOURCE_DIR` | Override the clang resource directory. An escape hatch: it turns the per-TU cache off unless the include closure already covers the directory |
 | `CPPSD_SCAN_DEPS` | Use this `clang-scan-deps` instead of discovering one |
 | `CPPSD_WORKERS` | Parser processes when `--workers` is absent (default: cores, capped at 8). `1` takes the serial path |
-| `CPPSD_CACHE_DIR` | Where worktrees and cached models live (default: `$XDG_CACHE_HOME`) |
+| `CPPSD_CACHE_DIR` | Where worktrees and cached models live (default: `$XDG_CACHE_HOME/cpp-semantic-diff`, else `~/.cache/cpp-semantic-diff`) |
+| `CPPSD_RENAME_SIMILARITY` | Git's rename-detection threshold, a percentage (default: 50, git's own `-M` default) |
 | `CPPSD_FIXTURE_ROOT` | Where the test fixture clones live (default: `~/fixtures`) |
 
 Development: `uv run ruff format . && uv run ruff check . && uv run pytest -q`. Tests marked
@@ -137,6 +148,8 @@ Read the first two before writing code.
 | [`docs/architecture/overview.md`](docs/architecture/overview.md) | **ARCH-001.** Pipeline, IR, identity, delta events, ranking, caching, performance budget. Code comments cite its section numbers; keep doing that. |
 | [`docs/research/cpp-analysis-tool-landscape.md`](docs/research/cpp-analysis-tool-landscape.md) | **RESEARCH-001.** Inventory of C++ analysis tooling across source, IR, object and binary levels. The supply side; reference material for the evidence layer. |
 | [`STATUS.md`](STATUS.md) | What is built, what is next, and the decisions already settled — with the reason for each, so you can tell whether it still holds. |
+| [`docs/plans/`](docs/plans/) | **PLAN-00x.** Scoped plans for work in progress or ahead: PLAN-002 Bitcoin Core probe, PLAN-003 shipping v0, PLAN-004 third-party code outside the model. |
+| [`reports/2026-10-10--up-to-speed/`](reports/2026-10-10--up-to-speed/project-review.md) | A dated review: what the tool does step by step, whether the model is sufficient, and seven known issues with the decisions taken on them. |
 
 ## Relationship to CodeAtlas C++
 

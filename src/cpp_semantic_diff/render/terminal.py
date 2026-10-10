@@ -22,17 +22,17 @@ a standard-section citation, and every annotation `DiffDocument.label` appends. 
 is to say the rule cannot be applied by inspecting strings for danger -- it is positional.
 The *view* supplies the markup; everything it styles is data.
 
-This matters most exactly where §11.2 requires the output to say what was missing: half a
+This matters most exactly where §11's rule 2 requires the output to say what was missing: half a
 reason a model is incomplete reads as a whole one.
 
 The page is ordered by what §11 and §10 say must be seen first:
 
-1. **Completeness, at the top, never in a log** (§11.2). What was missing precedes what was
+1. **Completeness, at the top, never in a log** (§11, rule 2). What was missing precedes what was
    found, because a reader who scrolls past the events has already formed a belief.
 2. **The compression line** (§10). The product's own success metric, printed on every run.
 3. **The events**, in ranking order (§7), grouped by component and with consequences nested
    under their causes (§6.3, `collapse.py`).
-4. **The tier-1 residue** (STATUS §6). v0's deliberate rename damage, stated as a
+4. **The tier-1 residue** (STATUS §3). v0's deliberate rename damage, stated as a
    measurement rather than left to be inferred from an inflated event count.
 5. **§11's two systematic limits**, which are true of every run and are printed on every one.
 """
@@ -86,7 +86,7 @@ def _header(document: DiffDocument, console: Console) -> None:
 
 
 def _completeness(document: DiffDocument, console: Console) -> None:
-    """ARCH-001 §11.2: "any output built on an incomplete model states what was missing, at
+    """ARCH-001 §11, rule 2: "any output built on an incomplete model states what was missing, at
     the top, not in a log."
 
     Two blocks, because there are two kinds of missing and only one of them is news.
@@ -127,7 +127,7 @@ def _completeness(document: DiffDocument, console: Console) -> None:
         # Escaped because a parse failure is a clang diagnostic quoting C++, and C++ is
         # bracketed: `[[nodiscard]]`, a template argument list, clang's own `[note]`. The
         # markup parser drops what it cannot style, so the sentence naming the cause used to
-        # arrive with the cause removed -- a §11.2 failure wearing the costume of a §11.2
+        # arrive with the cause removed -- a §11 rule 2 failure wearing the costume of a rule 2
         # disclosure, which is the worst place in this view for it to happen.
         for failure in report.failures[:5]:
             # `str()` rather than `or ""`: a detail-less failure has always printed "None"
@@ -181,11 +181,11 @@ def _boundary(block: CompletenessBlock, console: Console) -> None:
 def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> None:
     """ARCH-001 §10's sentence, and the honest arithmetic around it.
 
-    The sentence is taken from `summary.compression` rather than rebuilt, so that the JSON
-    and the terminal cannot disagree about the one claim the project is testing. The line
-    below it separates the two counts that are easy to conflate: `events_reported` is the
-    complete delta and is the numerator; the collapsed count is what this view chose to
-    nest, and is never the numerator.
+    The sentence is taken from `summary.compression` rather than rebuilt, so that the JSON and the
+    terminal cannot disagree about the one claim the project is testing. The line below it separates
+    the two counts that are easy to conflate: `events_reported` is the complete delta, and its
+    first-party part is the numerator; the collapsed count is what this view chose to nest, and is
+    never the numerator.
     """
     s = document.summary
     console.print()
@@ -365,7 +365,7 @@ def _why(document: DiffDocument, node: CollapseNode, console: Console, *, indent
 
 
 def _residue(document: DiffDocument, console: Console) -> None:
-    """STATUS §6: v0 ships tier-1 identity only, and *measuring the damage* is the deliverable.
+    """STATUS §3: v0 ships tier-1 identity only, and *measuring the damage* is the deliverable.
 
     So the residue is printed on every run, not only when it is large, and it is printed as
     a limitation of the tool rather than as a property of the change. A reader who is not
