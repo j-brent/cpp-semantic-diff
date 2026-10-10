@@ -147,6 +147,11 @@ def candidate_libraries() -> list[Path]:
     override, then llvm-config, then the dynamic linker's own cache, and only then
     directory patterns. Whatever comes back is still probe-verified before use -- ranking
     decides which working toolchain is picked, never whether a broken one is trusted.
+
+    An override that names no usable file is dropped here like any other non-candidate,
+    because this list is also what `cppsd doctor` counts after a failure and must not raise.
+    It is never *replaced* by what remains, though: `load` checks the override itself first
+    (`library_override`) and refuses rather than parse with a library nobody asked for.
     """
     candidates: list[Path] = []
 
@@ -173,6 +178,34 @@ def candidate_libraries() -> list[Path]:
         seen.add(resolved)
         unique.append(path)
     return unique
+
+
+def library_override() -> Path | None:
+    """The library `CPPSD_LIBCLANG` names, or None when it is unset.
+
+    Raises when it is set and names nothing loadable. Falling through to discovery instead
+    would parse with whatever the host offers next while the user believes the parser is
+    the one they chose -- a quiet disagreement about the one component every model depends
+    on (ARCH-001 §11). A set override is therefore exclusive: either it is the parser, or
+    there is none.
+    """
+    override = os.environ.get("CPPSD_LIBCLANG")
+    if not override:
+        return None
+    path = Path(override)
+    if not path.is_file():
+        problem = "is a directory" if path.is_dir() else "does not exist"
+        raise ClangToolchainError(
+            f"CPPSD_LIBCLANG={override} {problem}.",
+            hint="Point CPPSD_LIBCLANG at a libclang shared library, or unset it to search.",
+        )
+    if path.name.startswith(EXCLUDED_STEMS):
+        raise ClangToolchainError(
+            f"CPPSD_LIBCLANG={override} is libclang-cpp, the C++ API, which the Python "
+            f"bindings cannot use.",
+            hint="Point CPPSD_LIBCLANG at libclang itself, usually in the same directory.",
+        )
+    return path
 
 
 def library_version(config: ci.Config) -> str:
@@ -346,7 +379,7 @@ def _probe(resource_dir: Path | None) -> ci.TranslationUnit:
     parse, so the identity describes the library that was actually proved rather than one
     interrogated separately afterwards.
     """
-    args = list(PROBE_ARGS)
+    args: list[str] = list(PROBE_ARGS)
     if resource_dir is not None:
         args.append(f"-resource-dir={resource_dir}")
     index = ci.Index.create()
@@ -363,7 +396,12 @@ def load() -> Toolchain:
     if _loaded is not None:
         return _loaded
 
-    candidates = candidate_libraries()
+    # An override skips the search rather than heading it: the search could only ever
+    # contribute libraries that would not be used, and a worker handed its parent's
+    # verified library (`produce/parallel.py`) should not pay for llvm-config and ldconfig
+    # to rediscover it.
+    pinned = library_override()
+    candidates = [pinned] if pinned else candidate_libraries()
     if not candidates:
         raise ClangToolchainError(
             "No system libclang found.",

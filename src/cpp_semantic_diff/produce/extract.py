@@ -938,10 +938,12 @@ def extract(
     """
     root = root.resolve()
     relative = _relative(str(entry.file), root, entry.directory) or entry.file.name
-    index = index or ci.Index.create()
+    # A fresh name rather than reassigning `index`: cindex leaves `Index.create` unannotated,
+    # so its result does not narrow the `Index | None` the parameter is declared as.
+    parser: ci.Index = index if index is not None else ci.Index.create()
 
     try:
-        tu = index.parse(str(entry.file), args=parse_arguments(entry, toolchain))
+        tu = parser.parse(str(entry.file), args=parse_arguments(entry, toolchain))
     except ci.TranslationUnitLoadError as error:
         return TuExtract(
             path=relative,
