@@ -14,9 +14,10 @@ dependencies: [ARCH-001]
 
 **Reviewed 2026-10-10.** The steps were suggested alongside the findings in
 [`the-model.md`](../../reports/2026-10-10--up-to-speed/the-model.md), which is the evidence for
-everything below. Steps 1, 2, 4 and 5, and the parts of 6 and 7 that roadmap issues 4 and 5 need,
+everything below. Steps 1, 2, 4 and 5, and the parts of 6 and 7 that [#15](https://github.com/j-brent/cpp-semantic-diff/issues/15) and [#16](https://github.com/j-brent/cpp-semantic-diff/issues/16) need,
 are in v0 ([ADR-030](../adr/ADR-030-what-v0-is.md)). Step 1 is built:
-`tests/test_change_catalog.py`. The other steps are not scheduled.
+`tests/test_change_catalog.py`. The v0 steps are tracked in [#5](https://github.com/j-brent/cpp-semantic-diff/issues/5); steps 3, 8 and 9 in
+[#12](https://github.com/j-brent/cpp-semantic-diff/issues/12), [#13](https://github.com/j-brent/cpp-semantic-diff/issues/13) and [#14](https://github.com/j-brent/cpp-semantic-diff/issues/14).
 
 Delete this file when the steps that survive review are done and every case in the change
 catalog (step 1) has its expected outcome without being marked as an expected failure.
@@ -200,8 +201,8 @@ checks, and a rule for what happens when the two readers disagree.
 
 | Step | Overlaps |
 |---|---|
-| 4 | **Roadmap issue 1** (a changed signature is the same function) is the parameter-type half of this step. The inline-namespace case is not in issue 1, and it is the larger one on fmt. Also the carried-over item on two same-named `static`s merging into one node, which is an identity question. |
-| 5 | **Roadmap issue 2** (enums, globals and aliases are not in the model) is the first three rows. |
-| 6 | **Roadmap issue 5** (callers affected by a signature change) needs the same caller-to-cause links. |
-| 7 | **Roadmap issue 4** (change events specialized by entity kind) decides how these attributes are reported. |
+| 4 | **[#8](https://github.com/j-brent/cpp-semantic-diff/issues/8)** (a changed signature is the same function) is the parameter-type half of this step. The inline-namespace case is not in #8, and it is the larger one on fmt. Also the carried-over item on two same-named `static`s merging into one node, which is an identity question. |
+| 5 | **[#9](https://github.com/j-brent/cpp-semantic-diff/issues/9)** (enums, globals and aliases are not in the model) is the first three rows. |
+| 6 | **[#16](https://github.com/j-brent/cpp-semantic-diff/issues/16)** (callers affected by a signature change) needs the same caller-to-cause links. |
+| 7 | **[#15](https://github.com/j-brent/cpp-semantic-diff/issues/15)** (change events specialized by entity kind) decides how these attributes are reported. |
 | 8 | The carried-over `virtual` cause rule, which is also about calls reaching an overridden method. |

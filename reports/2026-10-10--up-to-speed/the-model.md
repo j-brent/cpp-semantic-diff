@@ -167,7 +167,7 @@ review-worthy thing that can appear in a PR".
 | type alias changed: `using T = int` → `long` | `f(T)` removed, `f(T)` added, its call removed and added. Nothing says `T` changed. |
 | inline namespace bumped: `v1` → `v2` | every entity inside removed and re-added. fmt uses `fmt::v12`, so a version bump rewrites the whole library. |
 | destructor added | `~S` added. Nothing says the class lost its implicit move operations, so every move is now a copy (§4.5: libclang cannot see them). |
-| parameter added | [roadmap issue 1](../../ROADMAP.md#issue-1--a-function-whose-parameters-changed-is-reported-as-deleted-and-re-added) |
+| parameter added | [roadmap issue 1](https://github.com/j-brent/cpp-semantic-diff/issues/8) |
 
 In each, the cause is something identity depends on but the model does not contain, so the
 consequences arrive as unrelated removals and additions.
