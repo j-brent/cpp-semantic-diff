@@ -1,20 +1,38 @@
+<!-- metadata
+type: report
+kind: frozen
+frozen: 2026-10-10
+author: Brent Runyan
+created: 2026-08-01
+-->
+
 # Status
+
+*Frozen 2026-10-10, as of commit `4f083c1`. Not maintained. Superseded by
+[`ROADMAP.md`](../../ROADMAP.md).*
+
+This was the tracker of the original v0 implementation from 2026-08-01 to 2026-10-10. Only link
+paths were updated when it was frozen, because the files they point to moved. Plans it names as
+active were retired the same day: PLAN-003 and the 2026-10-10 `known-issues.md` were folded into
+the roadmap and deleted, and git keeps both at `4f083c1`.
+
+---
 
 Living tracker: what is built, what is next, and what was already decided. Updated at the end of
 each working session. Started 2026-08-01 as a handover note; kept as a tracker because the
 *reasons* behind the settled decisions are the part worth carrying forward.
 
-Setup, requirements and the commands that work today are in [`README.md`](README.md). Design is
-[ARCH-001](docs/architecture/overview.md); this file is state, not design.
+Setup, requirements and the commands that work today are in [`README.md`](../../README.md). Design is
+[ARCH-001](../../docs/ARCH-001-architecture.md); this file is state, not design.
 
-Active plans: [PLAN-004](docs/plans/third-party-boundary.md) — third-party code outside the model,
-decided 2026-10-10 and not started; [PLAN-003](docs/plans/ship-v0.md) — what remains before v0
-ships, measured rather than estimated from this file; [PLAN-002](docs/plans/bitcoin-fixture.md) —
+Active plans: [PLAN-004](../../docs/plans/PLAN-004-third-party-boundary.md) — third-party code outside the model,
+decided 2026-10-10 and not started; PLAN-003 (`docs/plans/ship-v0.md`, deleted 2026-10-10) — what remains before v0
+ships, measured rather than estimated from this file; [PLAN-002](../../docs/plans/PLAN-002-bitcoin-probe.md) —
 Bitcoin Core as a scale-and-shape probe. Each says in its own header what it is deleted into here,
 the way PLAN-001 was (§6). A plan is a plan; this file is the state it leaves behind.
 
 The 2026-10-10 review is in
-[`reports/2026-10-10--up-to-speed/`](reports/2026-10-10--up-to-speed/known-issues.md): seven known
+[`reports/2026-10-10--up-to-speed/`](../../ROADMAP.md#2--confirmed-work): seven known
 issues, none fixed yet. Two of its decisions replace decisions recorded here, and both are marked
 where they stand: the tiers 2–4 verdict (§3, §7, §8) and the vendored partition (§2, §8).
 
@@ -184,7 +202,7 @@ removals that are all this case — file-logger factories and three sink constru
 buffer-size parameter, each reported as removed plus added — from an ordinary API change, not a
 refactor. Pairing them was decided on 2026-10-10 and is not built. The reasoning and the open
 questions (overloads, scope, templates) are
-[known issue 1](reports/2026-10-10--up-to-speed/known-issues.md).
+[known issue 1](../../ROADMAP.md#2--confirmed-work).
 
 Caveat worth keeping: fmt and spdlog are stable libraries. A repository mid-refactor would look
 different, and the number to watch is `internal_linkage_residue` — statics and anonymous-namespace
@@ -451,7 +469,7 @@ Five more were struck last pass — the render label, member function templates,
 of PLAN-003's §B, so that tail is empty: all seven of its items are committed.
 
 The 2026-10-10 review recorded seven more, in
-[`known-issues.md`](reports/2026-10-10--up-to-speed/known-issues.md). None is fixed; PLAN-004
+[`known-issues.md`](../../ROADMAP.md#2--confirmed-work). None is fixed; PLAN-004
 plans issue 7.
 
 - [ ] **`internal_linkage_residue` is still computed over the whole model**, vendored included —
@@ -749,7 +767,7 @@ below.
 | Check what the whole key already covers before widening an identity | The stdlib and builtin headers turned out to be content-keyed via the include closure. Every redundant key component costs a mass invalidation to defend against a defended hazard. |
 | Workers use `spawn`, not `fork` | A forked child inherits the parent's verified libclang, so the toolchain guarantee would hold *by accident of start method* and stop holding silently if that default changed. |
 | Low confidence ranks **up** | Uncertainty is a reason for a human to look, not a reason to hide (ARCH §7). Guarded by mutation-tested cases. |
-| Vendored code is **partitioned** out of the ranking, not merely down-weighted | The reviewer is reviewing their own code; a bumped dependency is context, not the subject. As a weighted term it lost — measured on leveldb, where blast radius plus novelty (0.60) beat all of exposure (0.25) and put googletest in the top 12. Raising the weight would fossilize a number against one repository and still lose on the next. The claim is "not what is being reviewed", which is an ordering, not a quantity. Only VENDORED — the project's own tests are its code and keep the weighted demotion. **Superseded 2026-10-10** by ARCH §13's prerequisite: third-party code must not change and is not modelled ([PLAN-004](docs/plans/third-party-boundary.md), known issue 7). Until PLAN-004 is built, the partition is what the code does. |
+| Vendored code is **partitioned** out of the ranking, not merely down-weighted | The reviewer is reviewing their own code; a bumped dependency is context, not the subject. As a weighted term it lost — measured on leveldb, where blast radius plus novelty (0.60) beat all of exposure (0.25) and put googletest in the top 12. Raising the weight would fossilize a number against one repository and still lose on the next. The claim is "not what is being reviewed", which is an ordering, not a quantity. Only VENDORED — the project's own tests are its code and keep the weighted demotion. **Superseded 2026-10-10** by ARCH §13's prerequisite: third-party code must not change and is not modelled ([PLAN-004](../../docs/plans/PLAN-004-third-party-boundary.md), known issue 7). Until PLAN-004 is built, the partition is what the code does. |
 
 ---
 

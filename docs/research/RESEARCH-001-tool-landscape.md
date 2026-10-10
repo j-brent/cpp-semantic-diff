@@ -6,9 +6,13 @@ author: Brent Runyan
 created: 2026-08-01
 dependencies: []
 origin: written during codeatlas-cpp research (RESEARCH-007 there); renumbered on move
+kind: frozen
+frozen: 2026-08-01
 -->
 
 # The C++ Analysis Tool Landscape Outside clang
+
+*Frozen document: research as of 2026-08-01. Not maintained.*
 
 A survey of tools that parse, understand, and analyze C++ projects — source, intermediate
 representations, and the object and executable files the compiler emits — classified by use case.

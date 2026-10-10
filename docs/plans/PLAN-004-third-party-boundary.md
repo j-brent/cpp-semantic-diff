@@ -5,21 +5,24 @@ status: not started
 author: Brent Runyan
 created: 2026-10-10
 dependencies: [ARCH-001]
+kind: living
 -->
 
 # Third-party code is outside the model
 
-Closes [known issue 7](../../reports/2026-10-10--up-to-speed/known-issues.md#7--the-tool-analyzes-third-party-code-instead-of-excluding-it).
+*Living document: kept current until it is done, then deleted.*
 
-Delete this file when every step below is done, the measurements are in `STATUS.md`, and known
-issue 7 is marked closed.
+Closes [known issue 7](../../ROADMAP.md#issue-7--the-tool-analyzes-third-party-code-instead-of-excluding-it).
+
+Delete this file when every step below is done, the measurements are in a frozen report, and
+issue 7 is removed from `ROADMAP.md`.
 
 ---
 
 ## 1 · The prerequisite
 
 Third-party code must not change between the two points. The prerequisite is recorded in
-[ARCH-001 §13](../architecture/overview.md#13--v0). This plan makes the tool enforce it.
+[ARCH-001 §13](../ARCH-001-architecture.md#13--v0). This plan makes the tool enforce it.
 
 The tool already draws this boundary around code outside the repository: the standard library,
 system headers and libc. That code is parsed but never modeled, and relationships into it are
@@ -48,7 +51,7 @@ Boundary crossing labels:
 | Outside the repository | the library's name, e.g. `C++ standard library`, `boost` (§3.3) |
 | Nowhere (compiler-generated) | `implicit` |
 
-This replaces the `STATUS.md` §8 decision "Vendored code is partitioned out of the ranking, not
+This replaces the [v0 tracker](../../reports/2026-08-01--v0-build/STATUS.md)'s §8 decision "Vendored code is partitioned out of the ranking, not
 merely down-weighted."
 
 ---
@@ -180,8 +183,8 @@ Each step is one commit, and the suite passes after each one.
 6. **Schema 2.0 and the demo.** Add `--third-party test/gtest` for fmt and
    `--third-party include/spdlog/fmt/bundled` for spdlog to `.github/workflows/demo.yml`, and
    replace the `vendored_events` row in its summary table with crossing counts.
-7. **Documents.** `STATUS.md` §2 and §8, the `exposure.py` docstring, `README.md`, and known
-   issue 7.
+7. **Documents.** [`ROADMAP.md`](../../ROADMAP.md) (issue 7 and the decisions in force), the
+   `exposure.py` docstring, `README.md`, and a frozen report with the measurements from §5.
 
 ---
 
@@ -193,7 +196,7 @@ Each step is one commit, and the suite passes after each one.
 | spdlog `HEAD~30`, `--third-party include/spdlog/fmt/bundled` | runs; bundled fmt is no longer modeled; first-party change events unchanged |
 | spdlog `HEAD~30`, no option | runs, and notes that `include/spdlog/fmt/bundled` looks like third-party code |
 | leveldb `HEAD~10` | **refused**, naming `third_party/googletest` and `third_party/benchmark` |
-| leveldb `HEAD~9..~1` | runs; the 49 head-side unmatched entities, all in googletest (`STATUS.md` §3), are gone |
+| leveldb `HEAD~9..~1` | runs; the 49 head-side unmatched entities, all in googletest (v0 tracker §3), are gone |
 | `uv run pytest -q`, `ruff format --check`, `ruff check` | clean |
 
 If a "change events unchanged" row is not unchanged, the difference is the finding. Explain it

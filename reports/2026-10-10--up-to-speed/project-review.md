@@ -1,15 +1,25 @@
+<!-- metadata
+type: report
+kind: frozen
+frozen: 2026-10-10
+author: Brent Runyan
+created: 2026-10-10
+-->
+
 # cpp-semantic-diff: project review
+
+*Frozen document: the 2026-10-10 review. Not maintained; the work it found is in [`ROADMAP.md`](../../ROADMAP.md).*
 
 Working notes from a review of the project's current state, started 2026-10-10. Statements
 about what the tool does today refer to commit
 [`4d8e367`](https://github.com/j-brent/cpp-semantic-diff/commit/4d8e3671cb464690ce3059773d5b4390001d550b).
 
-Problems found during the review are recorded separately, in [`known-issues.md`](known-issues.md).
+Problems found during the review are recorded separately, in [`known-issues.md`](../../ROADMAP.md#2--confirmed-work) (since moved into the roadmap).
 
 > **Terminology: "change event".** These documents call one difference between the two models a
 > **change event**. That term was decided on 2026-10-10. The tool itself still says just
 > "event": the JSON's `events` field, the terminal's "semantic events", and the code. Its wording
-> will be updated when the tool is next changed ([known issue 3](known-issues.md)).
+> will be updated when the tool is next changed ([known issue 3](../../ROADMAP.md#issue-3--the-tool-says-event-where-the-agreed-term-is-change-event)).
 
 ---
 
@@ -19,9 +29,9 @@ The examples show the desired behavior. Where the tool differs today is listed a
 this section.
 
 > **Prerequisite: third-party code does not change.** In v0, third-party and vendored code must be
-> identical at both points ([ARCH-001 §13](../../docs/architecture/overview.md#13--v0)). The only
+> identical at both points ([ARCH-001 §13](../../docs/ARCH-001-architecture.md#13--v0)). The only
 > changes analyzed are to code this repository owns and contains. The tool does not work this way
-> yet ([known issue 7](known-issues.md)).
+> yet ([known issue 7](../../ROADMAP.md#issue-7--the-tool-analyzes-third-party-code-instead-of-excluding-it)).
 
 ### Step 0 · A codebase at two points in time
 
@@ -444,9 +454,9 @@ and step 5 combines them.
 | Step | What exists | Implemented in | Notes |
 |---|---|---|---|
 | 0 | A codebase at two points in time | [`acquire/`](../../src/cpp_semantic_diff/acquire/) | |
-| 1 | A model of each | [`produce/`](../../src/cpp_semantic_diff/produce/), with the model types in [`model/ir.py`](../../src/cpp_semantic_diff/model/ir.py) | The model is incomplete. For example, enums, global variables and type aliases are missing. See [`the-model.md`](the-model.md) and [known issue 2](known-issues.md). |
-| 2 | A pairing between the two models | [`match/`](../../src/cpp_semantic_diff/match/) | Today two entities are paired only when their identities are exactly equal. A function whose parameters changed is therefore not paired with its old version, unlike the example. See [known issue 1](known-issues.md). |
-| 3 | A list of differences | [`diff/`](../../src/cpp_semantic_diff/diff/) | Today the example produces seven change events, not four: `render` is reported as removed and added, and its call as removed and added ([known issue 1](known-issues.md)). There is no "signature changed" change event. "Renamed" cannot occur, because the name is part of the identity. |
-| 4A | Causes linked to their consequences | [`classify/`](../../src/cpp_semantic_diff/classify/), with the links in [`classify/rules.py`](../../src/cpp_semantic_diff/classify/rules.py) | Today the example has four top-level change events and three consequences. `render()` removed and `render(int)` added each carry their call as a consequence, and so does `log` ([known issue 1](known-issues.md)). Two more links are written as rules in [`classify/rules.py`](../../src/cpp_semantic_diff/classify/rules.py) but cannot occur today. *A rename linked to the calls it retargets* (e.g. `render` renamed to `paint`) is never needed: once a renamed entity is paired, its calls are the same relationships before and after, so there is nothing to link. *A signature change linked to the callers it may break* (e.g. `render(int)` becoming `render(double)` while a caller still passes `2`) needs a change event no stage produces yet ([known issue 5](known-issues.md)). |
-| 4B | A risk score for each change event | [`rank/score.py`](../../src/cpp_semantic_diff/rank/score.py), with every weight and value in [`rank/weights.py`](../../src/cpp_semantic_diff/rank/weights.py) | Today 4B and step 5 are one stage, [`rank/`](../../src/cpp_semantic_diff/rank/). Exposure is decided from file paths. `render` cannot be scored, because "signature changed" does not exist ([known issue 1](known-issues.md)). |
-| 5 | A review | [`rank/ranker.py`](../../src/cpp_semantic_diff/rank/ranker.py), with groups in [`rank/components.py`](../../src/cpp_semantic_diff/rank/components.py); written out by [`render/`](../../src/cpp_semantic_diff/render/) | Today the example gives seven change events, four top-level, none high-risk, in one group ([known issue 1](known-issues.md)). The tool calls groups *components* and numbers them from 0. |
+| 1 | A model of each | [`produce/`](../../src/cpp_semantic_diff/produce/), with the model types in [`model/ir.py`](../../src/cpp_semantic_diff/model/ir.py) | The model is incomplete. For example, enums, global variables and type aliases are missing. See [`the-model.md`](the-model.md) and [known issue 2](../../ROADMAP.md#issue-2--enums-global-variables-and-type-aliases-are-not-in-the-model). |
+| 2 | A pairing between the two models | [`match/`](../../src/cpp_semantic_diff/match/) | Today two entities are paired only when their identities are exactly equal. A function whose parameters changed is therefore not paired with its old version, unlike the example. See [known issue 1](../../ROADMAP.md#issue-1--a-function-whose-parameters-changed-is-reported-as-deleted-and-re-added). |
+| 3 | A list of differences | [`diff/`](../../src/cpp_semantic_diff/diff/) | Today the example produces seven change events, not four: `render` is reported as removed and added, and its call as removed and added ([known issue 1](../../ROADMAP.md#issue-1--a-function-whose-parameters-changed-is-reported-as-deleted-and-re-added)). There is no "signature changed" change event. "Renamed" cannot occur, because the name is part of the identity. |
+| 4A | Causes linked to their consequences | [`classify/`](../../src/cpp_semantic_diff/classify/), with the links in [`classify/rules.py`](../../src/cpp_semantic_diff/classify/rules.py) | Today the example has four top-level change events and three consequences. `render()` removed and `render(int)` added each carry their call as a consequence, and so does `log` ([known issue 1](../../ROADMAP.md#issue-1--a-function-whose-parameters-changed-is-reported-as-deleted-and-re-added)). Two more links are written as rules in [`classify/rules.py`](../../src/cpp_semantic_diff/classify/rules.py) but cannot occur today. *A rename linked to the calls it retargets* (e.g. `render` renamed to `paint`) is never needed: once a renamed entity is paired, its calls are the same relationships before and after, so there is nothing to link. *A signature change linked to the callers it may break* (e.g. `render(int)` becoming `render(double)` while a caller still passes `2`) needs a change event no stage produces yet ([known issue 5](../../ROADMAP.md#issue-5--no-change-event-tells-a-reviewer-that-a-caller-may-be-affected-by-a-signature-change)). |
+| 4B | A risk score for each change event | [`rank/score.py`](../../src/cpp_semantic_diff/rank/score.py), with every weight and value in [`rank/weights.py`](../../src/cpp_semantic_diff/rank/weights.py) | Today 4B and step 5 are one stage, [`rank/`](../../src/cpp_semantic_diff/rank/). Exposure is decided from file paths. `render` cannot be scored, because "signature changed" does not exist ([known issue 1](../../ROADMAP.md#issue-1--a-function-whose-parameters-changed-is-reported-as-deleted-and-re-added)). |
+| 5 | A review | [`rank/ranker.py`](../../src/cpp_semantic_diff/rank/ranker.py), with groups in [`rank/components.py`](../../src/cpp_semantic_diff/rank/components.py); written out by [`render/`](../../src/cpp_semantic_diff/render/) | Today the example gives seven change events, four top-level, none high-risk, in one group ([known issue 1](../../ROADMAP.md#issue-1--a-function-whose-parameters-changed-is-reported-as-deleted-and-re-added)). The tool calls groups *components* and numbers them from 0. |

@@ -5,19 +5,26 @@ status: draft
 author: Brent Runyan
 created: 2026-08-01
 dependencies: [RESEARCH-001, RESEARCH-002]
+kind: living
 -->
 
 # Architecture
 
+*Living document: kept true as the code changes.*
+
 How `cpp-semantic-diff` turns two commits into a ranked list of things a reviewer should look at.
 
-The founding document ([RESEARCH-002](../research/semantic-diff-for-review.md)) establishes *what*
+The founding document ([RESEARCH-002](research/RESEARCH-002-semantic-diff-for-review.md)) establishes *what*
 questions matter. This document establishes *how* the system answers them: the pipeline, the data
 model, the identity scheme that everything else depends on, and the performance design that decides
 whether the tool is usable at all.
 
 Status: draft. Section 13 marks what v0 actually builds. This document is the design and stays
-ahead of the code; what is *implemented* is tracked in [`STATUS.md`](../../STATUS.md), not here.
+ahead of the code; what is *implemented*, and what is next, is in [`ROADMAP.md`](../ROADMAP.md), not here.
+
+**Section numbers are permanent.** Code comments cite them. A section that is removed leaves a stub
+saying it is retired and what replaced it, and a test fails if a comment cites a section that does
+not exist.
 
 ---
 
@@ -405,7 +412,7 @@ sentence: *this class — ABI-incompatible, +2 KB, 0 % coverage on new members*.
 
 The join is via `Node.symbol` (demangled and matched for `abidiff`, `bloaty`, `nm`) or via
 file/line range containment (coverage, `clang-tidy`, Cppcheck). Planned adapters, in the order
-[RESEARCH-002 §7](../research/semantic-diff-for-review.md) recommends: `abidiff`, `diff-cover`,
+[RESEARCH-002 §7](research/RESEARCH-002-semantic-diff-for-review.md) recommends: `abidiff`, `diff-cover`,
 `bloaty --diff`, `pahole`, then diff-scoped static analysis.
 
 All deferred past v0 — but the join key ships in v0 (§4.1), because retrofitting it invalidates
@@ -592,7 +599,7 @@ The smallest slice that tests the thesis end to end.
 **In:** namespace / class / function / method / field nodes · `contains`, `calls`, `inherits`,
 `overrides` edges · **tier-1 identity only** · node add/remove/attr/body and edge
 add/remove/kind/attr events · JSON + terminal output · the compression metric · fixtures `fmt` and
-`spdlog`, with `leveldb` added later ([`STATUS.md`](../../STATUS.md) §3).
+`spdlog`, with `leveldb` added later ([v0 tracker](../reports/2026-08-01--v0-build/STATUS.md) §3).
 
 **Out, deliberately:** rename detection (tiers 2–4), evidence adapters, derived events, HTML.
 
@@ -601,7 +608,7 @@ and contains. Third-party code, whether a git submodule or a library copied into
 identical at both points. A comparison where it differs is refused, not analyzed. Third-party code
 is still parsed, because the repository's code depends on it, but it is outside the model, exactly
 like the standard library. Decided 2026-10-10. Analyzing third-party changes is deferred, not
-rejected. Not yet implemented: [PLAN-004](../plans/third-party-boundary.md).
+rejected. Not yet implemented: [PLAN-004](plans/PLAN-004-third-party-boundary.md).
 
 Two things listed here as "out" in the original draft shipped anyway, and the reason is the same in
 both cases: they were cheaper *inside* the stage that needed them than as a later bolt-on.
@@ -613,14 +620,14 @@ will attach.
 
 Tiers 2–4 are excluded on purpose: RESEARCH-002 §7 step 4 says ship tier-1 and *measure how badly
 renames hurt* before building the machinery. That measurement is a v0 deliverable, and it is now
-in — see [`STATUS.md`](../../STATUS.md) §3. The answer was that on `fmt` and `spdlog` the upper
+in — see the [v0 tracker](../reports/2026-08-01--v0-build/STATUS.md) §3. The answer was that on `fmt` and `spdlog` the upper
 bound on events tiers 2–4 could remove is 3, 5 and 1, and on `leveldb` 0. That is an argument
 against building them next, which is what asking the question early was for.
 
 On 2026-10-10 that answer was reopened for one case: a function whose parameters changed is
 reported as removed plus added, and on current upstream spdlog that is every removal in a 30-commit
 range. Pairing it with its old version was decided and is not built
-([known issue 1](../../reports/2026-10-10--up-to-speed/known-issues.md)).
+([issue 1](../ROADMAP.md#issue-1--a-function-whose-parameters-changed-is-reported-as-deleted-and-re-added)).
 
 ### Technology
 
