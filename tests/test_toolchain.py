@@ -8,6 +8,7 @@ truncated AST that no later stage can detect.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -26,7 +27,7 @@ def test_release_rejects_unparseable() -> None:
     assert tc.parse_release("no version here") is None
 
 
-def toolchain(release: str = "18.1.3", **kw) -> tc.Toolchain:
+def toolchain(release: str = "18.1.3", **kw: Any) -> tc.Toolchain:
     defaults = {
         "library": Path("/a"),
         "version": f"clang version {release}",

@@ -19,14 +19,18 @@ from __future__ import annotations
 import importlib
 import inspect
 import re
+from typing import Any
 
 import pytest
 
 from cpp_semantic_diff.model import (
+    AttrValue,
     Confidence,
     Edge,
+    EdgeId,
     EdgeKind,
     Event,
+    EventId,
     EventKind,
     Location,
     MatchTier,
@@ -58,7 +62,7 @@ RESIDUE = Confidence(tier=None, models_complete=True)
 # -- builders ---------------------------------------------------------------------------
 
 
-def node(usr: str, *, file: str = PUBLIC, kind: NodeKind = NodeKind.FUNCTION, **kw) -> Node:
+def node(usr: str, *, file: str = PUBLIC, kind: NodeKind = NodeKind.FUNCTION, **kw: Any) -> Node:
     name = kw.pop("name", usr.rsplit("@", 1)[-1] or usr)
     return Node(
         id=NodeId(usr),
@@ -81,7 +85,9 @@ def edge(src: str, dst: str, kind: EdgeKind = EdgeKind.CALLS) -> Edge:
     return Edge(src=NodeId(src), dst=NodeId(dst), kind=kind)
 
 
-def event(kind: EventKind, subject: str, confidence: Confidence = SURE, **payload) -> Event:
+def event(
+    kind: EventKind, subject: str, confidence: Confidence = SURE, **payload: AttrValue
+) -> Event:
     return Event(kind=kind, subject=NodeId(subject), payload=payload, confidence=confidence)
 
 
@@ -101,7 +107,7 @@ def edge_event(
     """An event whose subject is an edge id -- `src|kind|dst` (ARCH-001 §4.2)."""
     return Event(
         kind=kind,
-        subject=f"{src}|{edge_kind.value}|{dst}",
+        subject=EdgeId(f"{src}|{edge_kind.value}|{dst}"),
         caused_by=caused_by.id if caused_by is not None else None,
         confidence=confidence,
     )
@@ -321,8 +327,8 @@ class TestAnEdgeEventIsAboutItsSourceNotItsBusiestEndpoint:
         assert outranks(rank([changed, call], head, head), changed, call)
 
     def test_the_home_of_a_node_subject_is_the_node_itself(self) -> None:
-        assert subject_home("c:@F@f#") == "c:@F@f#"
-        assert subject_home("c:@F@f#|calls|c:@F@g#") == "c:@F@f#"
+        assert subject_home(NodeId("c:@F@f#")) == "c:@F@f#"
+        assert subject_home(EdgeId("c:@F@f#|calls|c:@F@g#")) == "c:@F@f#"
 
 
 class TestAConsequenceNeverOutranksItsCause:
@@ -406,7 +412,7 @@ class TestAConsequenceNeverOutranksItsCause:
         dangling = Event(
             kind=EventKind.NODE_BODY_CHANGED,
             subject=NodeId("c:@F@f#"),
-            caused_by="NodeAdded:deadbeefdeadbeef",
+            caused_by=EventId("NodeAdded:deadbeefdeadbeef"),
             confidence=SURE,
         )
         score = rank([dangling], head, head).score_for(dangling.id)
@@ -841,7 +847,7 @@ class TestThreeDisconnectedChangesAreThreeChanges:
         dangling = Event(
             kind=EventKind.NODE_BODY_CHANGED,
             subject=NodeId("c:@F@c1#"),
-            caused_by="NodeAdded:deadbeefdeadbeef",
+            caused_by=EventId("NodeAdded:deadbeefdeadbeef"),
             confidence=SURE,
         )
         assert len(rank([body("c:@F@a1#"), dangling], head, head).components) == 2

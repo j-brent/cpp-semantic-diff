@@ -8,6 +8,7 @@ each parses a few lines of C++ with no includes.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -72,7 +73,7 @@ def run_each(
     ]
 
 
-def named(result: TuExtract, qualified: str):
+def named(result: TuExtract, qualified: str) -> Node:
     matches = [n for n in result.nodes.values() if n.qualified_name == qualified]
     assert matches, (
         f"{qualified} not extracted; have {sorted(n.qualified_name for n in result.nodes.values())}"
@@ -351,7 +352,7 @@ class TestMergingObservationsOfOneEdge:
 
     SRC, DST = "c:@F@caller#", "c:@F@callee#"
 
-    def merged(self, *observations: dict[str, AttrValue]) -> dict[str, AttrValue]:
+    def merged(self, *observations: Mapping[str, AttrValue]) -> dict[str, AttrValue]:
         edges: dict[str, Edge] = {}
         for attrs in observations:
             merge_edge(edges, self.SRC, self.DST, EdgeKind.CALLS, (), dict(attrs))
@@ -465,9 +466,11 @@ class TestRepositoryRelativePaths:
         deep = extract(entry, root=inner, toolchain=toolchain)
         wide = extract(entry, root=tmp_path, toolchain=toolchain)
 
-        assert named(deep, "f").location is not None
-        assert named(deep, "f").location.file == "a.cpp"  # type: ignore[union-attr]
-        assert named(wide, "f").location.file == "project/a.cpp"  # type: ignore[union-attr]
+        deep_at, wide_at = named(deep, "f").location, named(wide, "f").location
+        assert deep_at is not None
+        assert wide_at is not None
+        assert deep_at.file == "a.cpp"
+        assert wide_at.file == "project/a.cpp"
 
 
 class TestBodyHash:

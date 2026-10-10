@@ -13,6 +13,8 @@ of the reason it is one.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from cpp_semantic_diff.diff import diff_models
@@ -42,19 +44,19 @@ G = NodeId("c:@F@g#")
 C = NodeId("c:@S@C")
 
 
-def node(usr: str, name: str = "f", **kw) -> Node:
+def node(usr: str, name: str = "f", **kw: Any) -> Node:
     defaults = {"kind": NodeKind.FUNCTION, "name": name, "qualified_name": name}
     return Node(id=NodeId(usr), **{**defaults, **kw})
 
 
-def model(rev: str, *nodes: Node, edges: list[Edge] | None = None, **kw) -> Model:
+def model(rev: str, *nodes: Node, edges: list[Edge] | None = None, **kw: Any) -> Model:
     m = Model(rev=rev, edges=edges or [], **kw)
     for n in nodes:
         m.add_node(n)
     return m
 
 
-def calls(src: str, dst: str, line: int = 1, **kw) -> Edge:
+def calls(src: str, dst: str, line: int = 1, **kw: Any) -> Edge:
     return Edge(
         src=NodeId(src),
         dst=NodeId(dst),

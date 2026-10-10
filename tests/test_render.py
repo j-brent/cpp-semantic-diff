@@ -26,6 +26,7 @@ idiom of `test_diff.py` and `test_rank.py`.
 from __future__ import annotations
 
 import io
+from typing import Any
 
 import pytest
 from rich.console import Console
@@ -35,6 +36,7 @@ from cpp_semantic_diff.classify import classify_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.match import Correspondence, match_models
 from cpp_semantic_diff.model import (
+    AttrValue,
     Completeness,
     Confidence,
     Edge,
@@ -72,7 +74,7 @@ RESIDUE = Confidence(tier=None, models_complete=True)
 # -- builders ---------------------------------------------------------------------------
 
 
-def node(usr: str, *, file: str = PUBLIC, kind: NodeKind = NodeKind.FUNCTION, **kw) -> Node:
+def node(usr: str, *, file: str = PUBLIC, kind: NodeKind = NodeKind.FUNCTION, **kw: Any) -> Node:
     name = kw.pop("name", usr.rsplit("@", 1)[-1] or usr)
     return Node(
         id=NodeId(usr),
@@ -84,7 +86,7 @@ def node(usr: str, *, file: str = PUBLIC, kind: NodeKind = NodeKind.FUNCTION, **
     )
 
 
-def model(rev: str, *nodes: Node, edges: list[Edge] | None = None, **kw) -> Model:
+def model(rev: str, *nodes: Node, edges: list[Edge] | None = None, **kw: Any) -> Model:
     m = Model(rev=rev, edges=list(edges or []), **kw)
     for n in nodes:
         m.add_node(n)
@@ -95,7 +97,9 @@ def edge(src: str, dst: str, kind: EdgeKind = EdgeKind.CALLS) -> Edge:
     return Edge(src=NodeId(src), dst=NodeId(dst), kind=kind)
 
 
-def event(kind: EventKind, subject: str, confidence: Confidence = RESIDUE, **payload) -> Event:
+def event(
+    kind: EventKind, subject: str, confidence: Confidence = RESIDUE, **payload: AttrValue
+) -> Event:
     return Event(kind=kind, subject=NodeId(subject), payload=payload, confidence=confidence)
 
 
@@ -134,7 +138,7 @@ def pipeline(base: Model, head: Model, *, lines_changed: int = 100) -> DiffDocum
     return document(base, head, events, correspondence=corr, lines_changed=lines_changed)
 
 
-def draw(doc: DiffDocument, **kw) -> str:
+def draw(doc: DiffDocument, **kw: Any) -> str:
     """The terminal view as plain text. Width is fixed so a wrap is never a test failure."""
     buffer = io.StringIO()
     render(doc, Console(file=buffer, width=200, no_color=True, highlight=False), **kw)
@@ -313,7 +317,11 @@ class TestNothingIsHiddenWithoutACause:
             for n, d in root.walk()
             if doc.by_id[n.event_id].kind is EventKind.NODE_REMOVED
         }
-        assert depths["c:@N@n"] < depths["c:@N@n@S@C"] < depths["c:@N@n@S@C@F@m#"]
+        assert (
+            depths[NodeId("c:@N@n")]
+            < depths[NodeId("c:@N@n@S@C")]
+            < depths[NodeId("c:@N@n@S@C@F@m#")]
+        )
 
 
 # -- 2 · the view is a consumer -----------------------------------------------------------

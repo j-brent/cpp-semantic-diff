@@ -56,7 +56,9 @@ markers = [
 
 [tool.mypy]
 python_version = "3.12"
-files = ["src/cpp_semantic_diff"]
+files = ["src/cpp_semantic_diff", "tests"]
+# Tests import `conftest` as a top-level module, the way pytest's rootdir importer loads it.
+mypy_path = ["tests"]
 plugins = ["pydantic.mypy"]
 strict = true
 
@@ -72,7 +74,9 @@ init_forbid_extra = true
 warn_required_dynamic_aliases = true
 
 [tool.pyright]
-include = ["src/cpp_semantic_diff"]
+include = ["src/cpp_semantic_diff", "tests"]
+# Tests import `conftest` as a top-level module, the way pytest's rootdir importer loads it.
+extraPaths = ["tests"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 # Holds the stub that declares libclang's bindings untyped; see typings/clang/cindex.pyi.

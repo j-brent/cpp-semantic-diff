@@ -27,7 +27,7 @@ import json
 import multiprocessing as mp
 import os
 from collections.abc import Sequence
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -38,6 +38,7 @@ from cpp_semantic_diff.errors import ClangToolchainError, SemanticDiffError
 from cpp_semantic_diff.model.ir import Model, TuStatus
 from cpp_semantic_diff.produce.build import build_model
 from cpp_semantic_diff.produce.cache import find_scanner
+from cpp_semantic_diff.produce.extract import TuExtract
 from cpp_semantic_diff.produce.toolchain import (
     PROBE_ARGS,
     PROBE_SOURCE,
@@ -428,8 +429,11 @@ def _worker_report() -> dict[str, object]:
     }
 
 
-def _die() -> None:
-    """A worker that stops existing, the way a libclang segfault stops one."""
+def _die() -> TuExtract:
+    """A worker that stops existing, the way a libclang segfault stops one.
+
+    Typed as the task it replaces: it never returns, so the pool sees a parse that died.
+    """
     os._exit(1)
 
 
@@ -440,7 +444,7 @@ class _PoolThatLosesAWorker(parallel._Pool):
         super().__init__(workers, toolchain)
         self.killed = False
 
-    def submit(self, entry: CompileEntry, root: Path):  # type: ignore[no-untyped-def]
+    def submit(self, entry: CompileEntry, root: Path) -> tuple[int, Future[TuExtract]]:
         if entry.file.name == CRASHING_TU and not self.killed:
             self.killed = True
             if self._executor is None:

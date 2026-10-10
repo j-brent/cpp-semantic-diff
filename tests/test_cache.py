@@ -27,13 +27,14 @@ import time
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 import cpp_semantic_diff.produce.cache as cache_module
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileDatabase, cache_root
 from cpp_semantic_diff.errors import InvalidSettingError, PreconditionError
-from cpp_semantic_diff.model.ir import Model
+from cpp_semantic_diff.model.ir import Model, Node
 from cpp_semantic_diff.produce.build import build_model
 from cpp_semantic_diff.produce.cache import (
     GENERATIONS,
@@ -44,7 +45,7 @@ from cpp_semantic_diff.produce.cache import (
     find_scanner,
     loads,
 )
-from cpp_semantic_diff.produce.extract import extract
+from cpp_semantic_diff.produce.extract import TuExtract, extract
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -466,7 +467,7 @@ class TestStorage:
         def interrupted(src: object, dst: object) -> None:
             raise failure()
 
-        monkeypatch.setattr(cache_module.os, "replace", interrupted)
+        monkeypatch.setattr("cpp_semantic_diff.produce.cache.os.replace", interrupted)
         if failure is OSError:
             cache.save("ab" * 8, "k" * 16, partial)
         else:
@@ -760,7 +761,7 @@ class TestThePathologicalCaseIsReported:
 # -- helpers ------------------------------------------------------------------------
 
 
-def _without_cache_hits(model: Model) -> dict:
+def _without_cache_hits(model: Model) -> dict[str, Any]:
     """A model's content, with the one field that is *meant* to differ removed."""
     dump = model.model_dump()
     for result in dump["completeness"]["tus"]:
@@ -907,7 +908,7 @@ class TestAHitKeepsAnEntryAlive:
         assert path.stat().st_mtime > stale, "a served entry must not look unused"
 
 
-def _partial_dump(partial) -> dict:
+def _partial_dump(partial: TuExtract) -> dict[str, object]:
     return {
         "path": partial.path,
         "result": partial.result.model_dump(exclude={"cache_hit"}),
@@ -940,7 +941,7 @@ def _scanner_resource_dir(cache: TuCache) -> Path | None:
     return None
 
 
-def _named(model: Model, qualified: str) -> list:
+def _named(model: Model, qualified: str) -> list[Node]:
     return [n for n in model.nodes.values() if n.qualified_name == qualified]
 
 

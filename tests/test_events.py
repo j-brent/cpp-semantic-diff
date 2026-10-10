@@ -8,6 +8,8 @@ provenance chain that only runs one way all produce plausible-looking JSON.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -20,12 +22,14 @@ from cpp_semantic_diff.model import (
     V0_KINDS,
     Completeness,
     Confidence,
+    EdgeId,
     Event,
     EventId,
     EventKind,
     Hunk,
     Location,
     MatchTier,
+    NodeId,
     Side,
     TuResult,
     TuStatus,
@@ -35,11 +39,15 @@ from cpp_semantic_diff.model import (
 CERTAIN = Confidence(tier=MatchTier.DECLARED, models_complete=True)
 
 
-def event(kind: EventKind = EventKind.NODE_BODY_CHANGED, subject: str = "c:@F@f#", **kw) -> Event:
-    return Event(kind=kind, subject=subject, confidence=CERTAIN, **kw)
+def event(
+    kind: EventKind = EventKind.NODE_BODY_CHANGED, subject: str = "c:@F@f#", **kw: Any
+) -> Event:
+    return Event(kind=kind, subject=NodeId(subject), confidence=CERTAIN, **kw)
 
 
-def attr_changed(attr: str = "virtual", old: object = False, new: object = True, **kw) -> Event:
+def attr_changed(
+    attr: str = "virtual", old: object = False, new: object = True, **kw: Any
+) -> Event:
     return event(EventKind.NODE_ATTR_CHANGED, payload={"attr": attr, "old": old, "new": new}, **kw)
 
 
@@ -141,7 +149,12 @@ class TestTheSetIsClosed:
 
     def test_an_invented_kind_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            Event(kind="SomethingChanged", subject="c:@F@f#", confidence=CERTAIN)
+            # The invented kind is the point: validation, not the checker, must reject it.
+            Event(
+                kind="SomethingChanged",  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+                subject=NodeId("c:@F@f#"),
+                confidence=CERTAIN,
+            )
 
     def test_an_invented_field_is_rejected(self) -> None:
         """extra="forbid" is the other half: no escape hatch by field either."""
@@ -174,11 +187,11 @@ class TestPayloadStaysMechanical:
     """ARCH-001 §4.3, applied to events: the diff that produces a payload is mechanical."""
 
     @pytest.mark.parametrize("value", ["public", 3, 3.5, True, None])
-    def test_scalars_are_accepted(self, value) -> None:
+    def test_scalars_are_accepted(self, value: object) -> None:
         assert attr_changed(new=value).payload["new"] == value
 
     @pytest.mark.parametrize("value", [{"nested": 1}, ["a"], (1, 2)])
-    def test_structures_are_rejected(self, value) -> None:
+    def test_structures_are_rejected(self, value: object) -> None:
         with pytest.raises(ValidationError, match="must be scalar"):
             attr_changed(new=value)
 
@@ -233,7 +246,8 @@ class TestAnEventIsImmutable:
 
     def test_a_field_cannot_be_written_after_construction(self) -> None:
         with pytest.raises(ValidationError, match="frozen"):
-            attr_changed().caused_by = EventId("NodeRemoved:deadbeef")
+            # Writing the frozen field is the point of the test.
+            attr_changed().caused_by = EventId("NodeRemoved:deadbeef")  # type: ignore[misc]
 
     def test_a_cause_is_added_by_copying_and_the_original_is_untouched(self) -> None:
         """What `classify` does (ARCH-001 §6.3), and the reason freezing costs nothing:
@@ -258,6 +272,7 @@ class TestAnEventIsImmutable:
         produced = [attr_changed()]
         passed_through = list(produced)
         with pytest.raises(ValidationError, match="frozen"):
+            # Writing the frozen field is the point of the test.
             passed_through[0].payload = {}  # type: ignore[misc]
         assert produced[0].payload == {"attr": "virtual", "old": False, "new": True}
 
@@ -268,12 +283,14 @@ class TestConfidenceIsAlwaysStated:
 
     def test_an_event_cannot_omit_its_confidence(self) -> None:
         with pytest.raises(ValidationError):
-            Event(kind=EventKind.NODE_BODY_CHANGED, subject="c:@F@f#")
+            # The missing confidence is the point: validation must reject it.
+            Event(kind=EventKind.NODE_BODY_CHANGED, subject=NodeId("c:@F@f#"))  # type: ignore[call-arg]  # pyright: ignore[reportCallIssue]
 
     def test_completeness_cannot_be_assumed(self) -> None:
         """No default: omitting it would be a silent claim that nothing was missing."""
         with pytest.raises(ValidationError):
-            Confidence(tier=MatchTier.DECLARED)
+            # The missing completeness is the point: validation must reject it.
+            Confidence(tier=MatchTier.DECLARED)  # type: ignore[call-arg]  # pyright: ignore[reportCallIssue]
 
     def test_the_match_tier_reaches_the_event(self) -> None:
         """ARCH-001 §5: the tier propagates into every event derived from the match."""
@@ -284,7 +301,7 @@ class TestConfidenceIsAlwaysStated:
         (§13) -- stating None is how the damage stays visible."""
         e = Event(
             kind=EventKind.NODE_ADDED,
-            subject="c:@F@new#",
+            subject=NodeId("c:@F@new#"),
             confidence=Confidence(tier=None, models_complete=True),
         )
         assert e.confidence.tier is None
@@ -349,7 +366,7 @@ class TestCauseIsALinkNotARemoval:
         consequences = [
             Event(
                 kind=EventKind.EDGE_RETARGETED,
-                subject=f"c:@F@caller{i}#|calls|c:@F@f#",
+                subject=EdgeId(f"c:@F@caller{i}#|calls|c:@F@f#"),
                 payload={"old_dst": "c:@F@f#", "new_dst": "c:@F@g#"},
                 caused_by=cause.id,
                 confidence=CERTAIN,

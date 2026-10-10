@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -23,7 +24,7 @@ from cpp_semantic_diff.match import Correspondence, Match, match_models, usr_fil
 from cpp_semantic_diff.model import Location, MatchTier, Model, Node, NodeId, NodeKind
 
 
-def node(usr: str, name: str = "f", **kw) -> Node:
+def node(usr: str, name: str = "f", **kw: Any) -> Node:
     defaults = {"kind": NodeKind.FUNCTION, "name": name, "qualified_name": name}
     return Node(id=NodeId(usr), **{**defaults, **kw})
 
@@ -137,7 +138,13 @@ class TestMatchingIsOneToOne:
         class Greedy:
             tier = MatchTier.SIMILARITY
 
-            def propose(self, base, head, base_pool, head_pool):
+            def propose(
+                self,
+                base: Model,
+                head: Model,
+                base_pool: frozenset[NodeId],
+                head_pool: frozenset[NodeId],
+            ) -> Iterator[tuple[NodeId, NodeId]]:
                 yield NodeId("c:@F@f#"), NodeId("c:@F@x#")
                 yield NodeId("c:@F@f#"), NodeId("c:@F@y#")
 

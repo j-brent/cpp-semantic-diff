@@ -146,7 +146,9 @@ class TestConcurrentRunsTakeTurns:
         lock = cache_root() / "worktrees" / one_file_repo.name / f"{rev}.lock"
         held_during_configure: list[bool] = []
 
-        def probing_configure(worktree: Path, rev: str, extra_args: list[str] | None = None):
+        def probing_configure(
+            worktree: Path, rev: str, extra_args: list[str] | None = None
+        ) -> Path:
             held_during_configure.append(not _can_lock(lock))
             return fake_configure(worktree, rev, extra_args)
 
@@ -260,12 +262,14 @@ class TestConfigureFailsAsABuildProblem:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         (tmp_path / "CMakeLists.txt").write_text("project(x CXX)\n", encoding="utf-8")
-        monkeypatch.setattr(workspace.shutil, "which", lambda name: f"/usr/bin/{name}")
+        monkeypatch.setattr(
+            "cpp_semantic_diff.acquire.workspace.shutil.which", lambda name: f"/usr/bin/{name}"
+        )
 
         def too_slow(argv: list[str], **kwargs: object) -> None:
             raise subprocess.TimeoutExpired(argv, workspace.CONFIGURE_TIMEOUT_SECONDS)
 
-        monkeypatch.setattr(workspace.subprocess, "run", too_slow)
+        monkeypatch.setattr("cpp_semantic_diff.acquire.workspace.subprocess.run", too_slow)
         with pytest.raises(ConfigureError, match="did not finish"):
             configure(tmp_path, "abc123")
 
