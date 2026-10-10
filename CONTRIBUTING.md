@@ -29,20 +29,42 @@ and a line under its title.
 | Document | Kind | Holds |
 |---|---|---|
 | [`README.md`](README.md) | living | what the tool is, setup, how to run it |
-| [`ROADMAP.md`](ROADMAP.md) | living | where things stand, the one ordered list of open work, the decisions in force |
+| [`ROADMAP.md`](ROADMAP.md) | living | scope, order and the reasons for it; oversight that GitHub does not hold |
 | `CONTRIBUTING.md` | living | this file |
 | [`docs/ARCH-001-architecture.md`](docs/ARCH-001-architecture.md) | living | the design |
 | `docs/plans/PLAN-00n-<topic>.md` | living while active | one roadmap item being worked on; deleted when done |
+| `docs/adr/ADR-0nn-<topic>.md` | frozen | one decision, with its context, consequences and rejected alternatives |
 | `docs/research/RESEARCH-00n-<topic>.md` | frozen | research |
 | `reports/<date>--<topic>/` | frozen | reviews, measurements, findings |
 
+- **Work and its status live on GitHub:** issues, the v0 milestone and the project board
+  ([ADR-032](docs/adr/ADR-032-work-is-tracked-on-github.md)). No document tracks status.
 - **Measured numbers live in frozen reports.** A living document links to the report rather than
   repeating the number.
 - **Metadata block:** `id` (where the document has one), `type`, `kind`, `status`, `author`,
-  `created`, `dependencies`. IDs are `RESEARCH-00n`, `ARCH-00n` and `PLAN-00n`, unique and never
-  recycled. The file name starts with the ID.
-- **A plan is deleted when it is done.** What it leaves behind goes into `ROADMAP.md`, ARCH-001 or
-  a frozen report.
+  `created`, `dependencies`. IDs are `RESEARCH-00n`, `ARCH-00n`, `PLAN-00n` and `ADR-0nn`, unique
+  and never recycled. The file name starts with the ID.
+- **A plan is deleted when it is done.** What it leaves behind goes into `ROADMAP.md`, ARCH-001,
+  an ADR or a frozen report.
+
+---
+
+## Decisions
+
+Every decision that constrains the design or the process is an **ADR** (architecture decision
+record) in `docs/adr/`, one per file, numbered in the order decisions were made.
+
+- **Sections:** Context, Decision, Consequences, Alternatives rejected. Short: enough to judge
+  whether the decision still holds.
+- **Metadata:** `id`, `type: adr`, `kind: frozen`, `status`, `decided` (the date the decision was
+  made, not written), `author`, and `supersedes` / `superseded_by` where they apply.
+- **Status:** accepted, superseded, superseded in part, or deprecated.
+- **Frozen once accepted.** Only the status line ever changes. A decision that changes gets a new
+  ADR, and the old one's status becomes "Superseded by ADR-0nn". A decision dropped without a
+  replacement becomes "Deprecated".
+- **No index.** The decisions in force are the ADRs whose status is accepted.
+- **Other documents link to ADRs** rather than restating their reasons. Code comments may cite
+  them, since they are frozen.
 
 ---
 

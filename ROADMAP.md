@@ -8,11 +8,11 @@ created: 2026-10-10
 
 # Roadmap
 
-*Living document: where things stand, the one list of open work, and the decisions in force.*
+*Living document: where things stand, the work ahead, and the order it is done in.*
 
-**Draft.** The work in §2 is confirmed. Everything in §3 and §4 was carried over from the v0
-tracker and the plans it ran, and is awaiting review: each item will be reaffirmed, changed or
-dropped before this draft becomes final.
+**Draft.** §2 and §3 were reviewed with Brent on 2026-10-10. Their items will move to GitHub
+issues ([ADR-032](docs/adr/ADR-032-work-is-tracked-on-github.md)), and this file will keep only the
+order and the reasons for it.
 
 The history behind every item is in the frozen
 [v0 tracker](reports/2026-08-01--v0-build/STATUS.md) (2026-08-01 to 2026-10-10) and the frozen
@@ -47,9 +47,9 @@ outputs of GitHub Actions run
 1. **Issue 7, third-party code outside the model:**
    [PLAN-004](docs/plans/PLAN-004-third-party-boundary.md). Issue 3 is done in the same schema
    change.
-2. **Brent reviews `reports/2026-10-10--up-to-speed/model-analysis.md`**, alongside item 1. It is
-   not committed yet. It adds nothing to this roadmap until then. Issue 2 is decided together
-   with it.
+2. **The model:** [PLAN-006](docs/plans/PLAN-006-model-sufficiency.md), from the findings in
+   [`the-model.md`](reports/2026-10-10--up-to-speed/the-model.md). Its step 1, the change catalog,
+   is built. Issue 2 is its step 5. Which steps are in v0 is in ADR-030.
 3. **Not yet ordered:** issues 1, 4, 5 and 6. Issues 4 and 5 depend on issue 1.
 
 ### Issue 1 · A function whose parameters changed is reported as deleted and re-added
@@ -233,95 +233,43 @@ benchmark libraries produced 3,660 change events in that bundled code: 96 % of t
   only as the far end of relationships, and never produce change events of their own?
 - **A broken prerequisite.** What should the tool do when third-party code does change between the
   two points, as in the leveldb case: refuse, warn, or ignore the change? That same leveldb
-  update also produced 134 change events in leveldb's own test code. The project's code was
-  unchanged, but the googletest code it uses had changed underneath it.
+  update also produced 134 change events in leveldb's own code, which the v0 tracker attributes
+  mostly to test code that moved because googletest moved under it.
 - **Recognizing third-party code.** Directory names are a guess. A copied library under an
   unconventional name is missed (the module notes in `rank/exposure.py` say so). An explicit
   list, given by the repository, may be needed.
 
 ---
 
-## 3 · Carried over, awaiting review
+## 3 · Carried over from the v0 tracker and PLAN-003
 
-Open work from the v0 tracker (`T`, the [frozen `STATUS.md`](reports/2026-08-01--v0-build/STATUS.md))
-and from PLAN-003, "Shipping v0", which was retired into this list on 2026-10-10 (git keeps it at
-`4f083c1`). Each item says where it came from, so its full history can be read there.
+Reviewed with Brent on 2026-10-10. Sources: `T` is the
+[frozen v0 tracker](reports/2026-08-01--v0-build/STATUS.md); PLAN-003, "Shipping v0", was retired
+into this list and is in git at `4f083c1`.
 
-Every item has the status **awaiting review**.
-
-### 3.1 · Settled by confirmed work
-
-Kept so that their closing is checked rather than assumed.
-
-| Item | Source | Note |
+| Item | Source | Outcome |
 |---|---|---|
-| `internal_linkage_residue` is computed over the whole model, vendored code included | T §6; PLAN-003 C | PLAN-004 takes third-party code out of the model |
-| Components are numbered by a top score that includes vendored events, so the terminal can open with an event that is not the highest-ranked | T §6 | PLAN-004 removes the vendored class |
-| Whether to build identity tiers 2–4 | T §3, §7 | reopened in part by issue 1 |
-
-### 3.2 · Defects and gaps
-
-| Item | Source |
-|---|---|
-| No cause rule links `NodeAttrChanged(virtual)` to the `EdgeAttrChanged` on each call into the method, so a method gaining `virtual` with N callers is N+1 top-level events. PLAN-003 recommended skipping it: `EdgeAttrChanged` fired zero times across 300 commits of each fixture. | T §6; PLAN-003 C |
-| Each parser worker takes ~0.6 s to start, mostly rediscovering the toolchain the parent already found. Wants `Toolchain.adopt(library, expected_id)`. | T §6; PLAN-003 C |
-| `cppsd cache gc` collects by age, not by identity, so a superseded cache generation survives until it is `--older-than` days old. | T §6 |
-| `diff.renameLimit` can silently truncate git's rename map on a large diff, and `-l0` is potentially quadratic. | T §7; PLAN-003 C |
-| Unnamed (not anonymous) records have a USR that moves on any edit above them, which breaks tier-1 identity. No fixture has one. | T §7 |
-| Two `static`s with the same name in same-named files merge into one node. Recorded as a standing decision: no instance in any fixture, and the fix reaches every contract. | T §6; PLAN-003 D |
-
-### 3.3 · Found by the 2026-10-10 documentation pass, not fixed
-
-| Item | Where |
-|---|---|
-| Four runtime strings cite the old tracker `STATUS.md`, now frozen: the terminal's `identity:` line (also the wrong section), a JSON field description, the `cache gc` help text, and a line the demo workflow prints | `render/terminal.py`, `render/document.py`, `cli.py`, `.github/workflows/demo.yml` |
-| JSON field descriptions that are false: `vendored_events` ("never subtracted from the numerator"), `high_risk_count` (it counts first-party impact), and `model/ir.py`'s claim that USRs include the file path (they include the file name) | `render/document.py`, `model/ir.py` |
-| The demo summary's "semantic events (numerator)" row prints `events_reported`, which includes vendored events | `.github/workflows/demo.yml` |
-| Four cause rules are marked as missing from ARCH-001 §6.3, which now lists them; a test enforces the stale state | `classify/rules.py`, `tests/test_classify.py` |
-| ARCH-001 §13 marks `model/` "schema ✓", but no JSON schema is generated | `docs/ARCH-001-architecture.md` |
-| A parallel-parsing test failed once under CPU load and passed on rerun: `test_parallel.py::TestNothingVanishes::test_a_worker_that_dies_becomes_a_failure_and_the_other_tus_survive` | `tests/test_parallel.py` |
-
-### 3.4 · Open questions
-
-| Question | Source |
-|---|---|
-| **Where does the reviewer actually read this?** The CLI is right for v0 and probably wrong as the product. Measured compression is 0.4:1 to 53:1, and the one repository with real implementation files decompresses. | T §7; PLAN-003 F |
-| **Generated sources.** ARCH-001 §3.1 states the problem, not the policy. `clang-scan-deps` failed on 9.2 % of opencv's TUs against an unbuilt tree. | T §7 |
-| **Should the model fingerprint be visible** in the CLI or JSON, so two runs can be compared without rerunning? | T §7 |
-| **Should exposure use `Node.tu`** to sharpen the internal/public boundary where it is set? | T §7 |
-
-### 3.5 · Planned, not started
-
-| Item | Source |
-|---|---|
-| **Bitcoin Core as a scale-and-shape probe:** [PLAN-002](docs/plans/PLAN-002-bitcoin-probe.md). Needs a `--cmake-arg` passthrough first, because `cppsd diff` cannot pass CMake options. | PLAN-002; PLAN-003 E |
-| **`enrich`:** evidence adapters for external analysis tools. Deferred past v0 by design. | T §1; ARCH-001 §8, §13 |
+| `internal_linkage_residue` counts vendored code; components are numbered by a score that includes vendored events | T §6; PLAN-003 C | **Folded into PLAN-004**, as checks that it is done |
+| Whether to build identity tiers 2–4 | T §3, §7 | **Dropped.** Issue 1 and PLAN-006 step 4 replace it |
+| No cause rule for a method that becomes `virtual` | T §6; PLAN-003 C | **Dropped.** Revisit with issue 4 |
+| Each parser worker takes ~0.6 s to start | T §6; PLAN-003 C | **Kept,** post-v0 |
+| `cppsd cache gc` collects by age, not identity | T §6 | **Dropped** as a defect; an accepted design |
+| `diff.renameLimit` can silently truncate the rename map | T §7; PLAN-003 C | **Kept, v0:** at least detect and report it |
+| Unnamed records have an unstable USR; two same-named `static`s merge into one node | T §6, §7; PLAN-003 D | **Folded into PLAN-006 step 4** (identity). ADR-022 stands until step 4 decides otherwise |
+| Four runtime strings cite the old tracker; false JSON field descriptions; the demo's "numerator" row | 2026-10-10 documentation pass | **Folded into PLAN-004's schema change** |
+| Four cause rules are tagged as missing from ARCH-001 §6.3, and a test enforces it | 2026-10-10 documentation pass | **Kept,** small cleanup |
+| ARCH-001 marked the JSON schema as done | 2026-10-10 documentation pass | **Fixed** in ARCH-001 §13 |
+| A parallel-parsing test failed once under load | 2026-10-10 documentation pass | **Kept,** to investigate |
+| Generated sources: ARCH-001 §3.1 states the problem, not the policy | T §7 | **Kept** as an open question, post-v0 |
+| Show the model fingerprint; exposure using `Node.tu` | T §7 | **Dropped.** No use yet |
+| Bitcoin Core probe ([PLAN-002](docs/plans/PLAN-002-bitcoin-probe.md)) | PLAN-002; PLAN-003 E | **Deferred** until the model is fixed and the confirmed issues are addressed |
+| `enrich`, the evidence layer | T §1; ARCH-001 §8, §13 | **Post-v0,** by design |
+| Where the reviewer reads the output | T §7; PLAN-003 F | **Out of scope for now.** Ad hoc views, such as the renderer in `reports/2026-10-10--up-to-speed/demo-run-a/`, suffice while developing |
 
 ---
 
-## 4 · Decisions in force, awaiting reaffirmation
+## 4 · Decisions
 
-From the v0 tracker's §8, with its reasons. The one superseded decision, that vendored code is
-partitioned out of the ranking, is not repeated here: ARCH-001 §13's prerequisite replaced it on
-2026-10-10.
-
-| Decision | Why |
-|---|---|
-| Python, standalone repo | CodeAtlas C++ is TypeScript only because it began as a VS Code extension. Ideas carry over from it, not modules. |
-| Linux only during design and implementation | Windows support is dead weight while the shape is still moving. Portability rules stay ([`CONTRIBUTING.md`](CONTRIBUTING.md)): cross-platform *correctness* is cheap; cross-platform *support* is not. |
-| A system libclang is a hard requirement | The wheel's bundled library truncates ASTs silently. Convenience is not worth a failure mode that produces two agreeing wrong models. |
-| Base is `merge-base(main, HEAD)` | Against main's tip, every change other people merged while the branch was open gets attributed to this branch. There is a test for this; keep it. |
-| Compile database required at **both** revisions | Hard precondition, not a degradation path. Configure is seconds, so it is affordable. |
-| Base that does not build ⇒ hard failure | The base is main. A main that does not build is a different problem, not this tool's. |
-| JSON is the product, terminal is a consumer | Keeps delivery surfaces out of the analysis core — the mistake that made CodeAtlas TypeScript. `render`'s signature admits no `Model`. |
-| v0 ships **tier-1 identity only** | Renames look bad on purpose. Measure the damage before building tiers 2–4; measured in the v0 tracker §3. **Partly reopened 2026-10-10** by issue 1: a function whose parameters changed is to be paired with its old version. |
-| Identity tiers are one-to-one | Splits and merges surface as unmatched residue rather than being forced into a match. Enforced in the type, not just the matcher: a double-pairing does not crash, it produces a delta that reads perfectly and describes a change nobody made. |
-| Cascade collapse at render, never at diff | JSON always carries the full event set; the view hides consequences under causes. When cause attribution is uncertain, show rather than hide. |
-| `EdgeRetargeted` is refused, not deferred | An edge's id *is* `src\|kind\|dst`, so "retargeted from B to C" claims B and C are the same entity — a node-identity judgement the one-to-one matcher already declined. |
-| The cache unit is the TU, not the commit | Per-commit caching means the first review against any new base pays full price, and the base is what every review shares. |
-| Declining to cache beats a weaker key | A missing or version-mismatched `clang-scan-deps` disables the cache whole. Declining to cache is slow; a stale hit is wrong. |
-| The cache key covers the extraction code, not just libclang | `extract.py` decides what becomes a node; change it and the same inputs yield a different partial. Hashed rather than a hand-bumped constant, because forgetting a constant fails toward serving stale entries. |
-| Toolchain identity carries the target triple, never a host path | It is the one AST determinant the closure's content hashing cannot see. A path would break ARCH-001 §12.2, which makes the identity a value two hosts *compare* — equivalent machines would hard-fail. |
-| Check what the whole key already covers before widening an identity | The stdlib and builtin headers turned out to be content-keyed via the include closure. Every redundant key component costs a mass invalidation to defend against a defended hazard. |
-| Workers use `spawn`, not `fork` | A forked child inherits the parent's verified libclang, so the toolchain guarantee would hold *by accident of start method* and stop holding silently if that default changed. |
-| Low confidence ranks **up** | Uncertainty is a reason for a human to look, not a reason to hide (ARCH-001 §7). Guarded by mutation-tested cases. Issue 6 questions what uncertainty means for an entity with no partner. |
+Decisions and their reasons are architecture decision records in [`docs/adr/`](docs/adr/). The
+ones in force are those whose status is accepted. What v0 is:
+[ADR-030](docs/adr/ADR-030-what-v0-is.md).

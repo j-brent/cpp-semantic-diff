@@ -605,10 +605,15 @@ add/remove/kind/attr events · JSON + terminal output · the compression metric 
 
 **Prerequisite: third-party code does not change.** v0 analyzes only code the repository owns
 and contains. Third-party code, whether a git submodule or a library copied into the tree, must be
-identical at both points. A comparison where it differs is refused, not analyzed. Third-party code
-is still parsed, because the repository's code depends on it, but it is outside the model, exactly
-like the standard library. Decided 2026-10-10. Analyzing third-party changes is deferred, not
-rejected. Not yet implemented: [PLAN-004](plans/PLAN-004-third-party-boundary.md).
+identical at both points. A comparison where it differs is refused, not analyzed. Its headers are
+still parsed where the repository's code includes them, but its own translation units are not, and
+none of it is in the model, exactly like the standard library. Analyzing third-party changes is
+deferred, not rejected. Decided in [ADR-025](adr/ADR-025-third-party-code-must-not-change.md); not
+yet implemented ([PLAN-004](plans/PLAN-004-third-party-boundary.md)).
+
+**v0 was redefined on 2026-10-10** as a tool whose output can be trusted on changes the repository
+controls ([ADR-030](adr/ADR-030-what-v0-is.md)). The slice above is what was built first; ADR-030
+says what v0 still needs.
 
 Two things listed here as "out" in the original draft shipped anyway, and the reason is the same in
 both cases: they were cheaper *inside* the stage that needed them than as a later bolt-on.
@@ -659,7 +664,7 @@ Present tense is what exists; the rest is planned.
 
 ```
 cpp_semantic_diff/
-  model/       IR types, schema                        ✓
+  model/       IR types ✓ · JSON schema (not generated)
   acquire/     git revisions · worktrees · compile db  ✓
   produce/     toolchain ✓ · extraction ✓ · assembly ✓ · per-TU cache ✓
   match/       tiered matching (tier 1)                 ✓
@@ -694,7 +699,8 @@ academic question — the bundled library was silently truncating every AST). Re
   unmeasured, and `fmt`/`spdlog` will not reveal it.
 - **Threshold tuning for tier 4.** Git's `-M` has one knob and decades of tuning. Assume this needs
   per-repository calibration and design the knob in early.
-- **Where does the reviewer actually read this?** CLI is right for v0 and probably wrong as the
+- **Where does the reviewer actually read this?** *Out of scope for now*
+  ([ADR-030](adr/ADR-030-what-v0-is.md)). CLI is right for v0 and probably wrong as the
   product. The JSON-first contract defers the decision without prejudging it.
 - **How much environment must identity capture before a cache is safe to share?** §12.1 lists the
   determinants; which of them actually move a model is unmeasured. The cheap experiment is to build
