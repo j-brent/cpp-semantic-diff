@@ -196,7 +196,7 @@ def _footing(ctx: DiffContext, edge: Edge, side: Side) -> Footing:
     confident of the two identifications -- and if either endpoint was never matched, there
     is no tier, which is what makes an add or a remove report itself as untiered rather
     than borrowing the certainty of the endpoint that *was* matched (§11). It carries the
-    endpoint's residue instead, so a call to a plain addition is no more doubtful than the
+    endpoint's `unpaired` reason instead, so a call to a plain addition is no more doubtful than the
     addition itself (ADR-034).
     """
     return ctx.weakest(*(ctx.footing(side, node_id) for node_id in (edge.src, edge.dst)))

@@ -19,7 +19,7 @@ from typing import Protocol
 
 from cpp_semantic_diff.match.correspondence import Correspondence, Match
 from cpp_semantic_diff.match.declared import DeclaredTier
-from cpp_semantic_diff.match.residue import residue_reasons
+from cpp_semantic_diff.match.unpaired import unpaired_reasons
 from cpp_semantic_diff.model import MatchTier, Model, NodeId
 
 
@@ -109,7 +109,7 @@ def match_models(
 
     # A node one tier refused may still be paired by a later one; only what is left over
     # at the end is residue, and only residue gets a reason.
-    residue_base, residue_head = residue_reasons(
+    unpaired_base, unpaired_head = unpaired_reasons(
         base,
         head,
         base_pool,
@@ -124,7 +124,7 @@ def match_models(
         matches=sorted(matches, key=lambda m: (m.base, m.head)),
         unmatched_base=sorted(base_pool),
         unmatched_head=sorted(head_pool),
-        residue_base=dict(sorted(residue_base.items())),
-        residue_head=dict(sorted(residue_head.items())),
+        unpaired_base=dict(sorted(unpaired_base.items())),
+        unpaired_head=dict(sorted(unpaired_head.items())),
         tiers_run=[t.tier for t in tiers],
     )

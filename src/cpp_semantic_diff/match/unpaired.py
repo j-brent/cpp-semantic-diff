@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 
-from cpp_semantic_diff.model import EdgeKind, Model, NodeId, NodeKind, Residue
+from cpp_semantic_diff.model import EdgeKind, Model, NodeId, NodeKind, Unpaired
 
 
 def containers(model: Model) -> dict[NodeId, NodeId]:
@@ -43,7 +43,7 @@ _UNPAIRED_PARENT = NodeId("\x00unpaired-parent")
 type _Slot = tuple[NodeKind, NodeId | None]
 
 
-def residue_reasons(
+def unpaired_reasons(
     base: Model,
     head: Model,
     base_left: Collection[NodeId],
@@ -51,8 +51,8 @@ def residue_reasons(
     head_for: Mapping[NodeId, NodeId],
     ambiguous_base: Collection[NodeId],
     ambiguous_head: Collection[NodeId],
-) -> tuple[dict[NodeId, Residue], dict[NodeId, Residue]]:
-    """A `Residue` for every leftover on each side.
+) -> tuple[dict[NodeId, Unpaired], dict[NodeId, Unpaired]]:
+    """An `Unpaired` reason for every leftover on each side.
 
     `AMBIGUOUS` comes from the tiers, which are the only ones who know they declined a
     choice. Otherwise a leftover is a `CANDIDATE` when the other side's leftovers hold an
@@ -75,11 +75,13 @@ def residue_reasons(
     base_slots = {base_slot(n) for n in base_left}
     head_slots = {head_slot(n) for n in head_left}
 
-    def reason(slot: _Slot, ambiguous: bool, other: set[_Slot]) -> Residue:
+    def reason(slot: _Slot, ambiguous: bool, other: set[_Slot]) -> Unpaired:
         if ambiguous:
-            return Residue.AMBIGUOUS
+            return Unpaired.AMBIGUOUS
         # An unpaired parent never matches, so it is never a candidate -- see above.
-        return Residue.CANDIDATE if slot[1] != _UNPAIRED_PARENT and slot in other else Residue.NONE
+        return (
+            Unpaired.CANDIDATE if slot[1] != _UNPAIRED_PARENT and slot in other else Unpaired.NONE
+        )
 
     amb_b, amb_h = set(ambiguous_base), set(ambiguous_head)
     return (

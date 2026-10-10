@@ -294,10 +294,11 @@ def _event(document: DiffDocument, node: CollapseNode, console: Console, *, dept
     total = f"{score.total:.2f}" if score else "  — "
     # `is_high_risk`, never `total >= HIGH_RISK`. They are different questions: `total`
     # includes uncertainty so that a low-confidence event sorts *up* (ARCH-001 §7), while
-    # the high-risk verdict deliberately excludes it -- otherwise, under tier-1-only
-    # identity where every add and remove is unmatched residue, the marker would fire on
-    # novelty alone. Recomputing the threshold here is how the dots came to disagree with
-    # the count in `summary`, which is the number the reader is being asked to trust.
+    # the high-risk verdict deliberately excludes it, because our doubt about a match is not
+    # a consequence of the change. (Before ADR-034, when every add and remove scored maximum
+    # uncertainty, the marker fired on novelty alone.) Recomputing the threshold here is how
+    # the dots came to disagree with the count in `summary`, which is the number the reader
+    # is being asked to trust.
     marker = "[red]●[/]" if score and score.is_high_risk else "[dim]·[/]"
     glyph = "" if depth == 0 else "[dim]└ [/]"
 

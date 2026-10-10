@@ -34,10 +34,10 @@ from cpp_semantic_diff.model import (
     Node,
     NodeId,
     NodeKind,
-    Residue,
     Side,
     TuResult,
     TuStatus,
+    Unpaired,
 )
 
 F = NodeId("c:@F@f#")
@@ -96,8 +96,8 @@ def paired(base: Model, head: Model, *pairs: tuple[str, str], tier: MatchTier) -
         matches=[Match(base=NodeId(b), head=NodeId(h), tier=tier) for b, h in pairs],
         unmatched_base=left_base,
         unmatched_head=left_head,
-        residue_base=dict.fromkeys(left_base, Residue.NONE),
-        residue_head=dict.fromkeys(left_head, Residue.NONE),
+        unpaired_base=dict.fromkeys(left_base, Unpaired.NONE),
+        unpaired_head=dict.fromkeys(left_head, Unpaired.NONE),
         tiers_run=[MatchTier.DECLARED, tier],
     )
 
@@ -653,16 +653,16 @@ class TestConfidenceIsNeverLaundered:
         base = model("a", node(F))
         head = model("b", node(F), node(G, name="g"))
         confidence = only(diff(base, head), EventKind.NODE_ADDED).confidence
-        assert (confidence.tier, confidence.residue) == (None, Residue.NONE)
+        assert (confidence.tier, confidence.unpaired) == (None, Unpaired.NONE)
 
-    def test_an_edge_to_an_unmatched_node_carries_that_node_s_residue(self) -> None:
+    def test_an_edge_to_an_unmatched_node_carries_that_node_s_unpaired_reason(self) -> None:
         """An edge between a matched entity and a plain addition is no more doubtful than
         the addition -- which is not doubtful at all. Before ADR-034 the edge took the
         maximum because one endpoint had no tier."""
         base = model("a", node(F))
         head = model("b", node(F), node(G, name="g"), edges=[calls(F, G)])
         confidence = only(diff(base, head), EventKind.EDGE_ADDED).confidence
-        assert (confidence.tier, confidence.residue) == (None, Residue.NONE)
+        assert (confidence.tier, confidence.unpaired) == (None, Unpaired.NONE)
 
     def test_an_edge_takes_the_more_doubtful_of_two_unmatched_endpoints(self) -> None:
         a, x, y = NodeId("c:@F@a#"), NodeId("c:@F@x#"), NodeId("c:@F@y#")
@@ -671,11 +671,11 @@ class TestConfidenceIsNeverLaundered:
         corr = Correspondence(
             unmatched_base=[a],
             unmatched_head=[x, y],
-            residue_base={a: Residue.CANDIDATE},
-            residue_head={x: Residue.AMBIGUOUS, y: Residue.CANDIDATE},
+            unpaired_base={a: Unpaired.CANDIDATE},
+            unpaired_head={x: Unpaired.AMBIGUOUS, y: Unpaired.CANDIDATE},
         )
         confidence = only(diff(base, head, corr), EventKind.EDGE_ADDED).confidence
-        assert (confidence.tier, confidence.residue) == (None, Residue.AMBIGUOUS)
+        assert (confidence.tier, confidence.unpaired) == (None, Unpaired.AMBIGUOUS)
 
 
 class TestProvenanceRunsBothWays:
@@ -739,7 +739,7 @@ class TestTheStageIsAPureFunction:
             diff_models(
                 base,
                 model("b"),
-                Correspondence(unmatched_base=[F], residue_base={F: Residue.NONE}),
+                Correspondence(unmatched_base=[F], unpaired_base={F: Unpaired.NONE}),
             )
 
     def test_a_correspondence_built_against_other_models_is_refused(self) -> None:
@@ -748,7 +748,7 @@ class TestTheStageIsAPureFunction:
             diff_models(
                 model("a"),
                 model("b"),
-                Correspondence(unmatched_base=[ghost], residue_base={ghost: Residue.NONE}),
+                Correspondence(unmatched_base=[ghost], unpaired_base={ghost: Unpaired.NONE}),
             )
 
 

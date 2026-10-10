@@ -27,7 +27,7 @@ from cpp_semantic_diff.model import (
     EventKind,
     Model,
     NodeId,
-    Residue,
+    Unpaired,
 )
 from cpp_semantic_diff.rank import weights as w
 from cpp_semantic_diff.rank.exposure import EXPOSURE_ORDER, Exposure, exposure_map
@@ -318,10 +318,10 @@ def _novelty(event: Event) -> Factor:
 
 #: What a reviewer reads for an unmatched subject. Says why, because "unmatched" alone reads
 #: as doubt and is not (ADR-034).
-_RESIDUE_DETAIL: dict[Residue, str] = {
-    Residue.NONE: "unmatched, no candidate",
-    Residue.CANDIDATE: "unmatched, candidate on the other side",
-    Residue.AMBIGUOUS: "unmatched, ambiguous pairing",
+_UNPAIRED_DETAIL: dict[Unpaired, str] = {
+    Unpaired.NONE: "unmatched, no candidate",
+    Unpaired.CANDIDATE: "unmatched, candidate on the other side",
+    Unpaired.AMBIGUOUS: "unmatched, ambiguous pairing",
 }
 
 
@@ -339,10 +339,10 @@ def _uncertainty(confidence: Confidence) -> Factor:
         value = w.UNCERTAINTY_BY_TIER[confidence.tier]
         detail = confidence.tier.value
     else:
-        # `Confidence` guarantees a residue whenever the tier is None.
-        residue = confidence.residue or Residue.AMBIGUOUS
-        value = w.UNCERTAINTY_BY_RESIDUE[residue]
-        detail = _RESIDUE_DETAIL[residue]
+        # `Confidence` refuses a None tier without a reason, so this cannot fire.
+        assert confidence.unpaired is not None
+        value = w.UNCERTAINTY_BY_UNPAIRED[confidence.unpaired]
+        detail = _UNPAIRED_DETAIL[confidence.unpaired]
     if not confidence.models_complete:
         value += w.UNCERTAINTY_INCOMPLETE_MODELS
         detail = f"{detail}, incomplete models"

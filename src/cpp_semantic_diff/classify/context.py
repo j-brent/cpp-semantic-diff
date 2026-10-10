@@ -21,8 +21,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from cpp_semantic_diff.diff import containers
-from cpp_semantic_diff.match import Correspondence
+from cpp_semantic_diff.match import Correspondence, containers
 from cpp_semantic_diff.model import Edge, EdgeId, EdgeKind, Model, NodeId
 
 
@@ -70,9 +69,9 @@ class ClassifyContext:
             base=base,
             head=head,
             correspondence=correspondence,
-            # Reused from the diff stage rather than re-derived. `contains` follows the
-            # *semantic* parent (`diff/nodes.py`), so an out-of-line definition belongs to its
-            # class; a second copy of that rule here would drift from the one the diff
+            # The one definition match and diff share, not re-derived. `contains` follows the
+            # *semantic* parent (`match/unpaired.py`), so an out-of-line definition belongs to
+            # its class; a second copy of that rule here would drift from the one the diff
             # stage compares parents with, and the two stages would disagree about what
             # "contained" means while both looked right.
             base_parents=containers(base),

@@ -35,7 +35,7 @@ from cpp_semantic_diff.model import (
     Node,
     NodeId,
     NodeKind,
-    Residue,
+    Unpaired,
 )
 
 
@@ -389,7 +389,7 @@ class TestInternalLinkage:
         assert match_models(base, head, renames=renames).internal_linkage_residue == 0
 
 
-class TestTheResidueSaysWhyItIsResidue:
+class TestTheResidueSaysWhyItIsUnpaired:
     """ADR-034: an unmatched entity is not, by that fact, a doubtful pairing.
 
     Every genuine addition and removal has no partner by definition. What makes one doubtful
@@ -406,22 +406,22 @@ class TestTheResidueSaysWhyItIsResidue:
 
     def test_a_plain_addition_has_no_candidate(self) -> None:
         c = match_models(model("a", node("c:@F@f#")), model("b", node("c:@F@f#"), node("c:@F@g#")))
-        assert c.residue_head == {"c:@F@g#": Residue.NONE}
-        assert c.residue_base == {}
+        assert c.unpaired_head == {"c:@F@g#": Unpaired.NONE}
+        assert c.unpaired_base == {}
 
     def test_a_rename_tier_1_cannot_see_leaves_a_candidate_on_both_sides(self) -> None:
         """Same kind, same parent (top level), one gone and one new: §5's tier-4 candidate
         set, counted. Possibly a rename, and worth a human's eye."""
         c = match_models(model("a", node("c:@F@compute#")), model("b", node("c:@F@calculate#")))
-        assert c.residue_base == {"c:@F@compute#": Residue.CANDIDATE}
-        assert c.residue_head == {"c:@F@calculate#": Residue.CANDIDATE}
+        assert c.unpaired_base == {"c:@F@compute#": Unpaired.CANDIDATE}
+        assert c.unpaired_head == {"c:@F@calculate#": Unpaired.CANDIDATE}
 
     def test_a_different_kind_is_not_a_candidate(self) -> None:
         base = model("a", node("c:@F@f#"))
         head = model("b", node("c:@S@F", kind=NodeKind.STRUCT))
         c = match_models(base, head)
-        assert c.residue_base == {"c:@F@f#": Residue.NONE}
-        assert c.residue_head == {"c:@S@F": Residue.NONE}
+        assert c.unpaired_base == {"c:@F@f#": Unpaired.NONE}
+        assert c.unpaired_head == {"c:@S@F": Unpaired.NONE}
 
     def test_a_candidate_must_share_the_parent_through_the_matches(self) -> None:
         """`m` under class `C` and `n` under class `D` are not candidates for each other,
@@ -435,12 +435,12 @@ class TestTheResidueSaysWhyItIsResidue:
         base.add_node(other)
         head = self.contained("b", other, n)
         head.add_node(cls)
-        assert match_models(base, head).residue_base == {m.id: Residue.NONE}
+        assert match_models(base, head).unpaired_base == {m.id: Unpaired.NONE}
         head.add_node(n2)
         head.edges.append(Edge(src=cls.id, dst=n2.id, kind=EdgeKind.CONTAINS))
         c = match_models(base, head)
-        assert c.residue_base == {m.id: Residue.CANDIDATE}
-        assert c.residue_head == {n.id: Residue.NONE, n2.id: Residue.CANDIDATE}
+        assert c.unpaired_base == {m.id: Unpaired.CANDIDATE}
+        assert c.unpaired_head == {n.id: Unpaired.NONE, n2.id: Unpaired.CANDIDATE}
 
     def test_children_of_an_unmatched_parent_are_not_candidates(self) -> None:
         """Pairing them would be a claim about the parents first, and counting is not the
@@ -450,8 +450,8 @@ class TestTheResidueSaysWhyItIsResidue:
         m_old = node("c:@S@Old@F@m#", kind=NodeKind.METHOD)
         m_new = node("c:@S@New@F@m#", kind=NodeKind.METHOD)
         c = match_models(self.contained("a", old, m_old), self.contained("b", new, m_new))
-        assert c.residue_base == {old.id: Residue.CANDIDATE, m_old.id: Residue.NONE}
-        assert c.residue_head == {new.id: Residue.CANDIDATE, m_new.id: Residue.NONE}
+        assert c.unpaired_base == {old.id: Unpaired.CANDIDATE, m_old.id: Unpaired.NONE}
+        assert c.unpaired_head == {new.id: Unpaired.CANDIDATE, m_new.id: Unpaired.NONE}
 
     #: A file rename that lands one file-scoped USR on another's key: `old.cpp`'s helper,
     #: rewritten into head coordinates, is indistinguishable from `new.cpp`'s (no TU on
@@ -467,17 +467,17 @@ class TestTheResidueSaysWhyItIsResidue:
         head = model("b", node(self.NEW))
         c = match_models(base, head, renames=self.RENAMES)
         assert not c.matches
-        assert c.residue_base == {self.NEW: Residue.AMBIGUOUS, self.OLD: Residue.AMBIGUOUS}
-        assert c.residue_head == {self.NEW: Residue.AMBIGUOUS}
+        assert c.unpaired_base == {self.NEW: Unpaired.AMBIGUOUS, self.OLD: Unpaired.AMBIGUOUS}
+        assert c.unpaired_head == {self.NEW: Unpaired.AMBIGUOUS}
 
     def test_a_collision_with_nothing_to_choose_between_is_not_ambiguous(self) -> None:
         """Two colliding nodes that both vanished were never a choice tier 1 declined."""
         base = model("a", node(self.OLD), node(self.NEW))
         c = match_models(base, model("b"), renames=self.RENAMES)
-        assert set(c.residue_base.values()) == {Residue.NONE}
+        assert set(c.unpaired_base.values()) == {Unpaired.NONE}
 
     def test_every_leftover_has_a_reason_and_nothing_else_does(self) -> None:
-        with pytest.raises(ValidationError, match="have no residue"):
+        with pytest.raises(ValidationError, match="have no unpaired reason"):
             Correspondence(unmatched_base=[NodeId("a")])
         with pytest.raises(ValidationError, match="not unmatched"):
-            Correspondence(residue_head={NodeId("x"): Residue.NONE})
+            Correspondence(unpaired_head={NodeId("x"): Unpaired.NONE})

@@ -27,7 +27,7 @@ toward looking, not enough to reorder the page.
 
 from __future__ import annotations
 
-from cpp_semantic_diff.model import EventKind, MatchTier, Residue
+from cpp_semantic_diff.model import EventKind, MatchTier, Unpaired
 from cpp_semantic_diff.rank.exposure import Exposure
 
 # --------------------------------------------------------------------------------------
@@ -218,7 +218,7 @@ NOVELTY_BY_ATTR: dict[str, float] = {
 #: weaker claim is more worth a human's eye, not less.
 #:
 #: Uncertainty means *the tool may have this pairing wrong* -- not *this entity has no
-#: partner*. An unmatched entity has no tier and is valued by `UNCERTAINTY_BY_RESIDUE`.
+#: partner*. An unmatched entity has no tier and is valued by `UNCERTAINTY_BY_UNPAIRED`.
 UNCERTAINTY_BY_TIER: dict[MatchTier, float] = {
     MatchTier.SIMILARITY: 0.75,
     MatchTier.POSITIONAL: 0.50,
@@ -238,10 +238,10 @@ UNCERTAINTY_BY_TIER: dict[MatchTier, float] = {
 #:   chose wrongly and more than nothing.
 #: - `AMBIGUOUS` -- a tier found partners and refused to choose between them. The pairing
 #:   is the thing in question, so it is the maximum.
-UNCERTAINTY_BY_RESIDUE: dict[Residue, float] = {
-    Residue.NONE: 0.00,
-    Residue.CANDIDATE: 0.50,
-    Residue.AMBIGUOUS: 1.00,
+UNCERTAINTY_BY_UNPAIRED: dict[Unpaired, float] = {
+    Unpaired.NONE: 0.00,
+    Unpaired.CANDIDATE: 0.50,
+    Unpaired.AMBIGUOUS: 1.00,
 }
 
 #: Added when either model is incomplete (§4.4, §11). A global fact today -- `Confidence`

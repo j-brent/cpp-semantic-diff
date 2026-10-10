@@ -10,8 +10,8 @@ from cpp_semantic_diff.model.events import (
     EventId,
     EventKind,
     Hunk,
-    Residue,
     Side,
+    Unpaired,
     events_at,
 )
 from cpp_semantic_diff.model.ir import (
@@ -55,9 +55,9 @@ __all__ = [
     "Node",
     "NodeId",
     "NodeKind",
-    "Residue",
     "Side",
     "TuResult",
     "TuStatus",
+    "Unpaired",
     "events_at",
 ]

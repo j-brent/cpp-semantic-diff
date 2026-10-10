@@ -38,7 +38,7 @@ from cpp_semantic_diff.model import (
     Node,
     NodeId,
     NodeKind,
-    Residue,
+    Unpaired,
 )
 from cpp_semantic_diff.rank import (
     Exposure,
@@ -57,9 +57,9 @@ LIB_SOURCE = "src/format.cc"
 
 SURE = Confidence(tier=MatchTier.DECLARED, models_complete=True)
 UNSURE = Confidence(tier=MatchTier.SIMILARITY, models_complete=True)
-RESIDUE = Confidence(tier=None, residue=Residue.NONE, models_complete=True)
-CANDIDATE = Confidence(tier=None, residue=Residue.CANDIDATE, models_complete=True)
-AMBIGUOUS = Confidence(tier=None, residue=Residue.AMBIGUOUS, models_complete=True)
+RESIDUE = Confidence(tier=None, unpaired=Unpaired.NONE, models_complete=True)
+CANDIDATE = Confidence(tier=None, unpaired=Unpaired.CANDIDATE, models_complete=True)
+AMBIGUOUS = Confidence(tier=None, unpaired=Unpaired.AMBIGUOUS, models_complete=True)
 
 
 # -- builders ---------------------------------------------------------------------------
@@ -200,19 +200,19 @@ class TestUncertaintyRanksUpNotDown:
         ]
         assert ladder == sorted(ladder), "uncertainty must increase as the tier weakens"
 
-    def test_the_residue_ladder_runs_the_same_direction_as_the_diff_stage_orders_it(
+    def test_the_unpaired_ladder_runs_the_same_direction_as_the_diff_stage_orders_it(
         self,
     ) -> None:
-        """`diff.context.RESIDUE_ORDER` picks an edge event's most doubtful endpoint; the
+        """`diff.context.UNPAIRED_ORDER` picks an edge event's most doubtful endpoint; the
         weights must agree with it about which that is, or an edge would report its less
         doubtful endpoint."""
-        from cpp_semantic_diff.diff.context import RESIDUE_ORDER
+        from cpp_semantic_diff.diff.context import UNPAIRED_ORDER
 
-        ladder = [w.UNCERTAINTY_BY_RESIDUE[r] for r in RESIDUE_ORDER]
+        ladder = [w.UNCERTAINTY_BY_UNPAIRED[r] for r in UNPAIRED_ORDER]
         assert ladder == sorted(ladder) and len(set(ladder)) == len(ladder)
-        assert set(RESIDUE_ORDER) == set(Residue)
-        assert w.UNCERTAINTY_BY_RESIDUE[Residue.AMBIGUOUS] == max(
-            *w.UNCERTAINTY_BY_TIER.values(), *w.UNCERTAINTY_BY_RESIDUE.values()
+        assert set(UNPAIRED_ORDER) == set(Unpaired)
+        assert w.UNCERTAINTY_BY_UNPAIRED[Unpaired.AMBIGUOUS] == max(
+            *w.UNCERTAINTY_BY_TIER.values(), *w.UNCERTAINTY_BY_UNPAIRED.values()
         )
 
     def test_an_incomplete_model_adds_uncertainty_rather_than_removing_it(self) -> None:

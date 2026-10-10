@@ -37,8 +37,8 @@ from cpp_semantic_diff.model import (
     Node,
     NodeId,
     NodeKind,
-    Residue,
     Side,
+    Unpaired,
 )
 from cpp_semantic_diff.produce.build import assemble
 from cpp_semantic_diff.produce.extract import extract
@@ -535,7 +535,7 @@ def event(kind: EventKind, subject: AnyId, **payload: AttrValue) -> Event:
         kind=kind,
         subject=subject,
         payload=payload,
-        confidence=Confidence(tier=None, residue=Residue.NONE, models_complete=True),
+        confidence=Confidence(tier=None, unpaired=Unpaired.NONE, models_complete=True),
     )
 
 

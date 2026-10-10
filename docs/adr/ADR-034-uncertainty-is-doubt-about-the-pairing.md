@@ -2,16 +2,16 @@
 id: ADR-034
 type: adr
 kind: frozen
-status: accepted
+status: Pending Brent Runyan's review — decided by agent review during v0 orchestration, 2026-10-10. Becomes Accepted when the v0 branch merges to main.
 decided: 2026-10-10
-author: agent review during v0 orchestration, pending Brent Runyan's review
+author: agent review during v0 orchestration
 -->
 
 # ADR-034 · Uncertainty is doubt about the pairing, not the absence of a partner
 
 *Frozen document: a decision record. Only the status line may change, when a later ADR supersedes it.*
 
-**Status:** Accepted, 2026-10-10, by agent review during v0 orchestration. Pending Brent's review.
+**Status:** Pending Brent Runyan's review — decided by agent review during v0 orchestration, 2026-10-10. Becomes Accepted when the v0 branch merges to main.
 
 ## Context
 
@@ -26,7 +26,7 @@ Issue [#17](https://github.com/j-brent/cpp-semantic-diff/issues/17).
 Uncertainty means the pairing may be wrong. The match stage records why each leftover is unpaired,
 and rank values the reason:
 
-| Reason (`Confidence.residue`) | When | Uncertainty |
+| Reason (`Confidence.unpaired`) | When | Uncertainty |
 |---|---|---|
 | `none` | no unpaired entity of the same kind under the same parent on the other side | 0.0, as a tier-1 match |
 | `candidate` | at least one such entity: ARCH-001 §5's tier-4 candidate set, counted, not scored | 0.5 |
@@ -36,15 +36,15 @@ and rank values the reason:
 of an unpaired parent are never candidates. A key collision is `ambiguous` only if the other side
 has the key too. The +0.25 for incomplete models still applies.
 
-`Confidence.residue` is set exactly when `tier` is None. `tier` keeps its meaning: None when the
-subject, or either endpoint of an edge, is unpaired. An edge event's residue is the more doubtful
+`Confidence.unpaired` is set exactly when `tier` is None. `tier` keeps its meaning: None when the
+subject, or either endpoint of an edge, is unpaired. An edge event's `unpaired` is the more doubtful
 of its unpaired endpoints'.
 
 ## Consequences
 
 - A plain addition or removal, and the edges to it, no longer rank above an equal change to a
   paired entity. Possible renames (`candidate`) and refused pairings (`ambiguous`) still rank up.
-- The JSON changes: `events[].confidence.residue` is new, and `scores[].factors` uncertainty
+- The JSON changes: `events[].confidence.unpaired` is new, and `scores[].factors` uncertainty
   values and `detail` change meaning. It lands with the other v0 schema changes under 2.0.
 - With `tier` None, an edge does not carry the tier of its paired endpoint. An edge from a tier-4
   match to a plain addition scores 0.0, not 0.75. It cannot happen in v0, where only tier 1 runs

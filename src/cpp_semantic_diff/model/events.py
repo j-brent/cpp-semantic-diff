@@ -160,14 +160,14 @@ class Side(StrEnum):
     HEAD = "head"
 
 
-class Residue(StrEnum):
+class Unpaired(StrEnum):
     """Why an entity has no partner on the other side -- the match stage's doubt about it.
 
     An entity no tier paired is not, by that fact alone, a doubtful pairing: a genuine
     addition has no partner by definition, and nothing about it is uncertain. What makes an
     unpaired entity doubtful is evidence that a partner may have been missed, so that is what
-    this records (ADR-034). Ordered weakest doubt first; `diff.context.RESIDUE_ORDER` relies
-    on the order and `rank.weights.UNCERTAINTY_BY_RESIDUE` values it.
+    this records (ADR-034). Ordered weakest doubt first; `diff.context.UNPAIRED_ORDER` relies
+    on the order and `rank.weights.UNCERTAINTY_BY_UNPAIRED` values it.
     """
 
     #: Nothing on the other side's residue could be this entity's partner: no unpaired entity
@@ -207,7 +207,7 @@ class Hunk(BaseModel):
 class Confidence(BaseModel):
     """The two inputs ARCH-001 §11 names, carried verbatim -- not a score.
 
-    The match half is `tier` when the subject was matched and `residue` when it was not:
+    The match half is `tier` when the subject was matched and `unpaired` when it was not:
     an unmatched subject still has a match-stage verdict, namely how likely it is that a
     partner exists and was missed (ADR-034).
 
@@ -220,7 +220,7 @@ class Confidence(BaseModel):
     `tier` and `models_complete` are required. A default would let a caller omit
     completeness and thereby claim, silently, that nothing was missing -- the exact
     substitution of absence of evidence for evidence of absence that §11 exists to prevent.
-    `residue` defaults to None only because the validator below refuses that default
+    `unpaired` defaults to None only because the validator below refuses that default
     wherever it would be a claim.
     """
 
@@ -232,7 +232,7 @@ class Confidence(BaseModel):
         "(ARCH-001 §13), so None also covers every rename -- which is what makes the rename "
         "damage measurable rather than invisible.",
     )
-    residue: Residue | None = Field(
+    unpaired: Unpaired | None = Field(
         default=None,
         description="Why the subject is unmatched, set exactly when `tier` is None: "
         "unmatched means *no partner*, not *doubtful pairing*, and this says how much "
@@ -248,13 +248,13 @@ class Confidence(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _residue_iff_unmatched(self) -> Confidence:
+    def _unpaired_iff_unmatched(self) -> Confidence:
         # Defaulted, but never silently: an unmatched subject without a reason would leave
         # rank to guess how doubtful it is, and a matched one with a reason claims both.
-        if self.tier is None and self.residue is None:
-            raise ValueError("an unmatched subject (tier None) must say why: residue is required")
-        if self.tier is not None and self.residue is not None:
-            raise ValueError(f"a subject matched at {self.tier.value!r} has no residue")
+        if self.tier is None and self.unpaired is None:
+            raise ValueError("an unmatched subject (tier None) must say why: unpaired is required")
+        if self.tier is not None and self.unpaired is not None:
+            raise ValueError(f"a subject matched at {self.tier.value!r} has no unpaired reason")
         return self
 
     @classmethod
@@ -263,7 +263,7 @@ class Confidence(BaseModel):
         tier: MatchTier | None,
         base: Completeness,
         head: Completeness,
-        residue: Residue | None = None,
+        unpaired: Unpaired | None = None,
     ) -> Confidence:
         """Coverage on both sides, because an event rests on both models (ARCH-001 §11).
 
@@ -280,7 +280,7 @@ class Confidence(BaseModel):
         `Completeness` and by `render.CompletenessReport.boundary`.
         """
         return cls(
-            tier=tier, residue=residue, models_complete=base.is_complete and head.is_complete
+            tier=tier, unpaired=unpaired, models_complete=base.is_complete and head.is_complete
         )
 
 

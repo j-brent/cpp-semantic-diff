@@ -21,8 +21,7 @@ from collections.abc import Iterator
 
 from cpp_semantic_diff.diff.attrs import changed_attrs
 from cpp_semantic_diff.diff.context import DiffContext, node_hunks
-from cpp_semantic_diff.match import Correspondence, Match
-from cpp_semantic_diff.match.residue import containers as containers
+from cpp_semantic_diff.match import Correspondence, Match, containers
 from cpp_semantic_diff.model import (
     AttrValue,
     Event,
@@ -45,7 +44,7 @@ def node_events(ctx: DiffContext) -> Iterator[Event]:
             # edges without translating between the two sides again.
             subject=node_id,
             provenance=node_hunks((Side.BASE, node)),
-            confidence=ctx.confidence(None, corr.residue_base[node_id]),
+            confidence=ctx.confidence(None, corr.unpaired_base[node_id]),
         )
 
     for node_id in corr.unmatched_head:
@@ -54,7 +53,7 @@ def node_events(ctx: DiffContext) -> Iterator[Event]:
             kind=EventKind.NODE_ADDED,
             subject=node_id,
             provenance=node_hunks((Side.HEAD, node)),
-            confidence=ctx.confidence(None, corr.residue_head[node_id]),
+            confidence=ctx.confidence(None, corr.unpaired_head[node_id]),
         )
 
     base_parents = containers(ctx.base)
