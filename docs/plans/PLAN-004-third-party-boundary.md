@@ -81,6 +81,8 @@ list misses, so today it is modeled as spdlog's public API.
 FetchContent downloads (`build/_deps`). These are not contained in the repository. **Proposed:**
 only files git tracks at that revision are modeled, and everything else gets the label
 `untracked`. Step 1 measures how much of each fixture's model this affects before it is decided.
+**Measured:** no fixture has an untracked node ([step 1 report §2](../../reports/2026-10-10--plan-004-baseline/measurements.md#2--nodes-per-label)). Not
+yet decided.
 
 ### 3.2 · Refusing a changed third-party dependency
 
@@ -121,7 +123,9 @@ files. Also:
   assembled (`produce/build.py`) points to an entity inside the model's files that no declaration
   produced. The working claim is that these are all compiler-generated members. Step 1 checks
   that claim. If anything else turns up, it gets its own label rather than being called
-  `implicit`.
+  `implicit`. **Measured:** the claim does not hold. Lambda members, members of local classes,
+  template instantiations whose alias reaches no node, builtins and a few others are also
+  unresolved ([step 1 report §3](../../reports/2026-10-10--plan-004-baseline/measurements.md#3--unresolved-in-repository-callees)).
 - **The cache key includes the third-party set.** It is a runtime input that changes what
   extraction keeps, so `TuCache.identity` must fold it in. Otherwise a TU cached with one set is
   served under another. `_producer_code_digest` already covers the code change itself.
@@ -169,6 +173,7 @@ Each step is one commit, and the suite passes after each one.
    - the unresolved in-repository callees, to check that they are all compiler-generated.
 
    Record the numbers here. Decide §3.1's untracked question from them.
+   **Measured** in a [frozen report](../../reports/2026-10-10--plan-004-baseline/measurements.md), with the baseline outputs §5 compares against.
 2. **The third-party set.** Submodule discovery, `--third-party`, the missing-path refusal and
    folder-name hints. Not wired into extraction yet. Tests use temporary git repositories, like
    `tests/test_git.py`.

@@ -1,0 +1,62 @@
+fmt  HEAD~12...HEAD  (bcaa44d05579 -> e2243a6a7f4a)
+
+this model is incomplete — read what follows knowing it
+  base 1 of 51 compile-database entries are not C++ and were not modelled
+  head 1 of 51 compile-database entries are not C++ and were not modelled
+  base 50/50 TUs · head 50/50 TUs · libclang 18.1.3 x86_64-pc-linux-gnu
+  base 5,113 of 26,071 distinct edges (19.6%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit 
+special members). Expected, and a lower bound on the call graph, not a defect.
+  head 5,113 of 26,073 distinct edges (19.6%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit 
+special members). Expected, and a lower bound on the call graph, not a defect.
+
+179 lines changed -> 16 semantic events, 2 high-risk
+  11.2 lines per event · 7 top-level, 9 nested under a cause · 5 components · 11 files (5 C++) · 193.7s
+
+component 0 · 6 events
+  0.72 ● NodeAdded  + fmt::v12::detail::is_named_arg [partial specialization]  include/fmt/base.h:1062
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.59 · └ EdgeAdded  fmt::v12::detail::is_named_arg [partial specialization] -> fmt::v12::detail::is_named_arg [primary template]
+     0.57 · └ EdgeAdded  fmt::v12::detail -> fmt::v12::detail::is_named_arg [partial specialization]
+  0.72 ● NodeAdded  + fmt::v12::detail::is_static_named_arg [partial specialization]  include/fmt/base.h:1064
+         exposure public · novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model
+         2 consequence(s) nested below
+     0.59 · └ EdgeAdded  fmt::v12::detail::is_static_named_arg [partial specialization] -> fmt::v12::detail::is_static_named_arg [primary template]
+     0.57 · └ EdgeAdded  fmt::v12::detail -> fmt::v12::detail::is_static_named_arg [partial specialization]
+
+component 1 · 6 events
+  0.50 · NodeRemoved  - format_as  test/compile-test.cc:487
+         novelty NodeRemoved · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, base model · exposure test
+         1 consequence(s) nested below
+     0.30 · └ EdgeRemoved  (global scope) -> format_as
+  0.50 · NodeRemoved  - compile_format_as_type  test/compile-test.cc:484
+         novelty NodeRemoved · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, base model · exposure test
+         3 consequence(s) nested below
+     0.50 · └ NodeRemoved  - compile_format_as_type::value  test/compile-test.cc:485
+     0.35 · └ EdgeRemoved  compile_format_as_type -> compile_format_as_type::value
+     0.30 · └ EdgeRemoved  (global scope) -> compile_format_as_type
+
+component 2 · 2 events
+  0.47 · NodeAdded  + type_with_format_as::value  test/compile-test.cc:488
+         novelty NodeAdded · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, head model · exposure test
+         1 consequence(s) nested below
+     0.29 · └ EdgeAdded  type_with_format_as -> type_with_format_as::value
+
+component 3 · 1 event
+  0.18 · NodeBodyChanged    compile_test_named_Test::TestBody  test/compile-test.cc:125
+         novelty NodeBodyChanged · blast radius 1 dependent(s), 1 direct, head model · exposure test · uncertainty declared
+
+component 4 · 1 event
+  0.18 · NodeBodyChanged    compile_test_format_as_Test::TestBody  test/compile-test.cc:492
+         novelty NodeBodyChanged · blast radius 1 dependent(s), 1 direct, head model · exposure test · uncertainty declared
+
+identity: tier declared only (ARCH-001 §13, STATUS §6)
+  10,571 matched · 3 base / 3 head unmatched
+  git found no renames; one it could not detect would read here as a removal plus an addition
+  at most 3 of those are pairs tiers 2-4 could match; that is the upper bound on what rename detection would remove
+  3 unmatched entities have file-scoped USRs (internal linkage); a rename git did not report breaks tier 1 for these
+
+true of every run:
+  One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not 
+implied.
+  Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.

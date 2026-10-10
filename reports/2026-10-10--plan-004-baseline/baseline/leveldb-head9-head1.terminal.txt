@@ -1,0 +1,318 @@
+leveldb  HEAD~9...HEAD~1  (23e35d792b91 -> 9e273a6aef69)
+
+this model is incomplete — read what follows knowing it
+  base 1 of 94 compile-database entries are not C++ and were not modelled
+  head 1 of 94 compile-database entries are not C++ and were not modelled
+  base 93/93 TUs · head 93/93 TUs · libclang 18.1.3 x86_64-pc-linux-gnu
+  base 4,579 of 22,258 distinct edges (20.6%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit 
+special members). Expected, and a lower bound on the call graph, not a defect.
+  head 4,605 of 22,351 distinct edges (20.6%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit 
+special members). Expected, and a lower bound on the call graph, not a defect.
+  language mode differs: base c++11 → head c++11, c++17 — additions and removals may be the standard moving rather than the code
+
+45 lines changed -> 6 semantic events, 3 high-risk · 117 more in bundled dependencies, ranked last
+  7.5 lines per event · 6 top-level, 0 nested under a cause · 13 components · 6 files (5 C++) · 55.6s
+  117 event(s) in bundled dependencies (95% of the delta) ranked last — in the JSON, not shown here
+
+component 0 · 1 event
+  0.67 ● NodeBodyChanged    leveldb::DBImpl::TEST_CompactMemTable  db/db_impl.cc:643
+         blast radius 115 dependent(s), 31 direct, head model · exposure public · novelty NodeBodyChanged · uncertainty declared
+
+component 1 · 2 events
+  0.58 ● NodeAttrChanged    leveldb::NoDestructor::instance_storage_  util/no_destructor.h:45
+         exposure public · novelty NodeAttrChanged(type) · blast radius 2 dependent(s), 1 direct, head model · uncertainty declared
+  0.41 · NodeBodyChanged    leveldb::NoDestructor::NoDestructor<InstanceType>  util/no_destructor.h:21
+         exposure public · blast radius 2 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 2 · 2 events
+  0.54 ● NodeBodyChanged    leveldb::SingletonEnv::SingletonEnv<EnvType>  util/env_posix.cc:871
+         blast radius 62 dependent(s), 2 direct, head model · exposure internal · novelty NodeBodyChanged · uncertainty declared
+  0.51 · NodeAttrChanged    leveldb::SingletonEnv::env_storage_  util/env_posix.cc:899
+         novelty NodeAttrChanged(type) · exposure internal · blast radius 3 dependent(s), 1 direct, head model · uncertainty declared
+
+component 3 · 2 events
+  0.48 · NodeAdded  + testing::internal::EndsWithMatcher::MatchAndExplain  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:1082
+         novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.33 · └ EdgeAdded  testing::internal::EndsWithMatcher -> testing::internal::EndsWithMatcher::MatchAndExplain
+
+component 4 · 2 events
+  0.48 · NodeAdded  + testing::internal::StartsWithMatcher::MatchAndExplain  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:1028
+         novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.33 · └ EdgeAdded  testing::internal::StartsWithMatcher -> testing::internal::StartsWithMatcher::MatchAndExplain
+
+component 5 · 3 events
+  0.48 · NodeAdded  + testing::internal::MatchesRegexMatcher::MatchAndExplain [bool (const std::basic_string_view<char> &, testing::MatchResultListener *) 
+const]  third_party/googletest/googletest/include/gtest/gtest-matchers.h:802
+         novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model · exposure vendored
+         2 consequence(s) nested below
+     0.36 · └ EdgeAdded  testing::internal::MatchesRegexMatcher::MatchAndExplain [bool (const std::basic_string_view<char> &, testing::MatchResultListener *) 
+const] -> testing::internal::MatchesRegexMatcher::MatchAndExplain [bool (const type-parameter-0-0 &, testing::MatchResultListener *) const]
+     0.33 · └ EdgeAdded  testing::internal::MatchesRegexMatcher -> testing::internal::MatchesRegexMatcher::MatchAndExplain [bool (const 
+std::basic_string_view<char> &, testing::MatchResultListener *) const]
+
+component 6 · 2 events
+  0.48 · NodeAdded  + testing::internal::HasSubstrMatcher::MatchAndExplain  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:974
+         novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.33 · └ EdgeAdded  testing::internal::HasSubstrMatcher -> testing::internal::HasSubstrMatcher::MatchAndExplain
+
+component 7 · 3 events
+  0.48 · NodeAdded  + testing::internal::ConvertibleToStringViewPrinter::PrintValue  third_party/googletest/googletest/include/gtest/gtest-printers.h:254
+         novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model · exposure vendored
+         2 consequence(s) nested below
+     0.36 · └ EdgeAdded  testing::internal::ConvertibleToStringViewPrinter::PrintValue -> testing::internal::UniversalPrint
+     0.33 · └ EdgeAdded  testing::internal::ConvertibleToStringViewPrinter -> testing::internal::ConvertibleToStringViewPrinter::PrintValue
+
+component 8 · 2 events
+  0.48 · NodeAdded  + testing::internal::StrEqualityMatcher::MatchAndExplain  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:906
+         novelty NodeAdded · uncertainty unmatched · blast radius 3 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.33 · └ EdgeAdded  testing::internal::StrEqualityMatcher -> testing::internal::StrEqualityMatcher::MatchAndExplain
+
+component 9 · 1 event
+  0.47 · NodeBodyChanged    leveldb::Hash  util/hash.cc:22
+         blast radius 23 dependent(s), 7 direct, head model · exposure internal · novelty NodeBodyChanged · uncertainty declared
+
+component 10 · 58 events
+  0.46 · NodeAdded  + testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:754]  
+third_party/googletest/googletest/include/gtest/gtest-printers.h:754
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         11 consequence(s) nested below
+     0.46 · └ NodeAdded  + testing::internal::UniversalPrinter::Print [void (const variant<type-parameter-0-0...> &, std::basic_ostream<char> *)]  
+third_party/googletest/googletest/include/gtest/gtest-printers.h:756
+     0.46 · └ NodeAdded  + testing::internal::UniversalPrinter::Visitor  third_party/googletest/googletest/include/gtest/gtest-printers.h:767
+        0.46 · └ NodeAdded  + testing::internal::UniversalPrinter::Visitor::operator()  third_party/googletest/googletest/include/gtest/gtest-printers.h:769
+        0.46 · └ NodeAdded  + testing::internal::UniversalPrinter::Visitor::os  third_party/googletest/googletest/include/gtest/gtest-printers.h:774
+        0.46 · └ NodeAdded  + testing::internal::UniversalPrinter::Visitor::index  third_party/googletest/googletest/include/gtest/gtest-printers.h:775
+        0.36 · └ EdgeAdded  testing::internal::UniversalPrinter::Visitor -> testing::internal::UniversalPrinter::Visitor::index
+        0.36 · └ EdgeAdded  testing::internal::UniversalPrinter::Visitor -> testing::internal::UniversalPrinter::Visitor::os
+        0.36 · └ EdgeAdded  testing::internal::UniversalPrinter::Visitor -> testing::internal::UniversalPrinter::Visitor::operator()
+     0.33 · └ EdgeAdded  testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:754] -> 
+testing::internal::UniversalPrinter::Visitor
+     0.33 · └ EdgeAdded  testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:754] -> 
+testing::internal::UniversalPrinter::Print [void (const variant<type-parameter-0-0...> &, std::basic_ostream<char> *)]
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:754]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1>, char)]  
+third_party/googletest/googlemock/include/gmock/gmock-matchers.h:2991
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1>, 
+char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6>, char)]  
+third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3016
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6>, char)]
+  0.46 · NodeAdded  + testing::internal::PrintTo [void (std::basic_string_view<char>, std::basic_ostream<char> *)]  
+third_party/googletest/googletest/include/gtest/gtest-printers.h:583
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         2 consequence(s) nested below
+     0.33 · └ EdgeAdded  testing::internal::PrintTo [void (std::basic_string_view<char>, std::basic_ostream<char> *)] -> testing::internal::PrintTo [void (const
+std::basic_string<char> &, std::basic_ostream<char> *)]
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::PrintTo [void (std::basic_string_view<char>, std::basic_ostream<char> *)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4>, char)]  
+third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3006
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5>, char)]  
+third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3011
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 
+11, 12, 13, 14>, char)]  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3056
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 
+11, 12, 13, 14, 15>, char)]  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3061
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0>, char)]  
+third_party/googletest/googlemock/include/gmock/gmock-matchers.h:2986
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10>,
+char)]  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3036
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6, 7, 8, 9, 10>, char)]
+  0.46 · NodeAdded  + testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:706]  
+third_party/googletest/googletest/include/gtest/gtest-printers.h:706
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         6 consequence(s) nested below
+     0.46 · └ NodeAdded  + testing::internal::UniversalPrinter::Print [void (const std::any &, std::basic_ostream<char> *)]  
+third_party/googletest/googletest/include/gtest/gtest-printers.h:708
+        0.36 · └ EdgeAdded  testing::internal::UniversalPrinter::Print [void (const std::any &, std::basic_ostream<char> *)] -> 
+testing::internal::UniversalPrinter::GetTypeName
+     0.46 · └ NodeAdded  + testing::internal::UniversalPrinter::GetTypeName  third_party/googletest/googletest/include/gtest/gtest-printers.h:717
+     0.33 · └ EdgeAdded  testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:706] -> 
+testing::internal::UniversalPrinter::GetTypeName
+     0.33 · └ EdgeAdded  testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:706] -> 
+testing::internal::UniversalPrinter::Print [void (const std::any &, std::basic_ostream<char> *)]
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:706]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2>, char)]  
+third_party/googletest/googlemock/include/gmock/gmock-matchers.h:2996
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2>, 
+char)]
+  0.46 · NodeAdded  + testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:734]  
+third_party/googletest/googletest/include/gtest/gtest-printers.h:734
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         3 consequence(s) nested below
+     0.46 · └ NodeAdded  + testing::internal::UniversalPrinter::Print [void (const optional<type-parameter-0-0> &, std::basic_ostream<char> *)]  
+third_party/googletest/googletest/include/gtest/gtest-printers.h:736
+     0.33 · └ EdgeAdded  testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:734] -> 
+testing::internal::UniversalPrinter::Print [void (const optional<type-parameter-0-0> &, std::basic_ostream<char> *)]
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UniversalPrinter [third_party/googletest/googletest/include/gtest/gtest-printers.h:734]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6, 7>, char)]  
+third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3021
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6, 7>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 
+11>, char)]  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3041
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6, 7, 8, 9, 10, 11>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6, 7, 8, 9>, 
+char)]  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3031
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6, 7, 8, 9>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3>, char)]  
+third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3001
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 
+11, 12>, char)]  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3046
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6, 7, 8, 9, 10, 11, 12>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 
+11, 12, 13>, char)]  third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3051
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13>, char)]
+  0.46 · NodeAdded  + testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 3, 4, 5, 6, 7, 8>, char)]
+third_party/googletest/googlemock/include/gmock/gmock-matchers.h:3026
+         novelty NodeAdded · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, head model · exposure vendored
+         1 consequence(s) nested below
+     0.30 · └ EdgeAdded  testing::internal -> testing::internal::UnpackStructImpl [auto (const type-parameter-0-0 &, testing::internal::IndexSequence<0, 1, 2, 
+3, 4, 5, 6, 7, 8>, char)]
+
+component 11 · 44 events
+  0.43 · NodeAdded  + testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586]  
+third_party/googletest/googletest/include/gtest/gtest-matchers.h:586
+         novelty NodeAdded · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, head model · exposure vendored
+         22 consequence(s) nested below
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:589]  
+third_party/googletest/googletest/include/gtest/gtest-matchers.h:589
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:92]  
+third_party/googletest/googletest/src/gtest-matchers.cc:92
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:92] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:598]
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:92] -> testing::Eq
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:82]  
+third_party/googletest/googletest/src/gtest-matchers.cc:82
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:82] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:598]
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:82] -> testing::Eq
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:86]  
+third_party/googletest/googletest/src/gtest-matchers.cc:86
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:86] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:598]
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:86] -> testing::Eq
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:593]  
+third_party/googletest/googletest/include/gtest/gtest-matchers.h:593
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:598]  
+third_party/googletest/googletest/include/gtest/gtest-matchers.h:598
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:591]  
+third_party/googletest/googletest/include/gtest/gtest-matchers.h:591
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:593]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586] -> testing::internal::MatcherBase
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:598]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/src/gtest-matchers.cc:82]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/src/gtest-matchers.cc:92]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/src/gtest-matchers.cc:86]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:589]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:591]
+     0.25 · └ EdgeAdded  testing -> testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:586]
+  0.43 · NodeAdded  + testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:560]  
+third_party/googletest/googletest/include/gtest/gtest-matchers.h:560
+         novelty NodeAdded · uncertainty unmatched · blast radius 1 dependent(s), 1 direct, head model · exposure vendored
+         20 consequence(s) nested below
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:70]  
+third_party/googletest/googletest/src/gtest-matchers.cc:70
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:70] -> testing::Eq
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:70] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:570]
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:563]  
+third_party/googletest/googletest/include/gtest/gtest-matchers.h:563
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:570]  
+third_party/googletest/googletest/include/gtest/gtest-matchers.h:570
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:64]  
+third_party/googletest/googletest/src/gtest-matchers.cc:64
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:64] -> testing::Eq
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:64] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:570]
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:565]  
+third_party/googletest/googletest/include/gtest/gtest-matchers.h:565
+     0.43 · └ NodeAdded  + testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:76]  
+third_party/googletest/googletest/src/gtest-matchers.cc:76
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:76] -> testing::Eq
+        0.33 · └ EdgeAdded  testing::Matcher::Matcher [third_party/googletest/googletest/src/gtest-matchers.cc:76] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:570]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:560] -> testing::internal::MatcherBase
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:560] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/src/gtest-matchers.cc:64]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:560] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:563]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:560] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/src/gtest-matchers.cc:70]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:560] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/src/gtest-matchers.cc:76]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:560] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:570]
+     0.30 · └ EdgeAdded  testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:560] -> testing::Matcher::Matcher 
+[third_party/googletest/googletest/include/gtest/gtest-matchers.h:565]
+     0.25 · └ EdgeAdded  testing -> testing::Matcher [third_party/googletest/googletest/include/gtest/gtest-matchers.h:560]
+
+component 12 · 1 event
+  0.31 · NodeAttrChanged    testing::Expectation::Expectation  third_party/googletest/googlemock/include/gmock/gmock-spec-builders.h:508
+         novelty NodeAttrChanged(exception_spec) · blast radius 2 dependent(s), 1 direct, head model · exposure vendored · uncertainty declared
+
+identity: tier declared only (ARCH-001 §13, STATUS §6)
+  7,695 matched · 0 base / 49 head unmatched
+  git found no renames; one it could not detect would read here as a removal plus an addition
+
+true of every run:
+  One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not 
+implied.
+  Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.

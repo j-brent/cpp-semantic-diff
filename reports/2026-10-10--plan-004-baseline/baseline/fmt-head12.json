@@ -1,0 +1,1311 @@
+{
+  "meta": {
+    "tool": "cpp-semantic-diff",
+    "tool_version": "0.0.1",
+    "schema_version": "1.2",
+    "repo": "fmt",
+    "base_ref": "HEAD~12",
+    "head_ref": "HEAD",
+    "base_rev": "bcaa44d05579c75a83571821faee7acf6a9a0d55",
+    "head_rev": "e2243a6a7f4a8c09e9233a253f3d1f71e45d8cef",
+    "timings": {
+      "acquire": 10.517199889996846,
+      "produce_base": 87.78799886300112,
+      "produce_head": 90.24257113199565,
+      "match": 1.4554050270016887,
+      "diff": 0.5923021760027041,
+      "classify": 0.6378563890029909,
+      "rank": 0.9057824609990348,
+      "total": 193.66577377700014
+    }
+  },
+  "completeness": {
+    "base": {
+      "side": "base",
+      "rev": "bcaa44d05579c75a83571821faee7acf6a9a0d55",
+      "tus_total": 50,
+      "tus_parsed": 50,
+      "tus_failed": 0,
+      "tus_cached": 0,
+      "edges_total": 26071,
+      "edges_dropped": 5113,
+      "build_available": false,
+      "producer_version": "libclang 18.1.3 x86_64-pc-linux-gnu",
+      "producers": [
+        "libclang 18.1.3 x86_64-pc-linux-gnu"
+      ],
+      "language_modes": [],
+      "tus_complete": true,
+      "failures": [],
+      "notes": [
+        "1 of 51 compile-database entries are not C++ and were not modelled"
+      ]
+    },
+    "head": {
+      "side": "head",
+      "rev": "e2243a6a7f4a8c09e9233a253f3d1f71e45d8cef",
+      "tus_total": 50,
+      "tus_parsed": 50,
+      "tus_failed": 0,
+      "tus_cached": 0,
+      "edges_total": 26073,
+      "edges_dropped": 5113,
+      "build_available": false,
+      "producer_version": "libclang 18.1.3 x86_64-pc-linux-gnu",
+      "producers": [
+        "libclang 18.1.3 x86_64-pc-linux-gnu"
+      ],
+      "language_modes": [],
+      "tus_complete": true,
+      "failures": [],
+      "notes": [
+        "1 of 51 compile-database entries are not C++ and were not modelled"
+      ]
+    },
+    "limits": [
+      "One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not implied.",
+      "Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact."
+    ]
+  },
+  "entities": {
+    "c:@N@fmt@N@v12@N@detail": {
+      "id": "c:@N@fmt@N@v12@N@detail",
+      "kind": "namespace",
+      "name": "detail",
+      "qualified_name": "fmt::v12::detail",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/scan.h",
+        "line": 375,
+        "end_line": 629,
+        "column": 11
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0": {
+      "id": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0",
+      "kind": "struct",
+      "name": "is_named_arg",
+      "qualified_name": "fmt::v12::detail::is_named_arg",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/fmt/base.h",
+        "line": 1062,
+        "end_line": 1062,
+        "column": 30
+      },
+      "sides": [
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0": {
+      "id": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0",
+      "kind": "struct",
+      "name": "is_static_named_arg",
+      "qualified_name": "fmt::v12::detail::is_static_named_arg",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/fmt/base.h",
+        "line": 1064,
+        "end_line": 1064,
+        "column": 8
+      },
+      "sides": [
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg": {
+      "id": "c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg",
+      "kind": "struct",
+      "name": "is_named_arg",
+      "qualified_name": "fmt::v12::detail::is_named_arg",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/fmt/base.h",
+        "line": 1056,
+        "end_line": 1056,
+        "column": 30
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@N@detail@ST>1#T@is_static_named_arg": {
+      "id": "c:@N@fmt@N@v12@N@detail@ST>1#T@is_static_named_arg",
+      "kind": "struct",
+      "name": "is_static_named_arg",
+      "qualified_name": "fmt::v12::detail::is_static_named_arg",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/fmt/base.h",
+        "line": 1057,
+        "end_line": 1057,
+        "column": 30
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@S@compile_test_format_as_Test@F@TestBody#": {
+      "id": "c:@S@compile_test_format_as_Test@F@TestBody#",
+      "kind": "method",
+      "name": "TestBody",
+      "qualified_name": "compile_test_format_as_Test::TestBody",
+      "signature": "void ()",
+      "symbol": "_ZN27compile_test_format_as_Test8TestBodyEv",
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 492,
+        "end_line": 496,
+        "column": 1
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@S@compile_test_named_Test@F@TestBody#": {
+      "id": "c:@S@compile_test_named_Test@F@TestBody#",
+      "kind": "method",
+      "name": "TestBody",
+      "qualified_name": "compile_test_named_Test::TestBody",
+      "signature": "void ()",
+      "symbol": "_ZN23compile_test_named_Test8TestBodyEv",
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 125,
+        "end_line": 171,
+        "column": 1
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@S@type_with_format_as": {
+      "id": "c:@S@type_with_format_as",
+      "kind": "struct",
+      "name": "type_with_format_as",
+      "qualified_name": "type_with_format_as",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/std-test.cc",
+        "line": 587,
+        "end_line": 587,
+        "column": 8
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@S@type_with_format_as@FI@value": {
+      "id": "c:@S@type_with_format_as@FI@value",
+      "kind": "field",
+      "name": "value",
+      "qualified_name": "type_with_format_as::value",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 488,
+        "end_line": 488,
+        "column": 7
+      },
+      "sides": [
+        "head"
+      ]
+    },
+    "c:@aN": {
+      "id": "c:@aN",
+      "kind": "namespace",
+      "name": "",
+      "qualified_name": "",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/posix-mock-test.cc",
+        "line": 43,
+        "end_line": 60,
+        "column": 11
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:compile-test.cc@aN@F@format_as#$@aN@S@compile_format_as_type#": {
+      "id": "c:compile-test.cc@aN@F@format_as#$@aN@S@compile_format_as_type#",
+      "kind": "function",
+      "name": "format_as",
+      "qualified_name": "format_as",
+      "signature": "int ((anonymous namespace)::compile_format_as_type)",
+      "symbol": "_ZN12_GLOBAL__N_19format_asENS_22compile_format_as_typeE",
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 487,
+        "end_line": 487,
+        "column": 5
+      },
+      "sides": [
+        "base"
+      ]
+    },
+    "c:compile-test.cc@aN@S@compile_format_as_type": {
+      "id": "c:compile-test.cc@aN@S@compile_format_as_type",
+      "kind": "struct",
+      "name": "compile_format_as_type",
+      "qualified_name": "compile_format_as_type",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 484,
+        "end_line": 486,
+        "column": 8
+      },
+      "sides": [
+        "base"
+      ]
+    },
+    "c:compile-test.cc@aN@S@compile_format_as_type@FI@value": {
+      "id": "c:compile-test.cc@aN@S@compile_format_as_type@FI@value",
+      "kind": "field",
+      "name": "value",
+      "qualified_name": "compile_format_as_type::value",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 485,
+        "end_line": 485,
+        "column": 7
+      },
+      "sides": [
+        "base"
+      ]
+    }
+  },
+  "events": [
+    {
+      "id": "EdgeAdded:222048c278a18bfa",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0|inherits|c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg",
+      "payload": {},
+      "caused_by": "NodeAdded:3a994c39fc554b96",
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 1062,
+            "end_line": 1062,
+            "column": 54
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:3d730cfe4cfc0386",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0|inherits|c:@N@fmt@N@v12@N@detail@ST>1#T@is_static_named_arg",
+      "payload": {},
+      "caused_by": "NodeAdded:598e742b0ecf0fd0",
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 1064,
+            "end_line": 1064,
+            "column": 39
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:24a2955b4b8aa215",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail|contains|c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0",
+      "payload": {},
+      "caused_by": "NodeAdded:3a994c39fc554b96",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:190173103ae8e5c7",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail|contains|c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0",
+      "payload": {},
+      "caused_by": "NodeAdded:598e742b0ecf0fd0",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:b930e1b67216743e",
+      "kind": "EdgeAdded",
+      "subject": "c:@S@type_with_format_as|contains|c:@S@type_with_format_as@FI@value",
+      "payload": {},
+      "caused_by": "NodeAdded:66b38f7ee3fac5b6",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:e9b8c8428cf2d35d",
+      "kind": "EdgeRemoved",
+      "subject": "c:@aN|contains|c:compile-test.cc@aN@F@format_as#$@aN@S@compile_format_as_type#",
+      "payload": {},
+      "caused_by": "NodeRemoved:2e0a5c400c229b42",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:c63caccfe474b24b",
+      "kind": "EdgeRemoved",
+      "subject": "c:@aN|contains|c:compile-test.cc@aN@S@compile_format_as_type",
+      "payload": {},
+      "caused_by": "NodeRemoved:ae5f0bd431c3f1c7",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:60849501e01e2319",
+      "kind": "EdgeRemoved",
+      "subject": "c:compile-test.cc@aN@S@compile_format_as_type|contains|c:compile-test.cc@aN@S@compile_format_as_type@FI@value",
+      "payload": {},
+      "caused_by": "NodeRemoved:ae5f0bd431c3f1c7",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeAdded:3a994c39fc554b96",
+      "kind": "NodeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 1062,
+            "end_line": 1062,
+            "column": 30
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeAdded:598e742b0ecf0fd0",
+      "kind": "NodeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 1064,
+            "end_line": 1064,
+            "column": 8
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeAdded:66b38f7ee3fac5b6",
+      "kind": "NodeAdded",
+      "subject": "c:@S@type_with_format_as@FI@value",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 488,
+            "end_line": 488,
+            "column": 7
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:5927c10cb3324d67",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@S@compile_test_format_as_Test@F@TestBody#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 489,
+            "end_line": 491,
+            "column": 1
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 492,
+            "end_line": 496,
+            "column": 1
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:1a92ff3da571c487",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@S@compile_test_named_Test@F@TestBody#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 167,
+            "column": 1
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 171,
+            "column": 1
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeRemoved:2e0a5c400c229b42",
+      "kind": "NodeRemoved",
+      "subject": "c:compile-test.cc@aN@F@format_as#$@aN@S@compile_format_as_type#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 487,
+            "end_line": 487,
+            "column": 5
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeRemoved:ae5f0bd431c3f1c7",
+      "kind": "NodeRemoved",
+      "subject": "c:compile-test.cc@aN@S@compile_format_as_type",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 484,
+            "end_line": 486,
+            "column": 8
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeRemoved:417612c48c4d07ce",
+      "kind": "NodeRemoved",
+      "subject": "c:compile-test.cc@aN@S@compile_format_as_type@FI@value",
+      "payload": {},
+      "caused_by": "NodeRemoved:ae5f0bd431c3f1c7",
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 485,
+            "end_line": 485,
+            "column": 7
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    }
+  ],
+  "findings": [],
+  "ranking": [
+    "NodeAdded:3a994c39fc554b96",
+    "NodeAdded:598e742b0ecf0fd0",
+    "EdgeAdded:222048c278a18bfa",
+    "EdgeAdded:3d730cfe4cfc0386",
+    "EdgeAdded:190173103ae8e5c7",
+    "EdgeAdded:24a2955b4b8aa215",
+    "NodeRemoved:2e0a5c400c229b42",
+    "NodeRemoved:ae5f0bd431c3f1c7",
+    "NodeRemoved:417612c48c4d07ce",
+    "NodeAdded:66b38f7ee3fac5b6",
+    "EdgeRemoved:60849501e01e2319",
+    "EdgeRemoved:c63caccfe474b24b",
+    "EdgeRemoved:e9b8c8428cf2d35d",
+    "EdgeAdded:b930e1b67216743e",
+    "NodeBodyChanged:1a92ff3da571c487",
+    "NodeBodyChanged:5927c10cb3324d67"
+  ],
+  "scores": {
+    "NodeAdded:3a994c39fc554b96": {
+      "event_id": "NodeAdded:3a994c39fc554b96",
+      "total": 0.7176333382565816,
+      "impact": 0.6678039273606843,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.85,
+          "weight": 0.25,
+          "contribution": 0.2125,
+          "detail": "NodeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeAdded:598e742b0ecf0fd0": {
+      "event_id": "NodeAdded:598e742b0ecf0fd0",
+      "total": 0.7176333382565816,
+      "impact": 0.6678039273606843,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.85,
+          "weight": 0.25,
+          "contribution": 0.2125,
+          "detail": "NodeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeAdded:222048c278a18bfa": {
+      "event_id": "EdgeAdded:222048c278a18bfa",
+      "total": 0.5926333382565816,
+      "impact": 0.5207451038312725,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeAdded:3d730cfe4cfc0386": {
+      "event_id": "EdgeAdded:3d730cfe4cfc0386",
+      "total": 0.5926333382565816,
+      "impact": 0.5207451038312725,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeAdded:190173103ae8e5c7": {
+      "event_id": "EdgeAdded:190173103ae8e5c7",
+      "total": 0.5708161993561573,
+      "impact": 0.4950778815954792,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeAdded:24a2955b4b8aa215": {
+      "event_id": "EdgeAdded:24a2955b4b8aa215",
+      "total": 0.5708161993561573,
+      "impact": 0.4950778815954792,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeRemoved:2e0a5c400c229b42": {
+      "event_id": "NodeRemoved:2e0a5c400c229b42",
+      "total": 0.5025666691282907,
+      "impact": 0.41478431662151855,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "NodeRemoved:ae5f0bd431c3f1c7": {
+      "event_id": "NodeRemoved:ae5f0bd431c3f1c7",
+      "total": 0.5025666691282907,
+      "impact": 0.41478431662151855,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "NodeRemoved:417612c48c4d07ce": {
+      "event_id": "NodeRemoved:417612c48c4d07ce",
+      "total": 0.5025666691282907,
+      "impact": 0.41478431662151855,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": "NodeRemoved:ae5f0bd431c3f1c7",
+      "exposure": "test"
+    },
+    "NodeAdded:66b38f7ee3fac5b6": {
+      "event_id": "NodeAdded:66b38f7ee3fac5b6",
+      "total": 0.46506666912829075,
+      "impact": 0.37066666956269506,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.85,
+          "weight": 0.25,
+          "contribution": 0.2125,
+          "detail": "NodeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "EdgeRemoved:60849501e01e2319": {
+      "event_id": "EdgeRemoved:60849501e01e2319",
+      "total": 0.35256666912829077,
+      "impact": 0.23831372838622447,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "EdgeRemoved:c63caccfe474b24b": {
+      "event_id": "EdgeRemoved:c63caccfe474b24b",
+      "total": 0.3,
+      "impact": 0.17647058823529416,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.0,
+          "weight": 0.35,
+          "contribution": 0.0,
+          "detail": "0 dependent(s), 0 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "EdgeRemoved:e9b8c8428cf2d35d": {
+      "event_id": "EdgeRemoved:e9b8c8428cf2d35d",
+      "total": 0.3,
+      "impact": 0.17647058823529416,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.0,
+          "weight": 0.35,
+          "contribution": 0.0,
+          "detail": "0 dependent(s), 0 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "EdgeAdded:b930e1b67216743e": {
+      "event_id": "EdgeAdded:b930e1b67216743e",
+      "total": 0.2875,
+      "impact": 0.16176470588235295,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.0,
+          "weight": 0.35,
+          "contribution": 0.0,
+          "detail": "0 dependent(s), 0 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "NodeBodyChanged:1a92ff3da571c487": {
+      "event_id": "NodeBodyChanged:1a92ff3da571c487",
+      "total": 0.17756666912829078,
+      "impact": 0.20890196368034208,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 3,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "NodeBodyChanged:5927c10cb3324d67": {
+      "event_id": "NodeBodyChanged:5927c10cb3324d67",
+      "total": 0.17756666912829078,
+      "impact": 0.20890196368034208,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 4,
+      "bounded_by": null,
+      "exposure": "test"
+    }
+  },
+  "components": [
+    {
+      "index": 0,
+      "events": [
+        "NodeAdded:3a994c39fc554b96",
+        "NodeAdded:598e742b0ecf0fd0",
+        "EdgeAdded:222048c278a18bfa",
+        "EdgeAdded:3d730cfe4cfc0386",
+        "EdgeAdded:190173103ae8e5c7",
+        "EdgeAdded:24a2955b4b8aa215"
+      ],
+      "top_score": 0.7176333382565816
+    },
+    {
+      "index": 1,
+      "events": [
+        "NodeRemoved:2e0a5c400c229b42",
+        "NodeRemoved:ae5f0bd431c3f1c7",
+        "NodeRemoved:417612c48c4d07ce",
+        "EdgeRemoved:60849501e01e2319",
+        "EdgeRemoved:c63caccfe474b24b",
+        "EdgeRemoved:e9b8c8428cf2d35d"
+      ],
+      "top_score": 0.5025666691282907
+    },
+    {
+      "index": 2,
+      "events": [
+        "NodeAdded:66b38f7ee3fac5b6",
+        "EdgeAdded:b930e1b67216743e"
+      ],
+      "top_score": 0.46506666912829075
+    },
+    {
+      "index": 3,
+      "events": [
+        "NodeBodyChanged:1a92ff3da571c487"
+      ],
+      "top_score": 0.17756666912829078
+    },
+    {
+      "index": 4,
+      "events": [
+        "NodeBodyChanged:5927c10cb3324d67"
+      ],
+      "top_score": 0.17756666912829078
+    }
+  ],
+  "summary": {
+    "lines_changed": 179,
+    "files_changed": 11,
+    "cpp_files_changed": 5,
+    "files_renamed": 0,
+    "events_reported": 16,
+    "vendored_events": 0,
+    "compression": "179 lines changed -> 16 semantic events, 2 high-risk",
+    "compression_ratio": 11.1875,
+    "high_risk_count": 2,
+    "top_level_events": 7,
+    "components": 5,
+    "residue": {
+      "matched": 10571,
+      "unmatched_base": 3,
+      "unmatched_head": 3,
+      "internal_linkage_residue": 3,
+      "tiers_run": [
+        "declared"
+      ]
+    }
+  }
+}
