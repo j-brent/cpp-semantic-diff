@@ -34,6 +34,7 @@ from cpp_semantic_diff.model import (
     Node,
     NodeId,
     NodeKind,
+    Residue,
     Side,
     TuResult,
     TuStatus,
@@ -89,10 +90,14 @@ def paired(base: Model, head: Model, *pairs: tuple[str, str], tier: MatchTier) -
     """
     matched_base = {b for b, _ in pairs}
     matched_head = {h for _, h in pairs}
+    left_base = sorted(n for n in base.nodes if n not in matched_base)
+    left_head = sorted(n for n in head.nodes if n not in matched_head)
     return Correspondence(
         matches=[Match(base=NodeId(b), head=NodeId(h), tier=tier) for b, h in pairs],
-        unmatched_base=sorted(n for n in base.nodes if n not in matched_base),
-        unmatched_head=sorted(n for n in head.nodes if n not in matched_head),
+        unmatched_base=left_base,
+        unmatched_head=left_head,
+        residue_base=dict.fromkeys(left_base, Residue.NONE),
+        residue_head=dict.fromkeys(left_head, Residue.NONE),
         tiers_run=[MatchTier.DECLARED, tier],
     )
 
@@ -642,6 +647,36 @@ class TestConfidenceIsNeverLaundered:
         head = model("b", node(F))
         assert only(diff(base, head), EventKind.EDGE_REMOVED).confidence.tier is None
 
+    def test_an_unmatched_node_carries_why_it_is_unmatched(self) -> None:
+        """ADR-034: no partner is not doubt. The match stage says which it is, and the
+        event carries that verbatim for rank to weigh."""
+        base = model("a", node(F))
+        head = model("b", node(F), node(G, name="g"))
+        confidence = only(diff(base, head), EventKind.NODE_ADDED).confidence
+        assert (confidence.tier, confidence.residue) == (None, Residue.NONE)
+
+    def test_an_edge_to_an_unmatched_node_carries_that_node_s_residue(self) -> None:
+        """An edge between a matched entity and a plain addition is no more doubtful than
+        the addition -- which is not doubtful at all. Before ADR-034 the edge took the
+        maximum because one endpoint had no tier."""
+        base = model("a", node(F))
+        head = model("b", node(F), node(G, name="g"), edges=[calls(F, G)])
+        confidence = only(diff(base, head), EventKind.EDGE_ADDED).confidence
+        assert (confidence.tier, confidence.residue) == (None, Residue.NONE)
+
+    def test_an_edge_takes_the_more_doubtful_of_two_unmatched_endpoints(self) -> None:
+        a, x, y = NodeId("c:@F@a#"), NodeId("c:@F@x#"), NodeId("c:@F@y#")
+        base = model("a", node(a, name="a"))
+        head = model("b", node(x, name="x"), node(y, name="y"), edges=[calls(x, y)])
+        corr = Correspondence(
+            unmatched_base=[a],
+            unmatched_head=[x, y],
+            residue_base={a: Residue.CANDIDATE},
+            residue_head={x: Residue.AMBIGUOUS, y: Residue.CANDIDATE},
+        )
+        confidence = only(diff(base, head, corr), EventKind.EDGE_ADDED).confidence
+        assert (confidence.tier, confidence.residue) == (None, Residue.AMBIGUOUS)
+
 
 class TestProvenanceRunsBothWays:
     """ARCH-001 §6.2. The reviewer navigates from an event to the lines *and* back. An
@@ -701,12 +736,19 @@ class TestTheStageIsAPureFunction:
         the models, so this stage does."""
         base = model("a", node(F), node(G, name="g"))
         with pytest.raises(ValueError, match="neither matched nor residue"):
-            diff_models(base, model("b"), Correspondence(unmatched_base=[F]))
+            diff_models(
+                base,
+                model("b"),
+                Correspondence(unmatched_base=[F], residue_base={F: Residue.NONE}),
+            )
 
     def test_a_correspondence_built_against_other_models_is_refused(self) -> None:
         with pytest.raises(ValueError, match="different model"):
+            ghost = NodeId("c:@F@ghost#")
             diff_models(
-                model("a"), model("b"), Correspondence(unmatched_base=[NodeId("c:@F@ghost#")])
+                model("a"),
+                model("b"),
+                Correspondence(unmatched_base=[ghost], residue_base={ghost: Residue.NONE}),
             )
 
 

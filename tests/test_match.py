@@ -14,14 +14,29 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 from pydantic import ValidationError
 
 from cpp_semantic_diff.acquire import file_changes, resolve_revs
-from cpp_semantic_diff.match import Correspondence, Match, match_models, usr_file
-from cpp_semantic_diff.model import Location, MatchTier, Model, Node, NodeId, NodeKind
+from cpp_semantic_diff.match import (
+    Correspondence,
+    Match,
+    match_models,
+    usr_file,
+)
+from cpp_semantic_diff.model import (
+    Edge,
+    EdgeKind,
+    Location,
+    MatchTier,
+    Model,
+    Node,
+    NodeId,
+    NodeKind,
+    Residue,
+)
 
 
 def node(usr: str, name: str = "f", **kw: Any) -> Node:
@@ -148,6 +163,15 @@ class TestMatchingIsOneToOne:
                 yield NodeId("c:@F@f#"), NodeId("c:@F@x#")
                 yield NodeId("c:@F@f#"), NodeId("c:@F@y#")
 
+            def ambiguous(
+                self,
+                base: Model,
+                head: Model,
+                base_pool: frozenset[NodeId],
+                head_pool: frozenset[NodeId],
+            ) -> tuple[frozenset[NodeId], frozenset[NodeId]]:
+                return frozenset(), frozenset()
+
         base = model("a", node("c:@F@f#"))
         head = model("b", node("c:@F@x#"), node("c:@F@y#"))
         with pytest.raises(ValueError, match="one-to-one"):
@@ -230,6 +254,15 @@ class TestTiersRunOverTheResidue:
             for b in sorted(base_pool):
                 if (h := by_hash.get(base.nodes[b].body_hash)) is not None:
                     yield b, h
+
+        def ambiguous(
+            self,
+            base: Model,
+            head: Model,
+            base_pool: frozenset[NodeId],
+            head_pool: frozenset[NodeId],
+        ) -> tuple[frozenset[NodeId], frozenset[NodeId]]:
+            return frozenset(), frozenset()
 
     def test_a_later_tier_only_sees_what_tier_1_left(self) -> None:
         # `kept` matches on its USR at tier 1; the rename matches only on its body hash.
@@ -354,3 +387,97 @@ class TestInternalLinkage:
             "the fixture must actually break tier 1, or the next assertion proves nothing"
         )
         assert match_models(base, head, renames=renames).internal_linkage_residue == 0
+
+
+class TestTheResidueSaysWhyItIsResidue:
+    """ADR-034: an unmatched entity is not, by that fact, a doubtful pairing.
+
+    Every genuine addition and removal has no partner by definition. What makes one doubtful
+    is evidence that a partner was missed -- a same-kind entity left over under the same
+    parent on the other side -- or a tier that found partners and refused to choose. The
+    match stage is the only stage that saw both sides' leftovers, so it records which.
+    """
+
+    @staticmethod
+    def contained(rev: str, parent: Node, *children: Node) -> Model:
+        m = model(rev, parent, *children)
+        m.edges = [Edge(src=parent.id, dst=c.id, kind=EdgeKind.CONTAINS) for c in children]
+        return m
+
+    def test_a_plain_addition_has_no_candidate(self) -> None:
+        c = match_models(model("a", node("c:@F@f#")), model("b", node("c:@F@f#"), node("c:@F@g#")))
+        assert c.residue_head == {"c:@F@g#": Residue.NONE}
+        assert c.residue_base == {}
+
+    def test_a_rename_tier_1_cannot_see_leaves_a_candidate_on_both_sides(self) -> None:
+        """Same kind, same parent (top level), one gone and one new: §5's tier-4 candidate
+        set, counted. Possibly a rename, and worth a human's eye."""
+        c = match_models(model("a", node("c:@F@compute#")), model("b", node("c:@F@calculate#")))
+        assert c.residue_base == {"c:@F@compute#": Residue.CANDIDATE}
+        assert c.residue_head == {"c:@F@calculate#": Residue.CANDIDATE}
+
+    def test_a_different_kind_is_not_a_candidate(self) -> None:
+        base = model("a", node("c:@F@f#"))
+        head = model("b", node("c:@S@F", kind=NodeKind.STRUCT))
+        c = match_models(base, head)
+        assert c.residue_base == {"c:@F@f#": Residue.NONE}
+        assert c.residue_head == {"c:@S@F": Residue.NONE}
+
+    def test_a_candidate_must_share_the_parent_through_the_matches(self) -> None:
+        """`m` under class `C` and `n` under class `D` are not candidates for each other,
+        even though both are methods; `n2` under `C` is, because `C` matched."""
+        cls = node("c:@S@C", kind=NodeKind.STRUCT)
+        other = node("c:@S@D", kind=NodeKind.STRUCT)
+        m = node("c:@S@C@F@m#", kind=NodeKind.METHOD)
+        n = node("c:@S@D@F@n#", kind=NodeKind.METHOD)
+        n2 = node("c:@S@C@F@n2#", kind=NodeKind.METHOD)
+        base = self.contained("a", cls, m)
+        base.add_node(other)
+        head = self.contained("b", other, n)
+        head.add_node(cls)
+        assert match_models(base, head).residue_base == {m.id: Residue.NONE}
+        head.add_node(n2)
+        head.edges.append(Edge(src=cls.id, dst=n2.id, kind=EdgeKind.CONTAINS))
+        c = match_models(base, head)
+        assert c.residue_base == {m.id: Residue.CANDIDATE}
+        assert c.residue_head == {n.id: Residue.NONE, n2.id: Residue.CANDIDATE}
+
+    def test_children_of_an_unmatched_parent_are_not_candidates(self) -> None:
+        """Pairing them would be a claim about the parents first, and counting is not the
+        place to make one."""
+        old = node("c:@S@Old", kind=NodeKind.STRUCT)
+        new = node("c:@S@New", kind=NodeKind.STRUCT)
+        m_old = node("c:@S@Old@F@m#", kind=NodeKind.METHOD)
+        m_new = node("c:@S@New@F@m#", kind=NodeKind.METHOD)
+        c = match_models(self.contained("a", old, m_old), self.contained("b", new, m_new))
+        assert c.residue_base == {old.id: Residue.CANDIDATE, m_old.id: Residue.NONE}
+        assert c.residue_head == {new.id: Residue.CANDIDATE, m_new.id: Residue.NONE}
+
+    #: A file rename that lands one file-scoped USR on another's key: `old.cpp`'s helper,
+    #: rewritten into head coordinates, is indistinguishable from `new.cpp`'s (no TU on
+    #: either, as for a static declared in a header).
+    RENAMES: ClassVar[dict[str, str]] = {"src/old.cpp": "src/new.cpp"}
+    OLD = "c:old.cpp@F@helper#"
+    NEW = "c:new.cpp@F@helper#"
+
+    def test_a_collision_with_a_partner_on_the_other_side_is_ambiguous(self) -> None:
+        """Tier 1 drops a key two nodes share rather than pick one (`declared._index`), and
+        says so: the pairing itself is in doubt, which is the most doubt there is."""
+        base = model("a", node(self.OLD), node(self.NEW))
+        head = model("b", node(self.NEW))
+        c = match_models(base, head, renames=self.RENAMES)
+        assert not c.matches
+        assert c.residue_base == {self.NEW: Residue.AMBIGUOUS, self.OLD: Residue.AMBIGUOUS}
+        assert c.residue_head == {self.NEW: Residue.AMBIGUOUS}
+
+    def test_a_collision_with_nothing_to_choose_between_is_not_ambiguous(self) -> None:
+        """Two colliding nodes that both vanished were never a choice tier 1 declined."""
+        base = model("a", node(self.OLD), node(self.NEW))
+        c = match_models(base, model("b"), renames=self.RENAMES)
+        assert set(c.residue_base.values()) == {Residue.NONE}
+
+    def test_every_leftover_has_a_reason_and_nothing_else_does(self) -> None:
+        with pytest.raises(ValidationError, match="have no residue"):
+            Correspondence(unmatched_base=[NodeId("a")])
+        with pytest.raises(ValidationError, match="not unmatched"):
+            Correspondence(residue_head={NodeId("x"): Residue.NONE})

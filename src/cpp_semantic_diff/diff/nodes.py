@@ -22,31 +22,14 @@ from collections.abc import Iterator
 from cpp_semantic_diff.diff.attrs import changed_attrs
 from cpp_semantic_diff.diff.context import DiffContext, node_hunks
 from cpp_semantic_diff.match import Correspondence, Match
+from cpp_semantic_diff.match.residue import containers as containers
 from cpp_semantic_diff.model import (
     AttrValue,
-    EdgeKind,
     Event,
     EventKind,
-    Model,
     NodeId,
     Side,
 )
-
-
-def containers(model: Model) -> dict[NodeId, NodeId]:
-    """Child -> containing node, read off the `contains` edges (ARCH-001 §4.2).
-
-    The producer follows the *semantic* parent, so an out-of-line definition is contained
-    by its class rather than by the namespace it was written in, and a node has at most one
-    container. The IR does not forbid a second one; if one ever appears the move check
-    below is comparing *a* parent rather than *the* parent, which is why this is a named
-    function and not an inline comprehension.
-    """
-    parents: dict[NodeId, NodeId] = {}
-    for edge in model.edges:
-        if edge.kind is EdgeKind.CONTAINS:
-            parents.setdefault(edge.dst, edge.src)
-    return parents
 
 
 def node_events(ctx: DiffContext) -> Iterator[Event]:
@@ -62,7 +45,7 @@ def node_events(ctx: DiffContext) -> Iterator[Event]:
             # edges without translating between the two sides again.
             subject=node_id,
             provenance=node_hunks((Side.BASE, node)),
-            confidence=ctx.confidence(None),
+            confidence=ctx.confidence(None, corr.residue_base[node_id]),
         )
 
     for node_id in corr.unmatched_head:
@@ -71,7 +54,7 @@ def node_events(ctx: DiffContext) -> Iterator[Event]:
             kind=EventKind.NODE_ADDED,
             subject=node_id,
             provenance=node_hunks((Side.HEAD, node)),
-            confidence=ctx.confidence(None),
+            confidence=ctx.confidence(None, corr.residue_head[node_id]),
         )
 
     base_parents = containers(ctx.base)

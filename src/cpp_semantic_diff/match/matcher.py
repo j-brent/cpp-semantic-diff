@@ -14,11 +14,12 @@ else uses.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Protocol
 
 from cpp_semantic_diff.match.correspondence import Correspondence, Match
 from cpp_semantic_diff.match.declared import DeclaredTier
+from cpp_semantic_diff.match.residue import residue_reasons
 from cpp_semantic_diff.model import MatchTier, Model, NodeId
 
 
@@ -41,6 +42,19 @@ class Tier(Protocol):
         base_pool: frozenset[NodeId],
         head_pool: frozenset[NodeId],
     ) -> Iterable[tuple[NodeId, NodeId]]: ...
+
+    def ambiguous(
+        self,
+        base: Model,
+        head: Model,
+        base_pool: frozenset[NodeId],
+        head_pool: frozenset[NodeId],
+    ) -> tuple[Collection[NodeId], Collection[NodeId]]:
+        """(base, head) nodes this tier found partners for but refused to pair, because it
+        could not choose between them. Asked over the same pools as `propose`. Only the
+        tier knows it declined a choice, and that is the most doubtful residue there is
+        (ADR-034)."""
+        ...
 
 
 def default_tiers(renames: Mapping[str, str] | None = None) -> tuple[Tier, ...]:
@@ -72,13 +86,17 @@ def match_models(
     base_pool = set(base.nodes)
     head_pool = set(head.nodes)
     matches: list[Match] = []
+    ambiguous_base: set[NodeId] = set()
+    ambiguous_head: set[NodeId] = set()
 
     for tier in tiers:
         # Snapshot the pools: a tier reads the residue as it stood when the tier began, so
         # its proposals cannot depend on the order the driver consumed its own output.
-        for base_id, head_id in tier.propose(
-            base, head, frozenset(base_pool), frozenset(head_pool)
-        ):
+        pools = (frozenset(base_pool), frozenset(head_pool))
+        refused_base, refused_head = tier.ambiguous(base, head, *pools)
+        ambiguous_base.update(refused_base)
+        ambiguous_head.update(refused_head)
+        for base_id, head_id in tier.propose(base, head, *pools):
             if base_id not in base_pool or head_id not in head_pool:
                 raise ValueError(
                     f"tier {tier.tier.value!r} proposed {base_id!r} -> {head_id!r}, but one "
@@ -89,11 +107,24 @@ def match_models(
             head_pool.discard(head_id)
             matches.append(Match(base=base_id, head=head_id, tier=tier.tier))
 
+    # A node one tier refused may still be paired by a later one; only what is left over
+    # at the end is residue, and only residue gets a reason.
+    residue_base, residue_head = residue_reasons(
+        base,
+        head,
+        base_pool,
+        head_pool,
+        {m.base: m.head for m in matches},
+        ambiguous_base & base_pool,
+        ambiguous_head & head_pool,
+    )
     return Correspondence(
         # Sorted so the stage is deterministic: the same two models produce the same
         # correspondence, and therefore the same events and the same JSON, on every run.
         matches=sorted(matches, key=lambda m: (m.base, m.head)),
         unmatched_base=sorted(base_pool),
         unmatched_head=sorted(head_pool),
+        residue_base=dict(sorted(residue_base.items())),
+        residue_head=dict(sorted(residue_head.items())),
         tiers_run=[t.tier for t in tiers],
     )

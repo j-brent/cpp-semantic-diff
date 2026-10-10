@@ -160,6 +160,28 @@ class Side(StrEnum):
     HEAD = "head"
 
 
+class Residue(StrEnum):
+    """Why an entity has no partner on the other side -- the match stage's doubt about it.
+
+    An entity no tier paired is not, by that fact alone, a doubtful pairing: a genuine
+    addition has no partner by definition, and nothing about it is uncertain. What makes an
+    unpaired entity doubtful is evidence that a partner may have been missed, so that is what
+    this records (ADR-034). Ordered weakest doubt first; `diff.context.RESIDUE_ORDER` relies
+    on the order and `rank.weights.UNCERTAINTY_BY_RESIDUE` values it.
+    """
+
+    #: Nothing on the other side's residue could be this entity's partner: no unpaired entity
+    #: of the same kind under the same parent. A plain addition or removal.
+    NONE = "none"
+    #: The other side's residue holds at least one entity of the same kind under the same
+    #: parent -- ARCH-001 §5's tier-4 candidate set, counted rather than scored. A rename
+    #: that tier 1 cannot see lands here.
+    CANDIDATE = "candidate"
+    #: A tier found partners but could not choose between them, so it paired none (e.g.
+    #: `match.declared._index` on a colliding key). The pairing itself is in doubt.
+    AMBIGUOUS = "ambiguous"
+
+
 class Hunk(BaseModel):
     """A source span an event came from: (side, file, line span). ARCH-001 §6.2.
 
@@ -185,23 +207,37 @@ class Hunk(BaseModel):
 class Confidence(BaseModel):
     """The two inputs ARCH-001 §11 names, carried verbatim -- not a score.
 
+    The match half is `tier` when the subject was matched and `residue` when it was not:
+    an unmatched subject still has a match-stage verdict, namely how likely it is that a
+    partner exists and was missed (ADR-034).
+
     §11: "Every event carries confidence derived from its match tier and the completeness of
     both models." The derivation is deliberately *not* performed here. Rank (§7) owns the
     weighting, and it has the inverting rule that makes a premature scalar dangerous: a
     low-confidence event ranks **up**, not down. Collapsing tier and completeness into one
     number here would force that rule to be re-derived from a lossy input.
 
-    Both fields are required. A default would let a caller omit completeness and thereby
-    claim, silently, that nothing was missing -- the exact substitution of absence of
-    evidence for evidence of absence that §11 exists to prevent.
+    `tier` and `models_complete` are required. A default would let a caller omit
+    completeness and thereby claim, silently, that nothing was missing -- the exact
+    substitution of absence of evidence for evidence of absence that §11 exists to prevent.
+    `residue` defaults to None only because the validator below refuses that default
+    wherever it would be a claim.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     tier: MatchTier | None = Field(
         description="The tier that matched the subject, or None when it was unmatched "
-        "residue. In v0 only tier 1 runs (ARCH-001 §13), so None also covers every rename "
-        "-- which is what makes the rename damage measurable rather than invisible.",
+        "residue -- for an edge event, when either endpoint was. In v0 only tier 1 runs "
+        "(ARCH-001 §13), so None also covers every rename -- which is what makes the rename "
+        "damage measurable rather than invisible.",
+    )
+    residue: Residue | None = Field(
+        default=None,
+        description="Why the subject is unmatched, set exactly when `tier` is None: "
+        "unmatched means *no partner*, not *doubtful pairing*, and this says how much "
+        "doubt there is (ADR-034). For an edge event, the most doubtful of its unmatched "
+        "endpoints.",
     )
     models_complete: bool = Field(
         description="Both models parsed every TU they attempted -- **source coverage, and "
@@ -211,8 +247,24 @@ class Confidence(BaseModel):
         "consumer it has to say so.",
     )
 
+    @model_validator(mode="after")
+    def _residue_iff_unmatched(self) -> Confidence:
+        # Defaulted, but never silently: an unmatched subject without a reason would leave
+        # rank to guess how doubtful it is, and a matched one with a reason claims both.
+        if self.tier is None and self.residue is None:
+            raise ValueError("an unmatched subject (tier None) must say why: residue is required")
+        if self.tier is not None and self.residue is not None:
+            raise ValueError(f"a subject matched at {self.tier.value!r} has no residue")
+        return self
+
     @classmethod
-    def derive(cls, tier: MatchTier | None, base: Completeness, head: Completeness) -> Confidence:
+    def derive(
+        cls,
+        tier: MatchTier | None,
+        base: Completeness,
+        head: Completeness,
+        residue: Residue | None = None,
+    ) -> Confidence:
         """Coverage on both sides, because an event rests on both models (ARCH-001 §11).
 
         `Completeness` measures two unrelated kinds of incompleteness and only one of them
@@ -227,7 +279,9 @@ class Confidence(BaseModel):
         that is always on promotes nothing. The residue is reported by its own numbers on
         `Completeness` and by `render.CompletenessReport.boundary`.
         """
-        return cls(tier=tier, models_complete=base.is_complete and head.is_complete)
+        return cls(
+            tier=tier, residue=residue, models_complete=base.is_complete and head.is_complete
+        )
 
 
 def _derive_id(kind: EventKind, subject: str, payload: dict[str, AttrValue]) -> EventId:

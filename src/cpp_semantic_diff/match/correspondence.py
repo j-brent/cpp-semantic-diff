@@ -13,7 +13,7 @@ from functools import cached_property
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from cpp_semantic_diff.match.declared import usr_file
-from cpp_semantic_diff.model import MatchTier, NodeId
+from cpp_semantic_diff.model import MatchTier, NodeId, Residue, Side
 
 
 class Match(BaseModel):
@@ -46,6 +46,17 @@ class Correspondence(BaseModel):
     unmatched_base: list[NodeId] = Field(default_factory=list)
     unmatched_head: list[NodeId] = Field(default_factory=list)
 
+    residue_base: dict[NodeId, Residue] = Field(
+        default_factory=dict,
+        description="Why each `unmatched_base` node is unmatched, keyed by exactly those "
+        "nodes (ADR-034). No partner is not the same as a doubtful pairing, and only this "
+        "stage saw both sides' leftovers, so it is the stage that says which is which.",
+    )
+    residue_head: dict[NodeId, Residue] = Field(
+        default_factory=dict,
+        description="The same for `unmatched_head`.",
+    )
+
     tiers_run: list[MatchTier] = Field(
         default_factory=list,
         description="Which tiers actually ran, in order. Unmatched means different things "
@@ -70,6 +81,19 @@ class Correspondence(BaseModel):
             raise ValueError(f"base node(s) {sorted(overlap)} are both matched and unmatched")
         if overlap := set(head_ids) & set(self.unmatched_head):
             raise ValueError(f"head node(s) {sorted(overlap)} are both matched and unmatched")
+        # Every leftover has a reason and nothing else does. A missing reason would leave
+        # rank to guess how doubtful an add or a remove is, and any guess is a default
+        # presented as a measurement.
+        for side, unmatched, reasons in (
+            ("base", self.unmatched_base, self.residue_base),
+            ("head", self.unmatched_head, self.residue_head),
+        ):
+            if missing := set(unmatched) - reasons.keys():
+                raise ValueError(f"unmatched {side} node(s) {sorted(missing)} have no residue")
+            if extra := reasons.keys() - set(unmatched):
+                raise ValueError(
+                    f"{side} node(s) {sorted(extra)} have a residue but are not unmatched"
+                )
         return self
 
     @cached_property
@@ -96,6 +120,10 @@ class Correspondence(BaseModel):
         """
         m = self.by_base.get(base)
         return m.tier if m else None
+
+    def residue_for(self, side: Side, node_id: NodeId) -> Residue | None:
+        """Why this node is unmatched, or None if it is not residue on that side."""
+        return (self.residue_base if side is Side.BASE else self.residue_head).get(node_id)
 
     @property
     def internal_linkage_residue(self) -> int:

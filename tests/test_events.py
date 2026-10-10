@@ -30,6 +30,7 @@ from cpp_semantic_diff.model import (
     Location,
     MatchTier,
     NodeId,
+    Residue,
     Side,
     TuResult,
     TuStatus,
@@ -302,7 +303,7 @@ class TestConfidenceIsAlwaysStated:
         e = Event(
             kind=EventKind.NODE_ADDED,
             subject=NodeId("c:@F@new#"),
-            confidence=Confidence(tier=None, models_complete=True),
+            confidence=Confidence(tier=None, residue=Residue.NONE, models_complete=True),
         )
         assert e.confidence.tier is None
 
@@ -318,6 +319,20 @@ class TestConfidenceIsAlwaysStated:
         assert Confidence.derive(MatchTier.DECLARED, whole, whole).models_complete
         assert not Confidence.derive(MatchTier.DECLARED, whole, partial).models_complete
         assert not Confidence.derive(MatchTier.DECLARED, partial, whole).models_complete
+
+    def test_an_unmatched_subject_must_say_why(self) -> None:
+        """ADR-034. Without a residue rank would have to guess how doubtful an add or a
+        remove is, and a default would be a guess presented as a measurement."""
+        with pytest.raises(ValidationError, match="residue is required"):
+            Confidence(tier=None, models_complete=True)
+
+    def test_a_matched_subject_has_no_residue(self) -> None:
+        with pytest.raises(ValidationError, match="has no residue"):
+            Confidence(tier=MatchTier.DECLARED, residue=Residue.NONE, models_complete=True)
+
+    def test_the_residue_survives_a_json_round_trip(self) -> None:
+        c = Confidence(tier=None, residue=Residue.CANDIDATE, models_complete=True)
+        assert Confidence.model_validate_json(c.model_dump_json()) == c
 
 
 class TestProvenanceRunsBothWays:
