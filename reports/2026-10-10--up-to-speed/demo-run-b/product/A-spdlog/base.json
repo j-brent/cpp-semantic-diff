@@ -1,0 +1,243 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "spdlog \u00b7 component 0 \u00b7 base (bfde7d3711d5)",
+  "output": "docs/playground-B/product/A-spdlog/base.html",
+  "quality_profile": "showcase",
+  "legend": {
+   "entries": {
+    "frontend": {
+     "label": "caller (example/example.cpp)"
+    },
+    "backend": {
+     "label": "factory the change is about (_mt and _st drawn as one)"
+    },
+    "cloud": {
+     "label": "callee"
+    }
+   }
+  }
+ },
+ "components": [
+  {
+   "id": "ex_basic",
+   "type": "frontend",
+   "label": "basic_example",
+   "sublabel": "example.cpp:121",
+   "pos": [
+    40,
+    40
+   ],
+   "size": [
+    230,
+    60
+   ]
+  },
+  {
+   "id": "ex_async",
+   "type": "frontend",
+   "label": "async_example",
+   "sublabel": "example.cpp:165",
+   "pos": [
+    40,
+    130
+   ],
+   "size": [
+    230,
+    60
+   ]
+  },
+  {
+   "id": "ex_replace",
+   "type": "frontend",
+   "label": "replace_default_logger_example",
+   "sublabel": "example.cpp:374",
+   "pos": [
+    40,
+    220
+   ],
+   "size": [
+    250,
+    60
+   ]
+  },
+  {
+   "id": "ex_daily",
+   "type": "frontend",
+   "label": "daily_example",
+   "sublabel": "example.cpp:134",
+   "pos": [
+    40,
+    330
+   ],
+   "size": [
+    230,
+    60
+   ]
+  },
+  {
+   "id": "ex_rot",
+   "type": "frontend",
+   "label": "rotating_example",
+   "sublabel": "example.cpp:128",
+   "pos": [
+    40,
+    730
+   ],
+   "size": [
+    230,
+    60
+   ]
+  },
+  {
+   "id": "handlers",
+   "type": "cloud",
+   "label": "file_event_handlers",
+   "sublabel": "ctor ()",
+   "pos": [
+    860,
+    340
+   ],
+   "size": [
+    200,
+    200
+   ]
+  },
+  {
+   "id": "reg_inst",
+   "type": "cloud",
+   "label": "details::registry::instance",
+   "sublabel": "registry& ()",
+   "pos": [
+    860,
+    880
+   ],
+   "size": [
+    200,
+    60
+   ]
+  },
+  {
+   "id": "reg_flush",
+   "type": "cloud",
+   "label": "details::registry::flush_all",
+   "sublabel": "void ()",
+   "pos": [
+    860,
+    980
+   ],
+   "size": [
+    200,
+    60
+   ]
+  },
+  {
+   "id": "basic_old",
+   "type": "backend",
+   "label": "basic_logger_mt \u00b7 _st",
+   "sublabel": "(\u2026, handlers) \u00b7 basic_file_sink.h:45",
+   "pos": [
+    440,
+    40
+   ],
+   "size": [
+    290,
+    64
+   ],
+   "tag": "NodeRemoved \u00d72 \u00b7 risk 0.79"
+  },
+  {
+   "id": "daily_old",
+   "type": "backend",
+   "label": "daily_logger_mt \u00b7 _st",
+   "sublabel": "(\u2026, handlers) \u00b7 daily_file_sink.h:206",
+   "pos": [
+    440,
+    250
+   ],
+   "size": [
+    290,
+    64
+   ],
+   "tag": "NodeRemoved \u00d72 \u00b7 risk 0.76"
+  },
+  {
+   "id": "dfmt_old",
+   "type": "backend",
+   "label": "daily_logger_format_mt \u00b7 _st",
+   "sublabel": "(\u2026, handlers) \u00b7 daily_file_sink.h:218",
+   "pos": [
+    440,
+    450
+   ],
+   "size": [
+    290,
+    64
+   ],
+   "tag": "NodeRemoved \u00d72 \u00b7 risk 0.70"
+  },
+  {
+   "id": "rot_old",
+   "type": "backend",
+   "label": "rotating_logger_mt \u00b7 _st",
+   "sublabel": "(\u2026, handlers) \u00b7 rotating_file_sink.h:69",
+   "pos": [
+    440,
+    650
+   ],
+   "size": [
+    290,
+    64
+   ],
+   "tag": "NodeRemoved \u00d72 \u00b7 risk 0.76"
+  }
+ ],
+ "connections": [
+  {
+   "id": "ex_basic-basic_old",
+   "from": "ex_basic",
+   "to": "basic_old"
+  },
+  {
+   "id": "ex_async-basic_old",
+   "from": "ex_async",
+   "to": "basic_old"
+  },
+  {
+   "id": "ex_replace-basic_old",
+   "from": "ex_replace",
+   "to": "basic_old"
+  },
+  {
+   "id": "ex_daily-daily_old",
+   "from": "ex_daily",
+   "to": "daily_old"
+  },
+  {
+   "id": "ex_rot-rot_old",
+   "from": "ex_rot",
+   "to": "rot_old"
+  },
+  {
+   "id": "basic_old-handlers",
+   "from": "basic_old",
+   "to": "handlers"
+  },
+  {
+   "id": "daily_old-handlers",
+   "from": "daily_old",
+   "to": "handlers"
+  },
+  {
+   "id": "dfmt_old-handlers",
+   "from": "dfmt_old",
+   "to": "handlers"
+  },
+  {
+   "id": "rot_old-handlers",
+   "from": "rot_old",
+   "to": "handlers"
+  }
+ ]
+}

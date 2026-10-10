@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signature Churn · the top component, before and after</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .frame { width: 100%; border: 1px solid var(--ring); border-radius: 12px; background: #0b0f17; display: block; }
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 16px 0 10px; }
+  .grid3 h3 { margin-bottom: 6px; }
+  .grid3 ul { margin: 0; padding-left: 18px; }
+  .grid3 li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="crumbs"><a href="../index.html">Playground B</a> <span>/</span> <span class="kicker product">Product</span> <span>/</span> <span>A</span></div>
+    <div id="theme-slot"></div>
+  </div>
+  <h1>A · The top component, before and after</h1>
+  <p class="lede">Component 0 is what the tool ranks first: the change a reviewer should read before anything else.
+    The diagram puts the base and head call graphs on top of each other. <b>Dashed red</b> is only in base, <b>green</b>
+    only in head, and grey is in both. In each repository the top component is mostly one signature change seen through
+    tier-1 identity.</p>
+
+  <div class="controls"><span id="seg"></span><a id="open" class="note" target="_blank" rel="noopener">Open the diagram on its own ↗</a></div>
+  <div class="grid3" id="cards"></div>
+  <p class="note" style="margin:14px 0 8px">The diagram has its own <b>Before / Delta / After</b> switch at the top left, and an
+    "Exact authored changes" list at the bottom.</p>
+  <iframe class="frame" id="frame" title="before and after call graph"></iframe>
+  <p class="note muted">Drawn with archify <code>compare architecture</code> from <code>A-*/base.json</code> and <code>head.json</code>, which
+    <code>scripts/gen_*_component0.py</code> writes by hand from component 0 of each <code>diff.json</code>. Node and edge counts were
+    checked against the document. Archify's own header line ("See what changed before you merge") is its boilerplate.</p>
+</main>
+<script src="../data/run-38044461310.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+const VIEWS = {
+  fmt: {
+    src: "A-fmt/fmt-write-buffer.html", height: 1460,
+    cards: [
+      ["rose", "What the tool reported", [
+        "28 events in component 0, 3 of them top-level",
+        "detail::write_buffer(ostream&, buffer&) removed, risk 0.86",
+        "detail::write_buffer(ostream&, buffer&, unsigned long) added, risk 0.82",
+        "Each has 8 consequences nested under it: every caller and callee edge, removed and re-added"]],
+      ["amber", "What it most likely is", [
+        "One signature change: write_buffer gained a size parameter",
+        "Under tier-1 identity a changed signature is a different symbol, so it reads as a removal plus an addition",
+        "The ostream max_size test was rewritten alongside it (body changed, 3 calls out, 3 in)"]],
+      ["slate", "Drawn differently from the document", [
+        "3 namespace 'contains' edges are left out (1 removed, 2 added). The terminal view prints them as 'detail -> write_buffer', which reads like a call",
+        "fill_n shares this component with write_buffer only through namespace detail containing both"]],
+    ],
+  },
+  spdlog: {
+    src: "A-spdlog/spdlog-file-loggers.html", height: 1880,
+    cards: [
+      ["rose", "What the tool reported", [
+        "62 events in component 0",
+        "8 file-logger factories removed (risk 0.70–0.79) and 8 added (0.67–0.75)",
+        "Every call to them from example.cpp, and their call to file_event_handlers(), removed and re-added",
+        "spdlog::flush_all added, calling registry::instance and registry::flush_all"]],
+      ["amber", "What it most likely is", [
+        "One signature change applied to 8 functions: each gained a trailing unsigned long",
+        "Component 1, ranked next, adds buffer_size() and set_buffer_size() to the file sinks, which suggests that parameter is a buffer size",
+        "Tiers 2–4 would pair the removals with the additions; tier 1 cannot"]],
+      ["slate", "Drawn differently from the document", [
+        "_mt and _st are drawn as one node per family, so the diagram shows half the node and factory-edge counts",
+        "17 namespace 'contains' edges are left out (8 removed, 9 added)"]],
+    ],
+  },
+};
+const frame = document.getElementById("frame");
+function show(name) {
+  const v = VIEWS[name];
+  frame.src = v.src;
+  frame.style.height = v.height + "px";
+  document.getElementById("open").href = v.src;
+  document.getElementById("cards").replaceChildren(...v.cards.map(([dot, title, items]) =>
+    el("div", { class: "panel note" },
+      el("h3", {}, el("span", { class: "sw", style: `display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:var(--${{ rose: "critical", amber: "warning", slate: "muted" }[dot]})` }), title),
+      el("ul", {}, items.map((i) => el("li", { text: i }))))));
+}
+document.getElementById("seg").append(segmented([["fmt", "fmt · write_buffer"], ["spdlog", "spdlog · file loggers"]], "fmt", show));
+show("fmt");
+</script>
+</body>
+</html>

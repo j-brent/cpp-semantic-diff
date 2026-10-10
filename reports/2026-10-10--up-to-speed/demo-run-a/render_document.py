@@ -6,7 +6,7 @@ Every value shown comes from the document; nothing is computed here except the
 nesting the `render` stage already describes via `caused_by`, and the layout
 widths of the score bars.
 
-    python reports/2026-10-10--up-to-speed/demo-run/render_document.py \
+    python reports/2026-10-10--up-to-speed/demo-run-a/render_document.py \
         <document.json> <out.html> [display-label]
 
 `display-label` only replaces the page heading. It is needed because the demo

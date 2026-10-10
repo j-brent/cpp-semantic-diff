@@ -1,0 +1,415 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "compare",
+  "type": "architecture",
+  "comparatorVersion": 1,
+  "canonicalVersion": 1,
+  "completeness": "complete",
+  "proofLevel": "authored",
+  "base": {
+    "title": "spdlog · component 0 · base (bfde7d3711d5)",
+    "rawSha256": "24b2905cd0aaea74215666340112a23983dc0fbc37cdc6234d209c819072084c",
+    "semanticSha256": "25579d1c2977fd1f2d71cd16b10c3933922571227310a6f4b6afddadf688a8a8",
+    "bytes": 3897
+  },
+  "head": {
+    "title": "spdlog · component 0 · head (d6c93f38a08b)",
+    "rawSha256": "de3d2cef1646d72e4fcd313a01039179bba8aeed3cd93ca7d94d70716bd49a6d",
+    "semanticSha256": "5afa209fe55c39e7625351b52f36e304688529af09325751e997f3abdcb01dad",
+    "bytes": 4348
+  },
+  "summary": {
+    "components": {
+      "added": 5,
+      "changed": 0,
+      "evidenceChanged": 0,
+      "removed": 4,
+      "moved": 0
+    },
+    "connections": {
+      "added": 11,
+      "changed": 0,
+      "removed": 9,
+      "rerouted": 0
+    },
+    "boundaries": {
+      "added": 0,
+      "changed": 0,
+      "removed": 0,
+      "geometryChanged": 0
+    },
+    "presentationChanged": true,
+    "provenanceChanged": false
+  },
+  "changes": {
+    "components": [
+      {
+        "id": "basic_new",
+        "headLabel": "basic_logger_mt · _st",
+        "status": "added",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "basic_old",
+        "baseLabel": "basic_logger_mt · _st",
+        "status": "removed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "daily_new",
+        "headLabel": "daily_logger_mt · _st",
+        "status": "added",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "daily_old",
+        "baseLabel": "daily_logger_mt · _st",
+        "status": "removed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "dfmt_new",
+        "headLabel": "daily_logger_format_mt · _st",
+        "status": "added",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "dfmt_old",
+        "baseLabel": "daily_logger_format_mt · _st",
+        "status": "removed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "flush_all",
+        "headLabel": "spdlog::flush_all",
+        "status": "added",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "rot_new",
+        "headLabel": "rotating_logger_mt · _st",
+        "status": "added",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "rot_old",
+        "baseLabel": "rotating_logger_mt · _st",
+        "status": "removed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": []
+      }
+    ],
+    "connections": [
+      {
+        "id": "basic_new-handlers",
+        "head": {
+          "from": "basic_new",
+          "to": "handlers",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "basic_old-handlers",
+        "base": {
+          "from": "basic_old",
+          "to": "handlers",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "daily_new-handlers",
+        "head": {
+          "from": "daily_new",
+          "to": "handlers",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "daily_old-handlers",
+        "base": {
+          "from": "daily_old",
+          "to": "handlers",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "dfmt_new-handlers",
+        "head": {
+          "from": "dfmt_new",
+          "to": "handlers",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "dfmt_old-handlers",
+        "base": {
+          "from": "dfmt_old",
+          "to": "handlers",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_async-basic_new",
+        "head": {
+          "from": "ex_async",
+          "to": "basic_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_async-basic_old",
+        "base": {
+          "from": "ex_async",
+          "to": "basic_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_basic-basic_new",
+        "head": {
+          "from": "ex_basic",
+          "to": "basic_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_basic-basic_old",
+        "base": {
+          "from": "ex_basic",
+          "to": "basic_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_daily-daily_new",
+        "head": {
+          "from": "ex_daily",
+          "to": "daily_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_daily-daily_old",
+        "base": {
+          "from": "ex_daily",
+          "to": "daily_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_replace-basic_new",
+        "head": {
+          "from": "ex_replace",
+          "to": "basic_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_replace-basic_old",
+        "base": {
+          "from": "ex_replace",
+          "to": "basic_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_rot-rot_new",
+        "head": {
+          "from": "ex_rot",
+          "to": "rot_new",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "ex_rot-rot_old",
+        "base": {
+          "from": "ex_rot",
+          "to": "rot_old",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "flush-flush",
+        "head": {
+          "from": "flush_all",
+          "to": "reg_flush",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "flush-inst",
+        "head": {
+          "from": "flush_all",
+          "to": "reg_inst",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "rot_new-handlers",
+        "head": {
+          "from": "rot_new",
+          "to": "handlers",
+          "label": ""
+        },
+        "status": "added",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      },
+      {
+        "id": "rot_old-handlers",
+        "base": {
+          "from": "rot_old",
+          "to": "handlers",
+          "label": ""
+        },
+        "status": "removed",
+        "classifications": [
+          "topology"
+        ],
+        "changedFields": []
+      }
+    ],
+    "boundaries": []
+  },
+  "identity": {
+    "components": "components[].id",
+    "connections": "connections[].id (required)",
+    "boundaries": "boundaries[].kind + boundaries[].label (derived)"
+  },
+  "view": {
+    "visualPreset": "classic"
+  },
+  "limitations": [
+    "Authored Architecture IR only; no runtime impact, causality, risk, or mergeability is inferred.",
+    "Boundary identity is conservatively derived from kind + label."
+  ],
+  "artifact": {
+    "sha256": "8b11c53f766a57b9236dab0a879467fcb2919675d9db6c131355aba3ab07d1cd",
+    "bytes": 2164568
+  },
+  "validation": {
+    "checksPassed": 28,
+    "checkCount": 28,
+    "baseComposition": "pass",
+    "headComposition": "pass"
+  }
+}

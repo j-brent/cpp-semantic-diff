@@ -1,0 +1,291 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "fmt \u00b7 component 0 \u00b7 base (cdc27f91a007)",
+  "output": "docs/playground-B/product/A-fmt/base.html",
+  "quality_profile": "showcase",
+  "legend": {
+   "entries": {
+    "frontend": {
+     "label": "caller (library entry point)"
+    },
+    "external": {
+     "label": "caller (test)"
+    },
+    "backend": {
+     "label": "function the change is about"
+    },
+    "cloud": {
+     "label": "callee"
+    }
+   }
+  }
+ },
+ "components": [
+  {
+   "id": "print",
+   "type": "frontend",
+   "label": "fmt::print",
+   "sublabel": "(std::ostream&, fstring, T&&...)",
+   "pos": [
+    40,
+    40
+   ],
+   "size": [
+    210,
+    58
+   ]
+  },
+  {
+   "id": "vprint_c",
+   "type": "frontend",
+   "label": "fmt::vprint",
+   "sublabel": "(std::ostream&, string_view, args)",
+   "pos": [
+    40,
+    130
+   ],
+   "size": [
+    210,
+    58
+   ]
+  },
+  {
+   "id": "vprint_w",
+   "type": "frontend",
+   "label": "fmt::vprint (wchar_t)",
+   "sublabel": "(std::wostream&, wstring_view, args)",
+   "pos": [
+    40,
+    220
+   ],
+   "size": [
+    210,
+    58
+   ]
+  },
+  {
+   "id": "t_write",
+   "type": "external",
+   "label": "test: write_to_ostream",
+   "sublabel": "ostream-test.cc:127",
+   "pos": [
+    40,
+    310
+   ],
+   "size": [
+    210,
+    58
+   ]
+  },
+  {
+   "id": "t_max",
+   "type": "external",
+   "label": "test: write_to_ostream_max_size",
+   "sublabel": "ostream-test.cc:131 \u00b7 body changed",
+   "pos": [
+    40,
+    410
+   ],
+   "size": [
+    230,
+    80
+   ]
+  },
+  {
+   "id": "max_value",
+   "type": "cloud",
+   "label": "detail::max_value",
+   "sublabel": "T ()",
+   "pos": [
+    800,
+    150
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "to_unsigned",
+   "type": "cloud",
+   "label": "detail::to_unsigned",
+   "sublabel": "make_unsigned<T> (T)",
+   "pos": [
+    800,
+    240
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "buf_ctor",
+   "type": "cloud",
+   "label": "detail::buffer::buffer",
+   "sublabel": "(grow_fn, T*, size, capacity)",
+   "pos": [
+    800,
+    370
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "mem_buf",
+   "type": "cloud",
+   "label": "basic_memory_buffer",
+   "sublabel": "ctor (const Allocator&)",
+   "pos": [
+    800,
+    460
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "sv_ctor",
+   "type": "cloud",
+   "label": "basic_string_view",
+   "sublabel": "ctor (const Char*)",
+   "pos": [
+    800,
+    550
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "buf_data",
+   "type": "cloud",
+   "label": "detail::buffer::data",
+   "sublabel": "T* ()",
+   "pos": [
+    800,
+    640
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "ice",
+   "type": "cloud",
+   "label": "detail::is_constant_evaluated",
+   "sublabel": "bool (bool)",
+   "pos": [
+    800,
+    763
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "wb_old",
+   "type": "backend",
+   "label": "detail::write_buffer",
+   "sublabel": "(ostream&, buffer&) \u00b7 ostream.h:55",
+   "pos": [
+    420,
+    90
+   ],
+   "size": [
+    250,
+    130
+   ],
+   "tag": "NodeRemoved \u00b7 risk 0.86"
+  }
+ ],
+ "connections": [
+  {
+   "id": "print-wb_old",
+   "from": "print",
+   "to": "wb_old"
+  },
+  {
+   "id": "vprint_c-wb_old",
+   "from": "vprint_c",
+   "to": "wb_old"
+  },
+  {
+   "id": "vprint_w-wb_old",
+   "from": "vprint_w",
+   "to": "wb_old"
+  },
+  {
+   "id": "t_write-wb_old",
+   "from": "t_write",
+   "to": "wb_old"
+  },
+  {
+   "id": "t_max-wb_old",
+   "from": "t_max",
+   "to": "wb_old"
+  },
+  {
+   "id": "wb_old-max_value",
+   "from": "wb_old",
+   "to": "max_value"
+  },
+  {
+   "id": "wb_old-to_unsigned",
+   "from": "wb_old",
+   "to": "to_unsigned"
+  },
+  {
+   "id": "t_max-max_value",
+   "from": "t_max",
+   "to": "max_value"
+  },
+  {
+   "id": "t_max-to_unsigned",
+   "from": "t_max",
+   "to": "to_unsigned"
+  },
+  {
+   "id": "t_max-buf_ctor",
+   "from": "t_max",
+   "to": "buf_ctor"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "rose",
+   "title": "What the tool reported",
+   "items": [
+    "write_buffer(os, buf) removed, score 0.86",
+    "write_buffer(os, buf, unsigned long) added, score 0.82",
+    "Every caller edge removed and re-added: 8 consequences nested under each",
+    "28 events in component 0; 3 top-level"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "What it most likely is",
+   "items": [
+    "One signature change: a size parameter was added",
+    "Tier-1 identity only (ARCH-001 \u00a713), so a changed signature is a new symbol",
+    "Tiers 2\u20134 would pair these and collapse 18 events into roughly one"
+   ]
+  },
+  {
+   "dot": "slate",
+   "title": "Left out of the drawing",
+   "items": [
+    "3 namespace detail \u2018contains\u2019 edges (1 removed, 2 added)",
+    "The text view prints them as \u2018detail -> write_buffer\u2019, which reads like a call"
+   ]
+  }
+ ]
+}

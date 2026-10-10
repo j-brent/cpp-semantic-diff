@@ -38,7 +38,7 @@ None of them is fixed. Measurements of the tool on real repositories are in the
 
 Found by the 2026-10-10 review, and decided to be worked on. The text of each issue is as the
 review recorded it; the evidence it cites is in
-[`reports/2026-10-10--up-to-speed/demo-run/`](reports/2026-10-10--up-to-speed/demo-run/), the
+[`reports/2026-10-10--up-to-speed/demo-run-a/`](reports/2026-10-10--up-to-speed/demo-run-a/), the
 outputs of GitHub Actions run
 [38044461310](https://github.com/j-brent/cpp-semantic-diff/actions/runs/38044461310).
 
