@@ -364,6 +364,59 @@ class TestMacros:
         assert [n.id for n in moved.nodes.values()] == ["c:a.cpp@macro@LIMIT"]
 
 
+class TestAStaticAssertionAMacroWritesIsNotANode:
+    """googletest's `TEST` writes a `static_assert` at each use. Modelled, every new test
+    would be a top-level addition. Judged by where the text is written, the assertion belongs
+    to the macro, so it is not a node: not when the macro is third-party, and not when it is
+    the repository's own, whose macro node already compares its text (ADR-039)."""
+
+    GTEST_LIKE = """#pragma once
+    #define MY_TEST(suite, name) \\
+      static_assert(sizeof(#suite) > 1, "suite must not be empty"); \\
+      void suite##_##name()
+    """
+
+    def extract_with(self, tmp_path: Path, toolchain: Toolchain, source: str) -> TuExtract:
+        (tmp_path / "vendor").mkdir()
+        (tmp_path / "vendor" / "gtest.h").write_text(self.GTEST_LIKE, encoding="utf-8")
+        (tmp_path / "a.cpp").write_text(source, encoding="utf-8")
+        entry = CompileEntry(
+            file=tmp_path / "a.cpp",
+            directory=tmp_path,
+            arguments=["clang++", "-std=c++17", "-c", "a.cpp"],
+        )
+        return extract(
+            entry, root=tmp_path, toolchain=toolchain, boundary=Boundary(third_party=("vendor",))
+        )
+
+    def assertions(self, result: TuExtract) -> list[Node]:
+        return [n for n in result.nodes.values() if n.kind is NodeKind.STATIC_ASSERTION]
+
+    def test_a_third_party_macro_used_in_a_project_file(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        result = self.extract_with(
+            tmp_path, toolchain, '#include "vendor/gtest.h"\nMY_TEST(Suite, Case) {}\n'
+        )
+        assert result.ok, result.result.detail
+        assert self.assertions(result) == []
+        assert "Suite_Case" in {n.qualified_name for n in result.nodes.values()}
+
+    def test_a_project_macro(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        source = (
+            '#define CHECK_SIZE(T, n) static_assert(sizeof(T) == n, "size")\nCHECK_SIZE(int, 4);\n'
+        )
+        result = self.extract_with(tmp_path, toolchain, source)
+        assert self.assertions(result) == []
+        assert "CHECK_SIZE" in {n.qualified_name for n in result.nodes.values()}
+
+    def test_a_plain_static_assert_with_a_macro_in_its_condition_is_still_one(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        source = "#define WIDTH 4\nstatic_assert(sizeof(int) == WIDTH);\n"
+        assert len(self.assertions(self.extract_with(tmp_path, toolchain, source))) == 1
+
+
 class TestStaticAssertions:
     """A `static_assert` at namespace or class scope. Clang gives it no identifier, so it is
     identified by where it is declared and what it asserts (ADR-039)."""

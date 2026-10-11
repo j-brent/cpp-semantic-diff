@@ -53,6 +53,14 @@ to skip anything without one.
 - **Compared:** `message`, as written. Weight 0.30: it is what a failing build prints.
 - **Contained by its scope** where that scope is modelled. One inside a function body is part of
   the body and is not a node.
+- **One a macro writes is not a node,** whether the macro is third-party or the repository's.
+  googletest's `TEST` writes a `static_assert` at each use, so every new test would otherwise be
+  a top-level addition, and the assertion is the macro's text, which a repository macro's own
+  node already compares. libclang reports a declaration's location as the macro's use -- its
+  spelling, file and expansion locations agree -- so the extractor reads the text at that
+  location instead: an assertion written in place starts with `static_assert`, one a macro
+  writes starts with the macro's name. It is skipped rather than attributed to the macro: the
+  macro's name is not its node id when one file defines it twice.
 
 ## Consequences
 
@@ -65,8 +73,9 @@ to skip anything without one.
   (+49 %, 6 alternating runs each against `dev`). Earlier runs put about 19 % on enums, aliases
   and variables and about 25 % on macros. leveldb `HEAD~9..HEAD~1` showed no clear rise. fmt gains
   1,407 macros and 583 static assertions.
-- A `static_assert` written by a macro, such as googletest's `TEST`, is a node located at the
-  macro's use. leveldb has 216 static assertion nodes, nearly all in its test files.
+- leveldb `HEAD~9..HEAD~1` has no static assertion nodes; before macro-written ones were
+  skipped it had 216, nearly all googletest's `TEST` in its test files. Every `static_assert`
+  leveldb writes itself is inside a function or Windows-only.
 - A changed macro is reported without the code that uses it; that is the uses relationship, out of
   v0 ([ADR-041](ADR-041-v0-scope-of-steps-6-and-7.md)).
 - One model is one preprocessor configuration (ARCH-001 §11). A macro defined differently on two

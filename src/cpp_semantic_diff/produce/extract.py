@@ -1441,6 +1441,32 @@ def macro_id(usr: str, ordinal: int) -> str:
     return stripped if ordinal == 1 else f"{stripped}#{ordinal}"
 
 
+#: The keywords a `static_assert` written in place starts with.
+_STATIC_ASSERT_KEYWORDS = frozenset({"static_assert", "_Static_assert"})
+
+
+def _written_by_a_macro(cursor: ci.Cursor) -> bool:
+    """Whether a `static_assert` comes from a macro expansion rather than being written where
+    it stands.
+
+    libclang reports a declaration's location as the point of expansion -- spelling, file and
+    expansion location all name the macro's use -- so the text there is read instead: written
+    in place, the first token is `static_assert`; written by a macro, it is the macro's name.
+    The range is rebuilt from file offsets, because the cursor's own extent is a macro range
+    whose tokens libclang mixes up with the macro's definition.
+    """
+    start, end = cursor.extent.start, cursor.extent.end
+    if start.file is None:
+        return False
+    tu = cursor.translation_unit
+    span = ci.SourceRange.from_locations(
+        ci.SourceLocation.from_offset(tu, start.file, start.offset),
+        ci.SourceLocation.from_offset(tu, start.file, max(start.offset, end.offset)),
+    )
+    first = next(iter(tu.get_tokens(extent=span)), None)
+    return first is not None and first.spelling not in _STATIC_ASSERT_KEYWORDS
+
+
 def static_assertion_id(file: str, parent: str, condition: str | None, ordinal: int) -> str:
     """A static assertion's identity, which clang does not give it: its USR is a bare `c:`.
 
@@ -2149,9 +2175,15 @@ class _Extractor:
         """A `static_assert` at namespace or class scope, as a node (ADR-039).
 
         One inside a function body is part of the body, which `body_hash` compares.
+
+        One a macro writes is skipped, wherever the macro is defined. googletest's `TEST`
+        writes a `static_assert` at each use, so modelling those would add a top-level
+        addition for every new test -- noise in the most-reviewed kind of change -- and the
+        assertion is the macro's text, which the macro's own node already compares when the
+        macro is the repository's.
         """
         location = _location(cursor, self.root, self.base)
-        if location is None:
+        if location is None or _written_by_a_macro(cursor):
             return
         parent = cursor.semantic_parent
         if parent is not None and parent.kind not in MODELLED_KINDS:
