@@ -257,7 +257,7 @@ def cache_gc(
 
     `TuCache._evict` trims within one TU's directory and cannot reach the case that actually
     accumulates: every change to the extraction code gives each TU a new identity directory,
-    and nothing ever writes to the old ones again (ARCH-001 §9, STATUS §6).
+    and nothing ever writes to the old ones again (ARCH-001 §9).
 
     Safe by construction -- an entry collected here is reparsed on the next run that wants
     it, which is the same cost as one that was never written.

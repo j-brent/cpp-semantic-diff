@@ -93,12 +93,12 @@ class Component(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     index: int
-    events: list[ChangeEventId] = Field(description="Ordered as the ranking orders them.")
+    change_events: list[ChangeEventId] = Field(description="Ordered as the ranking orders them.")
     top_score: float = Field(description="The highest event total in the component.")
 
     @property
     def size(self) -> int:
-        return len(self.events)
+        return len(self.change_events)
 
 
 class _Union:
@@ -224,7 +224,7 @@ def components(
         result.append(
             Component(
                 index=index,
-                events=member_ids,
+                change_events=member_ids,
                 top_score=max(totals[e] for e in member_ids),
             )
         )

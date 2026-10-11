@@ -42,7 +42,7 @@ class Ranking(BaseModel):
     @property
     def order(self) -> list[ChangeEventId]:
         """ARCH-001 §10's `ranking: [event id]`."""
-        return [s.event_id for s in self.scores]
+        return [s.change_event_id for s in self.scores]
 
     @property
     def high_risk_count(self) -> int:
@@ -57,7 +57,7 @@ class Ranking(BaseModel):
 
     def score_for(self, event_id: ChangeEventId) -> RiskScore:
         for s in self.scores:
-            if s.event_id == event_id:
+            if s.change_event_id == event_id:
                 return s
         raise KeyError(f"no score for {event_id}")
 
@@ -115,7 +115,7 @@ def _bound_by_cause(scores: list[RiskScore], events: Sequence[ChangeEvent]) -> l
     which is why `_blast_radius` had to be fixed independently rather than relying on this.
     """
     cause_of = {e.id: e.caused_by for e in events if e.caused_by is not None}
-    by_id = {s.event_id: s for s in scores}
+    by_id = {s.change_event_id: s for s in scores}
     bounded: dict[ChangeEventId, RiskScore] = {}
 
     def resolve(event_id: ChangeEventId, guard: frozenset[ChangeEventId]) -> RiskScore:
@@ -136,7 +136,7 @@ def _bound_by_cause(scores: list[RiskScore], events: Sequence[ChangeEvent]) -> l
         bounded[event_id] = score
         return score
 
-    return [resolve(s.event_id, frozenset({s.event_id})) for s in scores]
+    return [resolve(s.change_event_id, frozenset({s.change_event_id})) for s in scores]
 
 
 def rank_events(events: Sequence[ChangeEvent], base: Model, head: Model) -> Ranking:
@@ -155,16 +155,16 @@ def rank_events(events: Sequence[ChangeEvent], base: Model, head: Model) -> Rank
     scored = _bound_by_cause([score_event(event, ctx) for event in events], events)
 
     depth = _cause_depth(events)
-    scored.sort(key=lambda s: (-s.total, depth[s.event_id], s.event_id))
-    order = [s.event_id for s in scored]
-    totals = {s.event_id: s.total for s in scored}
+    scored.sort(key=lambda s: (-s.total, depth[s.change_event_id], s.change_event_id))
+    order = [s.change_event_id for s in scored]
+    totals = {s.change_event_id: s.total for s in scored}
 
     parts, index_of = components(list(events), base, head, order, totals)
     # `component` is the one field written after scoring: it is a property of the event
     # *set*, which `score_event` deliberately cannot see. Rebuilt rather than assigned in
     # place, so that a `RiskScore` handed out by this function is never observed twice with
     # different contents.
-    scored = [s.model_copy(update={"component": index_of[s.event_id]}) for s in scored]
+    scored = [s.model_copy(update={"component": index_of[s.change_event_id]}) for s in scored]
 
     return Ranking(scores=scored, components=parts)
 

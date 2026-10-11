@@ -238,6 +238,18 @@ Each step is one commit, and the suite passes after each one.
    - The demo summary table: the jq paths `$s.events_reported` and `$s.top_level_events`, and
      the labels "semantic events (numerator)" → "change events (numerator)" and "lines per
      event" → "lines per change event".
+
+   **Built.** Decided 2026-10-11:
+   - `components[].events` → `change_events` and `scores{}.event_id` → `change_event_id`
+     too, so no JSON key says "event" alone. A test checks it.
+   - Each side's completeness record carries `crossings_by_label`. The crossings themselves
+     are in `crossings.base` and `crossings.head`, only those whose caller is an entity the
+     change events reference: the rule `entities` follows. Measured on fmt `HEAD~12` with
+     `--third-party test/gtest`: every crossing is 7,635 per side with 22,623 sites, about
+     3.4 MB of JSON per side against a 40 KB document; the referenced ones are 30, about
+     15 KB.
+   - The demo shows crossing counts per label for each side where `vendored_events` was.
+   - `SCHEMA_VERSION` stays `2.0.dev`; its comment lists what 2.0 changes.
 7. **Documents.** [`ROADMAP.md`](../../ROADMAP.md) (the order, once #3 is done), the
    `exposure.py` docstring, `README.md`, and a frozen report with the measurements from §5.
 
