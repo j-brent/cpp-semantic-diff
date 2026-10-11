@@ -407,7 +407,6 @@ CATALOG = [
         "void f(int, int = 0) {}\nvoid g() { f(1); }",
         changed("f"),
         not_replaced("f"),
-        fails="step 4: parameter types are identity",
     ),
     case(
         "parameter-added-f-is-reported",

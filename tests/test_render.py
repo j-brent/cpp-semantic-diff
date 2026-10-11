@@ -773,11 +773,11 @@ class TestTheResidueIsReported:
 
         r = doc.summary.residue
         assert (r.unmatched_base, r.unmatched_head) == (1, 1)
-        assert r.tiers_run == [MatchTier.DECLARED]
+        assert r.tiers_run == [MatchTier.DECLARED, MatchTier.NAME]
         assert r.pairable_residue == 1, "the upper bound on what tiers 2-4 could remove"
 
         out = draw(doc)
-        assert "tier declared only" in out
+        assert "tiers declared, name only" in out
         assert "removal plus an addition" in out
 
     def test_bundled_dependency_churn_is_named_not_hidden(self) -> None:

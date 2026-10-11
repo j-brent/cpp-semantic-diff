@@ -230,6 +230,12 @@ UNCERTAINTY_BY_TIER: dict[MatchTier, float] = {
     MatchTier.SIMILARITY: 0.75,
     MatchTier.POSITIONAL: 0.50,
     MatchTier.STRUCTURAL: 0.30,
+    # A function paired by its name because its USR changed (ADR-036). The pairing is
+    # unique by construction -- the tier refuses any name that is not one-to-one -- so the
+    # doubt is low. It is not zero: the claim rests on the name alone, and a function
+    # replaced by an unrelated one of the same name pairs as readily as one that changed.
+    # Below `STRUCTURAL`, whose matched body says more than a matched name.
+    MatchTier.NAME: 0.25,
     MatchTier.DECLARED: 0.00,
 }
 

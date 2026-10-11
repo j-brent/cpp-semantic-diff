@@ -424,8 +424,9 @@ def _residue(document: DiffDocument, console: Console) -> None:
     r = document.summary.residue
     renamed = document.summary.files_renamed
     tiers = ", ".join(t.value for t in r.tiers_run) or "none"
+    plural = "s" if len(r.tiers_run) > 1 else ""
     console.print()
-    console.print(f"[dim]identity: tier {tiers} only (ARCH-001 §13, STATUS §6)[/]")
+    console.print(f"[dim]identity: tier{plural} {tiers} only (ARCH-001 §13, STATUS §6)[/]")
     console.print(
         f"  [dim]{r.matched:,} matched · {r.unmatched_base:,} base / {r.unmatched_head:,} "
         f"head unmatched[/]"

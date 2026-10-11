@@ -288,12 +288,17 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
 
     def test_a_removed_endpoint_still_outranks_an_overload_explanation(self) -> None:
         """Both rules can explain one `EdgeRemoved`, and table order decides. An endpoint
-        that actually went away is the better account than one the caller stopped using."""
+        that actually went away is the better account than one the caller stopped using.
+
+        Two old overloads and one new one, so the name tier cannot tell which old one the new
+        one is and pairs none (ADR-036); with one of each it would pair them as a signature
+        change, and nothing would be removed."""
         old = node("c:@F@h#c", name="h", qualified_name="ns::h")
+        other = node("c:@F@h#i", name="h", qualified_name="ns::h")
         new = node("c:@F@h#s", name="h", qualified_name="ns::h")
         caller = node(F)
         events = classify(
-            model("a", caller, old, edges=[edge(F, old.id)]),
+            model("a", caller, old, other, edges=[edge(F, old.id)]),
             model("b", caller, new, edges=[edge(F, new.id)]),
         )
         assert cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") == by_subject(

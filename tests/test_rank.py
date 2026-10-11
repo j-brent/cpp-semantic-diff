@@ -194,13 +194,20 @@ class TestUncertaintyRanksUpNotDown:
     def test_the_tier_ladder_runs_the_same_direction_as_arch_5(self) -> None:
         """Each successive tier is a weaker claim that two entities are the same entity,
         so each carries more uncertainty than the one above it (§5's table, read down)."""
-        ladder = [
-            w.UNCERTAINTY_BY_TIER[MatchTier.DECLARED],
-            w.UNCERTAINTY_BY_TIER[MatchTier.STRUCTURAL],
-            w.UNCERTAINTY_BY_TIER[MatchTier.POSITIONAL],
-            w.UNCERTAINTY_BY_TIER[MatchTier.SIMILARITY],
-        ]
+        from cpp_semantic_diff.diff.context import TIER_ORDER
+
+        assert set(TIER_ORDER) == set(MatchTier)
+        ladder = [w.UNCERTAINTY_BY_TIER[t] for t in TIER_ORDER]
         assert ladder == sorted(ladder), "uncertainty must increase as the tier weakens"
+        assert len(set(ladder)) == len(ladder)
+
+    def test_a_name_pairing_is_doubtful_but_less_than_a_candidate(self) -> None:
+        """ADR-036: the name tier pairs only where the name is one-to-one, so it carries some
+        doubt -- more than a USR match -- but less than an entity left unpaired beside a
+        possible partner."""
+        name = w.UNCERTAINTY_BY_TIER[MatchTier.NAME]
+        assert w.UNCERTAINTY_BY_TIER[MatchTier.DECLARED] < name
+        assert name < w.UNCERTAINTY_BY_UNPAIRED[Unpaired.CANDIDATE]
 
     def test_the_unpaired_ladder_runs_the_same_direction_as_the_diff_stage_orders_it(
         self,
