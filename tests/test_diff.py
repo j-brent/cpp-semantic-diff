@@ -916,3 +916,167 @@ class TestTheDroppedEdgeAsymmetryIsInherited:
         events = diff(base, head)
         assert kinds(events) == ["EdgeAdded", "NodeAdded"]
         assert only(events, ChangeEventKind.NODE_ADDED).subject == G
+
+
+class TestAFunctionPairsByNameAcrossAUsrChange:
+    """ADR-026, ADR-035, ADR-036: a parameter change moves a function's USR, so tier 1
+    cannot pair it with itself -- that is the whole reason the name tier exists. Every
+    `NodeSignatureChanged` test above uses `node(F, ...)` with the *same* id on both
+    sides, which tier 1 pairs on its own; none of them exercises `MatchTier.NAME` at all,
+    so the feature PR #43 actually shipped -- pairing a changed USR by name -- has no
+    integration coverage here. These use the real `match_models`, not the `paired()`
+    scaffolding, because the claim under test is that the matcher's name tier and this
+    stage's reading of it actually agree, end to end.
+    """
+
+    def test_a_parameter_change_pairs_by_name_and_reports_one_signature_change(self) -> None:
+        """The headline case: the USR differs (a parameter changed), tier 1 cannot pair
+        it, and without the name tier this would read as a `NodeRemoved` plus a
+        `NodeAdded` instead of one `NodeSignatureChanged` with its callers intact."""
+        base = model("a", node("c:@F@f#i#", name="f", signature="void (int)"))
+        head = model("b", node("c:@F@f#d#", name="f", signature="void (double)"))
+        events = diff(base, head)
+        assert kinds(events) == ["NodeSignatureChanged"]
+        event = only(events, ChangeEventKind.NODE_SIGNATURE_CHANGED)
+        assert event.payload == {"old_signature": "void (int)", "new_signature": "void (double)"}
+        assert event.confidence.tier is MatchTier.NAME
+
+    def test_tier_1_takes_the_unchanged_overload_first_the_way_adr_036_s_example_says(
+        self,
+    ) -> None:
+        """ADR-036's own worked example: `f(int)` and `f(double)` before, `f(int)` and
+        `f(long)` after. Tier 1 pairs `f(int)` to itself and removes it from both pools,
+        which is what leaves exactly one leftover on each side for the name tier to pair.
+        Getting the pool bookkeeping wrong here either reports `f(int)` as churn too, or
+        leaves `f(double)`/`f(long)` unpaired because the pools were not narrowed first.
+        """
+        unchanged = node("c:@F@fi#", name="f", signature="void (int)")
+        base = model("a", unchanged, node("c:@F@fd#", name="f", signature="void (double)"))
+        head = model("b", unchanged, node("c:@F@fl#", name="f", signature="void (long)"))
+        events = diff(base, head)
+        assert kinds(events) == ["NodeSignatureChanged"]
+        event = only(events, ChangeEventKind.NODE_SIGNATURE_CHANGED)
+        assert event.payload == {"old_signature": "void (double)", "new_signature": "void (long)"}
+        assert event.confidence.tier is MatchTier.NAME
+
+    def test_two_unrelated_overloads_on_each_side_do_not_force_a_pairing(self) -> None:
+        """ADR-036: a key with leftovers on both sides that are not one to one pairs none
+        of them. Forcing a guess here -- pairing by signature similarity, say -- is exactly
+        the confident-and-wrong failure ARCH-001 §11 exists to avoid, so two old overloads
+        and two new ones must fall back to removal plus addition, each carrying
+        `Unpaired.AMBIGUOUS` rather than a borrowed name-tier confidence."""
+        base = model(
+            "a",
+            node("c:@F@fi#", name="f", signature="void (int)"),
+            node("c:@F@fd#", name="f", signature="void (double)"),
+        )
+        head = model(
+            "b",
+            node("c:@F@fs#", name="f", signature="void (short)"),
+            node("c:@F@fl#", name="f", signature="void (long)"),
+        )
+        events = diff(base, head)
+        assert kinds(events) == ["NodeAdded", "NodeAdded", "NodeRemoved", "NodeRemoved"]
+        assert {e.confidence.unpaired for e in events} == {Unpaired.AMBIGUOUS}
+        assert {e.confidence.tier for e in events} == {None}
+
+    def test_a_member_whose_container_is_unpaired_does_not_pair_by_name_either(self) -> None:
+        """ADR-036: the parent must already be paired, or the name tier never pairs the
+        child -- that is what keeps this tier from ever producing a `NodeMoved`. Renaming
+        the class leaves the class itself unpaired (its USR encodes the enclosing scope),
+        and a member whose signature also changed must fall back to removal plus addition
+        rather than being paired as if the class had stayed put."""
+        base = model(
+            "a",
+            node("c:@S@C", name="C", kind=NodeKind.CLASS),
+            node("c:@S@C@F@m#i#", name="m", kind=NodeKind.METHOD, signature="void (int)"),
+            edges=[calls("c:@S@C", "c:@S@C@F@m#i#", kind=EdgeKind.CONTAINS)],
+        )
+        head = model(
+            "b",
+            node("c:@S@D", name="D", kind=NodeKind.CLASS),
+            node("c:@S@D@F@m#d#", name="m", kind=NodeKind.METHOD, signature="void (double)"),
+            edges=[calls("c:@S@D", "c:@S@D@F@m#d#", kind=EdgeKind.CONTAINS)],
+        )
+        events = diff(base, head)
+        assert kinds(events) == [
+            "EdgeAdded",
+            "EdgeRemoved",
+            "NodeAdded",
+            "NodeAdded",
+            "NodeRemoved",
+            "NodeRemoved",
+        ]
+        assert not any(e.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED for e in events)
+        assert {e.confidence.tier for e in events} == {None}
+
+    def test_a_function_renamed_and_reparametrized_is_still_remove_plus_add(self) -> None:
+        """The name tier keys on the qualified name (ADR-036), so a function whose name
+        *and* signature both changed leaves no identity path: the USR differs (the
+        parameter changed) and the qualified name differs too, so there is nothing left
+        for either tier to key on. It must read exactly like an unrelated rename -- not
+        like a merged signature change that happens to rename its subject, which is the
+        mistake a future 'close enough' name match would make."""
+        base = model("a", node("c:@F@compute#i#", name="compute", signature="void (int)"))
+        head = model("b", node("c:@F@calculate#d#", name="calculate", signature="void (double)"))
+        events = diff(base, head)
+        assert kinds(events) == ["NodeAdded", "NodeRemoved"]
+        assert {e.confidence.tier for e in events} == {None}
+
+
+class TestTheNameTiersConfidenceIsNeverLaundered:
+    """ARCH-001 §11, ADR-034, ADR-036. The name tier is new to v0's `TIER_ORDER`
+    (`diff/context.py`), and two things that could not be exercised before it existed are
+    exercised here: the confidence trade the context docstring names explicitly, and the
+    tier ordering itself, a transposition in which has no symptom any single-tier test
+    would catch.
+    """
+
+    def test_an_edge_from_a_name_paired_function_to_a_new_addition_is_no_more_doubtful_than_the_addition(
+        self,
+    ) -> None:
+        """`diff/context.py`'s own rationale for this change: before the name tier ran in
+        v0, an edge's matched endpoint never carried a tier other than `DECLARED`'s zero
+        uncertainty, so this trade was unreachable. It must still collapse to the
+        addition's `Unpaired.NONE`, not borrow the name tier's 0.25 uncertainty, now that
+        a name-tier footing can actually appear on an edge endpoint."""
+        base = model("a", node("c:@F@f#i#", name="f", signature="void (int)"))
+        head = model(
+            "b",
+            node("c:@F@f#d#", name="f", signature="void (double)"),
+            node("c:@F@h#", name="h"),
+            edges=[calls("c:@F@f#d#", "c:@F@h#")],
+        )
+        events = diff(base, head)
+        edge_event = only(events, ChangeEventKind.EDGE_ADDED)
+        assert (edge_event.confidence.tier, edge_event.confidence.unpaired) == (
+            None,
+            Unpaired.NONE,
+        )
+        # The signature change itself still reports the name tier's own confidence --
+        # only the edge resting partly on the addition loses it.
+        sig_event = only(events, ChangeEventKind.NODE_SIGNATURE_CHANGED)
+        assert sig_event.confidence.tier is MatchTier.NAME
+
+    def test_the_name_tier_is_weaker_than_declared_but_stronger_than_structural(self) -> None:
+        """`TIER_ORDER` is the only place ARCH-001 §5's tier ordering is expressed in code,
+        and ADR-036 is explicit that the name tier's uncertainty (0.25) sits below the
+        structural tier's (0.30) -- i.e. the name tier is *more* confident. An edge resting
+        on one endpoint from each must report the weaker of the two, `STRUCTURAL`. Built
+        by hand, like `test_an_edge_is_no_more_confident_than_its_weaker_endpoint` above,
+        because the real matcher never hands one edge a `NAME` endpoint and a `STRUCTURAL`
+        one -- v0 only ever runs `DECLARED` then `NAME`."""
+        a, b = NodeId("c:@F@a#"), NodeId("c:@F@b#")
+        x, y = NodeId("c:@F@x#"), NodeId("c:@F@y#")
+        base = model("a", node(a, name="a"), node(b, name="b"), edges=[calls(a, b)])
+        head = model("b", node(x, name="x"), node(y, name="y"))
+        corr = Correspondence(
+            matches=[
+                Match(base=a, head=x, tier=MatchTier.NAME),
+                Match(base=b, head=y, tier=MatchTier.STRUCTURAL),
+            ],
+            tiers_run=[MatchTier.NAME, MatchTier.STRUCTURAL],
+        )
+        assert only(diff(base, head, corr), ChangeEventKind.EDGE_REMOVED).confidence.tier is (
+            MatchTier.STRUCTURAL
+        )
