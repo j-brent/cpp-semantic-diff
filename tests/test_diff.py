@@ -980,33 +980,30 @@ class TestAFunctionPairsByNameAcrossAUsrChange:
         assert {e.confidence.unpaired for e in events} == {Unpaired.AMBIGUOUS}
         assert {e.confidence.tier for e in events} == {None}
 
-    def test_a_member_whose_container_is_unpaired_does_not_pair_by_name_either(self) -> None:
+    def test_a_member_of_an_unpaired_class_does_not_pair_with_a_global_function(self) -> None:
         """ADR-036: the parent must already be paired, or the name tier never pairs the
         child -- that is what keeps this tier from ever producing a `NodeMoved`. Renaming
-        the class leaves the class itself unpaired (its USR encodes the enclosing scope),
-        and a member whose signature also changed must fall back to removal plus addition
-        rather than being paired as if the class had stayed put."""
+        the class (giving it no head counterpart at all) is not by itself a sharp test: a
+        head-side class gives the member a different key regardless of the guard, so the
+        two would stay unpaired either way. What actually isolates the guard is a head
+        entity whose own key carries *no* parent to narrow against -- a global-scope
+        function sharing the member's kind and qualified name. Without the guard, the
+        member's key would also collapse its unpaired class to no-parent and the two would
+        land in the same name-tier group, pairing as if the member had moved out of its
+        class and into the global namespace. With the guard, the member's unpaired class
+        blocks it from entering any group at all, and the pair falls back to removal plus
+        addition."""
         base = model(
             "a",
             node("c:@S@C", name="C", kind=NodeKind.CLASS),
             node("c:@S@C@F@m#i#", name="m", kind=NodeKind.METHOD, signature="void (int)"),
             edges=[calls("c:@S@C", "c:@S@C@F@m#i#", kind=EdgeKind.CONTAINS)],
         )
-        head = model(
-            "b",
-            node("c:@S@D", name="D", kind=NodeKind.CLASS),
-            node("c:@S@D@F@m#d#", name="m", kind=NodeKind.METHOD, signature="void (double)"),
-            edges=[calls("c:@S@D", "c:@S@D@F@m#d#", kind=EdgeKind.CONTAINS)],
-        )
+        global_fn = node("c:@F@m#d#", name="m", kind=NodeKind.METHOD, signature="void (double)")
+        head = model("b", global_fn)
         events = diff(base, head)
-        assert kinds(events) == [
-            "EdgeAdded",
-            "EdgeRemoved",
-            "NodeAdded",
-            "NodeAdded",
-            "NodeRemoved",
-            "NodeRemoved",
-        ]
+        assert kinds(events) == ["EdgeRemoved", "NodeAdded", "NodeRemoved", "NodeRemoved"]
+        assert not any(e.kind is ChangeEventKind.NODE_MOVED for e in events)
         assert not any(e.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED for e in events)
         assert {e.confidence.tier for e in events} == {None}
 
@@ -1032,7 +1029,7 @@ class TestTheNameTiersConfidenceIsNeverLaundered:
     would catch.
     """
 
-    def test_an_edge_from_a_name_paired_function_to_a_new_addition_is_no_more_doubtful_than_the_addition(
+    def test_an_edge_to_a_new_addition_keeps_the_additions_doubt_not_the_name_tiers(
         self,
     ) -> None:
         """`diff/context.py`'s own rationale for this change: before the name tier ran in
