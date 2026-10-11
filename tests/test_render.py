@@ -844,6 +844,82 @@ class TestTheGraphBoundaryIsStatedNumerically:
         assert doc.completeness.uncovered is None
         assert "explained by no change event" not in draw(doc)
 
+    def _coverage_doc(self, coverage: Coverage, *, lines_changed: int = 10) -> DiffDocument:
+        f = node("c:@F@f#", name="f")
+        parsed = Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)])
+        base, head = model("a", f, completeness=parsed), model("b", f, completeness=parsed)
+        return build_document(
+            repo="fixture",
+            revs=REVS,
+            base=base,
+            head=head,
+            correspondence=match_models(base, head),
+            events=[],
+            ranking=rank_events([], base, head),
+            lines_changed=lines_changed,
+            files_changed=3,
+            cpp_files_changed=3,
+            coverage=coverage,
+        )
+
+    def test_more_than_five_uncovered_files_are_announced_not_silently_dropped(self) -> None:
+        """Mirrors `TestTheViewIsHonestAboutItself`'s top-level truncation: a cap on this
+        list that did not say it capped would read as "every file that matters", exactly
+        the §11 failure the top-level truncation message already guards against. The
+        document still carries every file (ADR-042); only the view's top five do not."""
+        tokens = [50, 40, 30, 20, 10, 5, 1]
+        files = tuple(UncoveredFile(Side.HEAD, f"h{i}.h", (1,), t) for i, t in enumerate(tokens))
+        coverage = Coverage(
+            changed_lines=200,
+            uncovered_lines=7,
+            uncovered_tokens=sum(tokens),
+            files=files,
+        )
+        doc = self._coverage_doc(coverage)
+        out = draw(doc)
+        for i in range(5):
+            assert f"h{i}.h" in out, "the five largest files must be shown, most tokens first"
+        assert "h5.h" not in out and "h6.h" not in out
+        assert "2 more file(s) in the JSON" in out
+        again = DiffDocument.from_json(doc.to_json())
+        assert again.completeness.uncovered is not None
+        assert len(again.completeness.uncovered.files) == 7, "the document keeps every one"
+
+    def test_nothing_is_said_about_unmodelled_lines_when_every_file_is_modelled(self) -> None:
+        """The common case: some translation unit declares something in every uncovered
+        file. The sentence naming files no model reads from, and the per-file suffix that
+        backs it, must both be silent here -- not print a vacuous "0 of those line(s)"."""
+        coverage = Coverage(
+            changed_lines=6,
+            uncovered_lines=2,
+            uncovered_tokens=9,
+            files=(UncoveredFile(Side.HEAD, "seen.h", (3, 4), 9, modelled=True),),
+        )
+        doc = self._coverage_doc(coverage)
+        assert doc.completeness.uncovered is not None
+        assert doc.completeness.uncovered.lines_in_unmodelled_files == 0
+        out = draw(doc)
+        assert "no model declares anything in" not in out
+        assert "seen.h: 9 token(s) on 2 line(s)" in out
+
+    def test_excluded_files_state_each_ones_own_reason(self) -> None:
+        """ADR-025: a file set aside because it is third-party and a file set aside because
+        it is binary are excluded for different reasons, and a reader has to be able to
+        tell which is which rather than read one undifferentiated "not compared" list."""
+        coverage = Coverage(
+            changed_lines=4,
+            uncovered_lines=1,
+            uncovered_tokens=1,
+            files=(UncoveredFile(Side.HEAD, "seen.h", (1,), 1),),
+            excluded_files=(
+                ExcludedFile("vendor/lib.cc", "third-party"),
+                ExcludedFile("blob.bin", "binary"),
+            ),
+        )
+        out = draw(self._coverage_doc(coverage))
+        assert "not compared: vendor/lib.cc (third-party)" in out
+        assert "not compared: blob.bin (binary)" in out
+
     def test_a_clean_model_does_not_claim_to_be_incomplete(self) -> None:
         doc = self._doc(
             Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)]),
