@@ -246,34 +246,35 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     ),
     CauseRule(
         name="contained-addition",
-        arch=None,
+        arch="§6.3: NodeAdded(C) causes NodeAdded for everything C contains",
         cause=EventKind.NODE_ADDED,
         consequence=EventKind.NODE_ADDED,
         subjects=_added_container,
         status=RuleStatus.ACTIVE,
-        note="Not in §6.3, which names only the removal direction; the relation is the "
-        "same one read on the head side. A new class arrives with its methods.",
+        note="The mirror of `contained-removal`: the same relation read on the head side. "
+        "A new class arrives with its methods.",
     ),
     CauseRule(
         name="edge-lost-its-endpoint",
-        arch=None,
+        arch="§6.3: NodeRemoved(N) causes EdgeRemoved for edges touching N",
         cause=EventKind.NODE_REMOVED,
         consequence=EventKind.EDGE_REMOVED,
         subjects=_removed_endpoints,
         status=RuleStatus.ACTIVE,
-        note="Not in §6.3, and it is what carries v0's real cascades: removing one class "
-        "removes every containment and call edge that touched it. `diff/edges.py` emits "
-        "those deliberately and names this stage as the one that links them.",
+        note="It carries v0's real cascades: removing one class removes every containment "
+        "and call edge that touched it. `diff/edges.py` emits those deliberately and names "
+        "this stage as the one that links them.",
     ),
     CauseRule(
         name="call-moved-to-another-overload",
-        arch=None,
+        arch="§6.3: EdgeAdded(caller→G) causes EdgeRemoved(caller→F), "
+        "F and G overloads of one name",
         cause=EventKind.EDGE_ADDED,
         consequence=EventKind.EDGE_REMOVED,
         subjects=_overload_the_caller_moved_to,
         status=RuleStatus.ACTIVE,
-        note="Not in §6.3. The one shape that survived every other rule on a real "
-        "repository: an overload is added to a dependency and every call site moves to it, "
+        note="Found by running the tool: the one shape that survived every other rule on a "
+        "real repository. An overload is added to a dependency and every call site moves to it, "
         "leaving an `EdgeRemoved` whose endpoints both still exist. The cause is the "
         "`EdgeAdded` rather than the new overload's `NodeAdded` so that the chain stays "
         "one-step-per-fact -- the addition is already linked to the node by "
@@ -281,7 +282,7 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     ),
     CauseRule(
         name="edge-gained-its-endpoint",
-        arch=None,
+        arch="§6.3: NodeAdded(N) causes EdgeAdded for edges touching N",
         cause=EventKind.NODE_ADDED,
         consequence=EventKind.EDGE_ADDED,
         subjects=_added_endpoints,
@@ -290,7 +291,7 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     ),
     CauseRule(
         name="rename-retargets-edges",
-        arch="§6.3: NodeRenamed(F) causes every EdgeRetargeted whose endpoint is F",
+        arch="§6.3: NodeRenamed(F) causes EdgeRetargeted at F",
         cause=EventKind.NODE_RENAMED,
         consequence=EventKind.EDGE_RETARGETED,
         subjects=_renamed_endpoint_of_retarget,

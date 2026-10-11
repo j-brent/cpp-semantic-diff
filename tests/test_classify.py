@@ -186,9 +186,8 @@ class TestRemovingAContainerExplainsItsContents:
         assert cause_of(events, EventKind.NODE_REMOVED, M) is not None
 
     def test_an_added_class_explains_its_added_members(self) -> None:
-        """Not in §6.3, which names only the removal direction. Without it a new class of
-        twenty methods reads as twenty-one unexplained events while deleting the identical
-        class reads as one."""
+        """§6.3's `contained-addition`. Without it a new class of twenty methods reads as
+        twenty-one unexplained events while deleting the identical class reads as one."""
         head = model(
             "b",
             node(C, name="C", kind=NodeKind.CLASS),
@@ -202,7 +201,7 @@ class TestRemovingAContainerExplainsItsContents:
 
 
 class TestAnEdgeIsExplainedByTheEndpointThatVanished:
-    """Not an ARCH-001 §6.3 rule, and the one that carries v0's actual cascades.
+    """ARCH-001 §6.3's `edge-lost-its-endpoint`, the rule that carries v0's actual cascades.
 
     `diff/edges.py` emits an edge event for every edge touching a removed node "rather than
     folded into the `NodeRemoved` for that endpoint ... a consequence is linked to its cause
@@ -572,38 +571,25 @@ class TestTheRuleTableIsExplicit:
     def test_every_rule_says_where_it_comes_from(self) -> None:
         for rule in CAUSE_RULES:
             assert rule.note, f"{rule.name} has no rationale"
-            assert rule.arch or rule.status is RuleStatus.ACTIVE, (
-                f"{rule.name} cites no ARCH section and is not an active pipeline fact"
-            )
+            assert rule.arch, f"{rule.name} cites no ARCH section"
 
-    def test_all_three_rules_arch_names_are_present_and_only_one_can_fire(self) -> None:
-        """§6.3 gives three example rules. All three are in the table -- deleting the two
-        that cannot fire would lose the argument about why -- and exactly one of them is
-        reachable from the events this pipeline emits."""
-        cited = {r.arch: r.status for r in CAUSE_RULES if r.arch and r.arch.startswith("§6.3")}
-        assert len(cited) == 3
-        assert sorted(cited.values()) == sorted(
-            [RuleStatus.ACTIVE, RuleStatus.DORMANT, RuleStatus.UNREACHABLE]
-        )
-        active = next(arch for arch, status in cited.items() if status is RuleStatus.ACTIVE)
-        assert "everything C contained" in active
-
-    def test_the_rules_that_carry_v0s_cascades_are_not_in_arch(self) -> None:
-        """The other half of the discrepancy: the edge rules do the work in v0 and §6.3 does
-        not name them. Asserted so that amending the doc is a visible change here rather than
-        a silent divergence.
-
-        `call-moved-to-another-overload` joined them because a real repository produced a
-        cascade §6.3 did not anticipate -- a dependency adding an overload and every call
-        site moving to it. ARCH-001 §6.3 should grow a row for it.
-        """
-        uncited = {r.name for r in CAUSE_RULES if not r.arch}
-        assert uncited == {
-            "contained-addition",
-            "edge-lost-its-endpoint",
-            "edge-gained-its-endpoint",
-            "call-moved-to-another-overload",
+    def test_only_the_dormant_and_unreachable_rows_cannot_fire(self) -> None:
+        """Two of §6.3's rows cannot fire. Both are in the table -- deleting them would lose
+        the argument about why -- and every other row is reachable from the events this
+        pipeline emits."""
+        cannot_fire = {
+            "rename-retargets-edges": RuleStatus.UNREACHABLE,
+            "signature-change-breaks-callers": RuleStatus.DORMANT,
         }
+        for rule in CAUSE_RULES:
+            assert rule.status is cannot_fire.get(rule.name, RuleStatus.ACTIVE), rule.name
+
+    def test_every_rule_cites_its_arch_row(self) -> None:
+        """ADR-023: §6.3 is the whole table, so a rule that cites no row is one the design
+        cannot be read to explain. Asserted so that a rule added only in code is a visible
+        failure here rather than a silent divergence."""
+        uncited = {r.name for r in CAUSE_RULES if not (r.arch and r.arch.startswith("§6.3"))}
+        assert uncited == set()
 
     def test_no_rule_names_a_kind_outside_the_closed_event_set(self) -> None:
         """§6.1: the event set is closed. A rule keyed on a kind nothing emits is a rule
