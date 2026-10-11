@@ -441,6 +441,14 @@ CATALOG = [
         not_replaced("f"),
     ),
     case(
+        "typedef-in-a-renamed-file",
+        "typedef int Count;\nvoid f(Count) {}",
+        "typedef long Count;\nvoid f(Count) {}",
+        changed("Count", was="int", now="long"),
+        not_replaced("Count"),
+        renamed_to="b.cpp",
+    ),
+    case(
         "alias-target-changed-f-is-reported",
         "using T = int;\nvoid f(T) {}\nvoid g() { f(1); }",
         "using T = long;\nvoid f(T) {}\nvoid g() { f(1); }",

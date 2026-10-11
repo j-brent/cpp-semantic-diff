@@ -29,6 +29,7 @@ from cpp_semantic_diff.model.ir import (
 )
 from cpp_semantic_diff.produce.extract import (
     DROPPED_FLAGS,
+    Boundary,
     TuExtract,
     body_hash,
     extract,
@@ -409,6 +410,89 @@ class TestStaticAssertions:
         left = run(base, toolchain, {"a.cpp": "static_assert(sizeof(int) == 4);\n"})
         right = run(head, toolchain, {"a.cpp": "// note\nstatic_assert(sizeof(int) == 4);\n"})
         assert self.ids(left) == self.ids(right) != []
+
+
+class TestValueEntitiesOutsideTheModelAreNotModelled:
+    """A macro, alias, variable, enum and static assertion in a third-party directory or in a
+    file git does not track produce no node, as a function there does not (ADR-025, ADR-037).
+    Macros take a path of their own through the extractor, so the boundary is checked on it
+    separately."""
+
+    HEADER = """#pragma once
+    #define OUTSIDE_LIMIT 10
+    using OutsideAlias = int;
+    constexpr int kOutside = 3;
+    enum OutsideEnum { OutsideA, OutsideB };
+    static_assert(sizeof(int) == 4, "outside");
+    struct Outside { static constexpr int n = 1; };
+    """
+
+    def extract_with(
+        self, tmp_path: Path, toolchain: Toolchain, header: str, boundary: Boundary
+    ) -> TuExtract:
+        (tmp_path / header).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / header).write_text(self.HEADER, encoding="utf-8")
+        (tmp_path / "a.cpp").write_text(f'#include "{header}"\nint inside = 1;\n')
+        entry = CompileEntry(
+            file=tmp_path / "a.cpp",
+            directory=tmp_path,
+            arguments=["clang++", "-std=c++17", "-c", "a.cpp"],
+        )
+        return extract(entry, root=tmp_path, toolchain=toolchain, boundary=boundary)
+
+    def test_under_a_third_party_path(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        result = self.extract_with(
+            tmp_path, toolchain, "vendor/lib.h", Boundary(third_party=("vendor",))
+        )
+        assert result.ok, result.result.detail
+        assert {n.qualified_name for n in result.nodes.values()} == {"inside"}
+
+    def test_in_an_untracked_file(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        result = self.extract_with(
+            tmp_path, toolchain, "gen.h", Boundary(tracked=frozenset({"a.cpp"}))
+        )
+        assert result.ok, result.result.detail
+        assert {n.qualified_name for n in result.nodes.values()} == {"inside"}
+
+    def test_the_same_header_tracked_is_modelled(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The control: without the boundary, every one of them is a node."""
+        result = self.extract_with(tmp_path, toolchain, "gen.h", Boundary())
+        kinds = {n.kind for n in result.nodes.values()}
+        assert {
+            NodeKind.MACRO,
+            NodeKind.ALIAS,
+            NodeKind.VARIABLE,
+            NodeKind.ENUM,
+            NodeKind.ENUMERATOR,
+            NodeKind.STATIC_ASSERTION,
+        } <= kinds
+
+
+class TestTwoAliasesOfOneNameInTwoFiles:
+    """`using Foo = int;` in one source file and `using Foo = long;` in another share a USR,
+    which names no file, so they are one node (ADR-038, a known limit). Nothing reports the
+    disagreement; what this pins is that the node kept does not depend on TU order."""
+
+    SOURCES: ClassVar[dict[str, str]] = {
+        "a.cpp": "using Foo = int;\n",
+        "b.cpp": "using Foo = long;\n",
+    }
+
+    def test_the_node_kept_does_not_depend_on_tu_order(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        a, b = run_each(tmp_path, toolchain, self.SOURCES, "a.cpp", "b.cpp")
+        kept = []
+        for first, second in ((a, b), (b, a)):
+            nodes: dict[NodeId, Node] = {}
+            for partial in (first, second):
+                for node in partial.nodes.values():
+                    merge_node(nodes, node)
+            assert len(nodes) == 1
+            kept.append(next(iter(nodes.values())))
+        assert kept[0] == kept[1]
 
 
 class TestEnums:
