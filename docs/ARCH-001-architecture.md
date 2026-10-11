@@ -616,7 +616,7 @@ yet implemented ([PLAN-004](plans/PLAN-004-third-party-boundary.md)).
 
 **v0 was redefined on 2026-10-10** as a tool whose output can be trusted on changes the repository
 controls ([ADR-030](adr/ADR-030-what-v0-is.md)). The slice above is what was built first; ADR-030
-says what v0 still needs.
+and [ADR-041](adr/ADR-041-v0-scope-of-steps-6-and-7.md) say what v0 still needs.
 
 Two things listed here as "out" in the original draft shipped anyway, and the reason is the same in
 both cases: they were cheaper *inside* the stage that needed them than as a later bolt-on.

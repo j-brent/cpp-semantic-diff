@@ -25,7 +25,8 @@ The history behind every item is in the frozen
 ## 1 · Scope
 
 v0 is a tool whose output can be trusted on changes the repository controls. What is in and out is
-[ADR-030](docs/adr/ADR-030-what-v0-is.md). The issues in v0 are in the v0 milestone; issues with no
+[ADR-030](docs/adr/ADR-030-what-v0-is.md), amended by
+[ADR-041](docs/adr/ADR-041-v0-scope-of-steps-6-and-7.md). The issues in v0 are in the v0 milestone; issues with no
 milestone come later.
 
 ---
