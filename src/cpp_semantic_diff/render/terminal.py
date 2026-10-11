@@ -68,6 +68,7 @@ def render(
 
     _header(document, console)
     _completeness(document, console)
+    _third_party(document, console)
     _compression(document, tree, console)
     _events(document, tree, console, limit=limit)
     _residue(document, console)
@@ -180,7 +181,23 @@ def _boundary(block: CompletenessBlock, console: Console) -> None:
         console.print(f"  [dim]{side.value:4} {escape(sentence)}[/]")
 
 
-# -- 2 · the metric the project is pointed at --------------------------------------------
+def _third_party(document: DiffDocument, console: Console) -> None:
+    """The third-party set and the folder-name hints (ADR-025), when there are any.
+
+    The set is dim: it is what the run was told, not news. A hint is yellow because it asks
+    the reader to act -- a library the set does not name is analyzed as the repository's own.
+    """
+    if document.third_party:
+        listed = " · ".join(
+            f"{escape(p.path)} ({', '.join(s.value for s in p.sources)})"
+            for p in document.third_party
+        )
+        console.print(f"  [dim]third-party {listed}[/]")
+    for hint in document.third_party_hints:
+        console.print(f"  [yellow]note[/] {escape(hint.message)}")
+
+
+# -- 2 · the metric the project is pointed at--------------------------------------------
 
 
 def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> None:

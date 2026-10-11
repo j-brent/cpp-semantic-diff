@@ -177,6 +177,14 @@ Each step is one commit, and the suite passes after each one.
 2. **The third-party set.** Submodule discovery, `--third-party`, the missing-path refusal and
    folder-name hints. Not wired into extraction yet. Tests use temporary git repositories, like
    `tests/test_git.py`.
+   **Built** in `acquire/third_party.py`. Decided 2026-10-11:
+   - `bundled` is added to a hint-only list, `HINT_SEGMENTS = VENDOR_SEGMENTS | {"bundled"}`.
+     Ranking still reads `VENDOR_SEGMENTS` until step 5. Step 5 moves the list there.
+   - A hint is the topmost tracked directory, at base or head, whose own name matches and that
+     is neither in, under nor above a set entry. leveldb's `third_party` holds only its
+     submodules, so it gets no hint.
+   - The set and hints are in the JSON now (`third_party`, `third_party_hints`), under
+     `2.0.dev`, and in the terminal view. Step 6 adds only the crossing counts and the demo.
 3. **The refusal.** The new precondition error, checked before checkout. Tests: a submodule bump
    is refused; a change inside a declared path is refused; a change next to a declared path is
    not.
