@@ -304,7 +304,8 @@ class UncoveredFile(BaseModel):
     tokens: int
     modelled: bool = Field(
         default=True,
-        description="Whether either model declares anything in this file. False is roughly "
+        description="Whether either model declares anything in this file. Checked by path "
+        "against both models together, not against this side's model alone. False is roughly "
         "'no translation unit includes it'; approximate, because an included file that "
         "declares nothing the model records also reads False.",
     )

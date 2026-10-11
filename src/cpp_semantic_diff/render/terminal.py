@@ -281,9 +281,10 @@ def _uncovered(document: DiffDocument, console: Console) -> None:
         )
     by_size = sorted(report.files, key=lambda f: (-f.tokens, f.path, f.side.value))
     for f in by_size[:5]:
+        unread = "" if f.modelled else ", no model declares anything in it"
         console.print(
             f"  [dim]  {f.side.value:4} {escape(f.path)}: {f.tokens:,} token(s) on "
-            f"{len(f.lines):,} line(s){'' if f.modelled else ', no model reads it'}[/]"
+            f"{len(f.lines):,} line(s){unread}[/]"
         )
     if len(by_size) > 5:
         console.print(f"  [dim]  … {len(by_size) - 5} more file(s) in the JSON[/]")

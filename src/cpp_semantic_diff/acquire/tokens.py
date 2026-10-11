@@ -510,7 +510,8 @@ def token_delta(
             for path in (p.old_path, p.new_path)
         )
     ]
-    patches = [p for p in patches if p not in vendored]
+    vendored_ids = {id(p) for p in vendored}
+    patches = [p for p in patches if id(p) not in vendored_ids]
     excluded = (
         *(ExcludedFile(p.path, "third-party") for p in vendored),
         *(ExcludedFile(p.path, "binary") for p in patches if p.binary),

@@ -873,7 +873,7 @@ class TestTheGraphBoundaryIsStatedNumerically:
         assert not again.completeness.degraded, "a standing measure, not a failure"
         out = draw(again)
         assert "2 of 6 changed C++ lines explained by no change event" in out
-        assert "orphan.h: 9 token(s) on 2 line(s), no model reads it" in out
+        assert "orphan.h: 9 token(s) on 2 line(s), no model declares anything in it" in out
         assert again.completeness.uncovered.lines_in_unmodelled_files == 2
         assert "about 2 of those line(s) are in files no model declares anything in" in out
         assert "16 token(s) moved unchanged" in out
