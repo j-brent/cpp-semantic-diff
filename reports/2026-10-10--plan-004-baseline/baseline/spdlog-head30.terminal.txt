@@ -1,0 +1,122 @@
+spdlog  HEAD~30...HEAD  (566b2d14043a -> 989d28dd768a)
+base 8/8 TUs · head 8/8 TUs · libclang 18.1.3 x86_64-pc-linux-gnu · both sides parsed clean
+  base 1,203 of 5,351 distinct edges (22.5%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit special
+members). Expected, and a lower bound on the call graph, not a defect.
+  head 1,207 of 5,352 distinct edges (22.6%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit special
+members). Expected, and a lower bound on the call graph, not a defect.
+
+1,708 lines changed -> 32 semantic events, 5 high-risk
+  53.4 lines per event · 24 top-level, 8 nested under a cause · 18 components · 101 files (93 C++) · 20.6s
+
+component 0 · 7 events
+  0.73 ● NodeRemoved  - spdlog::details::to_string_view [fmt::basic_string_view<char> (const fmt::basic_memory_buffer<char, 250> &)]  
+include/spdlog/common.h:345
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, base model
+         4 consequence(s) nested below
+     0.58 · └ EdgeRemoved  spdlog::details::to_string_view [fmt::basic_string_view<char> (const fmt::basic_memory_buffer<char, 250> &)] -> 
+fmt::v12::basic_string_view::basic_string_view<Char>
+     0.58 · └ EdgeRemoved  spdlog::details::to_string_view [fmt::basic_string_view<char> (const fmt::basic_memory_buffer<char, 250> &)] -> 
+fmt::v12::detail::buffer::size
+     0.58 · └ EdgeRemoved  spdlog::details::to_string_view [fmt::basic_string_view<char> (const fmt::basic_memory_buffer<char, 250> &)] -> 
+fmt::v12::detail::buffer::data
+     0.55 · └ EdgeRemoved  spdlog::details -> spdlog::details::to_string_view [fmt::basic_string_view<char> (const fmt::basic_memory_buffer<char, 250> &)]
+  0.73 ● NodeRemoved  - spdlog::details::to_string_view [fmt::basic_string_view<char> (fmt::basic_string_view<char>)]  include/spdlog/common.h:350
+         exposure public · novelty NodeRemoved · uncertainty unmatched · blast radius 2 dependent(s), 1 direct, base model
+         1 consequence(s) nested below
+     0.55 · └ EdgeRemoved  spdlog::details -> spdlog::details::to_string_view [fmt::basic_string_view<char> (fmt::basic_string_view<char>)]
+
+component 1 · 7 events
+  0.70 ● NodeAdded  + spdlog::details::log_msg_buffer::append_source  include/spdlog/details/log_msg_buffer-inl.h:57
+         novelty NodeAdded · blast radius 11 dependent(s), 3 direct, head model · exposure internal · uncertainty unmatched
+         3 consequence(s) nested below
+     0.60 · └ EdgeAdded  spdlog::details::log_msg_buffer::log_msg_buffer [void (const spdlog::details::log_msg &)] -> 
+spdlog::details::log_msg_buffer::append_source
+     0.51 · └ EdgeAdded  spdlog::details::log_msg_buffer::log_msg_buffer [void (const spdlog::details::log_msg_buffer &)] -> 
+spdlog::details::log_msg_buffer::append_source
+     0.49 · └ EdgeAdded  spdlog::details::log_msg_buffer -> spdlog::details::log_msg_buffer::append_source
+  0.44 · NodeBodyChanged    spdlog::details::log_msg_buffer::update_string_views  include/spdlog/details/log_msg_buffer-inl.h:66
+         blast radius 15 dependent(s), 6 direct, head model · exposure internal · novelty NodeBodyChanged · uncertainty declared
+  0.44 · NodeBodyChanged    spdlog::details::log_msg_buffer::log_msg_buffer [void (const spdlog::details::log_msg &)]  
+include/spdlog/details/log_msg_buffer-inl.h:16
+         blast radius 15 dependent(s), 3 direct, head model · exposure internal · novelty NodeBodyChanged · uncertainty declared
+  0.35 · NodeBodyChanged    spdlog::details::log_msg_buffer::log_msg_buffer [void (const spdlog::details::log_msg_buffer &)]  
+include/spdlog/details/log_msg_buffer-inl.h:24
+         exposure internal · blast radius 4 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 2 · 1 event
+  0.54 ● NodeBodyChanged    spdlog::sinks::sink::level  include/spdlog/sinks/sink-inl.h:22
+         exposure public · blast radius 16 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 3 · 1 event
+  0.54 ● NodeBodyChanged    spdlog::details::registry::registry  include/spdlog/details/registry-inl.h:33
+         blast radius 59 dependent(s), 2 direct, head model · exposure internal · novelty NodeBodyChanged · uncertainty declared
+
+component 4 · 1 event
+  0.51 · NodeBodyChanged    spdlog::sinks::base_sink::set_pattern_  include/spdlog/sinks/base_sink-inl.h:53
+         exposure public · blast radius 10 dependent(s), 2 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 5 · 1 event
+  0.48 · NodeBodyChanged    spdlog::sinks::ansicolor_sink::set_pattern  include/spdlog/sinks/ansicolor_sink-inl.h:72
+         exposure public · blast radius 7 dependent(s), 2 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 6 · 1 event
+  0.48 · NodeBodyChanged    spdlog::sinks::daily_file_sink::now_tm  include/spdlog/sinks/daily_file_sink.h:146
+         exposure public · blast radius 7 dependent(s), 5 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 7 · 2 events
+  0.46 · NodeBodyChanged    spdlog::sinks::stdout_sink_base::set_pattern  include/spdlog/sinks/stdout_sinks-inl.h:83
+         exposure public · blast radius 5 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.46 · NodeBodyChanged    spdlog::sinks::stdout_sink_base::stdout_sink_base<ConsoleMutex>  include/spdlog/sinks/stdout_sinks-inl.h:33
+         exposure public · blast radius 5 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 8 · 1 event
+  0.44 · NodeBodyChanged    spdlog::details::os::create_dir  include/spdlog/details/os-inl.h:485
+         blast radius 15 dependent(s), 2 direct, head model · exposure internal · novelty NodeBodyChanged · uncertainty declared
+
+component 9 · 1 event
+  0.43 · NodeBodyChanged    spdlog::udp_logger_mt  include/spdlog/sinks/udp_sink.h:64
+         exposure public · blast radius 3 dependent(s), 2 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 10 · 1 event
+  0.43 · NodeBodyChanged    spdlog::logger::log  include/spdlog/logger.h:79
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 11 · 1 event
+  0.43 · NodeBodyChanged    spdlog::sinks::udp_sink::sink_it_  include/spdlog/sinks/udp_sink.h:45
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 12 · 1 event
+  0.43 · NodeBodyChanged    fmt::v12::formatter::put_newline  include/spdlog/fmt/bin_to_hex.h:213
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 13 · 1 event
+  0.43 · NodeBodyChanged    spdlog::set_pattern  include/spdlog/spdlog-inl.h:27
+         exposure public · blast radius 3 dependent(s), 3 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 14 · 1 event
+  0.41 · NodeBodyChanged    spdlog::async_logger::clone  include/spdlog/async_logger-inl.h:82
+         exposure public · blast radius 2 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 15 · 1 event
+  0.36 · NodeBodyChanged    spdlog::details::thread_pool::thread_pool  include/spdlog/details/thread_pool-inl.h:16
+         exposure internal · blast radius 5 dependent(s), 3 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 16 · 2 events
+  0.36 · EdgeRemoved  spdlog::details::os::remove_if_exists -> spdlog::details::os::path_exists
+         exposure internal · blast radius 3 dependent(s), 1 direct, head model · novelty EdgeRemoved · uncertainty declared
+  0.33 · NodeBodyChanged    spdlog::details::os::remove_if_exists  include/spdlog/details/os-inl.h:164
+         exposure internal · blast radius 3 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 17 · 1 event
+  0.31 · NodeBodyChanged    spdlog::synchronous_factory::create  include/spdlog/details/synchronous_factory.h:15
+         exposure internal · blast radius 2 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+identity: tier declared only (ARCH-001 §13, STATUS §6)
+  2,477 matched · 2 base / 1 head unmatched
+  git found no renames; one it could not detect would read here as a removal plus an addition
+  at most 1 of those are pairs tiers 2-4 could match; that is the upper bound on what rename detection would remove
+
+true of every run:
+  One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not 
+implied.
+  Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.

@@ -1,0 +1,728 @@
+{
+ "leveldb": {
+  "range": "HEAD~9..HEAD~1",
+  "base": {
+   "nodes": {
+    "third-party": 3931,
+    "first-party": 3764
+   },
+   "nodes_total": 7695,
+   "untracked_by_dir": {},
+   "edges_total": 22258,
+   "edges_dropped": 4579,
+   "dropped_edges_into_repo": 322,
+   "dropped_edges_into_repo_by_kind": {
+    "calls": 322
+   },
+   "dropped_edges_target_not_probed_by_kind": {
+    "overrides": 10
+   },
+   "unresolved_repo_targets": 132,
+   "unresolved_repo_targets_by_category": {
+    "compiler builtin function [first-party]": 1,
+    "implicit special member (copy assign) [first-party]": 3,
+    "implicit special member (copy assign) [third-party]": 5,
+    "implicit special member (copy ctor) [first-party]": 8,
+    "implicit special member (copy ctor) [third-party]": 3,
+    "implicit special member (default ctor) [first-party]": 31,
+    "implicit special member (default ctor) [third-party]": 28,
+    "implicit special member (move assign) [first-party]": 3,
+    "implicit special member (move assign) [third-party]": 5,
+    "implicit special member (move ctor) [first-party]": 1,
+    "implicit special member (move ctor) [third-party]": 9,
+    "lambda member (operator() or conversion) [third-party]": 19,
+    "member of a class local to a function [first-party]": 6,
+    "other: FUNCTION_DECL [third-party]": 1,
+    "template instantiation, template not a node [first-party]": 2,
+    "template instantiation, template not a node [third-party]": 7
+   },
+   "examples_by_category": {
+    "compiler builtin function": [
+     "util/posix_logger.h:82 FUNCTION_DECL ::__builtin_va_copy"
+    ],
+    "implicit special member (copy assign)": [
+     "db/dbformat.h:134 CXX_METHOD InternalKey::operator=",
+     "include/leveldb/options.h:34 CXX_METHOD Options::operator=",
+     "table/format.h:23 CXX_METHOD BlockHandle::operator=",
+     "third_party/benchmark/include/benchmark/benchmark.h:1668 CXX_METHOD BenchmarkName::operator=",
+     "third_party/benchmark/include/benchmark/benchmark.h:564 CXX_METHOD Counter::operator=",
+     "third_party/benchmark/src/complexity.h:42 CXX_METHOD LeastSq::operator="
+    ],
+    "implicit special member (copy ctor)": [
+     "db/dbformat.h:102 CONSTRUCTOR InternalKeyComparator::InternalKeyComparator",
+     "db/memtable.h:69 CONSTRUCTOR KeyComparator::KeyComparator",
+     "db/repair.cc:93 CONSTRUCTOR TableInfo::TableInfo",
+     "db/skiplist_test.cc:23 CONSTRUCTOR Comparator::Comparator",
+     "db/version_edit.h:18 CONSTRUCTOR FileMetaData::FileMetaData",
+     "db/version_set.cc:572 CONSTRUCTOR BySmallestKey::BySmallestKey"
+    ],
+    "implicit special member (default ctor)": [
+     "benchmarks/db_bench.cc:675 CONSTRUCTOR ThreadArg::ThreadArg",
+     "db/db_impl.cc:388 CONSTRUCTOR LogReporter::LogReporter",
+     "db/db_impl.cc:56 CONSTRUCTOR Output::Output",
+     "db/db_impl.h:80 CONSTRUCTOR ManualCompaction::ManualCompaction",
+     "db/db_test.cc:1561 CONSTRUCTOR NewComparator::NewComparator",
+     "db/db_test.cc:1584 CONSTRUCTOR NumberComparator::NumberComparator"
+    ],
+    "implicit special member (move assign)": [
+     "db/dbformat.h:134 CXX_METHOD InternalKey::operator=",
+     "include/leveldb/options.h:168 CXX_METHOD WriteOptions::operator=",
+     "include/leveldb/options.h:34 CXX_METHOD Options::operator=",
+     "third_party/benchmark/include/benchmark/benchmark.h:564 CXX_METHOD Counter::operator=",
+     "third_party/benchmark/src/benchmark_runner.h:109 CXX_METHOD IterationResults::operator=",
+     "third_party/benchmark/src/complexity.h:42 CXX_METHOD LeastSq::operator="
+    ],
+    "implicit special member (move ctor)": [
+     "include/leveldb/options.h:34 CONSTRUCTOR Options::Options",
+     "third_party/benchmark/include/benchmark/benchmark.h:1699 CONSTRUCTOR Run::Run",
+     "third_party/benchmark/include/benchmark/benchmark.h:691 CONSTRUCTOR State::State",
+     "third_party/benchmark/src/benchmark_runner.h:109 CONSTRUCTOR IterationResults::IterationResults",
+     "third_party/benchmark/src/benchmark_runner.h:39 CONSTRUCTOR RunResults::RunResults",
+     "third_party/benchmark/src/benchmark_runner.h:47 CONSTRUCTOR BenchTimeType::BenchTimeType"
+    ],
+    "lambda member (operator() or conversion)": [
+     "third_party/benchmark/src/benchmark.cc:314 CXX_METHOD (lambda)::operator()",
+     "third_party/benchmark/src/benchmark.cc:490 CXX_METHOD (lambda)::operator()",
+     "third_party/benchmark/src/complexity.cc:33 CONVERSION_FUNCTION (lambda)::operator double (*)(long)",
+     "third_party/benchmark/src/complexity.cc:35 CONVERSION_FUNCTION (lambda)::operator double (*)(long)",
+     "third_party/benchmark/src/complexity.cc:37 CONVERSION_FUNCTION (lambda)::operator double (*)(long)",
+     "third_party/benchmark/src/complexity.cc:41 CONVERSION_FUNCTION (lambda)::operator double (*)(long)"
+    ],
+    "member of a class local to a function": [
+     "db/db_impl.cc:393 CXX_METHOD LogReporter::Corruption",
+     "db/db_test.cc:1599 CXX_METHOD NumberComparator::ToNumber",
+     "db/db_test.cc:163 CONSTRUCTOR DataFile::DataFile",
+     "db/db_test.cc:200 CONSTRUCTOR ManifestFile::ManifestFile",
+     "db/db_test.cc:242 CONSTRUCTOR CountingFile::CountingFile",
+     "db/repair.cc:148 CXX_METHOD LogReporter::Corruption"
+    ],
+    "other: FUNCTION_DECL": [
+     "third_party/googletest/googletest/include/gtest/internal/gtest-port.h:1751 FUNCTION_DECL ::DeleteThreadLocalValue"
+    ],
+    "template instantiation, template not a node": [
+     "third_party/googletest/googlemock/include/gmock/gmock-matchers.h:1522 CXX_METHOD PredicateFormatterFromMatcher::operator()",
+     "third_party/googletest/googletest/include/gtest/gtest-matchers.h:291 CONSTRUCTOR MatcherBase::MatcherBase",
+     "third_party/googletest/googletest/include/gtest/gtest-matchers.h:646 CONVERSION_FUNCTION PolymorphicMatcher::operator Matcher",
+     "third_party/googletest/googletest/include/gtest/internal/gtest-param-util.h:797 CONVERSION_FUNCTION ValueArray::operator ParamGenerator",
+     "util/no_destructor.h:20 CONSTRUCTOR NoDestructor::NoDestructor"
+    ]
+   }
+  },
+  "head": {
+   "nodes": {
+    "third-party": 3980,
+    "first-party": 3764
+   },
+   "nodes_total": 7744,
+   "untracked_by_dir": {},
+   "edges_total": 22351,
+   "edges_dropped": 4605,
+   "dropped_edges_into_repo": 327,
+   "dropped_edges_into_repo_by_kind": {
+    "calls": 327
+   },
+   "dropped_edges_target_not_probed_by_kind": {
+    "overrides": 10
+   },
+   "unresolved_repo_targets": 133,
+   "unresolved_repo_targets_by_category": {
+    "compiler builtin function [first-party]": 1,
+    "implicit special member (copy assign) [first-party]": 3,
+    "implicit special member (copy assign) [third-party]": 5,
+    "implicit special member (copy ctor) [first-party]": 8,
+    "implicit special member (copy ctor) [third-party]": 3,
+    "implicit special member (default ctor) [first-party]": 30,
+    "implicit special member (default ctor) [third-party]": 25,
+    "implicit special member (move assign) [first-party]": 3,
+    "implicit special member (move assign) [third-party]": 7,
+    "implicit special member (move ctor) [first-party]": 1,
+    "implicit special member (move ctor) [third-party]": 9,
+    "lambda member (operator() or conversion) [third-party]": 19,
+    "member of a class local to a function [first-party]": 6,
+    "other: FUNCTION_DECL [third-party]": 1,
+    "template instantiation, template not a node [first-party]": 2,
+    "template instantiation, template not a node [third-party]": 10
+   },
+   "examples_by_category": {
+    "compiler builtin function": [
+     "util/posix_logger.h:82 FUNCTION_DECL ::__builtin_va_copy"
+    ],
+    "implicit special member (copy assign)": [
+     "db/dbformat.h:134 CXX_METHOD InternalKey::operator=",
+     "include/leveldb/options.h:34 CXX_METHOD Options::operator=",
+     "table/format.h:23 CXX_METHOD BlockHandle::operator=",
+     "third_party/benchmark/include/benchmark/benchmark.h:1668 CXX_METHOD BenchmarkName::operator=",
+     "third_party/benchmark/include/benchmark/benchmark.h:564 CXX_METHOD Counter::operator=",
+     "third_party/benchmark/src/complexity.h:42 CXX_METHOD LeastSq::operator="
+    ],
+    "implicit special member (copy ctor)": [
+     "db/dbformat.h:102 CONSTRUCTOR InternalKeyComparator::InternalKeyComparator",
+     "db/memtable.h:69 CONSTRUCTOR KeyComparator::KeyComparator",
+     "db/repair.cc:93 CONSTRUCTOR TableInfo::TableInfo",
+     "db/skiplist_test.cc:23 CONSTRUCTOR Comparator::Comparator",
+     "db/version_edit.h:18 CONSTRUCTOR FileMetaData::FileMetaData",
+     "db/version_set.cc:572 CONSTRUCTOR BySmallestKey::BySmallestKey"
+    ],
+    "implicit special member (default ctor)": [
+     "benchmarks/db_bench.cc:675 CONSTRUCTOR ThreadArg::ThreadArg",
+     "db/db_impl.cc:388 CONSTRUCTOR LogReporter::LogReporter",
+     "db/db_impl.cc:56 CONSTRUCTOR Output::Output",
+     "db/db_impl.h:80 CONSTRUCTOR ManualCompaction::ManualCompaction",
+     "db/db_test.cc:1561 CONSTRUCTOR NewComparator::NewComparator",
+     "db/db_test.cc:1584 CONSTRUCTOR NumberComparator::NumberComparator"
+    ],
+    "implicit special member (move assign)": [
+     "db/dbformat.h:134 CXX_METHOD InternalKey::operator=",
+     "include/leveldb/options.h:168 CXX_METHOD WriteOptions::operator=",
+     "include/leveldb/options.h:34 CXX_METHOD Options::operator=",
+     "third_party/benchmark/include/benchmark/benchmark.h:564 CXX_METHOD Counter::operator=",
+     "third_party/benchmark/src/benchmark_runner.h:109 CXX_METHOD IterationResults::operator=",
+     "third_party/benchmark/src/complexity.h:42 CXX_METHOD LeastSq::operator="
+    ],
+    "implicit special member (move ctor)": [
+     "include/leveldb/options.h:34 CONSTRUCTOR Options::Options",
+     "third_party/benchmark/include/benchmark/benchmark.h:1699 CONSTRUCTOR Run::Run",
+     "third_party/benchmark/include/benchmark/benchmark.h:691 CONSTRUCTOR State::State",
+     "third_party/benchmark/src/benchmark_runner.h:109 CONSTRUCTOR IterationResults::IterationResults",
+     "third_party/benchmark/src/benchmark_runner.h:39 CONSTRUCTOR RunResults::RunResults",
+     "third_party/benchmark/src/benchmark_runner.h:47 CONSTRUCTOR BenchTimeType::BenchTimeType"
+    ],
+    "lambda member (operator() or conversion)": [
+     "third_party/benchmark/src/benchmark.cc:314 CXX_METHOD (lambda)::operator()",
+     "third_party/benchmark/src/benchmark.cc:490 CXX_METHOD (lambda)::operator()",
+     "third_party/benchmark/src/complexity.cc:33 CONVERSION_FUNCTION (lambda)::operator double (*)(long)",
+     "third_party/benchmark/src/complexity.cc:35 CONVERSION_FUNCTION (lambda)::operator double (*)(long)",
+     "third_party/benchmark/src/complexity.cc:37 CONVERSION_FUNCTION (lambda)::operator double (*)(long)",
+     "third_party/benchmark/src/complexity.cc:41 CONVERSION_FUNCTION (lambda)::operator double (*)(long)"
+    ],
+    "member of a class local to a function": [
+     "db/db_impl.cc:393 CXX_METHOD LogReporter::Corruption",
+     "db/db_test.cc:1599 CXX_METHOD NumberComparator::ToNumber",
+     "db/db_test.cc:163 CONSTRUCTOR DataFile::DataFile",
+     "db/db_test.cc:200 CONSTRUCTOR ManifestFile::ManifestFile",
+     "db/db_test.cc:242 CONSTRUCTOR CountingFile::CountingFile",
+     "db/repair.cc:148 CXX_METHOD LogReporter::Corruption"
+    ],
+    "other: FUNCTION_DECL": [
+     "third_party/googletest/googletest/include/gtest/internal/gtest-port.h:1751 FUNCTION_DECL ::DeleteThreadLocalValue"
+    ],
+    "template instantiation, template not a node": [
+     "third_party/googletest/googlemock/include/gmock/gmock-matchers.h:1522 CXX_METHOD PredicateFormatterFromMatcher::operator()",
+     "third_party/googletest/googletest/include/gtest/gtest-matchers.h:291 CONSTRUCTOR MatcherBase::MatcherBase",
+     "third_party/googletest/googletest/include/gtest/gtest-matchers.h:646 CONVERSION_FUNCTION PolymorphicMatcher::operator Matcher",
+     "third_party/googletest/googletest/include/gtest/internal/gtest-param-util.h:797 CONVERSION_FUNCTION ValueArray::operator ParamGenerator",
+     "util/no_destructor.h:21 CONSTRUCTOR NoDestructor::NoDestructor"
+    ]
+   }
+  },
+  "third_party_set": [
+   "third_party/benchmark",
+   "third_party/googletest"
+  ]
+ },
+ "spdlog": {
+  "range": "HEAD~30..HEAD",
+  "base": {
+   "nodes": {
+    "first-party": 884,
+    "third-party": 1595
+   },
+   "nodes_total": 2479,
+   "untracked_by_dir": {},
+   "edges_total": 5351,
+   "edges_dropped": 1203,
+   "dropped_edges_into_repo": 249,
+   "dropped_edges_into_repo_by_kind": {
+    "calls": 244,
+    "inherits": 5
+   },
+   "dropped_edges_target_not_probed_by_kind": {},
+   "unresolved_repo_targets": 133,
+   "unresolved_repo_targets_by_category": {
+    "compiler builtin function [third-party]": 2,
+    "implicit special member (copy assign) [first-party]": 2,
+    "implicit special member (copy assign) [third-party]": 2,
+    "implicit special member (copy ctor) [first-party]": 4,
+    "implicit special member (copy ctor) [third-party]": 14,
+    "implicit special member (default ctor) [first-party]": 9,
+    "implicit special member (default ctor) [third-party]": 10,
+    "implicit special member (move assign) [third-party]": 4,
+    "implicit special member (move ctor) [third-party]": 4,
+    "lambda member (operator() or conversion) [first-party]": 11,
+    "lambda member (operator() or conversion) [third-party]": 4,
+    "member of a class local to a function [first-party]": 8,
+    "member of a class local to a function [third-party]": 8,
+    "other: CONSTRUCTOR [third-party]": 1,
+    "other: FUNCTION_DECL [third-party]": 2,
+    "other: TYPE_ALIAS_TEMPLATE_DECL [third-party]": 3,
+    "template instantiation, template not a node [third-party]": 45
+   },
+   "examples_by_category": {
+    "compiler builtin function": [
+     "include/spdlog/fmt/bundled/format.h:399 FUNCTION_DECL ::__builtin_addcll",
+     "include/spdlog/fmt/bundled/format.h:482 FUNCTION_DECL ::__builtin_assume"
+    ],
+    "implicit special member (copy assign)": [
+     "include/spdlog/common.h:315 CXX_METHOD source_loc::operator=",
+     "include/spdlog/fmt/bundled/base.h:522 CXX_METHOD basic_string_view::operator=",
+     "include/spdlog/fmt/bundled/base.h:693 CXX_METHOD basic_specs::operator=",
+     "include/spdlog/pattern_formatter.h:23 CXX_METHOD padding_info::operator="
+    ],
+    "implicit special member (copy ctor)": [
+     "include/spdlog/common.h:315 CONSTRUCTOR source_loc::source_loc",
+     "include/spdlog/common.h:328 CONSTRUCTOR file_event_handlers::file_event_handlers",
+     "include/spdlog/fmt/bundled/base.h:1300 CONSTRUCTOR dynamic_format_specs::dynamic_format_specs",
+     "include/spdlog/fmt/bundled/base.h:2484 CONSTRUCTOR basic_appender::basic_appender",
+     "include/spdlog/fmt/bundled/base.h:2585 CONSTRUCTOR basic_format_args::basic_format_args",
+     "include/spdlog/fmt/bundled/base.h:522 CONSTRUCTOR basic_string_view::basic_string_view"
+    ],
+    "implicit special member (default ctor)": [
+     "include/spdlog/async_logger-inl.h:42 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/async_logger-inl.h:54 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/async_logger-inl.h:64 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/async_logger-inl.h:76 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/details/fmt_helper.h:91 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/details/null_mutex.h:12 CONSTRUCTOR null_mutex::null_mutex"
+    ],
+    "implicit special member (move assign)": [
+     "include/spdlog/fmt/bundled/base.h:2484 CXX_METHOD basic_appender::operator=",
+     "include/spdlog/fmt/bundled/base.h:522 CXX_METHOD basic_string_view::operator=",
+     "include/spdlog/fmt/bundled/format.h:1746 CXX_METHOD find_escape_result::operator=",
+     "include/spdlog/fmt/bundled/format.h:305 CXX_METHOD uint128_fallback::operator="
+    ],
+    "implicit special member (move ctor)": [
+     "include/spdlog/fmt/bundled/base.h:2484 CONSTRUCTOR basic_appender::basic_appender",
+     "include/spdlog/fmt/bundled/base.h:522 CONSTRUCTOR basic_string_view::basic_string_view",
+     "include/spdlog/fmt/bundled/format.h:1746 CONSTRUCTOR find_escape_result::find_escape_result",
+     "include/spdlog/fmt/bundled/format.h:305 CONSTRUCTOR uint128_fallback::uint128_fallback"
+    ],
+    "lambda member (operator() or conversion)": [
+     "example/example.cpp:297 CONVERSION_FUNCTION (lambda)::operator void (*)(const std::basic_string<char> &)",
+     "include/spdlog/async_logger-inl.h:42 CXX_METHOD (lambda)::operator()",
+     "include/spdlog/async_logger-inl.h:54 CXX_METHOD (lambda)::operator()",
+     "include/spdlog/async_logger-inl.h:64 CXX_METHOD (lambda)::operator()",
+     "include/spdlog/async_logger-inl.h:76 CXX_METHOD (lambda)::operator()",
+     "include/spdlog/common-inl.h:45 CXX_METHOD (lambda)::operator()"
+    ],
+    "member of a class local to a function": [
+     "include/spdlog/async_logger-inl.h:42 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/async_logger-inl.h:54 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/async_logger-inl.h:64 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/async_logger-inl.h:76 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/details/fmt_helper.h:91 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/fmt/bundled/chrono.h:505 CONSTRUCTOR dispatcher::dispatcher"
+    ],
+    "other: CONSTRUCTOR": [
+     "include/spdlog/fmt/bundled/format.h:974 CONSTRUCTOR format_error::runtime_error"
+    ],
+    "other: FUNCTION_DECL": [
+     "include/spdlog/fmt/bundled/format.h:2793 FUNCTION_DECL detail::compare",
+     "include/spdlog/fmt/bundled/format.h:2809 FUNCTION_DECL detail::add_compare"
+    ],
+    "other: TYPE_ALIAS_TEMPLATE_DECL": [
+     "include/spdlog/fmt/bundled/base.h:2797 TYPE_ALIAS_TEMPLATE_DECL v12::is_formattable",
+     "include/spdlog/fmt/bundled/base.h:309 TYPE_ALIAS_TEMPLATE_DECL v12::conditional_t",
+     "include/spdlog/fmt/bundled/base.h:310 TYPE_ALIAS_TEMPLATE_DECL v12::bool_constant"
+    ],
+    "template instantiation, template not a node": [
+     "include/spdlog/fmt/bundled/base.h:1855 CXX_METHOD buffer::append",
+     "include/spdlog/fmt/bundled/base.h:1874 CXX_METHOD buffer::operator[]",
+     "include/spdlog/fmt/bundled/base.h:1878 CXX_METHOD buffer::operator[]",
+     "include/spdlog/fmt/bundled/base.h:2544 CXX_METHOD basic_format_arg::visit",
+     "include/spdlog/fmt/bundled/base.h:2659 CXX_METHOD basic_format_args::get",
+     "include/spdlog/fmt/bundled/base.h:2665 CXX_METHOD basic_format_args::get_id"
+    ]
+   }
+  },
+  "head": {
+   "nodes": {
+    "first-party": 883,
+    "third-party": 1595
+   },
+   "nodes_total": 2478,
+   "untracked_by_dir": {},
+   "edges_total": 5352,
+   "edges_dropped": 1207,
+   "dropped_edges_into_repo": 249,
+   "dropped_edges_into_repo_by_kind": {
+    "calls": 244,
+    "inherits": 5
+   },
+   "dropped_edges_target_not_probed_by_kind": {},
+   "unresolved_repo_targets": 132,
+   "unresolved_repo_targets_by_category": {
+    "compiler builtin function [third-party]": 2,
+    "implicit special member (copy assign) [first-party]": 2,
+    "implicit special member (copy assign) [third-party]": 2,
+    "implicit special member (copy ctor) [first-party]": 4,
+    "implicit special member (copy ctor) [third-party]": 14,
+    "implicit special member (default ctor) [first-party]": 9,
+    "implicit special member (default ctor) [third-party]": 10,
+    "implicit special member (move assign) [third-party]": 4,
+    "implicit special member (move ctor) [third-party]": 3,
+    "lambda member (operator() or conversion) [first-party]": 11,
+    "lambda member (operator() or conversion) [third-party]": 4,
+    "member of a class local to a function [first-party]": 8,
+    "member of a class local to a function [third-party]": 8,
+    "other: CONSTRUCTOR [third-party]": 1,
+    "other: FUNCTION_DECL [third-party]": 2,
+    "other: TYPE_ALIAS_TEMPLATE_DECL [third-party]": 3,
+    "template instantiation, template not a node [third-party]": 45
+   },
+   "examples_by_category": {
+    "compiler builtin function": [
+     "include/spdlog/fmt/bundled/format.h:399 FUNCTION_DECL ::__builtin_addcll",
+     "include/spdlog/fmt/bundled/format.h:482 FUNCTION_DECL ::__builtin_assume"
+    ],
+    "implicit special member (copy assign)": [
+     "include/spdlog/common.h:317 CXX_METHOD source_loc::operator=",
+     "include/spdlog/fmt/bundled/base.h:522 CXX_METHOD basic_string_view::operator=",
+     "include/spdlog/fmt/bundled/base.h:693 CXX_METHOD basic_specs::operator=",
+     "include/spdlog/pattern_formatter.h:23 CXX_METHOD padding_info::operator="
+    ],
+    "implicit special member (copy ctor)": [
+     "include/spdlog/common.h:317 CONSTRUCTOR source_loc::source_loc",
+     "include/spdlog/common.h:330 CONSTRUCTOR file_event_handlers::file_event_handlers",
+     "include/spdlog/fmt/bundled/base.h:1300 CONSTRUCTOR dynamic_format_specs::dynamic_format_specs",
+     "include/spdlog/fmt/bundled/base.h:2484 CONSTRUCTOR basic_appender::basic_appender",
+     "include/spdlog/fmt/bundled/base.h:2585 CONSTRUCTOR basic_format_args::basic_format_args",
+     "include/spdlog/fmt/bundled/base.h:522 CONSTRUCTOR basic_string_view::basic_string_view"
+    ],
+    "implicit special member (default ctor)": [
+     "include/spdlog/async_logger-inl.h:44 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/async_logger-inl.h:56 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/async_logger-inl.h:66 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/async_logger-inl.h:78 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/details/fmt_helper.h:91 CONSTRUCTOR FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+     "include/spdlog/details/null_mutex.h:14 CONSTRUCTOR null_mutex::null_mutex"
+    ],
+    "implicit special member (move assign)": [
+     "include/spdlog/fmt/bundled/base.h:2484 CXX_METHOD basic_appender::operator=",
+     "include/spdlog/fmt/bundled/base.h:522 CXX_METHOD basic_string_view::operator=",
+     "include/spdlog/fmt/bundled/format.h:1746 CXX_METHOD find_escape_result::operator=",
+     "include/spdlog/fmt/bundled/format.h:305 CXX_METHOD uint128_fallback::operator="
+    ],
+    "implicit special member (move ctor)": [
+     "include/spdlog/fmt/bundled/base.h:2484 CONSTRUCTOR basic_appender::basic_appender",
+     "include/spdlog/fmt/bundled/format.h:1746 CONSTRUCTOR find_escape_result::find_escape_result",
+     "include/spdlog/fmt/bundled/format.h:305 CONSTRUCTOR uint128_fallback::uint128_fallback"
+    ],
+    "lambda member (operator() or conversion)": [
+     "example/example.cpp:297 CONVERSION_FUNCTION (lambda)::operator void (*)(const std::basic_string<char> &)",
+     "include/spdlog/async_logger-inl.h:44 CXX_METHOD (lambda)::operator()",
+     "include/spdlog/async_logger-inl.h:56 CXX_METHOD (lambda)::operator()",
+     "include/spdlog/async_logger-inl.h:66 CXX_METHOD (lambda)::operator()",
+     "include/spdlog/async_logger-inl.h:78 CXX_METHOD (lambda)::operator()",
+     "include/spdlog/common-inl.h:46 CXX_METHOD (lambda)::operator()"
+    ],
+    "member of a class local to a function": [
+     "include/spdlog/async_logger-inl.h:44 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/async_logger-inl.h:56 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/async_logger-inl.h:66 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/async_logger-inl.h:78 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/details/fmt_helper.h:91 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/spdlog/fmt/bundled/chrono.h:505 CONSTRUCTOR dispatcher::dispatcher"
+    ],
+    "other: CONSTRUCTOR": [
+     "include/spdlog/fmt/bundled/format.h:974 CONSTRUCTOR format_error::runtime_error"
+    ],
+    "other: FUNCTION_DECL": [
+     "include/spdlog/fmt/bundled/format.h:2793 FUNCTION_DECL detail::compare",
+     "include/spdlog/fmt/bundled/format.h:2809 FUNCTION_DECL detail::add_compare"
+    ],
+    "other: TYPE_ALIAS_TEMPLATE_DECL": [
+     "include/spdlog/fmt/bundled/base.h:2797 TYPE_ALIAS_TEMPLATE_DECL v12::is_formattable",
+     "include/spdlog/fmt/bundled/base.h:309 TYPE_ALIAS_TEMPLATE_DECL v12::conditional_t",
+     "include/spdlog/fmt/bundled/base.h:310 TYPE_ALIAS_TEMPLATE_DECL v12::bool_constant"
+    ],
+    "template instantiation, template not a node": [
+     "include/spdlog/fmt/bundled/base.h:1855 CXX_METHOD buffer::append",
+     "include/spdlog/fmt/bundled/base.h:1874 CXX_METHOD buffer::operator[]",
+     "include/spdlog/fmt/bundled/base.h:1878 CXX_METHOD buffer::operator[]",
+     "include/spdlog/fmt/bundled/base.h:2544 CXX_METHOD basic_format_arg::visit",
+     "include/spdlog/fmt/bundled/base.h:2659 CXX_METHOD basic_format_args::get",
+     "include/spdlog/fmt/bundled/base.h:2665 CXX_METHOD basic_format_args::get_id"
+    ]
+   }
+  },
+  "third_party_set": [
+   "include/spdlog/fmt/bundled"
+  ]
+ },
+ "fmt": {
+  "range": "HEAD~12..HEAD",
+  "base": {
+   "nodes": {
+    "third-party": 3347,
+    "first-party": 7227
+   },
+   "nodes_total": 10574,
+   "untracked_by_dir": {},
+   "edges_total": 26071,
+   "edges_dropped": 5113,
+   "dropped_edges_into_repo": 1826,
+   "dropped_edges_into_repo_by_kind": {
+    "calls": 1814,
+    "inherits": 12
+   },
+   "dropped_edges_target_not_probed_by_kind": {
+    "overrides": 6
+   },
+   "unresolved_repo_targets": 1291,
+   "unresolved_repo_targets_by_category": {
+    "compiler builtin function [first-party]": 3,
+    "implicit special member (copy assign) [first-party]": 2,
+    "implicit special member (copy assign) [third-party]": 1,
+    "implicit special member (copy ctor) [first-party]": 27,
+    "implicit special member (copy ctor) [third-party]": 1,
+    "implicit special member (default ctor) [first-party]": 179,
+    "implicit special member (default ctor) [third-party]": 21,
+    "implicit special member (move assign) [first-party]": 13,
+    "implicit special member (move assign) [third-party]": 4,
+    "implicit special member (move ctor) [first-party]": 9,
+    "implicit special member (move ctor) [third-party]": 3,
+    "implicit special member (other) [first-party]": 1,
+    "lambda member (operator() or conversion) [first-party]": 119,
+    "lambda member (operator() or conversion) [third-party]": 2,
+    "member of a class local to a function [first-party]": 122,
+    "other: CONSTRUCTOR [first-party]": 3,
+    "other: FUNCTION_DECL [first-party]": 10,
+    "other: FUNCTION_DECL [third-party]": 1,
+    "other: TYPE_ALIAS_DECL [first-party]": 1,
+    "other: TYPE_ALIAS_TEMPLATE_DECL [first-party]": 3,
+    "template instantiation, template not a node [first-party]": 741,
+    "template instantiation, template not a node [third-party]": 25
+   },
+   "examples_by_category": {
+    "compiler builtin function": [
+     "include/fmt/base.h:540 FUNCTION_DECL ::__builtin_strlen",
+     "include/fmt/format.h:382 FUNCTION_DECL ::__builtin_addcll",
+     "include/fmt/format.h:465 FUNCTION_DECL ::__builtin_assume"
+    ],
+    "implicit special member (copy assign)": [
+     "include/fmt/base.h:521 CXX_METHOD basic_string_view::operator=",
+     "include/fmt/base.h:682 CXX_METHOD basic_specs::operator=",
+     "test/gtest/gmock/gmock.h:2690 CXX_METHOD Cardinality::operator="
+    ],
+    "implicit special member (copy ctor)": [
+     "include/fmt/base.h:1282 CONSTRUCTOR dynamic_format_specs::dynamic_format_specs",
+     "include/fmt/base.h:2440 CONSTRUCTOR basic_appender::basic_appender",
+     "include/fmt/base.h:2541 CONSTRUCTOR basic_format_args::basic_format_args",
+     "include/fmt/base.h:521 CONSTRUCTOR basic_string_view::basic_string_view",
+     "include/fmt/base.h:831 CONSTRUCTOR format_specs::format_specs",
+     "include/fmt/base.h:904 CONSTRUCTOR locale_ref::locale_ref"
+    ],
+    "implicit special member (default ctor)": [
+     "include/fmt/args.h:43 CONSTRUCTOR dynamic_arg_list::dynamic_arg_list",
+     "include/fmt/base.h:1282 CONSTRUCTOR dynamic_format_specs::dynamic_format_specs",
+     "include/fmt/base.h:2135 CONSTRUCTOR custom_tag::custom_tag",
+     "include/fmt/base.h:2754 CONSTRUCTOR formatter::formatter",
+     "include/fmt/chrono.h:1472 CONSTRUCTOR chrono_format_checker::chrono_format_checker",
+     "include/fmt/chrono.h:273 CONSTRUCTOR null::null"
+    ],
+    "implicit special member (move assign)": [
+     "include/fmt/args.h:43 CXX_METHOD dynamic_arg_list::operator=",
+     "include/fmt/base.h:2440 CXX_METHOD basic_appender::operator=",
+     "include/fmt/base.h:2460 CXX_METHOD basic_format_arg::operator=",
+     "include/fmt/base.h:2829 CXX_METHOD format_to_n_result::operator=",
+     "include/fmt/base.h:2857 CXX_METHOD format_to_result::operator=",
+     "include/fmt/base.h:521 CXX_METHOD basic_string_view::operator="
+    ],
+    "implicit special member (move ctor)": [
+     "include/fmt/args.h:74 CONSTRUCTOR dynamic_format_arg_store::dynamic_format_arg_store",
+     "include/fmt/base.h:2440 CONSTRUCTOR basic_appender::basic_appender",
+     "include/fmt/base.h:521 CONSTRUCTOR basic_string_view::basic_string_view",
+     "include/fmt/format.h:1801 CONSTRUCTOR find_escape_result::find_escape_result",
+     "include/fmt/format.h:293 CONSTRUCTOR uint128::uint128",
+     "include/fmt/os.h:318 CONSTRUCTOR buffer_size::buffer_size"
+    ],
+    "implicit special member (other)": [
+     "include/fmt/format.h:3989 CXX_METHOD formatter::format"
+    ],
+    "lambda member (operator() or conversion)": [
+     "include/fmt/color.h:500 CXX_METHOD (lambda)::operator()",
+     "include/fmt/color.h:536 CXX_METHOD (lambda)::operator()",
+     "include/fmt/format-inl.h:109 CXX_METHOD (lambda)::operator()",
+     "include/fmt/format-inl.h:110 CXX_METHOD (lambda)::operator()",
+     "include/fmt/format-inl.h:127 CXX_METHOD (lambda)::operator()",
+     "include/fmt/format-inl.h:1413 CXX_METHOD (lambda)::operator()"
+    ],
+    "member of a class local to a function": [
+     "include/fmt/chrono.h:504 CONSTRUCTOR dispatcher::dispatcher",
+     "include/fmt/chrono.h:506 CXX_METHOD dispatcher::run",
+     "include/fmt/chrono.h:511 CXX_METHOD dispatcher::handle",
+     "include/fmt/chrono.h:521 CXX_METHOD dispatcher::fallback",
+     "include/fmt/color.h:500 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/fmt/color.h:536 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view"
+    ],
+    "other: CONSTRUCTOR": [
+     "include/fmt/format.h:958 CONSTRUCTOR format_error::runtime_error",
+     "test/ranges-test.cc:293 CONSTRUCTOR vector_string::vector",
+     "test/ranges-test.cc:297 CONSTRUCTOR vector_debug_string::vector"
+    ],
+    "other: FUNCTION_DECL": [
+     "include/fmt/color.h:300 FUNCTION_DECL v12::operator|",
+     "include/fmt/format.h:2846 FUNCTION_DECL detail::compare",
+     "include/fmt/format.h:2862 FUNCTION_DECL detail::add_compare",
+     "include/fmt/format.h:329 FUNCTION_DECL detail::operator~",
+     "include/fmt/format.h:338 FUNCTION_DECL detail::operator*",
+     "include/fmt/format.h:346 FUNCTION_DECL detail::operator-"
+    ],
+    "other: TYPE_ALIAS_DECL": [
+     "include/fmt/ostream.h:91 TYPE_ALIAS_DECL v12::ostream_formatter"
+    ],
+    "other: TYPE_ALIAS_TEMPLATE_DECL": [
+     "include/fmt/base.h:2744 TYPE_ALIAS_TEMPLATE_DECL v12::is_formattable",
+     "include/fmt/base.h:322 TYPE_ALIAS_TEMPLATE_DECL v12::conditional_t",
+     "include/fmt/base.h:323 TYPE_ALIAS_TEMPLATE_DECL v12::bool_constant"
+    ],
+    "template instantiation, template not a node": [
+     "include/fmt/args.h:153 CXX_METHOD dynamic_format_arg_store::push_back",
+     "include/fmt/args.h:173 CXX_METHOD dynamic_format_arg_store::push_back",
+     "include/fmt/args.h:185 CXX_METHOD dynamic_format_arg_store::push_back",
+     "include/fmt/base.h:1832 CXX_METHOD buffer::append",
+     "include/fmt/base.h:1852 CXX_METHOD buffer::operator[]",
+     "include/fmt/base.h:1856 CXX_METHOD buffer::operator[]"
+    ]
+   }
+  },
+  "head": {
+   "nodes": {
+    "third-party": 3347,
+    "first-party": 7227
+   },
+   "nodes_total": 10574,
+   "untracked_by_dir": {},
+   "edges_total": 26073,
+   "edges_dropped": 5113,
+   "dropped_edges_into_repo": 1826,
+   "dropped_edges_into_repo_by_kind": {
+    "calls": 1814,
+    "inherits": 12
+   },
+   "dropped_edges_target_not_probed_by_kind": {
+    "overrides": 6
+   },
+   "unresolved_repo_targets": 1291,
+   "unresolved_repo_targets_by_category": {
+    "compiler builtin function [first-party]": 3,
+    "implicit special member (copy assign) [first-party]": 2,
+    "implicit special member (copy assign) [third-party]": 1,
+    "implicit special member (copy ctor) [first-party]": 27,
+    "implicit special member (copy ctor) [third-party]": 1,
+    "implicit special member (default ctor) [first-party]": 179,
+    "implicit special member (default ctor) [third-party]": 21,
+    "implicit special member (move assign) [first-party]": 13,
+    "implicit special member (move assign) [third-party]": 4,
+    "implicit special member (move ctor) [first-party]": 9,
+    "implicit special member (move ctor) [third-party]": 3,
+    "implicit special member (other) [first-party]": 1,
+    "lambda member (operator() or conversion) [first-party]": 119,
+    "lambda member (operator() or conversion) [third-party]": 2,
+    "member of a class local to a function [first-party]": 122,
+    "other: CONSTRUCTOR [first-party]": 3,
+    "other: FUNCTION_DECL [first-party]": 10,
+    "other: FUNCTION_DECL [third-party]": 1,
+    "other: TYPE_ALIAS_DECL [first-party]": 1,
+    "other: TYPE_ALIAS_TEMPLATE_DECL [first-party]": 3,
+    "template instantiation, template not a node [first-party]": 741,
+    "template instantiation, template not a node [third-party]": 25
+   },
+   "examples_by_category": {
+    "compiler builtin function": [
+     "include/fmt/base.h:540 FUNCTION_DECL ::__builtin_strlen",
+     "include/fmt/format.h:382 FUNCTION_DECL ::__builtin_addcll",
+     "include/fmt/format.h:465 FUNCTION_DECL ::__builtin_assume"
+    ],
+    "implicit special member (copy assign)": [
+     "include/fmt/base.h:521 CXX_METHOD basic_string_view::operator=",
+     "include/fmt/base.h:682 CXX_METHOD basic_specs::operator=",
+     "test/gtest/gmock/gmock.h:2690 CXX_METHOD Cardinality::operator="
+    ],
+    "implicit special member (copy ctor)": [
+     "include/fmt/base.h:1286 CONSTRUCTOR dynamic_format_specs::dynamic_format_specs",
+     "include/fmt/base.h:2444 CONSTRUCTOR basic_appender::basic_appender",
+     "include/fmt/base.h:2545 CONSTRUCTOR basic_format_args::basic_format_args",
+     "include/fmt/base.h:521 CONSTRUCTOR basic_string_view::basic_string_view",
+     "include/fmt/base.h:831 CONSTRUCTOR format_specs::format_specs",
+     "include/fmt/base.h:904 CONSTRUCTOR locale_ref::locale_ref"
+    ],
+    "implicit special member (default ctor)": [
+     "include/fmt/args.h:43 CONSTRUCTOR dynamic_arg_list::dynamic_arg_list",
+     "include/fmt/base.h:1286 CONSTRUCTOR dynamic_format_specs::dynamic_format_specs",
+     "include/fmt/base.h:2139 CONSTRUCTOR custom_tag::custom_tag",
+     "include/fmt/base.h:2758 CONSTRUCTOR formatter::formatter",
+     "include/fmt/chrono.h:1472 CONSTRUCTOR chrono_format_checker::chrono_format_checker",
+     "include/fmt/chrono.h:273 CONSTRUCTOR null::null"
+    ],
+    "implicit special member (move assign)": [
+     "include/fmt/args.h:43 CXX_METHOD dynamic_arg_list::operator=",
+     "include/fmt/base.h:2444 CXX_METHOD basic_appender::operator=",
+     "include/fmt/base.h:2464 CXX_METHOD basic_format_arg::operator=",
+     "include/fmt/base.h:2833 CXX_METHOD format_to_n_result::operator=",
+     "include/fmt/base.h:2861 CXX_METHOD format_to_result::operator=",
+     "include/fmt/base.h:521 CXX_METHOD basic_string_view::operator="
+    ],
+    "implicit special member (move ctor)": [
+     "include/fmt/args.h:74 CONSTRUCTOR dynamic_format_arg_store::dynamic_format_arg_store",
+     "include/fmt/base.h:2444 CONSTRUCTOR basic_appender::basic_appender",
+     "include/fmt/base.h:521 CONSTRUCTOR basic_string_view::basic_string_view",
+     "include/fmt/format.h:1801 CONSTRUCTOR find_escape_result::find_escape_result",
+     "include/fmt/format.h:293 CONSTRUCTOR uint128::uint128",
+     "include/fmt/os.h:318 CONSTRUCTOR buffer_size::buffer_size"
+    ],
+    "implicit special member (other)": [
+     "include/fmt/format.h:3989 CXX_METHOD formatter::format"
+    ],
+    "lambda member (operator() or conversion)": [
+     "include/fmt/color.h:500 CXX_METHOD (lambda)::operator()",
+     "include/fmt/color.h:536 CXX_METHOD (lambda)::operator()",
+     "include/fmt/format-inl.h:109 CXX_METHOD (lambda)::operator()",
+     "include/fmt/format-inl.h:110 CXX_METHOD (lambda)::operator()",
+     "include/fmt/format-inl.h:127 CXX_METHOD (lambda)::operator()",
+     "include/fmt/format-inl.h:1413 CXX_METHOD (lambda)::operator()"
+    ],
+    "member of a class local to a function": [
+     "include/fmt/chrono.h:504 CONSTRUCTOR dispatcher::dispatcher",
+     "include/fmt/chrono.h:506 CXX_METHOD dispatcher::run",
+     "include/fmt/chrono.h:511 CXX_METHOD dispatcher::handle",
+     "include/fmt/chrono.h:521 CXX_METHOD dispatcher::fallback",
+     "include/fmt/color.h:500 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view",
+     "include/fmt/color.h:536 CONVERSION_FUNCTION FMT_COMPILE_STRING::operator basic_string_view"
+    ],
+    "other: CONSTRUCTOR": [
+     "include/fmt/format.h:958 CONSTRUCTOR format_error::runtime_error",
+     "test/ranges-test.cc:293 CONSTRUCTOR vector_string::vector",
+     "test/ranges-test.cc:297 CONSTRUCTOR vector_debug_string::vector"
+    ],
+    "other: FUNCTION_DECL": [
+     "include/fmt/color.h:300 FUNCTION_DECL v12::operator|",
+     "include/fmt/format.h:2846 FUNCTION_DECL detail::compare",
+     "include/fmt/format.h:2862 FUNCTION_DECL detail::add_compare",
+     "include/fmt/format.h:329 FUNCTION_DECL detail::operator~",
+     "include/fmt/format.h:338 FUNCTION_DECL detail::operator*",
+     "include/fmt/format.h:346 FUNCTION_DECL detail::operator-"
+    ],
+    "other: TYPE_ALIAS_DECL": [
+     "include/fmt/ostream.h:93 TYPE_ALIAS_DECL v12::ostream_formatter"
+    ],
+    "other: TYPE_ALIAS_TEMPLATE_DECL": [
+     "include/fmt/base.h:2748 TYPE_ALIAS_TEMPLATE_DECL v12::is_formattable",
+     "include/fmt/base.h:322 TYPE_ALIAS_TEMPLATE_DECL v12::conditional_t",
+     "include/fmt/base.h:323 TYPE_ALIAS_TEMPLATE_DECL v12::bool_constant"
+    ],
+    "template instantiation, template not a node": [
+     "include/fmt/args.h:153 CXX_METHOD dynamic_format_arg_store::push_back",
+     "include/fmt/args.h:173 CXX_METHOD dynamic_format_arg_store::push_back",
+     "include/fmt/args.h:185 CXX_METHOD dynamic_format_arg_store::push_back",
+     "include/fmt/base.h:1836 CXX_METHOD buffer::append",
+     "include/fmt/base.h:1856 CXX_METHOD buffer::operator[]",
+     "include/fmt/base.h:1860 CXX_METHOD buffer::operator[]"
+    ]
+   }
+  },
+  "third_party_set": [
+   "test/gtest"
+  ]
+ }
+}
