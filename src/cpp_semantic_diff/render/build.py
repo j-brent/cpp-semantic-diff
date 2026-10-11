@@ -227,10 +227,13 @@ def _uncovered(coverage: Coverage | None) -> UncoveredReport | None:
         return None
     return UncoveredReport(
         files=[
-            UncoveredFile(side=f.side, path=f.path, lines=list(f.lines), tokens=f.tokens)
+            UncoveredFile(
+                side=f.side, path=f.path, lines=list(f.lines), tokens=f.tokens, modelled=f.modelled
+            )
             for f in coverage.files
         ],
         moved_tokens=coverage.moved_tokens,
+        lines_in_unmodelled_files=coverage.unmodelled_lines,
         renames_complete=coverage.renames_complete,
         excluded_files=[
             ExcludedFile(path=e.path, reason=e.reason) for e in coverage.excluded_files

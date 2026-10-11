@@ -16,8 +16,8 @@ dependencies: [ARCH-001]
 [`the-model.md`](../../reports/2026-10-10--up-to-speed/the-model.md), which is the evidence for
 everything below. Steps 1, 2, 4 and 5, and step 7 except field order and layout,
 are in v0 ([ADR-030](../adr/ADR-030-what-v0-is.md), [ADR-041](../adr/ADR-041-v0-scope-of-steps-6-and-7.md)). Step 1 is built:
-`tests/test_change_catalog.py`. Step 2 is built except excluding third-party code and counting
-unmodelled declarations ([ADR-042](../adr/ADR-042-uncovered-changes-are-tokens-on-no-event-line.md)). The v0 steps are tracked in [#5](https://github.com/j-brent/cpp-semantic-diff/issues/5); steps 3, 6, 8 and 9 in
+`tests/test_change_catalog.py`. Step 2 is built except counting unmodelled declarations
+([ADR-042](../adr/ADR-042-uncovered-changes-are-tokens-on-no-event-line.md)). The v0 steps are tracked in [#5](https://github.com/j-brent/cpp-semantic-diff/issues/5); steps 3, 6, 8 and 9 in
 [#12](https://github.com/j-brent/cpp-semantic-diff/issues/12), [#10](https://github.com/j-brent/cpp-semantic-diff/issues/10), [#13](https://github.com/j-brent/cpp-semantic-diff/issues/13) and [#14](https://github.com/j-brent/cpp-semantic-diff/issues/14).
 
 Delete this file when the steps that survive review are done and every case in the change

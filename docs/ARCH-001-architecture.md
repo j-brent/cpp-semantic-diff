@@ -560,7 +560,9 @@ the changed C++ lines no change event explains: *580 lines changed → 181 chang
 high-risk · 37 of 412 changed C++ lines explained by no change event*. A changed line is one
 carrying a changed token, so whitespace and comment edits do not count; it is explained when a
 change event's provenance contains it, which makes the uncovered count a lower bound
-([ADR-042](adr/ADR-042-uncovered-changes-are-tokens-on-no-event-line.md)).
+([ADR-042](adr/ADR-042-uncovered-changes-are-tokens-on-no-event-line.md)). Files in the
+third-party set are not counted. The uncovered lines in files neither model declares anything in
+are counted apart, as an approximation of files no translation unit includes.
 
 ---
 

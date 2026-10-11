@@ -402,7 +402,7 @@ def diff(
     from cpp_semantic_diff.classify import classify_events
     from cpp_semantic_diff.derive import derive_events
     from cpp_semantic_diff.diff import diff_models
-    from cpp_semantic_diff.diff.coverage import measure_coverage
+    from cpp_semantic_diff.diff.coverage import measure_coverage, modelled_files
     from cpp_semantic_diff.match import match_models
     from cpp_semantic_diff.produce import build_model, load
     from cpp_semantic_diff.rank import rank_events
@@ -510,7 +510,11 @@ def diff(
     # Over the final change events, so it measures what the reviewer is given (ADR-042).
     # The text diff is read here rather than with `file_changes` so that its cost is timed
     # with the measurement it serves.
-    coverage = measure_coverage(token_delta(repo, revs), events)
+    coverage = measure_coverage(
+        token_delta(repo, revs, third_party=third_party_paths),
+        events,
+        modelled_files(base_model, head_model),
+    )
     timings.coverage = time.perf_counter() - t
 
     t = time.perf_counter()

@@ -35,6 +35,7 @@ from cpp_semantic_diff.acquire.git import (
     resolve_rename_similarity,
     run_git_raw,
 )
+from cpp_semantic_diff.acquire.third_party import ThirdPartySet
 from cpp_semantic_diff.errors import GitError
 from cpp_semantic_diff.model.events import Side
 
@@ -477,15 +478,43 @@ def read_blobs(repo: Path, oids: Iterable[str]) -> dict[str, bytes]:
     return blobs
 
 
-def token_delta(repo: Path, revs: RevPair, *, rename_similarity: int | None = None) -> TokenDelta:
-    """The changed tokens of every C++ file the comparison touched."""
+def token_delta(
+    repo: Path,
+    revs: RevPair,
+    *,
+    rename_similarity: int | None = None,
+    third_party: ThirdPartySet | None = None,
+) -> TokenDelta:
+    """The changed tokens of every C++ file the comparison touched, third-party code aside.
+
+    A file in the third-party set is the repository's dependency, not its own code, and #6
+    counts only the latter (ADR-025). A rename is third-party if either end is: a file moved
+    out of a vendored directory was not the repository's own code at base.
+
+    Today a run in which third-party code changed is refused before this is reached
+    (`refuse_changed_third_party`), so no file is excluded for this reason in practice. The
+    exclusion is kept here so the count stays right if that refusal is ever relaxed.
+    """
+    third_party = third_party or ThirdPartySet()
     patch, stderr = _patch(repo, revs, resolve_rename_similarity(rename_similarity))
     patches = [
         p
         for p in parse_patch(patch)
         if any(path is not None and is_cpp(path) for path in (p.old_path, p.new_path))
     ]
-    excluded = tuple(ExcludedFile(p.path, "binary") for p in patches if p.binary)
+    vendored = [
+        p
+        for p in patches
+        if any(
+            path is not None and third_party.label_for(path) is not None
+            for path in (p.old_path, p.new_path)
+        )
+    ]
+    patches = [p for p in patches if p not in vendored]
+    excluded = (
+        *(ExcludedFile(p.path, "third-party") for p in vendored),
+        *(ExcludedFile(p.path, "binary") for p in patches if p.binary),
+    )
     compared = [p for p in patches if not p.binary and p.hunks]
     blobs = read_blobs(
         repo, (oid for p in compared for oid in (p.old_blob, p.new_blob) if oid is not None)

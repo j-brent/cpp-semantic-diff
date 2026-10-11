@@ -14,7 +14,7 @@ from cpp_semantic_diff.acquire.tokens import (
     TokenRun,
     changed_runs,
 )
-from cpp_semantic_diff.diff.coverage import MIN_MOVED_TOKENS, measure_coverage
+from cpp_semantic_diff.diff.coverage import MIN_MOVED_TOKENS, measure_coverage, modelled_files
 from cpp_semantic_diff.model import (
     ChangeEvent,
     ChangeEventKind,
@@ -22,7 +22,10 @@ from cpp_semantic_diff.model import (
     Hunk,
     Location,
     MatchTier,
+    Model,
+    Node,
     NodeId,
+    NodeKind,
     Side,
 )
 
@@ -83,6 +86,33 @@ class TestExplained:
     def test_excluded_files_are_carried_through(self) -> None:
         excluded = (ExcludedFile("blob.h", "binary"),)
         assert measure_coverage(TokenDelta(excluded_files=excluded), []).excluded_files == excluded
+
+
+class TestBreakdown:
+    def test_a_file_no_model_reads_is_marked_and_counted(self) -> None:
+        """The first, cheap breakdown: a change in a file neither model declares anything in
+        could not have been explained -- roughly, a file no translation unit includes."""
+        delta = TokenDelta(runs=(run(Side.HEAD, "a.cpp", 5), run(Side.HEAD, "orphan.h", 1, 2)))
+        coverage = measure_coverage(delta, [], modelled={"a.cpp"})
+        assert [(f.path, f.modelled) for f in coverage.files] == [
+            ("a.cpp", True),
+            ("orphan.h", False),
+        ]
+        assert coverage.unmodelled_lines == 2
+
+    def test_modelled_files_are_every_location_and_site(self) -> None:
+        decl, defn = Location(file="a.h", line=1), Location(file="a.cpp", line=4)
+        node = Node(
+            id=NodeId("c:@F@f#"),
+            kind=NodeKind.FUNCTION,
+            name="f",
+            qualified_name="f",
+            location=defn,
+            sites=(decl, defn),
+        )
+        base, head = Model(rev="a" * 40), Model(rev="b" * 40)
+        head.add_node(node)
+        assert modelled_files(base, head) == {"a.h", "a.cpp"}
 
 
 class TestMoved:

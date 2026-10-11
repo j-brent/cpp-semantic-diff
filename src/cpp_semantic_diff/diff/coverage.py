@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import bisect
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 
 from cpp_semantic_diff.acquire.tokens import ExcludedFile, TokenDelta, TokenRun
-from cpp_semantic_diff.model import ChangeEvent, Side
+from cpp_semantic_diff.model import ChangeEvent, Model, Side
 
 #: The least a run must be to count as moved: this many tokens and one whole line on each side.
 #: Below that, identical text in two places is as likely to be coincidence -- `return 0;`, a
@@ -42,6 +42,10 @@ class UncoveredFile:
     path: str
     lines: tuple[int, ...]
     tokens: int
+    #: Whether either model holds a declaration in this file. False approximates "no
+    #: translation unit includes it": it also covers an included file that declares nothing
+    #: the model records, such as one holding only macros.
+    modelled: bool = True
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,11 @@ class Coverage:
     excluded_files: tuple[ExcludedFile, ...] = ()
     #: False when git cut rename detection short for the text diff (`TokenDelta.rename_limit`).
     renames_complete: bool = True
+
+    @property
+    def unmodelled_lines(self) -> int:
+        """Uncovered lines in files neither model declares anything in. Approximate."""
+        return sum(len(f.lines) for f in self.files if not f.modelled)
 
 
 def _moved(runs: Sequence[TokenRun]) -> set[int]:
@@ -121,8 +130,27 @@ class _Spans:
         return i >= 0 and line <= self._ends[(side, file)][i]
 
 
-def measure_coverage(delta: TokenDelta, events: Iterable[ChangeEvent]) -> Coverage:
-    """Set the changed tokens against the change events' provenance."""
+def modelled_files(*models: Model) -> frozenset[str]:
+    """Every file any node in these models is located or declared in."""
+    return frozenset(
+        location.file
+        for model in models
+        for node in model.nodes.values()
+        for location in (*((node.location,) if node.location else ()), *node.sites)
+    )
+
+
+def measure_coverage(
+    delta: TokenDelta,
+    events: Iterable[ChangeEvent],
+    modelled: Collection[str] | None = None,
+) -> Coverage:
+    """Set the changed tokens against the change events' provenance.
+
+    `modelled` is the files the two models declare anything in (`modelled_files`), which
+    sorts uncovered files into a first, cheap breakdown: a change in a file no model reads
+    from is one the model could not have explained. None leaves every file marked modelled.
+    """
     runs = delta.runs
     moved = _moved(runs)
     spans = _Spans(events)
@@ -143,7 +171,13 @@ def measure_coverage(delta: TokenDelta, events: Iterable[ChangeEvent]) -> Covera
                 uncovered[(run.side, run.file)][token.line] += 1
 
     files = tuple(
-        UncoveredFile(side=side, path=path, lines=tuple(sorted(lines)), tokens=sum(lines.values()))
+        UncoveredFile(
+            side=side,
+            path=path,
+            lines=tuple(sorted(lines)),
+            tokens=sum(lines.values()),
+            modelled=modelled is None or path in modelled,
+        )
         for (side, path), lines in sorted(uncovered.items(), key=lambda kv: (kv[0][1], kv[0][0]))
     )
     return Coverage(
