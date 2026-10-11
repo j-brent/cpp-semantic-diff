@@ -42,6 +42,12 @@ from cpp_semantic_diff.model import (
 #: neither can these, so nothing is lost by the suppression.
 SIGNATURE_ATTRS: frozenset[str] = frozenset({"return_type", "const"})
 
+#: A record's bases in the order written (`extract._base_order`). Reported only where the
+#: bases present on both sides are in a different relative order: an added or removed base is
+#: already an `inherits` edge event, and reporting the order beside it would say it twice. A
+#: reorder alongside an addition is still a reorder, and is still reported (ADR-043).
+BASE_ORDER = "base_order"
+
 
 def node_events(ctx: DiffContext) -> Iterator[ChangeEvent]:
     corr = ctx.correspondence
@@ -122,6 +128,8 @@ def _changes(
     for attr, old, new in changed_attrs(base.attrs, head.attrs):
         if signature_changed and attr in SIGNATURE_ATTRS:
             continue
+        if attr == BASE_ORDER and not bases_reordered(old, new):
+            continue
         yield event(ChangeEventKind.NODE_ATTR_CHANGED, attr=attr, old=old, new=new)
 
     # ARCH-001 §4.1: `body_hash` is deliberately not an attribute, so a differing body is
@@ -141,6 +149,19 @@ def _changes(
     # artifact: the TU holding the definition failing to parse on one side produces the
     # identical shape, and turning that into an event is §11's laundering of absence of
     # evidence into evidence of absence.
+
+
+def bases_reordered(old: AttrValue, new: AttrValue) -> bool:
+    """Whether the bases on both sides of a `base_order` change are in a different order.
+
+    False where either side is not determined: there is no order to compare against.
+    """
+    if not isinstance(old, str) or not isinstance(new, str):
+        return False
+    before = old.split("; ") if old else []
+    after = new.split("; ") if new else []
+    common = set(before) & set(after)
+    return [b for b in before if b in common] != [b for b in after if b in common]
 
 
 def _parent_changed(

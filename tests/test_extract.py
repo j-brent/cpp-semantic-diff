@@ -1166,6 +1166,49 @@ class TestNodiscardDeprecatedAndFinalAreComparedState:
         assert self.attr(result, "F", "final") is True
 
 
+class TestInheritanceOrderAndVirtualBases:
+    """`base_order` on a record, and `virtual` on an `inherits` edge (#11)."""
+
+    SOURCE = """
+    namespace ns { struct A {}; }
+    struct B {};
+    template <class T> struct Tpl {};
+    struct None {};
+    struct Two : ns::A, B {};
+    struct Swapped : B, ns::A {};
+    struct Virt : virtual B, ns::A {};
+    struct OfTemplate : Tpl<int> {};
+    struct Fwd;
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("bases"), toolchain, {"a.cpp": self.SOURCE})
+
+    def order(self, result: TuExtract, qualified: str) -> AttrValue:
+        return named(result, qualified).attrs["base_order"]
+
+    def test_bases_are_listed_in_the_order_written(self, result: TuExtract) -> None:
+        assert self.order(result, "None") == ""
+        assert self.order(result, "Two") == "ns::A; B"
+        assert self.order(result, "Swapped") == "B; ns::A"
+        assert self.order(result, "OfTemplate") == "Tpl<int>"
+
+    def test_a_record_this_tu_never_defines_has_no_order(self, result: TuExtract) -> None:
+        assert self.order(result, "Fwd") is None
+
+    def test_a_virtual_base_is_an_attribute_of_the_edge(self, result: TuExtract) -> None:
+        names = {i: n.qualified_name for i, n in result.nodes.items()}
+        virtual = {
+            (names.get(e.src), names.get(e.dst)): e.attrs["virtual"]
+            for e in result.edges.values()
+            if e.kind is EdgeKind.INHERITS
+        }
+        assert virtual[("Virt", "B")] is True
+        assert virtual[("Virt", "ns::A")] is False
+        assert virtual[("Two", "B")] is False
+
+
 class TestFailureIsRecordedNotRaised:
     def test_a_broken_tu_is_reported_as_incompleteness(
         self, tmp_path: Path, toolchain: Toolchain

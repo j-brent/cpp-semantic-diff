@@ -239,6 +239,9 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     "deprecated": 0.55,
     # Breaks every class that derives from it, and devirtualizes calls on it.
     "final": 0.70,
+    # Base order is layout and construction order: every base's offset, and which base is
+    # constructed first.
+    "base_order": 0.90,
 }
 
 # --------------------------------------------------------------------------------------

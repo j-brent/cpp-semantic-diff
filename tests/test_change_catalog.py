@@ -392,14 +392,12 @@ CATALOG = [
         "struct A {}; struct B {}; struct S : A, B {};",
         "struct A {}; struct B {}; struct S : B, A {};",
         changed("S"),
-        fails="step 7: base order is not compared",
     ),
     case(
         "base-becomes-virtual",
         "struct A {}; struct S : A {};",
         "struct A {}; struct S : virtual A {};",
         changed("S", naming="A"),
-        fails="step 7: virtual inheritance is not compared",
     ),
     case(
         "constexpr-removed",
@@ -810,6 +808,8 @@ STEP_7_CASES = (
     "nodiscard-added",
     "deprecated-added",
     "constructor-initializer-list",
+    "base-becomes-virtual",
+    "base-order",
 )
 
 

@@ -373,6 +373,32 @@ def pretty_printed(cursor: ci.Cursor, *, suppress_initializers: bool = False) ->
     return _pretty_printer(cursor, suppress_initializers=suppress_initializers)
 
 
+class _VirtualBase:
+    """`clang_isVirtualBase`, which the Python bindings declare but give no method.
+
+    Whether a base specifier is `virtual`: an attribute of the `inherits` edge, beside its
+    access, because it belongs to the relation and not to either class.
+    """
+
+    def __init__(self) -> None:
+        self._get = ci.conf.lib.clang_isVirtualBase
+        self._get.argtypes = [ci.Cursor]
+        self._get.restype = ctypes.c_uint
+
+    def __call__(self, cursor: ci.Cursor) -> bool:
+        return bool(self._get(cursor))
+
+
+_virtual_base: _VirtualBase | None = None
+
+
+def is_virtual_base(cursor: ci.Cursor) -> bool:
+    global _virtual_base
+    if _virtual_base is None:
+        _virtual_base = _VirtualBase()
+    return _virtual_base(cursor)
+
+
 def _is_member(cursor: ci.Cursor) -> bool:
     """Whether this declaration belongs to a class-like scope (ARCH-001 §4.1).
 
@@ -1021,6 +1047,24 @@ def _final(cursor: ci.Cursor) -> bool | None:
     return any(c.kind is ci.CursorKind.CXX_FINAL_ATTR for c in definition.get_children())
 
 
+def _base_order(cursor: ci.Cursor) -> str | None:
+    """A record's bases in the order written, joined `"; "`, or None where this TU does not
+    see its definition. `""` means no bases.
+
+    Base order is layout and construction order, and the `inherits` edges have no order of
+    their own. The diff reports it only where the bases on both sides are in a different
+    relative order, so adding or removing a base is not also a reorder (ADR-043).
+    """
+    definition = cursor.get_definition()
+    if definition is None:
+        return None
+    return "; ".join(
+        _canonical_spelling(c.type)
+        for c in definition.get_children()
+        if c.kind is ci.CursorKind.CXX_BASE_SPECIFIER
+    )
+
+
 def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
     """Flat, always-present-per-kind scalars (ARCH-001 §4.3).
 
@@ -1085,6 +1129,7 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         )
         attrs["abstract"] = cursor.is_abstract_record()
         attrs["final"] = _final(cursor)
+        attrs["base_order"] = _base_order(cursor)
     return attrs
 
 
@@ -1708,6 +1753,7 @@ class _Extractor:
                         EdgeKind.INHERITS,
                         _location(child, self.root, self.base),
                         access=_access(child) or "private",
+                        virtual=is_virtual_base(child),
                     )
             else:
                 self.visit_declaration(child)
