@@ -208,7 +208,9 @@ class TestConfidenceCarriesModelCompleteness:
     `DiffContext.confidence` threads this through `Confidence.derive`; nothing here pins a
     float -- only the `models_complete` flag the design actually specifies."""
 
-    def test_a_failed_tu_on_either_side_marks_confidence_incomplete(self) -> None:
+    def test_a_failed_tu_on_base_marks_confidence_incomplete_even_with_a_complete_head(
+        self,
+    ) -> None:
         incomplete = Completeness(
             tus_total=2,
             tus=[
@@ -216,22 +218,50 @@ class TestConfidenceCarriesModelCompleteness:
                 TuResult(path="b.cpp", status=TuStatus.FAILED),
             ],
         )
-        base = model(
-            "a", f("void (int)"), caller(G), edges=[calls(G, F)], completeness=incomplete
-        )
-        head = model("b", f("void (double)"), caller(G), edges=[calls(G, F)])
+        complete = Completeness(tus_total=1, tus=[TuResult(path="c.cpp", status=TuStatus.PARSED)])
+        base = model("a", f("void (int)"), caller(G), edges=[calls(G, F)], completeness=incomplete)
+        head = model("b", f("void (double)"), caller(G), edges=[calls(G, F)], completeness=complete)
         (event,) = callers(derive(base, head))
+        # base incomplete, head complete: `and` gives False; `or` would wrongly give True.
+        assert event.confidence.models_complete is False
+
+    def test_a_failed_tu_on_head_marks_confidence_incomplete_even_with_a_complete_base(
+        self,
+    ) -> None:
+        complete = Completeness(tus_total=1, tus=[TuResult(path="a.cpp", status=TuStatus.PARSED)])
+        incomplete = Completeness(
+            tus_total=2,
+            tus=[
+                TuResult(path="b.cpp", status=TuStatus.PARSED),
+                TuResult(path="c.cpp", status=TuStatus.FAILED),
+            ],
+        )
+        base = model("a", f("void (int)"), caller(G), edges=[calls(G, F)], completeness=complete)
+        head = model(
+            "b", f("void (double)"), caller(G), edges=[calls(G, F)], completeness=incomplete
+        )
+        (event,) = callers(derive(base, head))
+        # base complete, head incomplete: `and` gives False, and only this direction catches
+        # a `confidence` that reads base's completeness for both sides -- that mutant would
+        # see base-complete twice and wrongly report True.
         assert event.confidence.models_complete is False
 
     def test_both_models_fully_parsed_marks_confidence_complete(self) -> None:
-        complete = Completeness(
+        base_complete = Completeness(
             tus_total=1, tus=[TuResult(path="a.cpp", status=TuStatus.PARSED)]
         )
+        head_complete = Completeness(
+            tus_total=2,
+            tus=[
+                TuResult(path="b.cpp", status=TuStatus.PARSED),
+                TuResult(path="c.cpp", status=TuStatus.PARSED),
+            ],
+        )
         base = model(
-            "a", f("void (int)"), caller(G), edges=[calls(G, F)], completeness=complete
+            "a", f("void (int)"), caller(G), edges=[calls(G, F)], completeness=base_complete
         )
         head = model(
-            "b", f("void (double)"), caller(G), edges=[calls(G, F)], completeness=complete
+            "b", f("void (double)"), caller(G), edges=[calls(G, F)], completeness=head_complete
         )
         (event,) = callers(derive(base, head))
         assert event.confidence.models_complete is True
