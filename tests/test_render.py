@@ -349,6 +349,25 @@ class TestNothingIsHiddenWithoutACause:
         members do not. The two-node fixture above cannot tell "promote the cycle" apart
         from "promote everything reachable from it", because there is nothing upstream to
         wrongly sweep in -- this fixture adds that upstream link.
+
+        **Why `doc.ranking` is forced rather than left as `rank_events` produced it.**
+        `_on_a_cycle` walks `parent` in the order `collapse()` built it from, which is
+        ranking order. `rank/ranker.py` caps a consequence's score at its cause's
+        (`_bound_by_cause`) and breaks ties on cascade depth, so a lead-in whose
+        `caused_by` points *into* a cycle always ranks after both cycle members -- its
+        score is capped by theirs and its depth is strictly greater. That means the walk
+        that first discovers the cycle always starts *on* the cycle itself in practice,
+        where the path and its cycle-tail are the same slice and the trim this test is
+        about never has anything to cut. A mutant that swept the whole walked path instead
+        of just the tail (`on_cycle.update(path)` for
+        `on_cycle.update(path[path.index(current):])`) passed this fixture unmodified,
+        which is exactly that: a real document built through ranking cannot exercise the
+        line ARCH-001 §6.3 and this module's docstring both rest on. `collapse.py`'s own
+        docstring says a document "can arrive from a file, from a test, or from a future
+        stage" -- not only from today's ranker -- so the walk order has to be forced to
+        the one shape ranking will not produce, and the claim has to hold there too.
+        `DiffDocument` is not frozen (`by_id`'s own comment), so reassigning `ranking` is
+        the same kind of by-hand construction the rest of this module already uses.
         """
         f = node("c:@F@f#", name="f")
         g = node("c:@F@g#", name="g")
@@ -362,6 +381,9 @@ class TestNothingIsHiddenWithoutACause:
         a = a.model_copy(update={"caused_by": b.id})
         b = b.model_copy(update={"caused_by": a.id})
         doc = document(model("x", f, g, h), model("y", f, g, h), [lead_in, a, b])
+        # Force the walk that discovers the cycle to start from the lead-in, not from a
+        # cycle member -- see the docstring above for why ranking alone never does this.
+        doc.ranking = [lead_in.id, a.id, b.id]
 
         tree = collapse(doc)
         assert set(tree.promoted) == {a.id, b.id}, "only the cycle has no usable cause"
