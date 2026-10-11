@@ -2251,8 +2251,13 @@ class _Extractor:
                         access=_access(child) or "private",
                         virtual=is_virtual_base(child),
                     )
-            else:
-                self.visit_declaration(child)
+                continue
+            # A member can come from another file: an `#include` inside the class body.
+            # Pruned like `visit` prunes, so a third-party member never enters the model.
+            file = child.location.file
+            if file is not None and self.outside(file.name) is not None:
+                continue
+            self.visit_declaration(child)
 
     def visit_body(self, cursor: ci.Cursor, usr: str) -> None:
         """Call edges out of one definition.

@@ -609,10 +609,10 @@ CodeAtlas TypeScript.
   completeness:{ per-side completeness records (§4.4), standing limits (§11),
                  where the uncovered changes are }
   entities:    { node id → node summary, for change events to reference }
-  events:      [ ChangeEvent ]        -- complete, uncollapsed
+  change_events: [ ChangeEvent ]      -- complete, uncollapsed
   findings:    [ Finding ]            -- evidence, attached by node id
   ranking:     [ change event id ]    -- ordered
-  summary:     { lines_changed, events_reported, compression, high_risk_count,
+  summary:     { lines_changed, change_events_reported, compression, high_risk_count,
                  changed_cpp_lines, uncovered_lines }
 }
 ```

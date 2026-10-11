@@ -80,7 +80,7 @@ class Collapsed:
         """Every event id in the forest, in reading order.
 
         The §6.3 invariant is a set equality against the document, and this is the half of
-        it the view side owns: `set(flatten()) == {e.id for e in document.events}`, always.
+        it the view side owns: `set(flatten()) == {e.id for e in document.change_events}`, always.
         """
         return [node.event_id for root in self.roots for node, _ in root.walk()]
 

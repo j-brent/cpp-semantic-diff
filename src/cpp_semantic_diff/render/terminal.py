@@ -1,11 +1,11 @@
 """The terminal view: a consumer of the document, and nothing more. ARCH-001 §10.
 
 **Every number on this page comes out of a `DiffDocument`.** No `Model`, no `Correspondence`,
-no `Ranking`, no `ChangeEvent` that is not already in `document.events`. The function signatures
-enforce it -- `render()` takes a document and a handful of display flags -- and the reason is
-§10's: the moment a view can reach a model, a number that "was easier to get from the model"
-lands in the presentation layer, and the analysis core has a delivery surface inside it. That
-is the mistake §10 names. **If this view needs a number the document does not carry, the fix
+no `Ranking`, no `ChangeEvent` that is not already in `document.change_events`. The function
+signatures enforce it -- `render()` takes a document and a handful of display flags -- and the
+reason is §10's: the moment a view can reach a model, a number that "was easier to get from the
+model" lands in the presentation layer, and the analysis core has a delivery surface inside it.
+That is the mistake §10 names. **If this view needs a number the document does not carry, the fix
 is to put it in the document.**
 
 **No document string passes through the markup parser.** Every value read off the document is
@@ -210,7 +210,7 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
 
     The sentence is taken from `summary.compression` rather than rebuilt, so that the JSON and the
     terminal cannot disagree about the one claim the project is testing. The line below it separates
-    the two counts that are easy to conflate: `events_reported` is the complete delta and the
+    the two counts that are easy to conflate: `change_events_reported` is the complete delta and the
     numerator; the collapsed count is what this view chose to nest, and is never the numerator.
     """
     s = document.summary
@@ -467,7 +467,7 @@ def _residue(document: DiffDocument, console: Console) -> None:
     tiers = ", ".join(t.value for t in r.tiers_run) or "none"
     plural = "s" if len(r.tiers_run) > 1 else ""
     console.print()
-    console.print(f"[dim]identity: tier{plural} {tiers} only (ARCH-001 §13, STATUS §6)[/]")
+    console.print(f"[dim]identity: tier{plural} {tiers} only (ARCH-001 §13)[/]")
     console.print(
         f"  [dim]{r.matched:,} matched · {r.unmatched_base:,} base / {r.unmatched_head:,} "
         f"head unmatched[/]"

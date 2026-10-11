@@ -185,7 +185,7 @@ class Node(BaseModel):
     tu: str | None = Field(
         default=None,
         description="Defining translation unit. Identity-relevant for internal linkage, "
-        "where USRs incorporate the file path (ARCH-001 §5).",
+        "where USRs incorporate the file name (ARCH-001 §5).",
     )
 
     @field_validator("attrs", mode="before")

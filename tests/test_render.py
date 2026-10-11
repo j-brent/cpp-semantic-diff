@@ -26,6 +26,7 @@ idiom of `test_diff.py` and `test_rank.py`.
 from __future__ import annotations
 
 import io
+import json
 from typing import Any
 
 import pytest
@@ -64,6 +65,7 @@ from cpp_semantic_diff.model import (
     TuStatus,
     Unpaired,
 )
+from cpp_semantic_diff.model.ir import Crossing
 from cpp_semantic_diff.rank import rank_events
 from cpp_semantic_diff.render import (
     SCHEMA_VERSION,
@@ -204,7 +206,7 @@ class TestDocumentCarriesEverything:
         base = model("a", cls, member, edges=[edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS)])
         doc = pipeline(base, model("b"))
 
-        caused = [e for e in doc.events if e.caused_by is not None]
+        caused = [e for e in doc.change_events if e.caused_by is not None]
         assert caused, "the fixture must produce a cascade or it is testing nothing"
 
         tree = collapse(doc, enabled=True)
@@ -212,8 +214,8 @@ class TestDocumentCarriesEverything:
         assert hidden, "the view must actually be nesting something"
 
         # The claim: nested in the view, present in the document.
-        assert hidden <= {e.id for e in doc.events}
-        assert doc.summary.events_reported == len(doc.events)
+        assert hidden <= {e.id for e in doc.change_events}
+        assert doc.summary.change_events_reported == len(doc.change_events)
 
     def test_collapsing_changes_shape_but_never_the_set(self) -> None:
         """`--expand` and the default must differ in nesting only, never in content.
@@ -281,7 +283,7 @@ class TestDocumentCarriesEverything:
         doc = pipeline(base, model("b"))
 
         flattened = collapse(doc).flatten()
-        assert sorted(flattened) == sorted(e.id for e in doc.events)
+        assert sorted(flattened) == sorted(e.id for e in doc.change_events)
         assert len(flattened) == len(set(flattened))
 
 
@@ -305,7 +307,7 @@ class TestNothingIsHiddenWithoutACause:
             ]
         )
         tree = collapse(doc)
-        assert {r.event_id for r in tree.roots} == {e.id for e in doc.events}
+        assert {r.event_id for r in tree.roots} == {e.id for e in doc.change_events}
         assert tree.hidden == 0
 
     def test_a_dangling_cause_promotes_rather_than_hides(self) -> None:
@@ -490,12 +492,12 @@ class TestCompressionCountsWhatItClaims:
         base = model("a", cls, member, edges=[edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS)])
         doc = pipeline(base, model("b"), lines_changed=200)
 
-        assert doc.summary.events_reported == len(doc.events)
-        assert doc.summary.top_level_events < doc.summary.events_reported, (
+        assert doc.summary.change_events_reported == len(doc.change_events)
+        assert doc.summary.top_level_change_events < doc.summary.change_events_reported, (
             "the fixture must collapse something, or the distinction is untested"
         )
-        assert doc.summary.compression_ratio == 200 / len(doc.events)
-        assert str(len(doc.events)) in doc.summary.compression
+        assert doc.summary.compression_ratio == 200 / len(doc.change_events)
+        assert str(len(doc.change_events)) in doc.summary.compression
 
     def test_the_denominator_is_the_text_diff_as_measured(self) -> None:
         """`lines_changed` is `acquire.diff_line_count` -- the number `cppsd plan` reports
@@ -524,7 +526,7 @@ class TestCompressionCountsWhatItClaims:
         this tool can produce, and a sentinel ratio would let a consumer average over it."""
         f = node("c:@F@f#", name="f")
         doc = pipeline(model("a", f), model("b", f), lines_changed=900)
-        assert doc.summary.events_reported == 0
+        assert doc.summary.change_events_reported == 0
         assert doc.summary.compression_ratio is None
         assert "no semantic change" in doc.summary.compression
 
@@ -556,7 +558,7 @@ class TestCompressionCountsWhatItClaims:
         ]
         doc = pipeline(model("a", own, *deps), model("b"), lines_changed=10)
 
-        assert doc.summary.events_reported == 5
+        assert doc.summary.change_events_reported == 5
         assert doc.summary.compression_ratio == 10 / 5
         assert "bundled" not in doc.summary.compression
         assert "vendored_events" not in doc.summary.model_dump()
@@ -990,7 +992,7 @@ class TestTheResidueIsReported:
         after = node("c:@F@new#", name="new")
         doc = pipeline(model("a", before), model("b", after))
 
-        kinds = sorted(e.kind for e in doc.events)
+        kinds = sorted(e.kind for e in doc.change_events)
         assert kinds == [ChangeEventKind.NODE_ADDED, ChangeEventKind.NODE_REMOVED]
 
         r = doc.summary.residue
@@ -1044,11 +1046,63 @@ class TestTheDocumentIsTheContract:
             "meta",
             "completeness",
             "entities",
-            "events",
+            "change_events",
             "findings",
             "ranking",
             "summary",
         } <= keys
+
+    def test_every_key_says_change_event_not_event(self) -> None:
+        """ADR-027 (#4). A key named for "event" alone survives nowhere in the JSON."""
+        cls = node("c:@S@C", kind=NodeKind.CLASS, name="C")
+        member = node("c:@S@C@F@m#", name="m", qualified_name="C::m")
+        base = model("a", cls, member, edges=[edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS)])
+        doc = pipeline(base, model("b", node("c:@F@g#", name="g")))
+        raw = json.loads(doc.to_json())
+
+        def keys(value: object) -> set[str]:
+            if isinstance(value, dict):
+                return {str(k) for k in value} | {k for v in value.values() for k in keys(v)}
+            if isinstance(value, list):
+                return {k for v in value for k in keys(v)}
+            return set()
+
+        found = keys({k: v for k, v in raw.items() if k != "scores"})
+        found |= {k for score in raw["scores"].values() for k in keys(score)}
+        assert {k for k in found if "event" in k and "change_event" not in k} == set()
+        assert {"change_events_reported", "top_level_change_events"} <= set(raw["summary"])
+        assert raw["components"] and "change_events" in raw["components"][0]
+        assert "change_event_id" in next(iter(raw["scores"].values()))
+
+    def test_crossing_counts_per_label_reach_the_document(self) -> None:
+        """The boundary, itemized by where each relation leads (ADR-025)."""
+        counts = {"test/gtest": 3, "C++ standard library": 2}
+        head = model(
+            "b",
+            completeness=Completeness(edges_total=10, edges_dropped=5, crossings_by_label=counts),
+        )
+        doc = pipeline(model("a"), head)
+        assert doc.completeness.head.crossings_by_label == counts
+        assert list(doc.completeness.head.crossings_by_label) == sorted(counts)
+        assert doc.completeness.base.crossings_by_label == {}
+
+    def test_crossings_are_those_of_the_entities_the_change_events_reference(self) -> None:
+        """The rule `entities` follows. Every crossing in the model would make the document a
+        model dump; the totals stay in `crossings_by_label`."""
+        changed = node("c:@F@changed#", name="changed")
+        quiet = node("c:@F@quiet#", name="quiet")
+
+        def out(src: str, callee: str) -> Crossing:
+            return Crossing(src=NodeId(src), callee=callee, kind=EdgeKind.CALLS, label="test/gtest")
+
+        crossings = [out("c:@F@quiet#", "testing::Quiet"), out("c:@F@changed#", "testing::Fail")]
+        base = model("a", changed, quiet, crossings=crossings)
+        head = model("b", quiet, crossings=crossings[:1])
+        doc = pipeline(base, head)
+
+        assert [c.callee for c in doc.crossings.base] == ["testing::Fail"]
+        assert doc.crossings.head == []
+        assert DiffDocument.from_json(doc.to_json()) == doc
 
     def test_it_round_trips(self) -> None:
         """ "JSON is the product" is aspirational unless a document read off disk is the
@@ -1061,7 +1115,9 @@ class TestTheDocumentIsTheContract:
         again = DiffDocument.from_json(doc.to_json())
         assert again.to_json() == doc.to_json()
         assert again == doc
-        assert [e.caused_by for e in again.events] == [e.caused_by for e in doc.events]
+        assert [e.caused_by for e in again.change_events] == [
+            e.caused_by for e in doc.change_events
+        ]
 
     def test_it_is_a_function_of_the_two_commits_and_not_of_the_clock(self) -> None:
         """Two runs over the same inputs must produce the same bytes, timings aside. §10's
@@ -1089,7 +1145,7 @@ class TestTheDocumentIsTheContract:
         g = node("c:@F@g#", name="g")
         doc = pipeline(model("a", f, g), model("b", f))
 
-        assert sorted(doc.ranking) == sorted(e.id for e in doc.events)
+        assert sorted(doc.ranking) == sorted(e.id for e in doc.change_events)
         totals = [doc.scores[i].total for i in doc.ranking]
         assert totals == sorted(totals, reverse=True)
         assert [e.id for e in doc.ranked()] == doc.ranking
@@ -1105,7 +1161,7 @@ class TestTheDocumentIsTheContract:
 
         from cpp_semantic_diff.rank import subject_endpoints
 
-        for e in doc.events:
+        for e in doc.change_events:
             for endpoint in subject_endpoints(e.subject):
                 assert endpoint in doc.entities, f"{e.kind.value} names an entity nobody can"
 
@@ -1193,11 +1249,13 @@ class TestASignatureChangeShowsItsCallers:
 
     def callers(self, doc: DiffDocument) -> list[ChangeEvent]:
         kind = ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
-        return [e for e in doc.events if e.kind is kind]
+        return [e for e in doc.change_events if e.kind is kind]
 
     def test_each_old_caller_is_a_change_event_under_the_signature_change(self) -> None:
         doc = self.doc("c:@F@g#", "c:@F@h#", new=("c:@F@k#",))
-        (changed,) = (e for e in doc.events if e.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED)
+        (changed,) = (
+            e for e in doc.change_events if e.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        )
         callers = self.callers(doc)
         assert {e.payload["caller"] for e in callers} == {"c:@F@g#", "c:@F@h#"}
         assert all(e.caused_by == changed.id for e in callers)
@@ -1275,7 +1333,7 @@ class TestASignatureChangeShowsItsCallers:
             side("a", old, "void (int)", edge(over, old, EdgeKind.OVERRIDES)),
             side("b", new, "void (double)"),
         )
-        broken = next(e.id for e in doc.events if e.kind is ChangeEventKind.EDGE_REMOVED)
+        broken = next(e.id for e in doc.change_events if e.kind is ChangeEventKind.EDGE_REMOVED)
         doc = doc.model_copy(update={"ranking": [*(i for i in doc.ranking if i != broken), broken]})
         (root,) = (
             r
@@ -1317,7 +1375,7 @@ class TestANamePairedFunctionIsOnBothSides:
 
     def test_the_callee_of_a_removed_call_does_not_read_as_removed(self) -> None:
         doc = self.doc()
-        (removed,) = (e for e in doc.events if e.kind is ChangeEventKind.EDGE_REMOVED)
+        (removed,) = (e for e in doc.change_events if e.kind is ChangeEventKind.EDGE_REMOVED)
         assert removed.subject == f"c:@F@g#|calls|{self.OLD}"
         assert doc.entities[NodeId(self.OLD)].sides == ["base", "head"]
         assert "- " not in draw(doc, collapse_cascades=False)
@@ -1380,7 +1438,7 @@ class TestALabelNamesOneEntity:
         doc = specialization_document(
             record(TEMPLATE_USR, line=1056), record(PARTIAL_USR, line=1062)
         )
-        edges = [e for e in doc.events if e.kind is ChangeEventKind.EDGE_ADDED]
+        edges = [e for e in doc.change_events if e.kind is ChangeEventKind.EDGE_ADDED]
         rendered = [doc.label(e.subject) for e in edges]
 
         self_edges = [r for r in rendered if len(set(r.split(" -> "))) == 1]

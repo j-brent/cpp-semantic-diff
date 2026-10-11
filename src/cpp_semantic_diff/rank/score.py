@@ -66,7 +66,7 @@ class RiskScore(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    event_id: ChangeEventId
+    change_event_id: ChangeEventId
     total: float = Field(
         description="Sum of the contributions, in [0, 1] -- except where `bounded_by` "
         "names a cause, in which case it is the cause's total (see `ranker.py`)."
@@ -104,7 +104,7 @@ class RiskScore(BaseModel):
         for f in self.factors:
             if f.name is name:
                 return f
-        raise KeyError(f"score for {self.event_id} carries no {name.value} factor")
+        raise KeyError(f"score for {self.change_event_id} carries no {name.value} factor")
 
     @property
     def is_high_risk(self) -> bool:
@@ -166,7 +166,7 @@ def score_event(event: ChangeEvent, ctx: ScoringContext) -> RiskScore:
     total = sum(f.contribution for f in factors)
     measured = sum(f.contribution for f in factors if f.name.value in w.IMPACT_FACTORS)
     return RiskScore(
-        event_id=event.id,
+        change_event_id=event.id,
         total=total,
         impact=measured / w.IMPACT_WEIGHT,
         factors=factors,

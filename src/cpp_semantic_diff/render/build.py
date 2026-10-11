@@ -12,9 +12,9 @@ Two things it deliberately does not do.
 list in the order the diff stage emitted it. Collapse is a view concern (§6.3, `collapse.py`)
 and this document is what the views agree on.
 
-**It does not improve the numerator.** `summary.events_reported` is `len(events)`, and it is
-the numerator. §10 makes the compression ratio the experiment this project runs on itself,
-and there is no filter, bucket or threshold here that could flatter it.
+**It does not improve the numerator.** `summary.change_events_reported` is `len(events)`, and
+it is the numerator. §10 makes the compression ratio the experiment this project runs on
+itself, and there is no filter, bucket or threshold here that could flatter it.
 """
 
 from __future__ import annotations
@@ -33,11 +33,13 @@ from cpp_semantic_diff.model import (
     NodeId,
     Side,
 )
+from cpp_semantic_diff.model.ir import Crossing
 from cpp_semantic_diff.rank import Ranking, subject_endpoints
 from cpp_semantic_diff.render.document import (
     SYSTEMATIC_LIMITS,
     CompletenessBlock,
     CompletenessReport,
+    CrossingsBlock,
     DiffDocument,
     EntitySummary,
     ExcludedFile,
@@ -119,13 +121,17 @@ def build_document(
             ThirdPartyHint(path=path, message=hint_message(path)) for path in third_party.hints
         ],
         entities=entities,
+        crossings=CrossingsBlock(
+            base=_crossings_from(base, entities),
+            head=_crossings_from(head, entities),
+        ),
         # The complete, uncollapsed set (§6.3). Copied into a list rather than aliased:
         # a document that shared its list with the caller's would let a later mutation
         # rewrite an already-serialized product.
-        events=list(events),
+        change_events=list(events),
         findings=[],  # §8 is deferred (§13); the key exists so consumers do not change.
         ranking=ranking.order,
-        scores={s.event_id: s for s in ranking.scores},
+        scores={s.change_event_id: s for s in ranking.scores},
         components=list(ranking.components),
         summary=Summary(
             lines_changed=lines_changed,
@@ -135,7 +141,7 @@ def build_document(
             changed_cpp_lines=coverage.changed_lines if coverage is not None else None,
             uncovered_lines=coverage.uncovered_lines if coverage is not None else None,
             uncovered_tokens=coverage.uncovered_tokens if coverage is not None else None,
-            events_reported=count,
+            change_events_reported=count,
             compression=compression_sentence(
                 lines_changed,
                 count,
@@ -148,7 +154,7 @@ def build_document(
             ),
             compression_ratio=(lines_changed / count) if count else None,
             high_risk_count=high_risk,
-            top_level_events=sum(1 for e in events if e.caused_by is None),
+            top_level_change_events=sum(1 for e in events if e.caused_by is None),
             components=len(ranking.components),
             residue=Residue(
                 matched=len(correspondence.matches),
@@ -181,8 +187,9 @@ def compression_sentence(
     see, which is either excellent news or a hole in the model.
 
     **Both sides count only the repository's own code.** The denominator is lines of text
-    diff, and the numerator is every change event; third-party code is in neither, because
-    a comparison across a third-party change is refused (ADR-025).
+    diff, and the numerator is every change event. Third-party code is in neither (ADR-025):
+    no lines, because a comparison across a third-party change is refused, and no change
+    events, because extraction leaves third-party code out of the model.
 
     **`uncovered` is (uncovered lines, changed C++ lines)**, and when it was measured it is
     part of the claim. On its own the ratio improves when the model sees *less* -- a change it
@@ -200,6 +207,11 @@ def compression_sentence(
     if not events:
         return f"{head} (no semantic change the model can see){unexplained}"
     return f"{head}, {high_risk:,} high-risk{unexplained}"
+
+
+def _crossings_from(model: Model, entities: dict[NodeId, EntitySummary]) -> list[Crossing]:
+    """The model's crossings whose caller is a referenced entity, in a stable order."""
+    return sorted((c for c in model.crossings if c.src in entities), key=lambda c: c.id)
 
 
 def _uncovered(coverage: Coverage | None) -> UncoveredReport | None:

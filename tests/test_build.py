@@ -553,6 +553,25 @@ class TestThirdPartyCodeIsOutsideTheModel:
         """`vend` covers `vend/...`, not `vendor/lib.h`."""
         assert named(self.build(tmp_path, toolchain, "vend"), "lib::f")
 
+    def test_a_member_included_into_a_class_body_from_it_is_not_modelled(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """An `#include` inside a class body puts the library's declarations in the class.
+        The class is the repository's; the members from the library are not."""
+        (tmp_path / "vendor").mkdir()
+        sources = {
+            "vendor/members.inc": "int leaked();\n",
+            "a.cpp": 'struct App {\n#include "vendor/members.inc"\n  int own();\n};\n',
+        }
+        checkout = project(tmp_path, sources, ("a.cpp",))
+        model = build_model(
+            checkout, toolchain=toolchain, cache=False, third_party=declared("vendor")
+        )
+        assert named(model, "App::own")
+        assert not named(model, "App::leaked")
+        unbounded = build_model(checkout, toolchain=toolchain, cache=False)
+        assert named(unbounded, "App::leaked"), "the fixture does reach the member"
+
 
 class TestUntrackedFilesAreOutsideTheModel:
     """ADR-037: only what git tracks at the revision is modelled. A generated header in the

@@ -49,6 +49,7 @@ from cpp_semantic_diff.model import (
     NodeKind,
     Side,
 )
+from cpp_semantic_diff.model.ir import Crossing
 from cpp_semantic_diff.rank import Component, RiskScore
 
 #: Bumped when a consumer that understood the previous version could misread this one.
@@ -73,10 +74,26 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #: 1.2 -> 2.0.dev: 2.0 is in development on `dev` for milestone v0. Every v0 change to the
 #: output lands under it, so a consumer sees one bump for the milestone rather than one per
 #: change. It becomes "2.0" when `dev` merges to `main`; until then the `.dev` suffix keeps a
-#: document from a moving schema from passing for a finished one. So far it removes
-#: `summary.vendored_events`: third-party code is not in the model (ADR-025), so every
-#: change event is first-party and `compression_ratio` and `high_risk_count` are taken over
-#: all of them.
+#: document from a moving schema from passing for a finished one. What 2.0 changes so far:
+#:
+#: - Renamed, for the term "change event" (ADR-027): `events` -> `change_events`,
+#:   `summary.events_reported` -> `summary.change_events_reported`,
+#:   `summary.top_level_events` -> `summary.top_level_change_events`,
+#:   `components[].events` -> `components[].change_events`, and
+#:   `scores{}.event_id` -> `scores{}.change_event_id`.
+#: - Removed: `summary.vendored_events`. Third-party code is not in the model (ADR-025), so
+#:   `compression_ratio` and `high_risk_count` are taken over every change event.
+#: - Changed meaning: `completeness.*.edges_dropped` counts every relation that leads
+#:   outside the model, third-party code included, and `edges_total` is resolved edges plus
+#:   those.
+#: - Added: `third_party` and `third_party_hints`; `completeness.*.crossings_by_label`;
+#:   `crossings`, from the referenced entities only; `completeness.renames`;
+#:   `completeness.uncovered` with `summary.changed_cpp_lines`, `uncovered_lines` and
+#:   `uncovered_tokens` (ADR-042); what the producer cannot see in `completeness.limits`;
+#:   `meta.timings.derive` and `coverage`.
+#: - Change events: `NodeSignatureChanged` and `CallerOfChangedSignature` are new kinds and
+#:   `SignatureIncompatible` is gone; `confidence.unpaired` says why an entity is
+#:   unmatched; the match tiers `inline-namespace` and `name` are new.
 SCHEMA_VERSION = "2.0.dev"
 
 #: ARCH-001 §11: systematic limits "get stated in the output itself, every time". These are the
@@ -150,6 +167,15 @@ class CompletenessReport(BaseModel):
         description="Distinct edges dropped because an endpoint is not declared in this "
         "repository. The model's boundary, quantified -- see the class docstring.",
     )
+    crossings_by_label: dict[str, int] = Field(
+        default_factory=dict,
+        description="`edges_dropped`, itemized by where each relation leads: a third-party "
+        "path, a library outside the repository (`C++ standard library`, `boost`), "
+        "`untracked`, or the kind of in-repository entity no declaration produced "
+        "(`implicit`, `function-local`, `template instantiation`, `compiler builtins`, "
+        "`unresolved`). For visualization only: nothing in the comparison or the ranking "
+        "reads it (ADR-025).",
+    )
 
     build_available: bool = Field(
         description="Whether binary artifacts existed. Configure-only in v0 (§3.1), so "
@@ -190,6 +216,7 @@ class CompletenessReport(BaseModel):
             tus_cached=sum(1 for t in completeness.tus if t.cache_hit),
             edges_total=completeness.edges_total,
             edges_dropped=completeness.edges_dropped,
+            crossings_by_label=dict(sorted(completeness.crossings_by_label.items())),
             build_available=completeness.build_available,
             producer_version=completeness.producer_version,
             producers=list(completeness.producers),
@@ -424,6 +451,21 @@ class CompletenessBlock(BaseModel):
         return bool(self.warnings) or not self.renames.complete
 
 
+class CrossingsBlock(BaseModel):
+    """Each side's boundary crossings out of the entities the change events reference.
+
+    The same rule as `entities`: a review touches tens of entities, and every crossing in the
+    model would make the document a model dump, megabytes on a real repository. The totals per
+    label are in `completeness.*.crossings_by_label`. For visualization only:
+    nothing in the comparison or the ranking reads them (ADR-025).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    base: list[Crossing] = Field(default_factory=list)
+    head: list[Crossing] = Field(default_factory=list)
+
+
 class ThirdPartyPath(BaseModel):
     """One directory of the third-party set, and where it came from (ADR-025).
 
@@ -475,7 +517,7 @@ class EntitySummary(BaseModel):
         description="Which sides hold this entity, through the correspondence: either id of "
         "a match counts as both, since a function paired by name has a different id on each "
         "side (ADR-036). A one-sided entity is exactly what a "
-        "pipeline without rename detection produces for a rename (STATUS §6), so the view "
+        "pipeline without rename detection produces for a rename, so the view "
         "can say 'gone' or 'new' without re-deriving it from the event kind."
     )
 
@@ -586,15 +628,15 @@ class Residue(BaseModel):
 class Summary(BaseModel):
     """§10's `summary`, and the sentence the whole project is pointed at.
 
-    **`compression` is computed honestly or not at all.** `events_reported` is the length
-    of `events` -- the complete, uncollapsed set, before any view hides anything. §10 is
-    blunt about why: if the ratio is not dramatic on real commits then RESEARCH-002's
+    **`compression` is computed honestly or not at all.** `change_events_reported` is the
+    length of `change_events` -- the complete, uncollapsed set, before any view hides anything.
+    §10 is blunt about why: if the ratio is not dramatic on real commits then RESEARCH-002's
     thesis is wrong, and the design should surface that in week one rather than month six.
     A numerator improved by filtering, bucketing or suppressing would destroy the only
     experiment this tool runs on itself.
 
-    `top_level_events` is reported *beside* it and is never the numerator. It is a property
-    of one view's collapse policy (§6.3), not of the delta.
+    `top_level_change_events` is reported *beside* it and is never the numerator. It is a
+    property of one view's collapse policy (§6.3), not of the delta.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -633,23 +675,29 @@ class Summary(BaseModel):
         description="The changed tokens behind `uncovered_lines`, moved tokens excluded.",
     )
 
-    events_reported: int = Field(
-        description="`len(events)`. The complete set. Not the visible set, not the "
+    change_events_reported: int = Field(
+        description="`len(change_events)`. The complete set. Not the visible set, not the "
         "top-level set, not a filtered set."
     )
     compression: str = Field(
-        description="§10's sentence, ready to print: '2,431 lines changed -> 9 semantic "
+        description="§10's sentence, ready to print: '2,431 lines changed -> 9 change "
         "events, 2 high-risk'. Rendered here so every view prints the same claim."
     )
     compression_ratio: float | None = Field(
-        description="lines_changed / events_reported. None when there are no change events, "
+        description="lines_changed / change_events_reported. None when there are no change "
+        "events, "
         "because 'infinite compression' and 'no change the model can see' are different "
         "facts, and a sentinel would let a consumer average over them."
     )
-    high_risk_count: int = Field(description="Scores at or above `rank.HIGH_RISK`.")
+    high_risk_count: int = Field(
+        description="Change events whose `impact` is at or above `rank.HIGH_RISK`. `impact` "
+        "is the score without the uncertainty factor (`RiskScore.is_high_risk`), so doubt "
+        "about a match orders the list but does not make a change event high-risk."
+    )
 
-    top_level_events: int = Field(
-        description="Events with no `caused_by` -- what a collapsing view shows at depth 0. "
+    top_level_change_events: int = Field(
+        description="Change events with no `caused_by` -- what a collapsing view shows at "
+        "depth 0. "
         "A view statistic, reported for honesty about what the terminal does, and never "
         "the compression numerator."
     )
@@ -781,8 +829,8 @@ _DISCRIMINATORS: tuple[Callable[[NodeId, EntitySummary], str | None], ...] = (
 class DiffDocument(BaseModel):
     """ARCH-001 §10's document. The product.
 
-    The invariant that outranks every other property of this type: **`events` is complete and
-    uncollapsed**. `caused_by` is a link and never a deletion (§6.3), so a view may nest but
+    The invariant that outranks every other property of this type: **`change_events` is complete
+    and uncollapsed**. `caused_by` is a link and never a deletion (§6.3), so a view may nest but
     the document always carries every event the diff produced. A view that hides a consequence
     is a choice a reader can undo; a document that never carried it is a change nobody can
     recover.
@@ -803,7 +851,12 @@ class DiffDocument(BaseModel):
         "`third_party`. Hints only: folder names never exclude anything.",
     )
     entities: dict[NodeId, EntitySummary] = Field(default_factory=dict)
-    events: list[ChangeEvent] = Field(default_factory=list)
+    crossings: CrossingsBlock = Field(
+        default_factory=CrossingsBlock,
+        description="Relations from the entities in `entities` to code outside the model, "
+        "per side, each labelled with where it leads.",
+    )
+    change_events: list[ChangeEvent] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     ranking: list[ChangeEventId] = Field(
         default_factory=list,
@@ -846,7 +899,7 @@ class DiffDocument(BaseModel):
         # index on a mutable model is the kind of staleness this project spends its whole
         # design budget avoiding. Documents are built once and read tens of times; the cost is
         # a dict comprehension over a list a reviewer could read.
-        return {e.id: e for e in self.events}
+        return {e.id: e for e in self.change_events}
 
     def ranked(self) -> list[ChangeEvent]:
         """Events in reading order (ARCH-001 §7). Anything unranked follows, in document
@@ -856,7 +909,7 @@ class DiffDocument(BaseModel):
         seen = set(self.ranking)
         return [
             *(index[i] for i in self.ranking if i in index),
-            *(e for e in self.events if e.id not in seen),
+            *(e for e in self.change_events if e.id not in seen),
         ]
 
     def score(self, event_id: ChangeEventId) -> RiskScore | None:

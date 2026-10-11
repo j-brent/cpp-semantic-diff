@@ -756,7 +756,7 @@ class TestThreeDisconnectedChangesAreThreeChanges:
     def test_every_event_lands_in_exactly_one_component(self) -> None:
         head, events = self.three_islands()
         ranking = rank(events, head, head)
-        placed = [e for c in ranking.components for e in c.events]
+        placed = [e for c in ranking.components for e in c.change_events]
         assert sorted(placed) == sorted(e.id for e in events)
 
     def test_a_call_between_two_changed_entities_makes_them_one_change(self) -> None:
@@ -902,7 +902,7 @@ class TestThreeDisconnectedChangesAreThreeChanges:
         head = model("m", node("c:@F@a1#", file=OWN_TEST), node("c:@F@c1#", file=PUBLIC))
         low, high = body("c:@F@a1#"), body("c:@F@c1#")
         ranking = rank([low, high], head, head)
-        assert ranking.components[0].events == [high.id]
+        assert ranking.components[0].change_events == [high.id]
         assert ranking.score_for(high.id).component == 0
 
 
