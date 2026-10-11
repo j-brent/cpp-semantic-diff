@@ -21,7 +21,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, Model
 from cpp_semantic_diff.rank import weights as w
 from cpp_semantic_diff.rank.components import Component, components
-from cpp_semantic_diff.rank.exposure import Exposure
 from cpp_semantic_diff.rank.score import RiskScore, ScoringContext, score_event
 
 
@@ -46,44 +45,15 @@ class Ranking(BaseModel):
         return [s.event_id for s in self.scores]
 
     @property
-    def vendored_count(self) -> int:
-        """Events in bundled dependencies, which sort last as a block.
-
-        Reported so the partition is visible. A view that shows the top N and says nothing
-        would be silently dropping most of the delta on a dependency bump, and "the tool found
-        almost nothing" and "the tool set almost everything aside" have to be told apart from
-        the output alone.
-        """
-        return sum(1 for s in self.scores if s.exposure is Exposure.VENDORED)
-
-    @property
-    def first_party_count(self) -> int:
-        """Events in the reviewer's own code -- everything except bundled dependencies.
-
-        The numerator of §10's compression ratio. The denominator is lines of *text diff*, and
-        git shows a submodule bump as two lines rather than the hundred thousand inside it, so
-        a ratio taken over every modelled event compares a first-party denominator against a
-        whole-world numerator. On leveldb that read 0.0 lines per event (commit `8046af5`,
-        2026-08-04).
-        """
-        return sum(1 for s in self.scores if s.exposure is not Exposure.VENDORED)
-
-    @property
     def high_risk_count(self) -> int:
         """The `summary.high_risk_count` of §10; the threshold lives in `weights.py`.
 
-        **What the number means, in one sentence:** the count of *first-party* events whose
-        measured consequences -- blast radius, exposure and the kind of change -- clear the
-        high-risk threshold on their own, with the tool's uncertainty about the match kept
-        out of the count even though it is kept in the order (`RiskScore.is_high_risk`).
-
-        First-party for the same reason the ratio is: this is a headline count of changes the
-        reviewer should look at, and they are not looking at bundled googletest. On leveldb 16
-        of 21 high-risk events were vendored (commit `562921c`, 2026-08-04), so the
-        unpartitioned count would have promised sixteen dangerous changes that the view does
-        not show and the reviewer did not write.
+        **What the number means, in one sentence:** the count of events whose measured
+        consequences -- blast radius, exposure and the kind of change -- clear the high-risk
+        threshold on their own, with the tool's uncertainty about the match kept out of the
+        count even though it is kept in the order (`RiskScore.is_high_risk`).
         """
-        return sum(1 for s in self.scores if s.is_high_risk and s.exposure is not Exposure.VENDORED)
+        return sum(1 for s in self.scores if s.is_high_risk)
 
     def score_for(self, event_id: ChangeEventId) -> RiskScore:
         for s in self.scores:
@@ -172,24 +142,8 @@ def _bound_by_cause(scores: list[RiskScore], events: Sequence[ChangeEvent]) -> l
 def rank_events(events: Sequence[ChangeEvent], base: Model, head: Model) -> Ranking:
     """Order the delta by risk and partition it into independent changes.
 
-    **Vendored code sorts after everything first-party, whatever the scores say.** A reviewer
-    is reviewing their own code; a bumped dependency is context, not the subject. Exposure was
-    a weighted term and that was not enough -- measured on leveldb on 2026-08-04 (commit
-    `562921c`), where a submodule bump made the top 12 events and 44 of the top 50 vendored
-    googletest. The arithmetic: exposure is capped at `W_EXPOSURE` (0.25), so the
-    VENDORED-to-PUBLIC gap is worth 0.2375 of score, while blast radius (0.35) and novelty
-    (0.25) together are 0.60 -- so a removed gtest node with 241 dependents (0.76) beat a
-    changed public attribute (~0.44).
-
-    A partition rather than a bigger weight, deliberately. Raising `W_EXPOSURE` until leveldb
-    looked right would fossilize a number against one repository and would still lose to a
-    large enough blast radius on the next one. The claim being encoded is not "vendored is 4x
-    less interesting", it is "vendored is not what is being reviewed", and that is an ordering,
-    not a quantity. The weight stays for ordering vendored events *among themselves*.
-
-    Only VENDORED is partitioned. The project's own tests are the reviewer's code and keep
-    their weighted demotion -- `db/db_test.cc` is theirs to fix, `third_party/googletest` is
-    not.
+    Every event is the repository's own: third-party code is not in the model (ADR-025), so
+    nothing is set aside here. The project's own tests keep their weighted demotion.
 
     Ties break on the cascade depth and then the event id, which is content-derived
     (`events.py`) and therefore stable across runs. Sorting on the score alone would leave
@@ -201,9 +155,7 @@ def rank_events(events: Sequence[ChangeEvent], base: Model, head: Model) -> Rank
     scored = _bound_by_cause([score_event(event, ctx) for event in events], events)
 
     depth = _cause_depth(events)
-    scored.sort(
-        key=lambda s: (s.exposure is Exposure.VENDORED, -s.total, depth[s.event_id], s.event_id)
-    )
+    scored.sort(key=lambda s: (-s.total, depth[s.event_id], s.event_id))
     order = [s.event_id for s in scored]
     totals = {s.event_id: s.total for s in scored}
 

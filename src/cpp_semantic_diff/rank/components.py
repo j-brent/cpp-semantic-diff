@@ -21,8 +21,9 @@ edge is written in its source's text, so the source is what changed.
 
 Two rules that look like plausible fixes were measured and are *not* here, because after
 the home rule neither buys anything: suppressing high-degree hub entities as connectors
-(any cap from 3 to 20: no change to the partition) and refusing connections through vendored
-code (no change). Both were fixes for a symptom of the attribution bug.
+(any cap from 3 to 20: no change to the partition) and refusing connections through bundled
+code (no change). Both were fixes for a symptom of the attribution bug. Third-party code is
+no longer in the model at all (ADR-025), so it connects nothing.
 
 Four rules, each earning its place:
 

@@ -2,7 +2,7 @@
 
 `weights.py` is the tuning surface -- every number the stage uses is there, with the reason
 it is that number. `exposure.py` holds the other calibration surface: the directory
-conventions that decide what is library code and what is bundled test code.
+conventions that decide what is public, internal and test code.
 """
 
 from cpp_semantic_diff.rank.components import Component, partition

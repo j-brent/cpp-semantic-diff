@@ -46,7 +46,6 @@ from rich.text import Text
 
 from cpp_semantic_diff.model import AnyId, ChangeEvent, ChangeEventId, ChangeEventKind, Side
 from cpp_semantic_diff.rank import subject_endpoints
-from cpp_semantic_diff.rank.exposure import Exposure
 from cpp_semantic_diff.render.collapse import Collapsed, CollapseNode, collapse
 from cpp_semantic_diff.render.document import CompletenessBlock, DiffDocument
 
@@ -211,9 +210,8 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
 
     The sentence is taken from `summary.compression` rather than rebuilt, so that the JSON and the
     terminal cannot disagree about the one claim the project is testing. The line below it separates
-    the two counts that are easy to conflate: `events_reported` is the complete delta, and its
-    first-party part is the numerator; the collapsed count is what this view chose to nest, and is
-    never the numerator.
+    the two counts that are easy to conflate: `events_reported` is the complete delta and the
+    numerator; the collapsed count is what this view chose to nest, and is never the numerator.
     """
     s = document.summary
     console.print()
@@ -222,30 +220,14 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
     parts = []
     if s.compression_ratio is not None:
         parts.append(f"{s.compression_ratio:.1f} lines per change event")
-    # Counted over first-party events only, like the sentence above it. A collapse count
-    # taken over the whole forest would sit beside a first-party headline and describe a
-    # different set -- which is the straddle this line would otherwise reintroduce one row
-    # below the place it was fixed.
-    vendored_ids = {i for i, sc in document.scores.items() if sc.exposure is Exposure.VENDORED}
-    roots = sum(1 for r in tree.roots if r.event_id not in vendored_ids)
-    nested = sum(1 for i in tree.flatten() if i not in vendored_ids) - roots
+    roots = len(tree.roots)
+    nested = len(tree.flatten()) - roots
     parts.append(f"{roots} top-level, {nested} nested under a cause")
     parts.append(f"{s.components} component{'' if s.components == 1 else 's'}")
     parts.append(f"{s.files_changed} files ({s.cpp_files_changed} C++)")
     if document.meta.timings.total:
         parts.append(f"{document.meta.timings.total:.1f}s")
     console.print(f"  [dim]{' · '.join(parts)}[/]")
-
-    if s.vendored_events:
-        # The events are ranked last, so on a dependency bump a top-N view simply stops
-        # showing them -- and silence there is indistinguishable from "nothing changed".
-        # A reviewer is reviewing their own code, but they are entitled to know how much
-        # was set aside on their behalf and that it is in the JSON.
-        share = s.vendored_events / s.events_reported if s.events_reported else 0.0
-        console.print(
-            f"  [dim]{s.vendored_events:,} event(s) in bundled dependencies "
-            f"({share:.0%} of the delta) ranked last — in the JSON, not shown here[/]"
-        )
 
     if tree.promoted:
         # §6.3: when cause attribution is uncertain, show. Saying so is the other half --

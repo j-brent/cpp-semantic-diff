@@ -546,64 +546,20 @@ class TestCompressionCountsWhatItClaims:
             "change event"
         )
 
-    def test_the_ratio_does_not_straddle_two_universes(self) -> None:
-        """Measured on leveldb: 52 lines changed, 3,794 events, 0.0 lines per event (commits
-        `2651354` and `8046af5`, 2026-08-04).
-
-        The denominator is lines of *text diff*, and git renders a submodule bump as two
-        lines rather than the hundred thousand inside it. Dividing that by every modelled
-        event compares a first-party denominator against a whole-world numerator, so the two
-        sides have to be taken over the same universe or the number means nothing.
-        """
+    def test_code_in_a_folder_named_like_a_dependency_is_not_set_aside(self) -> None:
+        """Third-party code is left out of the model, not ranked apart inside it (ADR-025).
+        What is in the model is the repository's own, whatever its folder is called, so every
+        change event is in the numerator and none is reported as bundled."""
         own = node("c:@F@own#", name="own", file="src/lib.cc")
-        deps = [
-            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(9)
-        ]
-        doc = pipeline(model("a", own, *deps), model("b", *deps), lines_changed=10)
-
-        assert doc.summary.events_reported == 1, "one first-party removal"
-        assert doc.summary.vendored_events == 0, "the dependency itself did not change here"
-        assert doc.summary.compression_ratio == 10 / 1
-
-    def test_a_dependency_bump_does_not_flatten_the_ratio(self) -> None:
-        own = node("c:@F@own#", name="own", file="src/lib.cc")
-        deps = [
-            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(20)
-        ]
-        doc = pipeline(model("a", own, *deps), model("b"), lines_changed=10)
-
-        assert doc.summary.vendored_events == 20
-        assert doc.summary.events_reported == 21, "the complete set is still reported"
-        assert doc.summary.compression_ratio == 10 / 1, (
-            "10 lines over the one first-party event, not over all 21"
-        )
-
-    def test_a_bump_that_touches_nothing_of_yours_says_so(self) -> None:
-        """Distinct from 'no semantic change': something did change, none of it yours."""
         deps = [
             node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(4)
         ]
-        doc = pipeline(model("a", *deps), model("b"), lines_changed=10)
+        doc = pipeline(model("a", own, *deps), model("b"), lines_changed=10)
 
-        assert doc.summary.compression_ratio is None
-        assert "bundled dependencies" in doc.summary.compression
-        assert "no semantic change" not in doc.summary.compression
-
-    def test_high_risk_does_not_count_what_the_reviewer_is_not_shown(self) -> None:
-        """On leveldb 16 of 21 high-risk events were vendored (commit `562921c`, 2026-08-04). A
-        headline promising sixteen dangerous changes the view never shows is worse than no
-        headline."""
-        dependents = [node(f"c:@F@x{i}#", file="third_party/gtest/gtest.cc") for i in range(40)]
-        base = model(
-            "a",
-            node("c:@F@assert_helper#", file="third_party/gtest/gtest.cc"),
-            *dependents,
-            edges=[edge(d.id, "c:@F@assert_helper#") for d in dependents],
-        )
-        doc = pipeline(base, model("b", *dependents), lines_changed=10)
-
-        assert doc.summary.vendored_events >= 1
-        assert doc.summary.high_risk_count == 0
+        assert doc.summary.events_reported == 5
+        assert doc.summary.compression_ratio == 10 / 5
+        assert "bundled" not in doc.summary.compression
+        assert "vendored_events" not in doc.summary.model_dump()
 
     def test_the_view_prints_the_sentence_the_document_carries(self) -> None:
         """One claim, one place. A view that composed its own could quietly disagree with
@@ -969,30 +925,6 @@ class TestTheResidueIsReported:
         out = draw(doc)
         assert "tiers declared, inline-namespace, name only" in out
         assert "removal plus an addition" in out
-
-    def test_bundled_dependency_churn_is_named_not_hidden(self) -> None:
-        """A dependency bump can be 96 % of the delta (leveldb, measured 2026-08-04, v0 tracker
-        §2, reports/2026-08-01--v0-build/STATUS.md). Ranking puts it last, so a top-N view
-        stops showing it -- which means the count has to be stated, or "almost nothing changed"
-        and "almost everything was set aside" look identical."""
-        own = node("c:@F@own#", name="own", file="src/lib.cc")
-        dep = node("c:@F@dep#", name="dep", file="third_party/gtest/gtest.cc")
-        doc = pipeline(model("a", own, dep), model("b", own))
-
-        assert doc.summary.vendored_events == 1
-        assert doc.summary.events_reported == 1, "the numerator is still the whole set"
-        assert "bundled dependencies" in doc.summary.compression
-
-    def test_the_numerator_never_shrinks_when_a_dependency_moves(self) -> None:
-        """This is the one figure nobody can audit from outside. Naming vendored churn beside
-        it is honest; subtracting it would be the redefinition that stops the metric measuring
-        anything."""
-        deps = [
-            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(5)
-        ]
-        doc = pipeline(model("a", *deps), model("b"))
-        assert doc.summary.events_reported == 5
-        assert doc.summary.vendored_events == 5
 
     def test_resolved_renames_reach_the_document(self) -> None:
         """ARCH-001 §5's one identity input that comes from outside the models.

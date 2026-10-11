@@ -40,15 +40,15 @@ from cpp_semantic_diff.rank.exposure import Exposure
 W_BLAST_RADIUS = 0.35
 
 #: Exposure is second because on a real repository it is doing filtering work rather than
-#: ordering work -- most of fmt's model is test and vendored code (see `exposure.py`), and this
-#: is the term that keeps it off the first page. Under-weight it and the ranking is correct
+#: ordering work -- most of fmt's model is test code (see `exposure.py`), and this is the term
+#: that keeps it off the first page. Under-weight it and the ranking is correct
 #: about everything except which repository it is ranking.
 W_EXPOSURE = 0.25
 
 #: Novelty at parity with exposure. It is the most locally *legible* signal -- a reviewer
 #: agrees immediately that a removal outranks a body edit -- which makes it the term most
-#: likely to be over-trusted. A removal in vendored googletest is still not the thing to
-#: read first.
+#: likely to be over-trusted. A removal in a test helper is still not the thing to read
+#: first.
 W_NOVELTY = 0.25
 
 #: See the module docstring. Lowest on purpose, non-zero on purpose.
@@ -112,11 +112,9 @@ BLAST_VISIT_CAP = 2000
 # Exposure
 # --------------------------------------------------------------------------------------
 
-#: Vendored code is not zero. A change *inside* bundled googletest is still a change, and
-#: zeroing the term would make it unrankable relative to other vendored changes rather than
-#: merely last. The gap between VENDORED/TEST and INTERNAL/PUBLIC is the load-bearing part.
+#: Test code is not zero: a deleted assertion is still a change worth ranking. The gap between
+#: TEST and INTERNAL/PUBLIC is the load-bearing part.
 EXPOSURE_WEIGHT: dict[Exposure, float] = {
-    Exposure.VENDORED: 0.05,
     Exposure.TEST: 0.20,
     Exposure.INTERNAL: 0.60,
     Exposure.PUBLIC: 1.00,

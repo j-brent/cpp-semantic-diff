@@ -28,13 +28,33 @@ from pathlib import Path, PurePosixPath
 
 from cpp_semantic_diff.acquire.git import FileChanges, RevPair, run_git, run_git_z
 from cpp_semantic_diff.errors import ThirdPartyChangedError, ThirdPartyPathError
-from cpp_semantic_diff.rank.exposure import VENDOR_SEGMENTS
 
-#: Directory names that suggest a dependency. `VENDOR_SEGMENTS` is still what ranking reads
-#: until the vendored class is removed from ranking, so the addition is made here and not
-#: there: adding to the shared list would change ranking, which this list must not do.
-#: `bundled` is spdlog's: it vendors fmt under `include/spdlog/fmt/bundled`.
-HINT_SEGMENTS: frozenset[str] = VENDOR_SEGMENTS | {"bundled"}
+#: Directory names that suggest a dependency. They produce a hint and nothing else.
+HINT_SEGMENTS: frozenset[str] = frozenset(
+    {
+        "3rdparty",
+        "_deps",
+        "bundled",  # spdlog vendors fmt under `include/spdlog/fmt/bundled`.
+        "contrib",
+        "deps",
+        "extern",
+        "external",
+        "third-party",
+        "third_party",
+        "thirdparty",
+        "vendor",
+        "vendored",
+        # Named libraries. A copy is often dropped straight into `test/` with no
+        # `third_party` above it, which is what fmt does with googletest.
+        "catch",
+        "catch2",
+        "doctest",
+        "gmock",
+        "googlemock",
+        "googletest",
+        "gtest",
+    }
+)
 
 
 class ThirdPartySource(StrEnum):

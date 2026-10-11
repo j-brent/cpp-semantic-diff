@@ -12,10 +12,9 @@ Two things it deliberately does not do.
 list in the order the diff stage emitted it. Collapse is a view concern (§6.3, `collapse.py`)
 and this document is what the views agree on.
 
-**It does not improve the numerator.** `summary.events_reported` is `len(events)`, and the
-numerator is its first-party part (schema 1.2; `compression_sentence` says why). §10 makes
-the compression ratio the experiment this project runs on itself, and there is no filter,
-bucket or threshold here that could flatter it.
+**It does not improve the numerator.** `summary.events_reported` is `len(events)`, and it is
+the numerator. §10 makes the compression ratio the experiment this project runs on itself,
+and there is no filter, bucket or threshold here that could flatter it.
 """
 
 from __future__ import annotations
@@ -101,7 +100,6 @@ def build_document(
     third_party = third_party or ThirdPartySet()
     high_risk = ranking.high_risk_count
     count = len(events)
-    first_party = ranking.first_party_count
 
     return DiffDocument(
         meta=Meta(
@@ -138,19 +136,17 @@ def build_document(
             uncovered_lines=coverage.uncovered_lines if coverage is not None else None,
             uncovered_tokens=coverage.uncovered_tokens if coverage is not None else None,
             events_reported=count,
-            vendored_events=ranking.vendored_count,
             compression=compression_sentence(
                 lines_changed,
-                first_party,
+                count,
                 high_risk,
-                ranking.vendored_count,
                 uncovered=(
                     (coverage.uncovered_lines, coverage.changed_lines)
                     if coverage is not None
                     else None
                 ),
             ),
-            compression_ratio=(lines_changed / first_party) if first_party else None,
+            compression_ratio=(lines_changed / count) if count else None,
             high_risk_count=high_risk,
             top_level_events=sum(1 for e in events if e.caused_by is None),
             components=len(ranking.components),
@@ -169,7 +165,6 @@ def compression_sentence(
     lines_changed: int,
     events: int,
     high_risk: int,
-    vendored: int = 0,
     *,
     uncovered: tuple[int, int] | None = None,
 ) -> str:
@@ -185,17 +180,9 @@ def compression_sentence(
     result this tool can report -- it means the change had no semantic content the model can
     see, which is either excellent news or a hole in the model.
 
-    **`events` here is the first-party count, and the two sides must match.** The denominator
-    is lines of text diff -- "the number a reviewer would otherwise have read" -- and git
-    renders a submodule bump as two lines, not the hundred thousand inside it. Dividing that
-    by every modelled event compares a first-party denominator against a whole-world
-    numerator, which on leveldb read 0.0 lines per event. So vendored events are named beside
-    the sentence and excluded from the arithmetic, and the fix is a real cost rather than a
-    flattering one: aligning the universes made leveldb's ratio finite but still inverted,
-    which is the honest result.
-
-    `summary.events_reported` is untouched and remains the complete set. It is the one figure
-    nobody can audit from outside, and it may not shrink because a dependency moved.
+    **Both sides count only the repository's own code.** The denominator is lines of text
+    diff, and the numerator is every change event; third-party code is in neither, because
+    a comparison across a third-party change is refused (ADR-025).
 
     **`uncovered` is (uncovered lines, changed C++ lines)**, and when it was measured it is
     part of the claim. On its own the ratio improves when the model sees *less* -- a change it
@@ -211,15 +198,8 @@ def compression_sentence(
             f"explained by no change event"
         )
     if not events:
-        if vendored:
-            # Distinct from "nothing changed": a dependency moved and none of it reached
-            # the reviewer's own code, which is a result rather than an absence of one.
-            return f"{head} (all {vendored:,} of it in bundled dependencies){unexplained}"
         return f"{head} (no semantic change the model can see){unexplained}"
-    tail = f", {high_risk:,} high-risk"
-    if vendored:
-        tail += f" · {vendored:,} more in bundled dependencies, ranked last"
-    return f"{head}{tail}{unexplained}"
+    return f"{head}, {high_risk:,} high-risk{unexplained}"
 
 
 def _uncovered(coverage: Coverage | None) -> UncoveredReport | None:

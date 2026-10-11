@@ -222,6 +222,10 @@ Each step is one commit, and the suite passes after each one.
    `EdgeRemoved` into bundled fmt are now crossings.
 5. **Remove vendored from ranking and rendering.** Tests in `test_rank.py` and `test_render.py`
    that assert the partition are deleted or rewritten, not loosened.
+   **Built.** The folder-name list is `HINT_SEGMENTS` in `acquire/third_party.py`, `bundled`
+   included, and a test pins that no name on it changes a path's exposure.
+   `summary.vendored_events` is removed under `2.0.dev`. `compression_ratio` and
+   `high_risk_count` are taken over every change event.
 6. **Schema 2.0 and the demo.** Add `--third-party test/gtest` for fmt and
    `--third-party include/spdlog/fmt/bundled` for spdlog to `.github/workflows/demo.yml`, and
    replace the `vendored_events` row in its summary table with crossing counts.
