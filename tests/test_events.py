@@ -118,8 +118,8 @@ class TestTheSetIsClosed:
         for the wrong reason: they were checking against a set with room to spare.
 
         What remains outside is what v0 genuinely cannot produce, and each exclusion has a
-        different reason: renames and moves need a tier past 1 (the USR encodes name and
-        scope, so a matched pair agrees on both), `EdgeRetargeted` is refused outright, and
+        different reason: renames and moves need rename detection (both v0 tiers pair only
+        entities that agree on name and scope), `EdgeRetargeted` is refused outright, and
         the derived kinds are deferred.
         """
         assert {

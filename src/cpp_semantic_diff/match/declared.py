@@ -6,7 +6,11 @@ tier: the USR already encodes kind, qualified name and signature, so overloads a
 without any signature comparison of ours, and body edits, reformatting and file moves cannot
 disturb it.
 
-The one place the key is not simply the USR is **internal linkage**. See `DeclaredTier`.
+The same encoding is what tier 1 cannot survive: a function whose parameters changed has a
+new USR. The name tier (`match.name`) runs next and pairs those (ADR-036).
+
+The one place the key is not simply the USR is **internal linkage**. See `DeclaredTier`. Its
+file-and-TU part is `RenameMap.file_scope`, which the name tier keys on too.
 """
 
 from __future__ import annotations

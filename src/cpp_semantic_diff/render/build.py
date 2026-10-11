@@ -191,7 +191,7 @@ def _callers(events: Sequence[ChangeEvent], head: Model) -> dict[ChangeEventId, 
     called -- the question a signature change raises. Head side, because those are the call
     sites that have to compile against the new signature. Evidence assembled from the head
     model, not analysis: a stopgap until derived change events for the callers exist
-    (ADR-035).
+    (ADR-036).
     """
     incoming: dict[NodeId, set[NodeId]] = defaultdict(set)
     for edge in head.edges:

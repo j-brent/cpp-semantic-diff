@@ -1,6 +1,7 @@
 """The match stage: two `Model`s -> one `Correspondence` (ARCH-001 §3, §5).
 
-The stage is a driver over a *sequence* of tiers, even though v0 registers exactly one.
+The stage is a driver over a *sequence* of tiers. v0 registers two: tier 1, and the name
+tier for the functions and methods it leaves (ADR-036).
 ARCH-001 §5 defines the scheme as tiers running "most-confident first, each tier running
 only over the residue the previous tiers left unmatched", and that sequencing -- not the
 tier-1 lookup -- is the part that is expensive to retrofit. Tier 1 is a keyed intersection;

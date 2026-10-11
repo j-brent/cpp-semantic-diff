@@ -106,12 +106,13 @@ DERIVED_KINDS: frozenset[ChangeEventKind] = frozenset(ChangeEventKind) - NODE_KI
 #: between two entities tier 1 has already paired, a relation that changed kind or changed
 #: `access` needs no new identity claim from this stage.
 #:
-#: What stays out is what v0 genuinely cannot reach: `NodeRenamed` and `NodeMoved` need a
-#: tier past 1 (the USR encodes name and scope, so a matched pair agrees on both by
-#: construction), `EdgeRetargeted` is refused outright (§6.1), and the derived kinds are
-#: deferred by §13. The rest of the set is still declared in `ChangeEventKind` because the schema
-#: is the contract the whole pipeline is written against; declaring it late would mean
-#: rewriting consumers rather than extending them.
+#: What stays out is what v0 genuinely cannot reach: `NodeRenamed` and `NodeMoved` need
+#: rename detection (both v0 tiers pair only entities that agree on name and scope: the USR
+#: encodes both, and the name tier keys on the qualified name under a paired parent),
+#: `EdgeRetargeted` is refused outright (§6.1), and the derived kinds are deferred by §13.
+#: The rest of the set is still declared in `ChangeEventKind` because the schema is the
+#: contract the whole pipeline is written against; declaring it late would mean rewriting
+#: consumers rather than extending them.
 V0_KINDS: frozenset[ChangeEventKind] = frozenset(
     {
         ChangeEventKind.NODE_ADDED,
@@ -248,7 +249,7 @@ class Confidence(BaseModel):
 
     tier: MatchTier | None = Field(
         description="The tier that matched the subject, or None when it was unmatched "
-        "residue -- for an edge event, when either endpoint was. In v0 only tier 1 runs "
+        "residue -- for an edge event, when either endpoint was. v0 has no rename detection "
         "(ARCH-001 §13), so None also covers every rename -- which is what makes the rename "
         "damage measurable rather than invisible.",
     )

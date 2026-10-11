@@ -398,8 +398,8 @@ class EntitySummary(BaseModel):
     location: Location | None = None
     sides: list[Side] = Field(
         description="Which model(s) contain this id. A one-sided entity is exactly what a "
-        "tier-1-only pipeline produces for a rename (STATUS §6), so the view can say "
-        "'gone' or 'new' without re-deriving it from the event kind."
+        "pipeline without rename detection produces for a rename (STATUS §6), so the view "
+        "can say 'gone' or 'new' without re-deriving it from the event kind."
     )
 
 
@@ -736,7 +736,7 @@ class DiffDocument(BaseModel):
         "subject: the sources of its incoming `calls` edges at head. Evidence, not change "
         "events -- the edges map through the correspondence, so a paired function's calls "
         "produce no edge events, and this is where its call sites are filed (ARCH-001 §6.2, "
-        "ADR-035). A stopgap: derived change events for the callers replace it (ADR-035).",
+        "ADR-035). A stopgap: derived change events for the callers replace it (ADR-036).",
     )
     summary: Summary
 

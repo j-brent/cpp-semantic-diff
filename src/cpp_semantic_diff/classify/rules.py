@@ -209,7 +209,10 @@ def _overload_the_caller_moved_to(ctx: ClassifyContext, event: ChangeEvent) -> I
     *caller's* outgoing edges and needs no opinion about whether B and C are the same thing.
 
     Same edge kind, and the overload set is `qualified_name` equality -- which is what an
-    overload set *is*, since overloads differ exactly in signature. Candidates arrive in
+    overload set *is*, since overloads differ exactly in signature. Where the old overload
+    was removed and the new one is the only other of its name, the name tier pairs them as
+    one function whose signature changed (ADR-036), the edge maps through the
+    correspondence, and this rule has nothing to explain. Candidates arrive in
     `head_out_edges` order, which is sorted by edge id, so a caller that gained two overloads
     gets a stable answer rather than one that depends on model construction.
     """

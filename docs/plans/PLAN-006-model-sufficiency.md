@@ -100,6 +100,11 @@ Suggested direction:
 - Overloads are told apart only when the name alone is ambiguous. An ambiguous pairing is left
   unpaired and reported, under the project's rule against forced matches.
 
+For parameter types and template parameters this was done without changing identity: the USR
+stays the node id, and a name tier pairs the functions and methods tier 1 leaves
+([ADR-036](../adr/ADR-036-functions-pair-by-name.md)). Inline namespaces, aliases and unnamed
+records remain.
+
 ### Step 5 · Add the entities that carry values
 
 Each with the one thing a reviewer compares. ARCH-001 §4.1 already includes enum, enumerator,

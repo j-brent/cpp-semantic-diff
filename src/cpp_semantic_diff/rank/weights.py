@@ -20,9 +20,9 @@ sum so that one threshold serves both.
 **Uncertainty is weighted lowest, and that is not a hedge.** ARCH-001 §7 is explicit that a
 low-confidence event ranks *up* -- uncertainty is a reason for a human to look. It is not a
 claim that uncertainty is the largest risk. Weighted at parity with blast radius it would
-put every doubtful leaf above every widely-called change, and in v0 (tier 1 only, §13)
-every rename is a doubtful leaf twice over. It belongs where it is: enough to break a tie
-toward looking, not enough to reorder the page.
+put every doubtful leaf above every widely-called change, and in v0 (no rename detection,
+§13) every rename is a doubtful leaf twice over. It belongs where it is: enough to break a
+tie toward looking, not enough to reorder the page.
 """
 
 from __future__ import annotations
@@ -179,9 +179,9 @@ NOVELTY_BY_KIND: dict[ChangeEventKind, float] = {
 #:
 #: **There is no `signature` attribute, and there cannot be one.** `signature` is a field on
 #: `Node` (§4.1), not an entry in `attrs`, so the mechanical attribute diff in
-#: `diff/nodes.py` can never emit `NodeAttrChanged(signature)`. Worse, in v0 a changed
-#: signature changes the USR, which is tier-1 identity (§5), so the pair is never matched
-#: and the change surfaces as remove + add -- scored by `NOVELTY_BY_KIND`, not here.
+#: `diff/nodes.py` can never emit `NodeAttrChanged(signature)`. A changed signature is
+#: `NodeSignatureChanged` (ADR-035), whether tier 1 paired the two versions or the name tier
+#: did because the USR changed (ADR-036) -- scored by `NOVELTY_BY_KIND`, not here.
 #:
 #: `return_type` is the part of the doc's intent that survives as a real attribute. The
 #: signature spells it too, so a changed return type arrives as `NodeSignatureChanged` and
