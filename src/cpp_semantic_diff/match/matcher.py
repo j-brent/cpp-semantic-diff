@@ -73,6 +73,7 @@ def match_models(
     head: Model,
     *,
     renames: Mapping[str, str] | None = None,
+    missed_rename_files: Collection[str] = (),
     tiers: Sequence[Tier] | None = None,
 ) -> Correspondence:
     """Pair base nodes with head nodes, most-confident tier first.
@@ -80,6 +81,9 @@ def match_models(
     `renames` is base path -> head path as resolved by git. ARCH-001 §5 requires it to be an
     input rather than something the matcher infers; it only affects entities whose USR is
     file-scoped (see `declared.usr_file`).
+
+    `missed_rename_files` is non-empty only when git's rename map is known to be short
+    (`acquire.FileChanges.missed_rename_files`); see `unpaired.unpaired_reasons`.
     """
     tiers = default_tiers(renames) if tiers is None else tiers
 
@@ -117,6 +121,7 @@ def match_models(
         {m.base: m.head for m in matches},
         ambiguous_base & base_pool,
         ambiguous_head & head_pool,
+        missed_rename_files,
     )
     return Correspondence(
         # Sorted so the stage is deterministic: the same two models produce the same

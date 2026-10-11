@@ -51,6 +51,7 @@ def unpaired_reasons(
     head_for: Mapping[NodeId, NodeId],
     ambiguous_base: Collection[NodeId],
     ambiguous_head: Collection[NodeId],
+    missed_rename_files: Collection[str] = (),
 ) -> tuple[dict[NodeId, Unpaired], dict[NodeId, Unpaired]]:
     """An `Unpaired` reason for every leftover on each side.
 
@@ -60,6 +61,13 @@ def unpaired_reasons(
     counted and not scored -- and `NONE` when they hold none. "Same parent" is asked in head
     coordinates through the matches made so far: a base parent means its head partner, and
     top level means top level.
+
+    `missed_rename_files` are files git may have failed to pair as renames: every file the
+    diff added or deleted, when git skipped inexact rename detection at `diff.renameLimit`.
+    A leftover located in one is at least a `CANDIDATE` whatever the slot test says. The
+    slot test cannot see this case: members of a class in an anonymous namespace sit under
+    a parent that is itself unpaired, so they would read as plain additions and removals --
+    a confident claim resting on a rename map known to be short (ARCH-001 §11).
     """
     base_parents = containers(base)
     head_parents = containers(head)
@@ -83,8 +91,16 @@ def unpaired_reasons(
             Unpaired.CANDIDATE if slot[1] != _UNPAIRED_PARENT and slot in other else Unpaired.NONE
         )
 
+    suspect = frozenset(missed_rename_files)
+
+    def floored(model: Model, node_id: NodeId, found: Unpaired) -> Unpaired:
+        location = model.nodes[node_id].location
+        if found is Unpaired.NONE and location is not None and location.file in suspect:
+            return Unpaired.CANDIDATE
+        return found
+
     amb_b, amb_h = set(ambiguous_base), set(ambiguous_head)
     return (
-        {n: reason(base_slot(n), n in amb_b, head_slots) for n in base_left},
-        {n: reason(head_slot(n), n in amb_h, base_slots) for n in head_left},
+        {n: floored(base, n, reason(base_slot(n), n in amb_b, head_slots)) for n in base_left},
+        {n: floored(head, n, reason(head_slot(n), n in amb_h, base_slots)) for n in head_left},
     )

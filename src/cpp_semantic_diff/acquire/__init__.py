@@ -1,6 +1,7 @@
 from cpp_semantic_diff.acquire.git import (
     FileChange,
     FileChanges,
+    RenameLimitHit,
     RevPair,
     changed_files,
     diff_line_count,
@@ -21,6 +22,7 @@ __all__ = [
     "CompileEntry",
     "FileChange",
     "FileChanges",
+    "RenameLimitHit",
     "RevPair",
     "cache_root",
     "changed_files",

@@ -31,7 +31,7 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-from cpp_semantic_diff.acquire import RevPair
+from cpp_semantic_diff.acquire import RenameLimitHit, RevPair
 from cpp_semantic_diff.classify import classify_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.match import Correspondence, match_models
@@ -59,6 +59,7 @@ from cpp_semantic_diff.render import (
     SCHEMA_VERSION,
     SYSTEMATIC_LIMITS,
     DiffDocument,
+    RenameDetection,
     build_document,
     collapse,
     compression_sentence,
@@ -115,6 +116,7 @@ def document(
     correspondence: Correspondence | None = None,
     lines_changed: int = 100,
     files_renamed: int = 0,
+    rename_limit: RenameLimitHit | None = None,
 ) -> DiffDocument:
     corr = correspondence if correspondence is not None else match_models(base, head)
     return build_document(
@@ -129,6 +131,7 @@ def document(
         files_changed=3,
         cpp_files_changed=2,
         files_renamed=files_renamed,
+        rename_limit=rename_limit,
     )
 
 
@@ -554,6 +557,41 @@ class TestIncompletenessIsVisible:
         assert doc.completeness.base.tus_complete
         assert doc.completeness.degraded, "tus_complete alone must not decide the banner"
         assert "invalidated and reparsed" in draw(doc)
+
+    def test_a_truncated_rename_map_is_warned_about(self) -> None:
+        """Both models can parse clean while git cut the rename map short at
+        `diff.renameLimit`; the removals and additions that follow look ordinary unless the
+        page says why. Carried in the JSON, so every consumer can state it."""
+        f = node("c:@F@f#", name="f")
+        base = model("a", f, completeness=self._parsed())
+        head = model("b", completeness=self._parsed())
+        corr = match_models(base, head)
+        events = classify_events(diff_models(base, head, corr), base, head, corr)
+        doc = document(
+            base, head, events, correspondence=corr, rename_limit=RenameLimitHit(needed=1234)
+        )
+        assert doc.completeness.renames == RenameDetection(complete=False, limit_needed=1234)
+        assert doc.completeness.warnings == [], "both sides parsed clean"
+        assert doc.completeness.degraded
+        out = draw(doc)
+        assert "diff.renameLimit" in out and "1,234" in out
+        assert out.index("diff.renameLimit") < out.index("NodeRemoved")
+        again = DiffDocument.from_json(doc.to_json())
+        assert again.completeness.renames == doc.completeness.renames
+
+    @staticmethod
+    def _parsed() -> Completeness:
+        return Completeness(
+            tus_total=1,
+            tus=[TuResult(path="src/a.cpp", status=TuStatus.PARSED)],
+            producer_version=PRODUCER,
+        )
+
+    def test_a_complete_rename_map_says_nothing(self) -> None:
+        doc = self._doc(self._parsed(), self._parsed())
+        assert doc.completeness.renames.complete
+        assert not doc.completeness.degraded
+        assert "renameLimit" not in draw(doc)
 
 
 class TestTheGraphBoundaryIsStatedNumerically:

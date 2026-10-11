@@ -248,6 +248,48 @@ class CompletenessReport(BaseModel):
         return out
 
 
+class RenameDetection(BaseModel):
+    """Whether git's rename map -- an input to identity (ARCH-001 §5) -- is complete.
+
+    Not a property of either model, so it sits beside the per-side records rather than in
+    one of them. When `diff.renameLimit` is exceeded git skips inexact rename detection and
+    says so only on stderr: exact renames are still found, but a file renamed *and* edited
+    arrives as a delete plus an add, and every internal-linkage entity in it as a removal
+    plus an addition. What was missing is stated at the top (§11, rule 2), and per event the
+    match stage records every unpaired entity in an added or deleted file as having a
+    candidate (`Unpaired.CANDIDATE`), so none of them reads as a confident addition or
+    removal (`match.unpaired.unpaired_reasons`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    complete: bool = Field(
+        default=True,
+        description="False when git skipped inexact rename detection because "
+        "`diff.renameLimit` was exceeded. The limit is not lifted (`-l0` is potentially "
+        "quadratic on the large diffs that hit it); it is reported instead.",
+    )
+    limit_needed: int | None = Field(
+        default=None,
+        description="The `diff.renameLimit` git said would have sufficed, when it said.",
+    )
+
+    @property
+    def warning(self) -> str | None:
+        if self.complete:
+            return None
+        advice = (
+            f"; setting diff.renameLimit to at least {self.limit_needed:,} would find them"
+            if self.limit_needed is not None
+            else ""
+        )
+        return (
+            "git skipped inexact rename detection (diff.renameLimit exceeded): only exact "
+            "renames were applied, so a file renamed and edited reads as deleted and added, "
+            f"and its file-scoped entities as removed and re-added{advice}"
+        )
+
+
 class CompletenessBlock(BaseModel):
     """§10's `completeness: { per-side completeness records }`, plus §11's standing limits."""
 
@@ -255,6 +297,10 @@ class CompletenessBlock(BaseModel):
 
     base: CompletenessReport
     head: CompletenessReport
+    renames: RenameDetection = Field(
+        default_factory=RenameDetection,
+        description="Whether git's rename map was complete. Shared by both sides.",
+    )
     limits: list[str] = Field(
         default_factory=lambda: list(SYSTEMATIC_LIMITS),
         description="ARCH-001 §11's two systematic limits, carried on every document so "
@@ -295,8 +341,11 @@ class CompletenessBlock(BaseModel):
         unconditionally through `boundaries` instead of intermittently through here.
         Reading it as degradation made every fmt and spdlog run announce itself as
         incomplete, which is how a §11 signal stops being read at all.
+
+        A truncated rename map degrades the run too: it is identity input that is missing,
+        and the events it distorts look like ordinary additions and removals.
         """
-        return bool(self.warnings)
+        return bool(self.warnings) or not self.renames.complete
 
 
 class EntitySummary(BaseModel):

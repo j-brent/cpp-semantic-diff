@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import os
+import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -11,6 +14,7 @@ from conftest import commit, git, require_fixture
 from cpp_semantic_diff.acquire import git as git_module
 from cpp_semantic_diff.acquire.git import (
     RENAME_SIMILARITY_ENV,
+    RenameLimitHit,
     RevPair,
     changed_files,
     detect_default_branch,
@@ -18,6 +22,7 @@ from cpp_semantic_diff.acquire.git import (
     file_changes,
     is_git_repository,
     is_shallow,
+    rename_limit_hit,
     resolve_rename_similarity,
     resolve_revs,
 )
@@ -291,7 +296,9 @@ class TestRenamesAreResolvedFromGit:
     ) -> None:
         """A rename record missing its destination would understate what changed."""
         revs = resolve_revs(diverged_repo)
-        monkeypatch.setattr(git_module, "run_git_z", lambda repo, *args: ["M", "a.cpp", "R100"])
+        monkeypatch.setattr(
+            git_module, "run_git_z", lambda repo, *args: (["M", "a.cpp", "R100"], "")
+        )
         with pytest.raises(GitError, match="mid-record"):
             file_changes(diverged_repo, revs)
 
@@ -383,3 +390,119 @@ class TestRenamesAreResolvedFromGit:
 
         assert changes.renames == {"test/core-test.cc": "test/base-test.cc"}
         assert changes.paths == ["test/CMakeLists.txt", "test/base-test.cc"]
+
+
+class TestATruncatedRenameMapIsReported:
+    """ARCH-001 §11 rule 2. Past `diff.renameLimit`, git skips inexact rename
+    detection, exits 0 and says so only on stderr. A rename map that is silently short turns
+    every file-scoped entity in a renamed-and-edited file into a removal plus an addition, and
+    nothing in the output would say why. The cap is not lifted (`-l0` is potentially quadratic
+    on the diffs that hit it); the truncation is reported."""
+
+    @staticmethod
+    def _two_inexact_renames(repo: Path) -> RevPair:
+        for name in ("a", "b"):
+            body = "".join(f"int {name}{i}() {{ return {i}; }}\n" for i in range(30))
+            commit(repo, f"src/{name}.cpp", body, f"add {name}")
+        git(repo, "checkout", "-q", "-b", "feature")
+        for name in ("a", "b"):
+            git(repo, "mv", f"src/{name}.cpp", f"src/{name}2.cpp")
+            with (repo / f"src/{name}2.cpp").open("a", encoding="utf-8") as fh:
+                fh.write("int extra();\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "rename and edit both")
+        return resolve_revs(repo)
+
+    def test_within_the_limit_nothing_is_reported(self, bare_repo: Path) -> None:
+        revs = self._two_inexact_renames(bare_repo)
+        changes = file_changes(bare_repo, revs)
+        assert changes.renames == {"src/a.cpp": "src/a2.cpp", "src/b.cpp": "src/b2.cpp"}
+        assert changes.rename_limit is None
+        assert changes.missed_rename_files == frozenset()
+
+    def test_past_the_limit_the_truncation_is_reported(self, bare_repo: Path) -> None:
+        revs = self._two_inexact_renames(bare_repo)
+        git(bare_repo, "config", "diff.renameLimit", "1")
+        changes = file_changes(bare_repo, revs)
+        assert changes.renames == {}, "the gap being reported must actually exist"
+        assert changes.rename_limit == RenameLimitHit(needed=2)
+        assert changes.missed_rename_files == {
+            "src/a.cpp",
+            "src/a2.cpp",
+            "src/b.cpp",
+            "src/b2.cpp",
+        }
+
+    def test_the_query_runs_in_the_c_locale(
+        self, bare_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The warning is read from stderr, so a translated git would hide it. The call is
+        made in the C locale whatever the reviewer's is, with `LANGUAGE` removed."""
+        seen: list[Mapping[str, str] | None] = []
+        real = git_module._run
+
+        def spy(argv: Sequence[str], **kw: Any) -> subprocess.CompletedProcess[str]:
+            seen.append(kw.get("env"))
+            return real(argv, **kw)
+
+        monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+        monkeypatch.setenv("LANGUAGE", "de")
+        monkeypatch.setattr(git_module, "_run", spy)
+        git_module.run_git_z(bare_repo, "status", "-z")
+
+        (env,) = seen
+        assert env is not None
+        assert env["LC_ALL"] == "C"
+        assert "LANGUAGE" not in env
+
+    def test_the_message_git_prints_is_the_one_read(self, bare_repo: Path) -> None:
+        """Pins git's own wording, in the C locale, so a git that rewords it fails here
+        rather than going quiet in production."""
+        revs = self._two_inexact_renames(bare_repo)
+        proc = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(bare_repo),
+                "-c",
+                "diff.renameLimit=1",
+                "diff",
+                "--name-status",
+                "--find-renames=50%",
+                "-z",
+                f"{revs.base_sha}..{revs.head_sha}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+        assert "rename detection was skipped" in proc.stderr
+        assert "diff.renameLimit" in proc.stderr
+        assert rename_limit_hit(proc.stderr) == RenameLimitHit(needed=2)
+
+    @pytest.mark.parametrize(
+        ("stderr", "expected"),
+        [
+            ("", None),
+            ("warning: something unrelated\n", None),
+            # git 2.43's wording
+            (
+                "warning: exhaustive rename detection was skipped due to too many files.\n"
+                "warning: you may want to set your diff.renameLimit variable to at least 1234 "
+                "and retry the command.\n",
+                RenameLimitHit(needed=1234),
+            ),
+            # older git's wording
+            (
+                "warning: inexact rename detection was skipped due to too many files.\n"
+                "warning: you may want to set your diff.renamelimit variable to at least 9 "
+                "and retry the command.\n",
+                RenameLimitHit(needed=9),
+            ),
+            # the skip without the advice line still counts
+            ("warning: inexact rename detection was skipped\n", RenameLimitHit(needed=None)),
+        ],
+    )
+    def test_the_match_is_tolerant(self, stderr: str, expected: RenameLimitHit | None) -> None:
+        assert rename_limit_hit(stderr) == expected

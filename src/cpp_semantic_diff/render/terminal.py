@@ -99,9 +99,9 @@ def _completeness(document: DiffDocument, console: Console) -> None:
     lives in the document (§10) and every consumer gets it as a number.
 
     **Coverage** -- `CompletenessBlock.degraded` -- is the yellow banner, and it fires only
-    when something actually went wrong: a TU that would not parse, or a note the builder
-    chose to record. Warnings print verbatim rather than summarized; a summary of a caveat
-    is a smaller caveat.
+    when something actually went wrong: a TU that would not parse, a note the builder
+    chose to record, or a rename map git cut short at `diff.renameLimit`. Warnings print
+    verbatim rather than summarized; a summary of a caveat is a smaller caveat.
     """
     block = document.completeness
     parsed = (
@@ -119,6 +119,9 @@ def _completeness(document: DiffDocument, console: Console) -> None:
 
     console.print()
     console.print("[bold yellow]this model is incomplete[/] [dim]— read what follows knowing it[/]")
+    if (renames := block.renames.warning) is not None:
+        # Labelled "both": the rename map is input shared by the two sides, not either's.
+        console.print(f"  [yellow]both[/] {escape(renames)}")
     for side, warning in block.warnings:
         console.print(f"  [yellow]{side.value:4}[/] {escape(warning)}")
     for report in (block.base, block.head):

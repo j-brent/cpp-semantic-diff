@@ -299,6 +299,15 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     # analyzed" in a second, and this is now part of the answer rather than something a
     # reviewer discovers two minutes into a `diff`.
     table.add_row("files renamed", str(len(changes.renames)))
+    if changes.rename_limit is not None:
+        # ARCH-001 §11: a rename map git cut short is stated, not left for `diff` to inherit.
+        needed = changes.rename_limit.needed
+        table.add_row(
+            "",
+            "[yellow]exact renames only: git's diff.renameLimit was exceeded"
+            + (f" (needs {needed})" if needed is not None else "")
+            + "[/]",
+        )
     table.add_row("lines changed", str(lines))
     console.print(table)
 
@@ -440,7 +449,12 @@ def diff(
     # rename breaks tier 1 for every one of them. Git's answer is passed through unfiltered
     # -- deciding which renames count is `RenameMap`'s job, and inventing or narrowing one
     # here would put an identity decision in the CLI.
-    correspondence = match_models(base_model, head_model, renames=changes.renames)
+    correspondence = match_models(
+        base_model,
+        head_model,
+        renames=changes.renames,
+        missed_rename_files=changes.missed_rename_files,
+    )
     timings.match = time.perf_counter() - t
 
     t = time.perf_counter()
@@ -471,6 +485,7 @@ def diff(
         files_changed=len(files),
         cpp_files_changed=sum(1 for f in files if Path(f).suffix.lower() in CPP_SUFFIXES),
         files_renamed=len(changes.renames),
+        rename_limit=changes.rename_limit,
         timings=timings,
     )
 
