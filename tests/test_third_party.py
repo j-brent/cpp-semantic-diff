@@ -188,6 +188,23 @@ class TestSubmodules:
     def test_no_gitlink_is_an_empty_set(self, copied_repo: Path) -> None:
         assert third_party_set(copied_repo, resolve_revs(copied_repo)).entries == ()
 
+    def test_a_submodule_replaced_in_place_by_copied_files_is_still_the_base_entry(
+        self, bare_repo: Path, inner: Path
+    ) -> None:
+        """Vendoring a dependency in place: the gitlink at `dep` is replaced by ordinary
+        tracked files at the same path. The set is the union of both revisions, so `dep`
+        stays in it as the submodule it was at base -- and the whole directory still reads
+        as changed, because every file under it is new."""
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        add_submodule(bare_repo, inner, "dep")
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        git(bare_repo, "rm", "-q", "dep")
+        commit(bare_repo, "dep/lib.h", "int lib();\n", "copy dep in place")
+
+        found = third_party_set(bare_repo, resolve_revs(bare_repo))
+        assert found.entries == (ThirdPartyEntry(path="dep", sources=SUBMODULE),)
+        assert changed(bare_repo) == ("dep",)
+
 
 class TestDeclaredPaths:
     """`--third-party PATH`: repository-relative directories, refused when neither side has one."""
@@ -211,6 +228,27 @@ class TestDeclaredPaths:
         found = third_party_set(submodule_repo, resolve_revs(submodule_repo), ["dep"])
 
         assert found.entries == (ThirdPartyEntry(path="dep", sources=SUBMODULE | DECLARED),)
+
+    def test_a_submodule_nested_in_a_declared_directory_is_its_own_entry(
+        self, bare_repo: Path, inner: Path
+    ) -> None:
+        """A copied-in vendor folder that itself pins a submodule: both are entries, and a
+        file inside the submodule is labelled by it, not by the enclosing declared path
+        (`label_for`'s innermost-wins rule, exercised end to end through a real tree)."""
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        commit(bare_repo, "vendor/base.h", "// vendor\n", "vendor base")
+        add_submodule(bare_repo, inner, "vendor/zlib")
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        commit(bare_repo, "a.cpp", "int a(int);\n", "B")
+
+        found = third_party_set(bare_repo, resolve_revs(bare_repo), ["vendor"])
+
+        assert found.entries == (
+            ThirdPartyEntry(path="vendor", sources=DECLARED),
+            ThirdPartyEntry(path="vendor/zlib", sources=SUBMODULE),
+        )
+        assert found.label_for("vendor/base.h") == "vendor"
+        assert found.label_for("vendor/zlib/lib.h") == "vendor/zlib"
 
     @pytest.mark.parametrize(
         ("raw", "expected"),
