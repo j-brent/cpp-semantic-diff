@@ -849,7 +849,7 @@ class TestTheGraphBoundaryIsStatedNumerically:
             uncovered_lines=2,
             uncovered_tokens=9,
             moved_tokens=16,
-            files=(UncoveredFile(Side.HEAD, "orphan.h", (3, 4), 9),),
+            files=(UncoveredFile(Side.HEAD, "orphan.h", (3, 4), 9, modelled=False),),
             excluded_files=(ExcludedFile("blob.h", "binary"),),
             renames_complete=False,
         )
@@ -873,7 +873,9 @@ class TestTheGraphBoundaryIsStatedNumerically:
         assert not again.completeness.degraded, "a standing measure, not a failure"
         out = draw(again)
         assert "2 of 6 changed C++ lines explained by no change event" in out
-        assert "orphan.h: 9 token(s) on 2 line(s)" in out
+        assert "orphan.h: 9 token(s) on 2 line(s), no model declares anything in it" in out
+        assert again.completeness.uncovered.lines_in_unmodelled_files == 2
+        assert "about 2 of those line(s) are in files no model declares anything in" in out
         assert "16 token(s) moved unchanged" in out
         assert "not compared: blob.h (binary)" in out
         assert "skipped inexact rename detection for this count" in out

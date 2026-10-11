@@ -11,6 +11,7 @@ from pathlib import Path
 
 from conftest import commit, git, move
 from cpp_semantic_diff.acquire.git import RevPair
+from cpp_semantic_diff.acquire.third_party import ThirdPartyEntry, ThirdPartySet, ThirdPartySource
 from cpp_semantic_diff.acquire.tokens import (
     LineHunk,
     TokenRun,
@@ -277,6 +278,33 @@ class TestAskingGit:
         assert token_delta(bare_repo, revs).rename_limit is None
         git(bare_repo, "config", "diff.renameLimit", "1")
         assert token_delta(bare_repo, revs).rename_limit is not None
+
+    def test_third_party_files_are_excluded_at_either_end_of_a_rename(
+        self, bare_repo: Path
+    ) -> None:
+        """Only the repository's own code counts (ADR-025). A file moved out of or into a
+        vendored directory was third-party at one end, so neither end is counted."""
+        body = "".join(f"int v{i}() {{ return {i}; }}\n" for i in range(20))
+        commit(bare_repo, "vendor/lib.h", "int lib = 1;\n", "A")
+        commit(bare_repo, "vendor/out.h", body, "B")
+        commit(bare_repo, "src/in.h", body.replace("v", "w"), "C")
+        base = commit(bare_repo, "src/own.h", "int own = 1;\n", "D")
+        commit(bare_repo, "vendor/lib.h", "int lib = 2;\n", "edit vendored")
+        move(bare_repo, "vendor/out.h", "src/out.h", "move out of vendor")
+        commit(bare_repo, "src/out.h", body + "int x;\n", "edit")
+        move(bare_repo, "src/in.h", "vendor/in.h", "move into vendor")
+        commit(bare_repo, "vendor/in.h", body.replace("v", "w") + "int y;\n", "edit")
+        commit(bare_repo, "src/own.h", "int own = 2;\n", "edit own")
+        vendor = ThirdPartySet(
+            entries=(ThirdPartyEntry("vendor", frozenset({ThirdPartySource.DECLARED})),)
+        )
+        delta = token_delta(bare_repo, self.revs(bare_repo, base), third_party=vendor)
+        assert {r.file for r in delta.runs} == {"src/own.h"}
+        assert sorted((e.path, e.reason) for e in delta.excluded_files) == [
+            ("src/out.h", "third-party"),
+            ("vendor/in.h", "third-party"),
+            ("vendor/lib.h", "third-party"),
+        ]
 
     def test_a_binary_file_is_excluded_by_name(self, bare_repo: Path) -> None:
         base = commit(bare_repo, "a.cpp", "int f();\n", "A")

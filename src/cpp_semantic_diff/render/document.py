@@ -302,6 +302,13 @@ class UncoveredFile(BaseModel):
     path: str
     lines: list[int] = Field(description="The lines the uncovered tokens are on, ascending.")
     tokens: int
+    modelled: bool = Field(
+        default=True,
+        description="Whether either model declares anything in this file. Checked by path "
+        "against both models together, not against this side's model alone. False is roughly "
+        "'no translation unit includes it'; approximate, because an included file that "
+        "declares nothing the model records also reads False.",
+    )
 
 
 class ExcludedFile(BaseModel):
@@ -332,7 +339,14 @@ class UncoveredReport(BaseModel):
     )
     excluded_files: list[ExcludedFile] = Field(
         default_factory=list,
-        description="Changed C++ files whose tokens were not compared, such as binary files.",
+        description="Changed C++ files whose tokens were not compared, with the reason: "
+        "'binary', or 'third-party' for a file in the third-party set (ADR-025).",
+    )
+    lines_in_unmodelled_files: int = Field(
+        default=0,
+        description="Of `summary.uncovered_lines`, those in files neither model declares "
+        "anything in -- roughly, files no translation unit includes. Approximate, as "
+        "`UncoveredFile.modelled` says.",
     )
     renames_complete: bool = Field(
         default=True,
@@ -609,7 +623,7 @@ class Summary(BaseModel):
         "event's lines. **A lower bound** on what the model cannot explain: an event's hunk "
         "covers whole lines, so an unexplained edit inside a changed entity's span is counted "
         "as explained. Reported beside the compression, so the ratio cannot improve by the "
-        "model seeing less. Includes vendored code until third-party code is excluded.",
+        "model seeing less. Files in the third-party set are not counted (ADR-025).",
     )
     uncovered_tokens: int | None = Field(
         default=None,

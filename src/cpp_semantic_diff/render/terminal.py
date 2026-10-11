@@ -274,11 +274,17 @@ def _uncovered(document: DiffDocument, console: Console) -> None:
     if report.moved_tokens:
         line += f"; {report.moved_tokens:,} token(s) moved unchanged"
     console.print(line + "[/]")
+    if s.uncovered_lines and report.lines_in_unmodelled_files:
+        console.print(
+            f"  [dim]  about {report.lines_in_unmodelled_files:,} of those line(s) are in files "
+            f"no model declares anything in (roughly: no translation unit includes them)[/]"
+        )
     by_size = sorted(report.files, key=lambda f: (-f.tokens, f.path, f.side.value))
     for f in by_size[:5]:
+        unread = "" if f.modelled else ", no model declares anything in it"
         console.print(
             f"  [dim]  {f.side.value:4} {escape(f.path)}: {f.tokens:,} token(s) on "
-            f"{len(f.lines):,} line(s)[/]"
+            f"{len(f.lines):,} line(s){unread}[/]"
         )
     if len(by_size) > 5:
         console.print(f"  [dim]  … {len(by_size) - 5} more file(s) in the JSON[/]")

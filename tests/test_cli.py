@@ -401,6 +401,7 @@ def test_a_change_no_model_can_see_is_reported_as_uncovered(cmake_branch: Path) 
         ("head", "orphan.h"),
     }
     assert "2 of 4 changed C++ lines explained by no change event" in summary["compression"]
+    assert document["completeness"]["uncovered"]["lines_in_unmodelled_files"] == 2
 
 
 @pytest.mark.usefixtures("warm_cache")
