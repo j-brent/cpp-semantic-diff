@@ -438,6 +438,7 @@ CATALOG = [
         "inline-namespace-bumped",
         "namespace lib { inline namespace v1 { void f() {} } }",
         "namespace lib { inline namespace v2 { void f() {} } }",
+        changed("lib::v2", was="v1", now="v2"),
         not_replaced("f"),
         some_event(),
     ),

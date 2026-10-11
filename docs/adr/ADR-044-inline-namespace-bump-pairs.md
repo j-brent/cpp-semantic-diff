@@ -47,7 +47,9 @@ unpaired parent.
   namespace pairs through the rewrite. An inline namespace removed beside an unrelated one
   added (fmt has `inline namespace literals`) is one for one and must not pair.
 - **No type-spelling normalization.** libclang 18 already drops inline namespaces from
-  canonical type spellings, so `void f(S)` keeps its signature across the bump.
+  canonical type spellings, so `void f(S)` keeps its signature across the bump. The exception
+  is where dropping it would be ambiguous (both `lib::v1::X` and `lib::X` declared): there the
+  spelling keeps the tag and a bump shows as `NodeSignatureChanged`. Accepted.
 - **The name tier keys on the name, not the qualified name.** It already requires the paired
   parent, which says where the function is. The qualified name restated it in base
   coordinates, which is wrong across a bump. This amends ADR-036's key.
