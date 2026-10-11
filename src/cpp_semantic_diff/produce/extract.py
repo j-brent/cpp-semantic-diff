@@ -968,6 +968,19 @@ def _constexpr(cursor: ci.Cursor) -> bool | None:
     return False
 
 
+def _final(cursor: ci.Cursor) -> bool | None:
+    """Whether a record is `final`, or None where this TU does not see its definition.
+
+    Read from the definition, which is the declaration that carries `final`: a forward
+    declaration cannot say, and reading False off one would contradict the TU that saw the
+    class.
+    """
+    definition = cursor.get_definition()
+    if definition is None:
+        return None
+    return any(c.kind is ci.CursorKind.CXX_FINAL_ATTR for c in definition.get_children())
+
+
 def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
     """Flat, always-present-per-kind scalars (ARCH-001 §4.3).
 
@@ -988,6 +1001,22 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["exception_spec"] = _exception_spec(cursor)
         attrs["default_arguments"] = _default_arguments(cursor)
         attrs["constexpr"] = _constexpr(cursor)
+        # A redeclaration inherits the attribute, so an out-of-line definition carries the
+        # header's `[[nodiscard]]` as a child of its own.
+        attrs["nodiscard"] = any(
+            c.kind is ci.CursorKind.WARN_UNUSED_RESULT_ATTR for c in cursor.get_children()
+        )
+    if kind in (
+        NodeKind.FUNCTION,
+        NodeKind.METHOD,
+        NodeKind.CLASS,
+        NodeKind.STRUCT,
+        NodeKind.UNION,
+    ):
+        # Clang's availability, which follows inherited attributes as `nodiscard` does. It is
+        # the entity's own: a member of a deprecated class is not itself deprecated, and a
+        # deleted function is unavailable, not deprecated.
+        attrs["deprecated"] = cursor.availability is ci.AvailabilityKind.DEPRECATED
     # Keyed on the node kind rather than on the cursor kind, which is what lets a member
     # function template carry exactly what an ordinary method carries. Clang's
     # `clang_CXXMethod_*` predicates unwrap a FunctionTemplateDecl to the function it
@@ -1015,6 +1044,7 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
             ci.CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
         )
         attrs["abstract"] = cursor.is_abstract_record()
+        attrs["final"] = _final(cursor)
     return attrs
 
 

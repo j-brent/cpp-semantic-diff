@@ -1032,6 +1032,93 @@ class TestDefaultsAndConstexprAreComparedState:
         assert node.attrs["default_arguments"] == "1"
 
 
+class TestNodiscardDeprecatedAndFinalAreComparedState:
+    """`[[nodiscard]]`, deprecation and `final` (#11)."""
+
+    SOURCE = """
+    #define ND [[nodiscard]]
+    #define DEP [[deprecated]]
+    [[nodiscard]] int nd();
+    ND int nd_macro();
+    int plain();
+    template <class T> [[nodiscard]] T nd_tpl(T t) { return t; }
+    DEP void old();
+    struct DEP Old { void member(); };
+    struct S {
+      [[nodiscard]] int get() const;
+      void gone() = delete;
+      [[deprecated("use get")]] int value() const;
+    };
+    struct F final {};
+    template <class T> struct TF final {};
+    struct NotFinal {};
+    struct Fwd;
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("flags"), toolchain, {"a.cpp": self.SOURCE})
+
+    def attr(self, result: TuExtract, qualified: str, key: str) -> AttrValue:
+        return named(result, qualified).attrs[key]
+
+    def test_nodiscard(self, result: TuExtract) -> None:
+        for qualified in ("nd", "nd_macro", "nd_tpl", "S::get"):
+            assert self.attr(result, qualified, "nodiscard") is True, qualified
+        assert self.attr(result, "plain", "nodiscard") is False
+
+    def test_deprecated(self, result: TuExtract) -> None:
+        assert self.attr(result, "old", "deprecated") is True
+        assert self.attr(result, "Old", "deprecated") is True
+        assert self.attr(result, "S::value", "deprecated") is True
+        assert self.attr(result, "plain", "deprecated") is False
+
+    def test_a_member_of_a_deprecated_class_is_not_itself_deprecated(
+        self, result: TuExtract
+    ) -> None:
+        assert self.attr(result, "Old::member", "deprecated") is False
+
+    def test_a_deleted_function_is_not_deprecated(self, result: TuExtract) -> None:
+        assert self.attr(result, "S::gone", "deleted") is True
+        assert self.attr(result, "S::gone", "deprecated") is False
+
+    def test_final(self, result: TuExtract) -> None:
+        assert self.attr(result, "F", "final") is True
+        assert self.attr(result, "TF", "final") is True
+        assert self.attr(result, "NotFinal", "final") is False
+
+    def test_a_record_this_tu_never_defines_is_not_determined(self, result: TuExtract) -> None:
+        assert self.attr(result, "Fwd", "final") is None
+
+    def test_the_header_attributes_reach_the_out_of_line_definitions(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The definition wins the merge and spells neither attribute. Both are inherited
+        from the header's declaration."""
+        result = run(
+            tmp_path,
+            toolchain,
+            {
+                "a.h": "[[nodiscard]] int f();\n[[deprecated]] void g();\n",
+                "a.cpp": '#include "a.h"\nint f() { return 1; }\nvoid g() {}\n',
+            },
+        )
+        for qualified in ("f", "g"):
+            assert named(result, qualified).body_hash is not None, qualified
+        assert self.attr(result, "f", "nodiscard") is True
+        assert self.attr(result, "g", "deprecated") is True
+
+    def test_final_is_read_from_the_definition_whichever_declaration_is_seen(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        result = run(
+            tmp_path,
+            toolchain,
+            {"a.cpp": "struct F;\nstruct F final {};\nstruct F;\n"},
+        )
+        assert self.attr(result, "F", "final") is True
+
+
 class TestFailureIsRecordedNotRaised:
     def test_a_broken_tu_is_reported_as_incompleteness(
         self, tmp_path: Path, toolchain: Toolchain

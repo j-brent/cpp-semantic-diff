@@ -232,6 +232,13 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     "constexpr": 0.80,
     # Changes the state every constructor that does not name the field starts it in.
     "default_member_init": 0.60,
+    # Gaining one makes every caller that discards the result warn; losing one only loses
+    # the warning. Nothing stops compiling unless warnings are errors.
+    "nodiscard": 0.55,
+    # A warning at every use, and notice that the entity is going away.
+    "deprecated": 0.55,
+    # Breaks every class that derives from it, and devirtualizes calls on it.
+    "final": 0.70,
 }
 
 # --------------------------------------------------------------------------------------

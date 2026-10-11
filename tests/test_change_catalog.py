@@ -413,21 +413,18 @@ CATALOG = [
         "struct S { virtual void f(); };",
         "struct S final { virtual void f(); };",
         changed("S"),
-        fails="step 7: final is not compared",
     ),
     case(
         "nodiscard-added",
         "int f();",
         "[[nodiscard]] int f();",
         changed("f"),
-        fails="step 7: [[nodiscard]] is not compared",
     ),
     case(
         "deprecated-added",
         "void f();",
         "[[deprecated]] void f();",
         changed("f"),
-        fails="step 7: deprecation is not compared",
     ),
     case(
         "static-assert-removed",
@@ -810,6 +807,9 @@ STEP_7_CASES = (
     "default-argument-value",
     "default-member-initializer",
     "constexpr-removed",
+    "class-becomes-final",
+    "nodiscard-added",
+    "deprecated-added",
 )
 
 
