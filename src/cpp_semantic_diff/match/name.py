@@ -53,9 +53,10 @@ class NameTier:
     The rules (ADR-036):
 
     - **The parent must already be paired.** A function whose class or namespace is itself
-      unpaired is left alone, so this tier never produces a `NodeMoved`. An inline namespace
-      bump (`v1` to `v2`) therefore pairs nothing: the namespaces are different entities to
-      tier 1, and pairing their members would be a claim about the namespaces first.
+      unpaired is left alone, so this tier never produces a `NodeMoved`. Pairing members of
+      two unpaired namespaces would be a claim about the namespaces first. An inline
+      namespace bump (`v1` to `v2`) is paired by the tier before this one (ADR-044), so a
+      function whose signature changed in the same bump pairs here under its paired namespace.
     - **One to one, or nothing.** A key with exactly one leftover on each side pairs. A key
       with leftovers on both sides that are not one to one -- two old overloads and two new
       ones, say -- pairs none of them and reports them as ambiguous. There is no tie-break:

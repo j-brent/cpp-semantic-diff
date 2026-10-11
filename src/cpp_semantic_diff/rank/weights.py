@@ -242,6 +242,12 @@ UNCERTAINTY_BY_TIER: dict[MatchTier, float] = {
     # replaced by an unrelated one of the same name pairs as readily as one that changed.
     # Below `STRUCTURAL`, whose matched body says more than a matched name.
     MatchTier.NAME: 0.25,
+    # An entity paired across an inline namespace bump (`lib::v1::f` with `lib::v2::f`,
+    # ADR-044): its USR is the old one with the version tag swapped, and the swap stands only
+    # where one inline namespace was replaced by one other under the same parent and something
+    # inside them paired through it. Nearly a USR match, so close to zero; not zero, because
+    # the version tag was part of the identity and the tool chose to look past it.
+    MatchTier.INLINE_NAMESPACE: 0.10,
     MatchTier.DECLARED: 0.00,
 }
 

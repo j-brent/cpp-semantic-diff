@@ -26,6 +26,7 @@ from cpp_semantic_diff.match import (
     match_models,
     usr_file,
 )
+from cpp_semantic_diff.match.inline import rewrite
 from cpp_semantic_diff.model import (
     Edge,
     EdgeKind,
@@ -230,7 +231,7 @@ class TestEveryMatchSaysHowItWasMade:
         """ "Unmatched" means different things depending on this. With only tier 1 it
         includes every rename (§13), and output that does not say so overstates it."""
         c = match_models(model("a"), model("b"))
-        assert c.tiers_run == [MatchTier.DECLARED, MatchTier.NAME]
+        assert c.tiers_run == [MatchTier.DECLARED, MatchTier.INLINE_NAMESPACE, MatchTier.NAME]
 
     def test_lookups_work_in_both_directions(self) -> None:
         c = match_models(model("a", node("c:@F@f#")), model("b", node("c:@F@f#")))
@@ -350,11 +351,11 @@ class TestTheNameTierPairsOnlyWhatItCanTell:
         }
 
     def test_nothing_pairs_under_a_parent_that_did_not(self) -> None:
-        """An inline namespace bump: `lib::v1` and `lib::v2` are different namespaces to
-        tier 1, and pairing their members would be a claim about the namespaces first. So
-        this tier never reports a move."""
-        v1 = node("c:@N@lib@N@v1", name="lib::v1", kind=NodeKind.NAMESPACE)
-        v2 = node("c:@N@lib@N@v2", name="lib::v2", kind=NodeKind.NAMESPACE)
+        """A plain namespace renamed: `lib::v1` and `lib::v2` are different namespaces, and
+        pairing their members would be a claim about the namespaces first. So this tier
+        never reports a move."""
+        v1 = node("c:@N@lib@N@v1", name="lib::v1", kind=NodeKind.NAMESPACE, attrs={"inline": False})
+        v2 = node("c:@N@lib@N@v2", name="lib::v2", kind=NodeKind.NAMESPACE, attrs={"inline": False})
         f1 = node("c:@N@lib@N@v1@F@f#", name="lib::f")
         f2 = node("c:@N@lib@N@v2@F@f#I#", name="lib::f")
         c = match_models(self.contained("a", v1, f1), self.contained("b", v2, f2))
@@ -437,6 +438,163 @@ class TestTheNameTierPairsOnlyWhatItCanTell:
         assert (
             set(c.unpaired_base.values()) == set(c.unpaired_head.values()) == {Unpaired.AMBIGUOUS}
         )
+
+
+def ns(usr: str, inline: bool = True) -> Node:
+    return node(usr, name=usr.rsplit("@", 1)[-1], kind=NodeKind.NAMESPACE, attrs={"inline": inline})
+
+
+type Member = tuple[Node, Node | None]
+
+
+def tree(rev: str, *members: Member) -> Model:
+    """A model from (node, parent) pairs, parent None at global scope."""
+    m = model(rev, *(n for n, _ in members))
+    m.edges = [
+        Edge(src=parent.id, dst=n.id, kind=EdgeKind.CONTAINS)
+        for n, parent in members
+        if parent is not None
+    ]
+    return m
+
+
+class TestTheInlineNamespaceTierPairsAcrossABump:
+    """ADR-044. Where one inline namespace was replaced by one other under the same paired
+    parent, what tier 1 left inside it pairs through an anchored rewrite of the old
+    namespace's path, and only if something inside actually pairs."""
+
+    LIB = ns("c:@N@lib", inline=False)
+    V1 = ns("c:@N@lib@N@v1")
+    V2 = ns("c:@N@lib@N@v2")
+    F1 = node("c:@N@lib@N@v1@F@f#")
+    F2 = node("c:@N@lib@N@v2@F@f#")
+
+    def bump(self, base: Iterable[Member] = (), head: Iterable[Member] = ()) -> Correspondence:
+        """`lib::v1` bumped to `lib::v2`, with `f` inside, plus `base` and `head`."""
+        return match_models(
+            tree("a", (self.LIB, None), (self.V1, self.LIB), (self.F1, self.V1), *base),
+            tree("b", (self.LIB, None), (self.V2, self.LIB), (self.F2, self.V2), *head),
+        )
+
+    def test_the_namespace_and_its_members_pair_and_say_how(self) -> None:
+        c = self.bump()
+        assert {(m.base, m.head, m.tier) for m in c.matches} == {
+            (self.LIB.id, self.LIB.id, MatchTier.DECLARED),
+            (self.V1.id, self.V2.id, MatchTier.INLINE_NAMESPACE),
+            (self.F1.id, self.F2.id, MatchTier.INLINE_NAMESPACE),
+        }
+        assert not c.unmatched_base and not c.unmatched_head
+
+    def test_a_type_named_in_a_parameter_list_is_rewritten_too(self) -> None:
+        """`void q(lib::S)`, outside the bumped namespace, has the namespace in its USR."""
+        q1, q2 = node("c:@F@q#$@N@lib@N@v1@S@S#"), node("c:@F@q#$@N@lib@N@v2@S@S#")
+        assert (q1.id, q2.id) in pairs(self.bump([(q1, None)], [(q2, None)]))
+
+    def test_a_member_with_internal_linkage_is_rewritten_after_its_file_name(self) -> None:
+        h1 = node("c:a.cpp@N@lib@N@v1@F@h#", tu="a.cpp")
+        h2 = node("c:a.cpp@N@lib@N@v2@F@h#", tu="a.cpp")
+        assert (h1.id, h2.id) in pairs(self.bump([(h1, self.V1)], [(h2, self.V2)]))
+
+    def test_the_path_is_replaced_only_where_it_starts_a_usr(self) -> None:
+        """`other::lib::v1` contains `@N@lib@N@v1`, and is not `lib::v1`."""
+        g1, g2 = (
+            node("c:@N@other@N@lib@N@v1@S@G", kind=NodeKind.STRUCT),
+            node("c:@N@other@N@lib@N@v2@S@G", kind=NodeKind.STRUCT),
+        )
+        c = self.bump([(g1, None)], [(g2, None)])
+        assert g1.id in c.unmatched_base and g2.id in c.unmatched_head
+
+    def test_the_path_is_replaced_only_where_it_ends_a_name(self) -> None:
+        """`lib::v10` begins like `lib::v1`, and is a different namespace."""
+        g1, g2 = (
+            node("c:@N@lib@N@v10@S@G", kind=NodeKind.STRUCT),
+            node("c:@N@lib@N@v20@S@G", kind=NodeKind.STRUCT),
+        )
+        c = self.bump([(g1, None)], [(g2, None)])
+        assert g1.id in c.unmatched_base and g2.id in c.unmatched_head
+
+    def test_a_mapping_nothing_inside_pairs_through_is_withdrawn(self) -> None:
+        """`v12` removed and an unrelated `literals` added are one for one, and unrelated."""
+        v12, literals = ns("c:@N@lib@N@v12"), ns("c:@N@lib@N@literals")
+        a, b = node("c:@N@lib@N@v12@F@a#", name="a"), node("c:@N@lib@N@literals@F@b#", name="b")
+        c = match_models(
+            tree("a", (self.LIB, None), (v12, self.LIB), (a, v12)),
+            tree("b", (self.LIB, None), (literals, self.LIB), (b, literals)),
+        )
+        assert pairs(c) == {(self.LIB.id, self.LIB.id)}
+
+    def test_a_plain_namespace_is_never_a_candidate(self) -> None:
+        p1, p2 = ns("c:@N@lib@N@v1", inline=False), ns("c:@N@lib@N@v2", inline=False)
+        c = match_models(
+            tree("a", (self.LIB, None), (p1, self.LIB), (self.F1, p1)),
+            tree("b", (self.LIB, None), (p2, self.LIB), (self.F2, p2)),
+        )
+        assert pairs(c) == {(self.LIB.id, self.LIB.id)}
+
+    def test_two_inline_namespaces_on_one_side_are_a_refused_choice(self) -> None:
+        v3 = ns("c:@N@lib@N@v3")
+        c = self.bump(head=[(v3, self.LIB)])
+        assert pairs(c) == {(self.LIB.id, self.LIB.id)}
+        assert c.unpaired_base[self.V1.id] is Unpaired.AMBIGUOUS
+        assert c.unpaired_head[self.V2.id] is Unpaired.AMBIGUOUS
+        assert c.unpaired_head[v3.id] is Unpaired.AMBIGUOUS
+
+    def test_a_bump_at_global_scope_pairs(self) -> None:
+        g1, g2 = ns("c:@N@v1"), ns("c:@N@v2")
+        f1, f2 = node("c:@N@v1@F@f#"), node("c:@N@v2@F@f#")
+        c = match_models(tree("a", (g1, None), (f1, g1)), tree("b", (g2, None), (f2, g2)))
+        assert pairs(c) == {(g1.id, g2.id), (f1.id, f2.id)}
+
+    def test_a_bump_inside_a_bump_is_found_once_the_outer_one_is(self) -> None:
+        abi1, abi2 = ns("c:@N@lib@N@v1@N@abi1"), ns("c:@N@lib@N@v2@N@abi2")
+        g1, g2 = node("c:@N@lib@N@v1@N@abi1@F@g#"), node("c:@N@lib@N@v2@N@abi2@F@g#")
+        c = self.bump([(abi1, self.V1), (g1, abi1)], [(abi2, self.V2), (g2, abi2)])
+        assert {(self.V1.id, self.V2.id), (abi1.id, abi2.id), (g1.id, g2.id)} <= pairs(c)
+
+    def test_a_rewritten_key_two_nodes_share_is_a_refused_choice(self) -> None:
+        """Two base overloads that differ only in which version of `S` they take rewrite to
+        one USR. Which became the head one is a guess."""
+        old_s = node("c:@N@lib@N@v1@F@g#$@N@lib@N@v1@S@S#", name="g")
+        new_s = node("c:@N@lib@N@v1@F@g#$@N@lib@N@v2@S@S#", name="g")
+        g2 = node("c:@N@lib@N@v2@F@g#$@N@lib@N@v2@S@S#", name="g")
+        c = self.bump([(old_s, self.V1), (new_s, self.V1)], [(g2, self.V2)])
+        assert (self.F1.id, self.F2.id) in pairs(c)
+        assert c.unpaired_base[old_s.id] is Unpaired.AMBIGUOUS
+        assert c.unpaired_base[new_s.id] is Unpaired.AMBIGUOUS
+        assert c.unpaired_head[g2.id] is Unpaired.AMBIGUOUS
+
+
+class TestTheRewriteIsAnchored:
+    """`match.inline.rewrite` on its own: where a namespace path may be replaced."""
+
+    PATHS: ClassVar[dict[str, str]] = {"@N@lib@N@v1": "@N@lib@N@v2"}
+
+    @pytest.mark.parametrize(
+        ("usr", "expected"),
+        [
+            ("c:@N@lib@N@v1", "c:@N@lib@N@v2"),
+            ("c:@N@lib@N@v1@F@f#", "c:@N@lib@N@v2@F@f#"),
+            ("c:@N@lib@N@v1@ST>1#T@X", "c:@N@lib@N@v2@ST>1#T@X"),
+            ("c:a.cpp@N@lib@N@v1@F@h#", "c:a.cpp@N@lib@N@v2@F@h#"),
+            ("c:@F@q#$@N@lib@N@v1@S@S#", "c:@F@q#$@N@lib@N@v2@S@S#"),
+            (
+                "c:@N@lib@N@v1@F@g#$@N@lib@N@v1@S@X>#$@N@lib@N@v1@S@S#",
+                "c:@N@lib@N@v2@F@g#$@N@lib@N@v2@S@X>#$@N@lib@N@v2@S@S#",
+            ),
+            ("c:@N@other@N@lib@N@v1@F@g#", "c:@N@other@N@lib@N@v1@F@g#"),
+            ("c:@N@lib@N@v10@F@g#", "c:@N@lib@N@v10@F@g#"),
+            ("c:@F@q#$@N@other@N@lib@N@v1@S@S#", "c:@F@q#$@N@other@N@lib@N@v1@S@S#"),
+        ],
+    )
+    def test_only_a_path_that_starts_and_ends_a_scope_is_replaced(
+        self, usr: str, expected: str
+    ) -> None:
+        assert rewrite(usr, self.PATHS) == expected
+
+    def test_the_longest_path_wins(self) -> None:
+        paths = {"@N@lib@N@v1": "@N@lib@N@v2", "@N@lib@N@v1@N@abi1": "@N@lib@N@v2@N@abi2"}
+        assert rewrite("c:@N@lib@N@v1@N@abi1@F@f#", paths) == "c:@N@lib@N@v2@N@abi2@F@f#"
+        assert rewrite("c:@N@lib@N@v1@N@detail@F@f#", paths) == "c:@N@lib@N@v2@N@detail@F@f#"
 
 
 class TestInternalLinkage:

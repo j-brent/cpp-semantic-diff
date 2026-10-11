@@ -7,14 +7,16 @@ a field-by-field comparison of two nodes the match stage has already declared to
 same entity, which is what makes each difference a *change* to one thing rather than the
 disappearance of one thing and the appearance of another.
 
-Two of the seven kinds cannot fire in v0, and that is the point rather than a gap. Tier 1 keys
-on the USR, which encodes the entity's name and its enclosing scope (ARCH-001 §5), and the name
-tier keys on the qualified name under a parent that is already paired (ADR-036), so a node
-whose name or parent differs from its match's does not exist -- the pair would never have been
-matched. `NodeRenamed` and `NodeMoved` are therefore written against what a later tier will
-produce and are unreachable until one runs. Softening that here -- pairing a removed node with
-an added one because the names look related -- would move an identity decision out of the
-matcher and destroy the measurement v0 exists to take (ARCH-001 §13).
+One of the seven kinds cannot fire in v0, and one fires in a single case; that is the point
+rather than a gap. Tier 1 keys on the USR, which encodes the entity's name and its enclosing
+scope (ARCH-001 §5), and the name tier keys on the name under a parent that is already paired
+(ADR-036), so a node whose parent differs from its match's does not exist -- the pair would
+never have been matched -- and `NodeMoved` is written against what a later tier will produce.
+`NodeRenamed` fires only for an inline namespace whose version tag was bumped (`v1` to `v2`,
+ADR-044), the one rename v0 pairs, on evidence from what is inside it. Softening either here --
+pairing a removed node with an added one because the names look related -- would move an
+identity decision out of the matcher and destroy the measurement v0 exists to take (ARCH-001
+§13).
 """
 
 from __future__ import annotations

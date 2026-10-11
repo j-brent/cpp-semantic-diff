@@ -121,11 +121,20 @@ class DeclaredTier:
         self.renames = RenameMap.of(renames)
 
     def key(self, node: Node) -> DeclaredKey:
-        original = usr_file(node.id)
+        return self.key_of(node.id, node)
+
+    def key_of(self, usr: str, node: Node) -> DeclaredKey:
+        """The key `node` would have if its USR were `usr`.
+
+        For the inline-namespace tier, which rewrites a base USR into head coordinates and
+        must then key it exactly as tier 1 would. `usr` keeps `node`'s file component, so the
+        file and TU are still `node`'s.
+        """
+        original = usr_file(usr)
         if original is None:
-            return (node.id, None)
+            return (usr, None)
         file, tu = self.renames.file_scope(node)
-        return (f"c:{file}{node.id[2 + len(original) :]}", tu)
+        return (f"c:{file}{usr[2 + len(original) :]}", tu)
 
     def propose(
         self,

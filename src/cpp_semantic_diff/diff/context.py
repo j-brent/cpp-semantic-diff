@@ -28,6 +28,7 @@ from cpp_semantic_diff.model import (
 #: an event resting on two matches is no more confident than the weaker of them.
 TIER_ORDER: tuple[MatchTier, ...] = (
     MatchTier.DECLARED,
+    MatchTier.INLINE_NAMESPACE,
     MatchTier.NAME,
     MatchTier.STRUCTURAL,
     MatchTier.POSITIONAL,
