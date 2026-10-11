@@ -18,6 +18,7 @@ from cpp_semantic_diff.model import (
     DERIVED_KINDS,
     ChangeEvent,
     ChangeEventKind,
+    Completeness,
     Edge,
     EdgeKind,
     Location,
@@ -27,6 +28,8 @@ from cpp_semantic_diff.model import (
     NodeId,
     NodeKind,
     Side,
+    TuResult,
+    TuStatus,
 )
 
 F = NodeId("c:@F@f#")
@@ -41,8 +44,16 @@ def node(usr: str, name: str, **kw: Any) -> Node:
     return Node(id=NodeId(usr), **{**defaults, **kw})
 
 
-def model(rev: str, *nodes: Node, edges: list[Edge] | None = None) -> Model:
-    m = Model(rev=rev, edges=edges or [])
+def model(
+    rev: str,
+    *nodes: Node,
+    edges: list[Edge] | None = None,
+    completeness: Completeness | None = None,
+) -> Model:
+    kwargs: dict[str, Any] = {"rev": rev, "edges": edges or []}
+    if completeness is not None:
+        kwargs["completeness"] = completeness
+    m = Model(**kwargs)
     for n in nodes:
         m.add_node(n)
     return m
@@ -74,9 +85,12 @@ def callers(events: list[ChangeEvent]) -> list[ChangeEvent]:
 class TestEachCallOnBothSidesIsReported:
     def test_an_unedited_caller_gets_one_event_saying_so(self) -> None:
         base = model("a", f("void (int)"), caller(G), edges=[calls(G, F, line=3)])
-        head = model("b", f("void (double)"), caller(G), edges=[calls(G, F, line=4)])
+        head_edge = calls(G, F, line=4)
+        head = model("b", f("void (double)"), caller(G), edges=[head_edge])
         (event,) = callers(derive(base, head))
-        assert event.subject == f"{G}|calls|{F}"
+        # ADR-040: "the subject is the head call edge" -- checked against the edge itself,
+        # not a restated id format, so this fails only when the wrong edge is named.
+        assert event.subject == head_edge.id
         assert event.payload == {
             "caller": G,
             "callee": F,
@@ -113,16 +127,20 @@ class TestEachCallOnBothSidesIsReported:
         h_old, h_new = node(H, "h", signature="int ()"), node(H, "h", signature="long ()")
         base = model("a", f("void (int)"), h_old, caller(G), edges=[calls(G, F), calls(G, H)])
         head = model("b", f("void (double)"), h_new, caller(G), edges=[calls(G, F), calls(G, H)])
-        assert {e.payload["callee"] for e in callers(derive(base, head))} == {F, H}
+        events = callers(derive(base, head))
+        # Exactly two, not merely "at least these two callees" -- the ADR's count claim.
+        assert len(events) == 2
+        assert {e.payload["callee"] for e in events} == {F, H}
 
     def test_a_name_paired_callee_is_reported_in_head_coordinates(self) -> None:
         """A function whose parameter types changed has one USR at base and another at head
         (ADR-036). The call maps through the correspondence, never by id."""
         old, new = f("void (int)", "c:@F@f#I#"), f("void (double)", "c:@F@f#d#")
         base = model("a", old, caller(G), edges=[calls(G, old.id)])
-        head = model("b", new, caller(G), edges=[calls(G, new.id)])
+        head_edge = calls(G, new.id)
+        head = model("b", new, caller(G), edges=[head_edge])
         (event,) = callers(derive(base, head))
-        assert event.subject == f"{G}|calls|{new.id}"
+        assert event.subject == head_edge.id
         assert event.payload["callee"] == new.id
         assert event.confidence.tier is MatchTier.NAME
 
@@ -156,6 +174,97 @@ class TestOnlyCallsThatExistedBeforeAreReported:
         base = model("a", f("void (int)", body_hash="x"), caller(G), edges=[calls(G, F)])
         head = model("b", f("void (int)", body_hash="y"), caller(G), edges=[calls(G, F)])
         assert callers(derive(base, head)) == []
+
+
+class TestCallerEditedReflectsOnlyBodyOrSignature:
+    """callers.py: "A change to its attributes alone does not touch the call site's text,
+    so it does not count." `_EDITS` is exactly `{NodeBodyChanged, NodeSignatureChanged}`."""
+
+    def test_an_attribute_only_change_on_the_caller_is_not_marked_edited(self) -> None:
+        old_g = node(G, "g", signature="void ()", body_hash="same", attrs={"is_const": False})
+        new_g = node(G, "g", signature="void ()", body_hash="same", attrs={"is_const": True})
+        base = model("a", f("void (int)"), old_g, edges=[calls(G, F)])
+        head = model("b", f("void (double)"), new_g, edges=[calls(G, F)])
+        (event,) = callers(derive(base, head))
+        assert event.payload["caller_edited"] is False
+
+    def test_a_function_calling_itself_counts_its_own_signature_change_as_an_edit(self) -> None:
+        """F is both the caller and the callee of its own changed signature: `edited`
+        must still pick up F's `NodeSignatureChanged`, not just a *different* node's."""
+        base = model("a", f("void (int)"), edges=[calls(F, F)])
+        head = model("b", f("void (double)"), edges=[calls(F, F)])
+        (event,) = callers(derive(base, head))
+        assert event.payload == {
+            "caller": F,
+            "callee": F,
+            "old_signature": "void (int)",
+            "new_signature": "void (double)",
+            "caller_edited": True,
+        }
+
+
+class TestConfidenceCarriesModelCompleteness:
+    """ARCH-001 §11: confidence is match tier *and* the completeness of both models.
+    `DiffContext.confidence` threads this through `Confidence.derive`; nothing here pins a
+    float -- only the `models_complete` flag the design actually specifies."""
+
+    def test_a_failed_tu_on_base_marks_confidence_incomplete_even_with_a_complete_head(
+        self,
+    ) -> None:
+        incomplete = Completeness(
+            tus_total=2,
+            tus=[
+                TuResult(path="a.cpp", status=TuStatus.PARSED),
+                TuResult(path="b.cpp", status=TuStatus.FAILED),
+            ],
+        )
+        complete = Completeness(tus_total=1, tus=[TuResult(path="c.cpp", status=TuStatus.PARSED)])
+        base = model("a", f("void (int)"), caller(G), edges=[calls(G, F)], completeness=incomplete)
+        head = model("b", f("void (double)"), caller(G), edges=[calls(G, F)], completeness=complete)
+        (event,) = callers(derive(base, head))
+        # base incomplete, head complete: `and` gives False; `or` would wrongly give True.
+        assert event.confidence.models_complete is False
+
+    def test_a_failed_tu_on_head_marks_confidence_incomplete_even_with_a_complete_base(
+        self,
+    ) -> None:
+        complete = Completeness(tus_total=1, tus=[TuResult(path="a.cpp", status=TuStatus.PARSED)])
+        incomplete = Completeness(
+            tus_total=2,
+            tus=[
+                TuResult(path="b.cpp", status=TuStatus.PARSED),
+                TuResult(path="c.cpp", status=TuStatus.FAILED),
+            ],
+        )
+        base = model("a", f("void (int)"), caller(G), edges=[calls(G, F)], completeness=complete)
+        head = model(
+            "b", f("void (double)"), caller(G), edges=[calls(G, F)], completeness=incomplete
+        )
+        (event,) = callers(derive(base, head))
+        # base complete, head incomplete: `and` gives False, and only this direction catches
+        # a `confidence` that reads base's completeness for both sides -- that mutant would
+        # see base-complete twice and wrongly report True.
+        assert event.confidence.models_complete is False
+
+    def test_both_models_fully_parsed_marks_confidence_complete(self) -> None:
+        base_complete = Completeness(
+            tus_total=1, tus=[TuResult(path="a.cpp", status=TuStatus.PARSED)]
+        )
+        head_complete = Completeness(
+            tus_total=2,
+            tus=[
+                TuResult(path="b.cpp", status=TuStatus.PARSED),
+                TuResult(path="c.cpp", status=TuStatus.PARSED),
+            ],
+        )
+        base = model(
+            "a", f("void (int)"), caller(G), edges=[calls(G, F)], completeness=base_complete
+        )
+        head = model(
+            "b", f("void (double)"), caller(G), edges=[calls(G, F)], completeness=head_complete
+        )
+        (event,) = callers(derive(base, head))
+        assert event.confidence.models_complete is True
 
 
 class TestTheStageOnlyAdds:
