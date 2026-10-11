@@ -23,7 +23,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from cpp_semantic_diff import __version__
-from cpp_semantic_diff.acquire import RenameLimitHit, RevPair
+from cpp_semantic_diff.acquire import RenameLimitHit, RevPair, ThirdPartySet
+from cpp_semantic_diff.acquire.third_party import hint_message
 from cpp_semantic_diff.match import Correspondence
 from cpp_semantic_diff.model import ChangeEvent, Model, Node, NodeId, Side
 from cpp_semantic_diff.rank import Ranking, subject_endpoints
@@ -36,6 +37,8 @@ from cpp_semantic_diff.render.document import (
     RenameDetection,
     Residue,
     Summary,
+    ThirdPartyHint,
+    ThirdPartyPath,
     Timings,
 )
 
@@ -54,6 +57,7 @@ def build_document(
     cpp_files_changed: int,
     files_renamed: int = 0,
     rename_limit: RenameLimitHit | None = None,
+    third_party: ThirdPartySet | None = None,
     timings: Timings | None = None,
 ) -> DiffDocument:
     """Assemble ARCH-001 §10's document from the stage outputs.
@@ -73,6 +77,7 @@ def build_document(
         ),
     )
 
+    third_party = third_party or ThirdPartySet()
     high_risk = ranking.high_risk_count
     count = len(events)
     first_party = ranking.first_party_count
@@ -88,6 +93,12 @@ def build_document(
             timings=timings or Timings(),
         ),
         completeness=completeness,
+        third_party=[
+            ThirdPartyPath(path=e.path, sources=sorted(e.sources)) for e in third_party.entries
+        ],
+        third_party_hints=[
+            ThirdPartyHint(path=path, message=hint_message(path)) for path in third_party.hints
+        ],
         entities=entities,
         # The complete, uncollapsed set (§6.3). Copied into a list rather than aliased:
         # a document that shared its list with the caller's would let a later mutation

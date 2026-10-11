@@ -31,7 +31,13 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-from cpp_semantic_diff.acquire import RenameLimitHit, RevPair
+from cpp_semantic_diff.acquire import (
+    RenameLimitHit,
+    RevPair,
+    ThirdPartyEntry,
+    ThirdPartySet,
+    ThirdPartySource,
+)
 from cpp_semantic_diff.classify import classify_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.match import Correspondence, match_models
@@ -117,6 +123,7 @@ def document(
     lines_changed: int = 100,
     files_renamed: int = 0,
     rename_limit: RenameLimitHit | None = None,
+    third_party: ThirdPartySet | None = None,
 ) -> DiffDocument:
     corr = correspondence if correspondence is not None else match_models(base, head)
     return build_document(
@@ -132,6 +139,7 @@ def document(
         cpp_files_changed=2,
         files_renamed=files_renamed,
         rename_limit=rename_limit,
+        third_party=third_party,
     )
 
 
@@ -696,6 +704,59 @@ class TestTheGraphBoundaryIsStatedNumerically:
             Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)]),
         )
         assert not doc.completeness.degraded
+
+
+class TestTheThirdPartySetIsReported:
+    """ADR-025: the set and the folder-name hints are data on the document, and the view
+    states both. Not yet applied to extraction."""
+
+    TP = ThirdPartySet(
+        entries=(
+            ThirdPartyEntry(
+                path="third_party/lib",
+                sources=frozenset({ThirdPartySource.SUBMODULE, ThirdPartySource.DECLARED}),
+            ),
+            ThirdPartyEntry(path="vendor/zlib", sources=frozenset({ThirdPartySource.DECLARED})),
+        ),
+        hints=("include/x/fmt/bundled",),
+    )
+
+    def _doc(self, third_party: ThirdPartySet | None) -> DiffDocument:
+        parsed = Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)])
+        f = node("c:@F@f#", name="f")
+        base = model("a", f, completeness=parsed)
+        head = model("b", f, completeness=parsed)
+        return document(base, head, [], third_party=third_party)
+
+    def test_the_set_and_hints_are_in_the_json(self) -> None:
+        doc = self._doc(self.TP)
+        data = doc.model_dump(mode="json")
+        assert data["third_party"] == [
+            {"path": "third_party/lib", "sources": ["declared", "submodule"]},
+            {"path": "vendor/zlib", "sources": ["declared"]},
+        ]
+        assert data["third_party_hints"] == [
+            {
+                "path": "include/x/fmt/bundled",
+                "message": "`include/x/fmt/bundled` looks like third-party code; pass "
+                "`--third-party include/x/fmt/bundled` if it is.",
+            }
+        ]
+        assert DiffDocument.from_json(doc.to_json()) == doc
+
+    def test_the_view_states_the_set_and_the_hints(self) -> None:
+        out = draw(self._doc(self.TP))
+        assert "third-party third_party/lib (declared, submodule) · vendor/zlib (declared)" in out
+        assert "note `include/x/fmt/bundled` looks like third-party code" in out
+
+    def test_nothing_is_said_when_there_is_nothing_to_say(self) -> None:
+        doc = self._doc(None)
+        assert doc.third_party == [] and doc.third_party_hints == []
+        out = draw(doc)
+        assert "third-party" not in out
+
+    def test_a_hint_does_not_degrade_the_run(self) -> None:
+        assert not self._doc(self.TP).completeness.degraded
 
 
 class TestTheResidueIsReported:

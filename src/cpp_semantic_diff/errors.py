@@ -54,6 +54,14 @@ class InvalidSettingError(PreconditionError):
     exit_code = ExitCode.USAGE
 
 
+class ThirdPartyPathError(InvalidSettingError):
+    """A `--third-party` path that cannot name a directory in either revision.
+
+    Refused rather than ignored: a mistyped path would silently leave the library it meant
+    in the model (ADR-025).
+    """
+
+
 class GitNotFoundError(PreconditionError):
     def __init__(self) -> None:
         super().__init__("git is not installed, or not on PATH.")

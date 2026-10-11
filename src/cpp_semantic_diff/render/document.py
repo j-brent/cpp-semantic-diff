@@ -38,6 +38,7 @@ from functools import cached_property
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from cpp_semantic_diff.acquire import ThirdPartySource
 from cpp_semantic_diff.model import (
     ChangeEvent,
     ChangeEventId,
@@ -346,6 +347,32 @@ class CompletenessBlock(BaseModel):
         and the events it distorts look like ordinary additions and removals.
         """
         return bool(self.warnings) or not self.renames.complete
+
+
+class ThirdPartyPath(BaseModel):
+    """One directory of the third-party set, and where it came from (ADR-025).
+
+    `sources` lists both when a submodule was also declared: each is a separate reason the
+    path is third-party, and a consumer should not have to guess which one applied.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str
+    sources: list[ThirdPartySource]
+
+
+class ThirdPartyHint(BaseModel):
+    """A tracked directory named like a dependency that is not in the third-party set.
+
+    A note and nothing more: it excludes nothing (ADR-025). Structured, so a consumer can act
+    on `path` without parsing `message`.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str
+    message: str
 
 
 class EntitySummary(BaseModel):
@@ -674,6 +701,16 @@ class DiffDocument(BaseModel):
 
     meta: Meta
     completeness: CompletenessBlock
+    third_party: list[ThirdPartyPath] = Field(
+        default_factory=list,
+        description="The third-party set: submodules at either revision and `--third-party` "
+        "paths. v0 analyzes only code the repository owns (ADR-025).",
+    )
+    third_party_hints: list[ThirdPartyHint] = Field(
+        default_factory=list,
+        description="Tracked directories whose name suggests a dependency and that are not in "
+        "`third_party`. Hints only: folder names never exclude anything.",
+    )
     entities: dict[NodeId, EntitySummary] = Field(default_factory=dict)
     events: list[ChangeEvent] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)

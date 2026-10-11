@@ -29,7 +29,12 @@ from rich.markup import escape
 from rich.table import Table
 
 from cpp_semantic_diff import __version__
-from cpp_semantic_diff.acquire import diff_line_count, file_changes, resolve_revs
+from cpp_semantic_diff.acquire import (
+    diff_line_count,
+    file_changes,
+    resolve_revs,
+    third_party_set,
+)
 from cpp_semantic_diff.acquire.workspace import checkout
 from cpp_semantic_diff.errors import (
     EmptyComparisonError,
@@ -376,6 +381,17 @@ def diff(
             ),
         ),
     ] = None,
+    third_party: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--third-party",
+            metavar="PATH",
+            help=(
+                "A directory of third-party code copied into the repository, relative to its "
+                "root. Repeatable. Submodules are third-party without it."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Diff the semantic models at two revisions -- the whole pipeline (ARCH-001 §3).
 
@@ -411,6 +427,10 @@ def diff(
             f"{revs.head_ref} is the merge base of {revs.base_ref}; there is no second "
             f"point to analyze.\nCheck out the branch under review, or pass --base."
         )
+
+    # ADR-025. Before any worktree, so a mistyped `--third-party` is refused in a
+    # second. Reported in the document; not yet applied to extraction.
+    third_party_paths = third_party_set(repo, revs, third_party or ())
 
     changes = file_changes(repo, revs)
     files = changes.paths
@@ -486,6 +506,7 @@ def diff(
         cpp_files_changed=sum(1 for f in files if Path(f).suffix.lower() in CPP_SUFFIXES),
         files_renamed=len(changes.renames),
         rename_limit=changes.rename_limit,
+        third_party=third_party_paths,
         timings=timings,
     )
 
