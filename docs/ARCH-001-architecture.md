@@ -728,7 +728,7 @@ Present tense is what exists; the rest is planned.
 ```
 cpp_semantic_diff/
   model/       IR types ✓ · JSON schema (not generated)
-  acquire/     git revisions · worktrees · compile db  ✓
+  acquire/     git revisions · worktrees · compile db · changed tokens  ✓
   produce/     toolchain ✓ · extraction ✓ · assembly ✓ · per-TU cache ✓
   match/       tiered matching (tier 1, name tier)      ✓
   diff/        model × model → change events            ✓

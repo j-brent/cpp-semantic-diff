@@ -36,6 +36,7 @@ from cpp_semantic_diff.acquire import (
     resolve_revs,
     third_party_set,
 )
+from cpp_semantic_diff.acquire.tokens import is_cpp
 from cpp_semantic_diff.acquire.workspace import checkout
 from cpp_semantic_diff.errors import (
     EmptyComparisonError,
@@ -44,10 +45,6 @@ from cpp_semantic_diff.errors import (
     SemanticDiffError,
 )
 from cpp_semantic_diff.render import DEFAULT_LIMIT
-
-#: Suffixes counted as C++ for the summary's `cpp_files_changed`. A reporting figure only --
-#: what is actually modelled is whatever the compile database lists (`Checkout.cpp_entries`).
-CPP_SUFFIXES = frozenset({".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp", ".hh", ".hxx", ".inl"})
 
 app = typer.Typer(
     name="cppsd",
@@ -291,7 +288,7 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     changes = file_changes(repo, revs)
     files = changes.paths
     lines = diff_line_count(repo, revs)
-    cpp = [f for f in files if Path(f).suffix.lower() in CPP_SUFFIXES]
+    cpp = [f for f in files if is_cpp(f)]
 
     table = Table(show_header=False, box=None, pad_edge=False)
     table.add_column(style="dim")
@@ -508,7 +505,7 @@ def diff(
         ranking=ranking,
         lines_changed=lines,
         files_changed=len(files),
-        cpp_files_changed=sum(1 for f in files if Path(f).suffix.lower() in CPP_SUFFIXES),
+        cpp_files_changed=sum(1 for f in files if is_cpp(f)),
         files_renamed=len(changes.renames),
         rename_limit=changes.rename_limit,
         third_party=third_party_paths,

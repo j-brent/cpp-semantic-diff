@@ -140,6 +140,19 @@ def run_git_z(repo: Path, *args: str) -> tuple[list[str], str]:
     return [field for field in proc.stdout.split("\0") if field], proc.stderr
 
 
+def run_git_raw(repo: Path, *args: str) -> str:
+    """A git command's whole stdout, decoded the way `os` decodes paths, under the C locale.
+
+    For output that carries file names and file content together -- a patch -- where
+    `run_git`'s `errors="replace"` would mangle a non-UTF-8 name and its `.strip()` would cut
+    a line that is part of the content.
+    """
+    proc = _run(["git", "-C", str(repo), *args], errors="surrogateescape", env=_c_locale_env())
+    if proc.returncode != 0:
+        raise GitError(list(args), proc.returncode, proc.stderr)
+    return proc.stdout
+
+
 def is_git_repository(repo: Path) -> bool:
     """Whether `repo` is inside a work tree. A missing git raises rather than answering no."""
     try:
