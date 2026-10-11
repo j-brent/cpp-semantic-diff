@@ -28,14 +28,16 @@ import multiprocessing as mp
 import os
 from collections.abc import Sequence
 from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 import cpp_semantic_diff.produce.parallel as parallel
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileDatabase, CompileEntry
 from cpp_semantic_diff.errors import ClangToolchainError, SemanticDiffError
-from cpp_semantic_diff.model.ir import Model, TuStatus
+from cpp_semantic_diff.model.ir import Model, TuResult, TuStatus
 from cpp_semantic_diff.produce.build import build_model
 from cpp_semantic_diff.produce.cache import find_scanner
 from cpp_semantic_diff.produce.extract import TuExtract
@@ -248,6 +250,43 @@ class TestNothingVanishes:
         assert [t.status for t in model.completeness.tus].count(TuStatus.PARSED) == 3
         assert named(model, "app::helper")
 
+    @pytest.mark.parametrize("marked_late", [False, True], ids=["marked", "marked-late"])
+    def test_one_death_is_charged_to_one_translation_unit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, marked_late: bool
+    ) -> None:
+        """The test above, with the timing pinned down. Which TUs a real death catches in
+        flight depends on how busy the machine is, and the one behind the charged TU is
+        caught only sometimes (#20). Here every TU is caught, so the TU that moves up to
+        the head of the queue is an innocent casualty of a death already paid for.
+        `marked_late` is the executor marking the dead pool's futures one at a time, so
+        that TU's future may not even look broken yet when it reaches the head."""
+        pool = _PoolWithScriptedDeaths({0: {"a.cpp", "b.cpp", "c.cpp"}}, marked_late=marked_late)
+        monkeypatch.setattr(parallel, "_Pool", lambda workers, toolchain: pool)
+
+        assert scripted_build(tmp_path) == [
+            ("a.cpp", TuStatus.FAILED),
+            ("b.cpp", TuStatus.PARSED),
+            ("c.cpp", TuStatus.PARSED),
+        ]
+
+    @pytest.mark.parametrize("marked_late", [False, True], ids=["marked", "marked-late"])
+    def test_a_reparsed_translation_unit_that_kills_its_new_pool_is_charged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, marked_late: bool
+    ) -> None:
+        """Re-parsing a casualty is not a pardon. A TU that kills the fresh pool too is a
+        second death, and it is charged like the first, or a TU that reliably crashes
+        libclang would be retried until the restart limit ends the build."""
+        pool = _PoolWithScriptedDeaths(
+            {0: {"a.cpp", "b.cpp", "c.cpp"}, 1: {"b.cpp"}}, marked_late=marked_late
+        )
+        monkeypatch.setattr(parallel, "_Pool", lambda workers, toolchain: pool)
+
+        assert scripted_build(tmp_path) == [
+            ("a.cpp", TuStatus.FAILED),
+            ("b.cpp", TuStatus.FAILED),
+            ("c.cpp", TuStatus.PARSED),
+        ]
+
     def test_a_pool_that_keeps_dying_is_a_hard_error_not_a_thin_model(
         self, toolchain: Toolchain, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -451,6 +490,58 @@ class _PoolThatLosesAWorker(parallel._Pool):
                 self._executor = self._start()
             return self.generation, self._executor.submit(_die)
         return super().submit(entry, root)
+
+
+class _BrokenWhenAwaited(Future[TuExtract]):
+    """A dead pool's future that the executor has not marked broken yet. It is marked when
+    the producer waits on it, which is the latest the real executor could get to it."""
+
+    def result(self, timeout: float | None = None) -> TuExtract:
+        if not self.done():
+            self.set_exception(BrokenProcessPool("a worker died"))
+        return super().result(timeout)
+
+
+class _PoolWithScriptedDeaths:
+    """Stands in for `_Pool` with no processes: `deaths[g]` names the TUs that pool
+    generation `g` fails with `BrokenProcessPool`, and every other TU parses."""
+
+    def __init__(self, deaths: dict[int, set[str]], *, marked_late: bool) -> None:
+        self.deaths = deaths
+        self.marked_late = marked_late
+        self.generation = 0
+
+    def submit(self, entry: CompileEntry, root: Path) -> tuple[int, Future[TuExtract]]:
+        name = entry.file.name
+        future: Future[TuExtract]
+        if name not in self.deaths.get(self.generation, set()):
+            future = Future()
+            future.set_result(
+                TuExtract(path=name, result=TuResult(path=name, status=TuStatus.PARSED))
+            )
+        elif self.marked_late:
+            future = _BrokenWhenAwaited()
+        else:
+            future = Future()
+            future.set_exception(BrokenProcessPool("a worker died"))
+        return self.generation, future
+
+    def replace(self, generation: int) -> None:
+        if generation == self.generation:
+            self.generation += 1
+
+    def close(self) -> None:
+        return None
+
+
+def scripted_build(root: Path) -> list[tuple[str, TuStatus]]:
+    """a.cpp, b.cpp and c.cpp through the parallel producer, with `_Pool` already faked."""
+    entries = [CompileEntry(root / n, root, []) for n in ("a.cpp", "b.cpp", "c.cpp")]
+    # The fake pool never loads a parser, so no toolchain is needed.
+    extracts = parallel.parallel_extracts(
+        entries, root=root, toolchain=cast(Toolchain, None), workers=WORKERS
+    )
+    return [(e.result.path, e.result.status) for e in extracts]
 
 
 class _NullExecutor:

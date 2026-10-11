@@ -337,6 +337,10 @@ class _Producer:
         #: then served from the entry the *same run* just wrote. Dispatching those to workers
         #: would parse them a second time and lose fifteen parses on a cold build.
         self.claimed: set[tuple[str, str]] = set()
+        #: Pool generations whose death has already been charged to a TU. One death breaks
+        #: every future in flight, and the next one to reach the head of the queue is as
+        #: innocent as the rest: charging it too would cost two TUs for one crash.
+        self.charged: set[int] = set()
 
     def _prepare(self, entry: CompileEntry) -> _Slot:
         """Decide where this entry's partial comes from, and start it if it needs parsing."""
@@ -379,11 +383,20 @@ class _Producer:
         try:
             partial = slot.future.result()
         except BrokenProcessPool:
+            if slot.generation in self.charged:
+                # A death some earlier TU has already paid for. This one was only in the
+                # blast radius and is parsed again on a fresh pool. `_recover` usually
+                # gets there first, but not when this TU reached the head before the pool
+                # had marked its future broken.
+                self.pool.replace(slot.generation)
+                slot.generation, slot.future = self.pool.submit(slot.entry, self.root)
+                return self._await(slot)
             # The pool took this TU's worker down with it. Every *other* future the death
             # broke is re-submitted to a fresh pool (`_recover`); this one is at the head
             # of the queue and is charged with the crash, so that a TU which reliably
             # crashes libclang ends the build's progress on that TU instead of being
             # retried forever. Recorded, never dropped (ARCH-001 §11).
+            self.charged.add(slot.generation)
             return _failure(
                 slot.entry,
                 self.root,
@@ -437,10 +450,13 @@ class _Producer:
         `ProcessPoolExecutor` fails every pending future the moment a worker dies, so the
         broken ones are all `done()` and answer `exception()` without blocking. Only they
         are re-submitted: a future that was already running on a newer pool must not be
-        parsed twice.
+        parsed twice. The head is left to be charged only if its pool's death has not been
+        charged already.
         """
         for index, slot in buffered.items():
-            if index == head or slot.future is None or not slot.future.done():
+            if slot.future is None or not slot.future.done():
+                continue
+            if index == head and slot.generation not in self.charged:
                 continue
             if isinstance(slot.future.exception(), BrokenProcessPool):
                 self.pool.replace(slot.generation)
