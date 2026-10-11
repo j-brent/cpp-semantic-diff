@@ -17,6 +17,7 @@ import itertools
 from typing import Any
 
 from cpp_semantic_diff.classify import CAUSE_RULES, RuleStatus, classify_events
+from cpp_semantic_diff.derive import derive_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.match import Correspondence, Match, match_models
 from cpp_semantic_diff.model import (
@@ -102,8 +103,8 @@ def roots_at(events: list[ChangeEvent], event: ChangeEvent) -> ChangeEvent:
 def synthetic(kind: ChangeEventKind, subject: str, **payload: AttrValue) -> ChangeEvent:
     """An event the pipeline cannot currently produce.
 
-    The dormant and unreachable rules in the table (§6.3) have no reachable input, and the
-    temptation is to leave them untested until something emits their kinds. Handing the
+    The unreachable rule in the table (§6.3) has no reachable input, and the temptation is to
+    leave it untested until something emits its kind. Handing the
     driver the events it would then receive tests the rule now, the same way `test_diff`'s
     `paired` tests renames before tier 2 exists -- without any of it reaching the pipeline.
     """
@@ -644,14 +645,11 @@ class TestTheRuleTableIsExplicit:
             assert rule.note, f"{rule.name} has no rationale"
             assert rule.arch, f"{rule.name} cites no ARCH section"
 
-    def test_only_the_dormant_and_unreachable_rows_cannot_fire(self) -> None:
-        """Two of §6.3's rows cannot fire. Both are in the table -- deleting them would lose
-        the argument about why -- and every other row is reachable from the events this
-        pipeline emits."""
-        cannot_fire = {
-            "rename-retargets-edges": RuleStatus.UNREACHABLE,
-            "signature-change-breaks-callers": RuleStatus.DORMANT,
-        }
+    def test_only_the_unreachable_row_cannot_fire(self) -> None:
+        """One of §6.3's rows cannot fire. It is in the table -- deleting it would lose the
+        argument about why -- and every other row is reachable from the events this pipeline
+        emits, `signature-change-breaks-callers` since the derive stage (ADR-040)."""
+        cannot_fire = {"rename-retargets-edges": RuleStatus.UNREACHABLE}
         for rule in CAUSE_RULES:
             assert rule.status is cannot_fire.get(rule.name, RuleStatus.ACTIVE), rule.name
 
@@ -684,49 +682,91 @@ class TestTheRuleTableIsExplicit:
         assert {e.kind for e in classify(base, head) if e.caused_by is not None} <= live
 
 
-class TestTheDormantRulesAreImplementedNotPretended:
-    """The rules §6.3 names that this pipeline cannot currently reach.
+class TestASignatureChangeExplainsEachCaller:
+    """§6.3's `signature-change-breaks-callers` (ADR-040): each `CallerOfChangedSignature` is
+    caused by the `NodeSignatureChanged` of the call's callee."""
 
-    They are kept and implemented rather than deleted, because deleting them loses the
-    argument about *why* they cannot fire. They are tested against events built by hand, so
-    the table entry is code that works rather than a comment claiming it would.
-    """
+    H = NodeId("c:@F@h#")
 
-    def test_the_pipeline_emits_neither_kind_the_dormant_rules_key_on(self) -> None:
-        """The claim the tests below must not be read as contradicting. `EdgeRetargeted` is
-        refused by design (`diff/edges.py`), and `SignatureIncompatible` is derived and out
-        of v0 scope (§13) -- so neither appears in any delta this pipeline produces."""
-        base = model("a", node(F), node(G, name="g"), edges=[edge(F, G)])
-        head = model("b", node(F), node(C, name="C", kind=NodeKind.CLASS), edges=[edge(F, C)])
-        dormant = {r.consequence for r in CAUSE_RULES if r.status is not RuleStatus.ACTIVE}
-        assert {e.kind for e in classify(base, head)} & dormant == set()
+    def classified(self) -> list[ChangeEvent]:
+        """`f` calls `g` and `h`, and both change signature: two causes, two callers."""
+        base = model(
+            "a",
+            node(F),
+            node(G, name="g", signature="void ()"),
+            node(self.H, name="h", signature="int ()"),
+            edges=[edge(F, G), edge(F, self.H, line=2)],
+        )
+        head = model(
+            "b",
+            node(F),
+            node(G, name="g", signature="void (int)"),
+            node(self.H, name="h", signature="long ()"),
+            edges=[edge(F, G), edge(F, self.H, line=2)],
+        )
+        corr = match_models(base, head)
+        derived = derive_events(diff_models(base, head, corr), base, head, corr)
+        return classify_events(derived, base, head, corr)
 
-    def test_a_signature_change_would_explain_an_incompatible_caller(self) -> None:
-        """§6.3's third rule. The cause is `NodeSignatureChanged` and not any attribute
-        change -- a `virtual` flip does not break a caller's call site (ADR-035)."""
+    def test_the_cause_is_the_signature_change_of_the_subject_edges_callee(self) -> None:
+        events = self.classified()
+        for callee in (G, self.H):
+            cause = cause_of(
+                events, ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE, f"{F}|calls|{callee}"
+            )
+            assert cause is not None
+            assert cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+            assert cause.subject == callee
+
+    def test_an_attribute_change_on_the_callee_is_not_the_cause(self) -> None:
+        """A `virtual` flip does not change what a call site was written against (ADR-035)."""
         head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
+        caller = ChangeEvent(
+            kind=ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
+            subject=edge(F, G).id,
+            payload={
+                "caller": F,
+                "callee": G,
+                "old_signature": "void ()",
+                "new_signature": "void (int)",
+                "caller_edited": False,
+            },
+            confidence=Confidence(tier=MatchTier.DECLARED, models_complete=True),
+        )
         events = [
-            synthetic(
-                ChangeEventKind.NODE_SIGNATURE_CHANGED,
-                G,
-                old_signature="void ()",
-                new_signature="void (int)",
-            ),
             synthetic(ChangeEventKind.NODE_ATTR_CHANGED, G, attr="virtual", old=False, new=True),
-            synthetic(ChangeEventKind.SIGNATURE_INCOMPATIBLE, F),
+            caller,
         ]
-        corr = match_models(head, head)
-        classified = classify_events(events, head, head, corr)
-        cause = cause_of(classified, ChangeEventKind.SIGNATURE_INCOMPATIBLE, F)
-        assert cause is not None and cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        classified = classify_events(events, head, head, match_models(head, head))
+        assert (
+            cause_of(classified, ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE, caller.subject)
+            is None
+        )
 
     def test_classify_does_not_synthesize_the_derived_event_itself(self) -> None:
-        """The line this stage does not cross. §13 puts derived events out of v0 and
-        `events.py` records their payloads as undesigned; a stage whose contract is
-        relabeling must not put an event in the JSON that no stage owns."""
+        """The line this stage does not cross: it links events and creates none. The derive
+        stage, which runs before it, owns the caller events (ADR-040)."""
         base = model("a", node(F), node(G, name="g", signature="void ()"), edges=[edge(F, G)])
         head = model("b", node(F), node(G, name="g", signature="void (int)"), edges=[edge(F, G)])
-        assert ChangeEventKind.SIGNATURE_INCOMPATIBLE not in {e.kind for e in classify(base, head)}
+        kinds = {e.kind for e in classify(base, head)}
+        assert ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE not in kinds
+
+
+class TestTheUnreachableRuleIsImplementedNotPretended:
+    """The rule §6.3 names that this pipeline cannot reach.
+
+    It is kept and implemented rather than deleted, because deleting it loses the argument
+    about *why* it cannot fire. It is tested against events built by hand, so the table entry
+    is code that works rather than a comment claiming it would.
+    """
+
+    def test_the_pipeline_never_emits_the_kind_the_unreachable_rule_keys_on(self) -> None:
+        """The claim the test below must not be read as contradicting. `EdgeRetargeted` is
+        refused by design (`diff/edges.py`), so it appears in no delta this pipeline produces."""
+        base = model("a", node(F), node(G, name="g"), edges=[edge(F, G)])
+        head = model("b", node(F), node(C, name="C", kind=NodeKind.CLASS), edges=[edge(F, C)])
+        unreachable = {r.consequence for r in CAUSE_RULES if r.status is not RuleStatus.ACTIVE}
+        assert {e.kind for e in classify(base, head)} & unreachable == set()
 
     def test_a_rename_would_explain_a_retargeted_edge(self) -> None:
         """§6.3's first rule, against the only input that could ever trigger it. It cannot

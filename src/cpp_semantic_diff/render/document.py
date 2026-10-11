@@ -497,6 +497,7 @@ class Timings(BaseModel):
     produce_head: float = 0.0
     match: float = 0.0
     diff: float = 0.0
+    derive: float = 0.0
     classify: float = 0.0
     coverage: float = Field(
         default=0.0,

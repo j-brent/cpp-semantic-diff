@@ -82,6 +82,9 @@ half-answer.
                                                        diff          (§6 change events)
                                                          │
                                                          ▼
+                                                      derive         (§6.1 derived change events)
+                                                         │
+                                                         ▼
                                                      classify        (§6.3 cause/cascade)
                                                          │
   external tools ─→ evidence adapters ──────────────→  enrich        (§8)
@@ -104,6 +107,7 @@ and inspect at any boundary — which matters because most debugging here is "wh
 | **produce** | worktree + compile db | `Model` (§4) |
 | **match** | two `Model`s | `Correspondence` — bipartite matching with per-pair tier |
 | **diff** | two `Model`s + `Correspondence` | `ChangeEvent` list, deterministically ordered |
+| **derive** | change events + two `Model`s + `Correspondence` | the same change events plus derived ones (§6.1) |
 | **classify** | change events + two `Model`s + `Correspondence` | change events with `caused_by` links |
 | **enrich** | change events + head model + tool output | change events with blast radius and `Finding`s attached |
 | **rank** | enriched change events | ordered change events with risk scores |
@@ -327,11 +331,21 @@ and belong to the matcher, but its kind is diffable state. Between two already-p
 relation that was `calls` and is now `overrides` needs no new identity claim.
 
 **Derived** — `BecameUnreachable` · `BecameReachable` · `CycleIntroduced` · `FanInChanged` ·
-`LayerViolationIntroduced` · `SignatureIncompatible`
+`LayerViolationIntroduced` · `CallerOfChangedSignature(caller, callee, old_signature, new_signature, caller_edited)`
 
 Derived change events are computed from the two models plus graph algorithms, not read off either one.
 They are the answer to the founding document's §1 point that the most important consequences of a
-change are never *in* the change.
+change are never *in* the change. The derive stage (§3) computes them.
+
+`CallerOfChangedSignature` is the only one v0 emits
+([ADR-040](adr/ADR-040-callers-of-a-changed-signature-are-derived.md)). One per call G → F that
+exists on both sides, where F has a `NodeSignatureChanged`. The subject is the head call edge, so
+its home is the caller and its provenance is the call sites. A new caller, or a new call, is left
+out: it is already an `EdgeAdded`, written against the new signature. `caller_edited` says whether
+G has its own body or signature change in the diff. The kind states an observation, not a verdict:
+nothing checks whether the call still compiles or behaves the same. It is a lower bound: calls the
+model misses (calls that depend on a template parameter, calls from initializers, calls through a
+function pointer) get none. The earlier draft named it `SignatureIncompatible`.
 
 ### 6.2 Change event shape
 
@@ -373,7 +387,7 @@ Rename one function and 200 call edges "change". That is one change event with 2
 | call-moved-to-another-overload | `EdgeAdded(caller→G)` | `EdgeRemoved(caller→F)`, F and G overloads of one name | active |
 | edge-gained-its-endpoint | `NodeAdded(N)` | `EdgeAdded` for edges touching N | active |
 | rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **unreachable** |
-| signature-change-breaks-callers | `NodeSignatureChanged(F)` | `SignatureIncompatible` on callers | dormant |
+| signature-change-breaks-callers | `NodeSignatureChanged(F)` | `CallerOfChangedSignature` for each call into F | active |
 
 **That is the whole table, and it is closed the way §6.1's change event set is closed.** The rows are
 `CAUSE_RULES` in `classify/rules.py` and the Status column is its `RuleStatus`; nothing outside that
@@ -422,9 +436,13 @@ answer to the problem this section opens with. Tier 2 makes `NodeRenamed` reacha
 change events beside it; only reversing the edge-identity decision in §6.1 would make this rule fire. The
 rule is kept and implemented rather than deleted, because deleting it would lose that argument.
 
-`signature-change-breaks-callers` is **dormant** because its consequence is a derived change event,
-which §13 puts out of v0. Classify links causes among change events that already exist; it never
-synthesizes one. A stage that may create change events is a stage that can hide a change inside a cause.
+`signature-change-breaks-callers` links each `CallerOfChangedSignature` to the signature change of
+its callee: the head destination of its subject edge, so there is exactly one candidate. The derive
+stage creates those change events
+([ADR-040](adr/ADR-040-callers-of-a-changed-signature-are-derived.md)). Classify links causes among
+change events that already exist; it never synthesizes one. A stage that may create change events is
+a stage that can hide a change inside a cause. Under one signature change, views list unedited
+callers first.
 
 Change events with no matching rule get no cause link and are shown. **Collapse happens at render, never
 at diff** — the JSON always carries the full change event set; the view hides consequences under causes by
@@ -680,10 +698,15 @@ The smallest slice that tests the thesis end to end.
 
 **In:** namespace / class / function / method / field nodes · `contains`, `calls`, `inherits`,
 `overrides` edges · **tier-1 identity, plus the inline namespace tier and the name tier for functions and methods** · node
-add/remove/attr/body/signature and edge add/remove/kind/attr change events · JSON + terminal output · the compression metric · fixtures `fmt` and
+add/remove/attr/body/signature and edge add/remove/kind/attr change events · one derived change
+event, `CallerOfChangedSignature` · JSON + terminal output · the compression metric · fixtures `fmt` and
 `spdlog`, with `leveldb` added later ([v0 tracker](../reports/2026-08-01--v0-build/STATUS.md) §3).
 
 **Out, deliberately:** rename detection (tiers 2–4), evidence adapters, derived change events, HTML.
+
+**One exception to the derived change events being out:** `CallerOfChangedSignature`, from a
+derive stage between diff and classify. It is how ADR-030's v0 tells a reviewer which callers a
+signature change may affect ([ADR-040](adr/ADR-040-callers-of-a-changed-signature-are-derived.md)).
 
 **Prerequisite: third-party code does not change.** v0 analyzes only code the repository owns
 and contains. Third-party code, whether a git submodule or a library copied into the tree, must be
@@ -753,6 +776,7 @@ cpp_semantic_diff/
   produce/     toolchain ✓ · extraction ✓ · assembly ✓ · per-TU cache ✓
   match/       tiered matching (tier 1, name tier)      ✓
   diff/        model × model → change events · uncovered changes  ✓
+  derive/      derived change events (v0: callers)      ✓
   classify/    cause and cascade rules                  ✓
   evidence/    tool adapters                (post-v0)
   rank/        blast radius, scoring                     ✓
