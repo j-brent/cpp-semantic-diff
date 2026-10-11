@@ -300,6 +300,52 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
             events, ChangeEventKind.NODE_REMOVED, old.id
         )
 
+    def test_a_same_named_edge_of_a_different_kind_is_not_mistaken_for_an_overload(self) -> None:
+        """The locator's own guard: "Same edge kind, and the overload set is `qualified_name`
+        equality". A relation of a *different* kind to a same-named node is not a call that
+        moved -- it is a second, unrelated fact about the caller, and nesting the dropped call
+        under it would hide that fact rather than explain this one. Drop the `edge.kind is not
+        removed.kind` check in `_overload_the_caller_moved_to` and this misfires."""
+        old = node("c:@F@h#c", name="h", qualified_name="ns::h")
+        same_name_other_relation = node("c:@F@h#s", name="h", qualified_name="ns::h")
+        caller = node(F)
+        events = classify(
+            model("a", caller, old, edges=[edge(F, old.id)]),
+            model(
+                "b",
+                caller,
+                old,
+                same_name_other_relation,
+                edges=[edge(F, same_name_other_relation.id, kind=EdgeKind.OVERRIDES)],
+            ),
+        )
+        assert cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") is None
+
+    def test_two_new_overloads_pick_the_same_cause_every_run(self) -> None:
+        """§6.3 promises "a stable answer rather than one that depends on model construction"
+        when a caller gains more than one same-named overload. Undetectable by running the
+        pipeline once -- the bug this guards is nondeterminism, which only shows up as a flaky
+        test or, worse, a report that differs between two runs of the same diff."""
+        old = node("c:@F@h#c", name="h", qualified_name="ns::h")
+        first = node("c:@F@h#1", name="h", qualified_name="ns::h")
+        second = node("c:@F@h#2", name="h", qualified_name="ns::h")
+        caller = node(F)
+        base = model("a", caller, old, edges=[edge(F, old.id)])
+        head = model(
+            "b",
+            caller,
+            old,
+            first,
+            second,
+            edges=[edge(F, first.id, line=2), edge(F, second.id, line=3)],
+        )
+        expected = min(f"{F}|calls|{first.id}", f"{F}|calls|{second.id}")
+
+        for _ in range(5):
+            events = classify(base, head)
+            cause = cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{old.id}")
+            assert cause == by_subject(events, ChangeEventKind.EDGE_ADDED, expected)
+
     def test_an_edge_onto_an_added_node_is_caused_by_that_addition(self) -> None:
         head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
         events = classify(model("a", node(F)), head)
@@ -407,6 +453,24 @@ class TestAnEventNobodyCanExplainIsShown:
         events = classify(base, head)
         assert [e.kind for e in events] == [ChangeEventKind.EDGE_KIND_CHANGED]
         assert events[0].caused_by is None
+
+    def test_a_moved_node_keeps_no_cause(self) -> None:
+        """§6.3's table does not name `NodeMoved` anywhere -- not as a cause, not as a
+        consequence, not even as one of the dormant or unreachable rows. A node whose
+        container changed is diffed correctly (`diff/nodes.py`), but this stage has no row
+        to explain *why*, and must not borrow the reasoning the table gives `NodeRemoved`'s
+        and `NodeAdded`'s own unrelated neighbours for an event the table never mentions."""
+        other_ns = NodeId("c:@N@other")
+        klass = node(C, name="C", kind=NodeKind.CLASS)
+        base = model("a", node(N, name="ns", kind=NodeKind.NAMESPACE), klass, edges=[holds(N, C)])
+        head = model(
+            "b",
+            node(other_ns, name="other", kind=NodeKind.NAMESPACE),
+            klass,
+            edges=[holds(other_ns, C)],
+        )
+        events = classify(base, head)
+        assert by_subject(events, ChangeEventKind.NODE_MOVED, C).caused_by is None
 
     def test_an_unrelated_change_beside_a_cascade_is_not_swept_into_it(self) -> None:
         """The failure that would make the compression metric a lie: everything in the diff
