@@ -13,6 +13,7 @@ of the reason it is one.
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Any
 
 import pytest
@@ -336,6 +337,52 @@ class TestBaseOrderCoexistsWithOtherAttributeChanges:
         base = self.record("a", "A; B", final=False)
         head = self.record("b", "B; A", final=True)
         assert {e.payload["attr"] for e in diff(base, head)} == {"base_order", "final"}
+
+
+class TestADefaultThatOnlyDropsItsOwnNamespaceIsSpellingOnly:
+    """ADR-046: a default argument compared again without leading qualifiers that name a
+    namespace the function is in. A match is reported, marked `spelling_only`."""
+
+    def events(self, old: str, new: str, *, inside: str = "ns::details") -> list[ChangeEvent]:
+        def side(rev: str, defaults: str) -> Model:
+            parts = inside.split("::")
+            spaces = [
+                node(
+                    f"c:@N@{'@N@'.join(parts[: i + 1])}",
+                    parts[i],
+                    kind=NodeKind.NAMESPACE,
+                    qualified_name="::".join(parts[: i + 1]),
+                )
+                for i in range(len(parts))
+            ]
+            f = node(F, "f", qualified_name=f"{inside}::f", attrs={"default_arguments": defaults})
+            chain = [*spaces, f]
+            contains = [
+                Edge(src=a.id, dst=b.id, kind=EdgeKind.CONTAINS) for a, b in pairwise(chain)
+            ]
+            return model(rev, *chain, edges=contains)
+
+        return diff(side("a", old), side("b", new))
+
+    def payload(self, old: str, new: str, **kw: Any) -> dict[str, object]:
+        return dict(only(self.events(old, new, **kw), ChangeEventKind.NODE_ATTR_CHANGED).payload)
+
+    def test_dropping_an_enclosing_namespace_is_spelling_only(self) -> None:
+        assert self.payload("ns::details::x", "details::x")["spelling_only"] is True
+        assert self.payload("ns::details::x", "x")["spelling_only"] is True
+        assert self.payload("::ns::x", "x")["spelling_only"] is True
+        assert self.payload("1; ns::y", "1; y")["spelling_only"] is True
+
+    def test_a_changed_value_is_not(self) -> None:
+        assert "spelling_only" not in self.payload("1", "2")
+        assert "spelling_only" not in self.payload("ns::x", "ns::y")
+        assert "spelling_only" not in self.payload("ns::x", "")
+
+    def test_a_qualifier_that_is_not_an_enclosing_namespace_is_not(self) -> None:
+        assert "spelling_only" not in self.payload("other::x", "x")
+        assert "spelling_only" not in self.payload("details::x", "x", inside="ns")
+        # Token boundary: `ns` encloses the function, `nsx` does not.
+        assert "spelling_only" not in self.payload("nsx::x", "x")
 
 
 class TestABodyChangeIsNotAnAttributeChange:

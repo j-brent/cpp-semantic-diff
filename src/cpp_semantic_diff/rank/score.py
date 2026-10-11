@@ -100,6 +100,13 @@ class RiskScore(BaseModel):
         description="The subject's exposure class, also carried inside `factors`.",
     )
 
+    informational: bool = Field(
+        default=False,
+        description="The change event records a change of spelling only: an attribute in "
+        "`weights.INFORMATIONAL_ATTRS`, or a payload marked `spelling_only`. Listed and "
+        "ordered as usual, never counted as high risk (ADR-046).",
+    )
+
     def factor(self, name: FactorName) -> Factor:
         for f in self.factors:
             if f.name is name:
@@ -123,8 +130,11 @@ class RiskScore(BaseModel):
         about attention -- uncertainty is a reason for a human to look -- and attention is
         the ordering, which still reads all four factors. Risk is a claim about
         consequences, and our doubt about a match is not one of them.
+
+        A change of spelling only is never high risk (ADR-046), whatever its impact: it clears
+        the line on blast radius and exposure, and nothing outside the diff can break.
         """
-        return self.impact >= w.HIGH_RISK
+        return not self.informational and self.impact >= w.HIGH_RISK
 
 
 @dataclass(frozen=True)
@@ -171,6 +181,17 @@ def score_event(event: ChangeEvent, ctx: ScoringContext) -> RiskScore:
         impact=measured / w.IMPACT_WEIGHT,
         factors=factors,
         exposure=exposure_of(event, ctx),
+        informational=is_informational(event),
+    )
+
+
+def is_informational(event: ChangeEvent) -> bool:
+    """Whether an event records a change of spelling only (ADR-046)."""
+    if event.payload.get("spelling_only") is True:
+        return True
+    return (
+        event.kind is ChangeEventKind.NODE_ATTR_CHANGED
+        and event.payload.get("attr") in w.INFORMATIONAL_ATTRS
     )
 
 

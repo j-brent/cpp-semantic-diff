@@ -87,6 +87,13 @@ IMPACT_WEIGHT: float = sum(FACTOR_WEIGHTS[name] for name in IMPACT_FACTORS)
 #: that every term feeding it varies with the event.
 HIGH_RISK = 0.6
 
+#: Attributes that record how something is written, not what it is: a function's written
+#: signature where its canonical type is unchanged (ADR-038), whether an enumerator's value is
+#: written (ADR-038), a static assertion's message (ADR-039). A change to one alone is listed
+#: and ordered like any other, and never counted as high risk (ADR-046): it can clear
+#: `HIGH_RISK` on blast radius and exposure alone, and nothing outside the diff can break.
+INFORMATIONAL_ATTRS: frozenset[str] = frozenset({"sugared_signature", "explicit_value", "message"})
+
 # --------------------------------------------------------------------------------------
 # Blast radius
 # --------------------------------------------------------------------------------------

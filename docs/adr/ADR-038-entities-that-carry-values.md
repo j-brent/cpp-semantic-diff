@@ -112,6 +112,8 @@ variables, `static` or not, are part of its body.
   checked against the `switch` statements over its enum: both need the uses relationship, out of
   v0 ([ADR-041](ADR-041-v0-scope-of-steps-6-and-7.md)). ARCH-001 §6.3 records both rules for when
   it lands.
+- A change to `sugared_signature` alone is informational: listed, never counted as high risk
+  ([ADR-046](ADR-046-spelling-only-changes-are-never-high-risk.md)).
 
 ## Alternatives rejected
 

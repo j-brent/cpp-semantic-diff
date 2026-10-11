@@ -32,6 +32,7 @@ from cpp_semantic_diff.model import (
     ChangeEvent,
     ChangeEventKind,
     NodeId,
+    NodeKind,
     Side,
 )
 
@@ -50,6 +51,11 @@ SIGNATURE_ATTRS: frozenset[str] = frozenset({"return_type", "const", "sugared_si
 #: already an `inherits` edge event, and reporting the order beside it would say it twice. A
 #: reorder alongside an addition is still a reorder, and is still reported (ADR-043).
 BASE_ORDER = "base_order"
+
+#: A function's default arguments as clang prints them (`extract._default_arguments`). A
+#: change that only adds or drops a qualifier naming a namespace the function is in carries
+#: `spelling_only: true` in its payload, and rank does not count it as high risk (ADR-046).
+DEFAULT_ARGUMENTS = "default_arguments"
 
 
 def node_events(ctx: DiffContext) -> Iterator[ChangeEvent]:
@@ -133,6 +139,13 @@ def _changes(
             continue
         if attr == BASE_ORDER and not bases_reordered(old, new):
             continue
+        if attr == DEFAULT_ARGUMENTS and defaults_differ_only_in_spelling(
+            old, new, _enclosing_namespaces(ctx, match, base_parents, head_parents)
+        ):
+            yield event(
+                ChangeEventKind.NODE_ATTR_CHANGED, attr=attr, old=old, new=new, spelling_only=True
+            )
+            continue
         yield event(ChangeEventKind.NODE_ATTR_CHANGED, attr=attr, old=old, new=new)
 
     # ARCH-001 §4.1: `body_hash` is deliberately not an attribute, so a differing body is
@@ -152,6 +165,64 @@ def _changes(
     # artifact: the TU holding the definition failing to parse on one side produces the
     # identical shape, and turning that into an event is §11's laundering of absence of
     # evidence into evidence of absence.
+
+
+def defaults_differ_only_in_spelling(
+    old: AttrValue, new: AttrValue, namespaces: frozenset[str]
+) -> bool:
+    """Whether two `default_arguments` values differ only in qualifiers that name a namespace
+    the function is itself in (ADR-046).
+
+    Clang prints a default as it was written, so `spdlog::details::x` becoming `details::x`
+    inside `spdlog` is a change to the attribute and not to what the default is. Each default
+    is compared with its leading enclosing-namespace qualifier removed, in every way the
+    namespaces allow: the two match where some removal from each gives the same text. Only a
+    whole leading qualifier is removed, so `spdlog::` never matches inside `spdlogx::`, and a
+    qualifier naming any other namespace still counts as a change.
+    """
+    if not isinstance(old, str) or not isinstance(new, str):
+        return False
+    before = old.split("; ") if old else []
+    after = new.split("; ") if new else []
+    if len(before) != len(after):
+        return False
+    return all(
+        _unqualified(a, namespaces) & _unqualified(b, namespaces)
+        for a, b in zip(before, after, strict=True)
+    )
+
+
+def _unqualified(default: str, namespaces: frozenset[str]) -> set[str]:
+    """`default`, and `default` without each leading qualifier that is an enclosing namespace."""
+    text = default.removeprefix("::")
+    spellings = {default, text}
+    for namespace in namespaces:
+        if text.startswith(namespace + "::"):
+            spellings.add(text[len(namespace) + 2 :])
+    return spellings
+
+
+def _enclosing_namespaces(
+    ctx: DiffContext,
+    match: Match,
+    base_parents: dict[NodeId, NodeId],
+    head_parents: dict[NodeId, NodeId],
+) -> frozenset[str]:
+    """The qualified names of the namespaces a matched node is in, on either side."""
+    names: set[str] = set()
+    for model, parents, node_id in (
+        (ctx.base, base_parents, match.base),
+        (ctx.head, head_parents, match.head),
+    ):
+        seen: set[NodeId] = set()
+        parent = parents.get(node_id)
+        while parent is not None and parent not in seen and parent in model.nodes:
+            seen.add(parent)
+            node = model.nodes[parent]
+            if node.kind is NodeKind.NAMESPACE:
+                names.add(node.qualified_name)
+            parent = parents.get(parent)
+    return frozenset(names)
 
 
 def bases_reordered(old: AttrValue, new: AttrValue) -> bool:

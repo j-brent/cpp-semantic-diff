@@ -51,6 +51,9 @@ plain attributes. Two needed a decision:
 - A default is printed by clang, so a macro arrives expanded and an out-of-line definition
   carries the default its header declared.
 - A base renamed in the same change is not on both sides, so it does not count as reordered.
+- Defaults are compared again without the function's own namespace qualifiers. A change that
+  only adds or drops one is marked spelling-only and never counted as high risk
+  ([ADR-046](ADR-046-spelling-only-changes-are-never-high-risk.md)).
 
 ## Alternatives rejected
 
