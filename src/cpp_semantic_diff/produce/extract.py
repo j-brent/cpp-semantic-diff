@@ -2238,9 +2238,13 @@ class _Extractor:
         parameter belongs to its template, and counting either would report as missing what
         is not an entity. A skipped declaration is not descended into, so an unmodelled
         record's members are not counted again. Located in the repository or not at all:
-        `visit` has already pruned what lies outside the model.
+        `visit` has already pruned what lies outside the model. A C-style typedef that only
+        names its own struct is skipped on purpose and loses nothing -- the struct is the
+        node -- so it is not counted either.
         """
         if not cursor.kind.is_declaration() or cursor.kind in _NOT_ENTITIES:
+            return
+        if _names_its_own_tag(cursor):
             return
         location = _location(cursor, self.root, self.base)
         if location is None:

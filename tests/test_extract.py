@@ -131,6 +131,17 @@ class TestLinkageSpecifications:
         assert {"f", "g", "S", "S::x"} <= {n.qualified_name for n in result.nodes.values()}
         assert not any(kind == "linkage_spec" for *_, kind in result.unmodelled)
 
+    def test_a_typedef_naming_its_own_struct_is_not_counted_as_unmodelled(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """C's `typedef struct X {...} X;` is skipped on purpose: the struct is the node, and
+        the typedef holds nothing more."""
+        result = run(
+            tmp_path, toolchain, {"a.cpp": 'extern "C" { typedef struct X { int a; } X; }\n'}
+        )
+        assert "X" in {n.qualified_name for n in result.nodes.values()}
+        assert result.unmodelled == set()
+
 
 class TestUnmodelledDeclarations:
     """What is declared in the repository and not in the model is counted, by kind (#6)."""
