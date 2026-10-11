@@ -117,6 +117,21 @@ UNMODELLED = {
 }
 
 
+class TestLinkageSpecifications:
+    def test_declarations_in_extern_c_are_modelled(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """A braced block and the one-line form are both a linkage spec to libclang 18, and
+        what they declare -- often a library's whole C API -- belongs in the model."""
+        result = run(
+            tmp_path,
+            toolchain,
+            {"a.cpp": 'extern "C" { void f(int); struct S { int x; }; }\nextern "C" void g();\n'},
+        )
+        assert {"f", "g", "S", "S::x"} <= {n.qualified_name for n in result.nodes.values()}
+        assert not any(kind == "linkage_spec" for *_, kind in result.unmodelled)
+
+
 class TestUnmodelledDeclarations:
     """What is declared in the repository and not in the model is counted, by kind (#6)."""
 

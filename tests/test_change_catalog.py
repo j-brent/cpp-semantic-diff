@@ -745,6 +745,24 @@ CATALOG = [
         relation("x", "h"),
         fails="step 8 (out of v0, ADR-030): calls from initializers are not relationships",
     ),
+    # Linkage. `extern "C"` changes the USR (`c:@F@f#I#` -> `c:@F@f`) and the linker symbol
+    # (`_Z1fi` -> `f`), which breaks every caller compiled against the old one. The name tier
+    # pairs the two, so it is not a removal plus an addition -- but nothing compares the
+    # symbol, so no change event says the linkage changed. The edit is still not silent: its
+    # tokens are uncovered.
+    case(
+        "function-gains-c-linkage",
+        "void f(int) {}\nvoid h() { f(1); }",
+        'extern "C" void f(int) {}\nvoid h() { f(1); }',
+        changed("f"),
+        fails="no step yet: linkage (`Node.symbol`) is not compared",
+    ),
+    case(
+        "function-gains-c-linkage-is-paired",
+        "void f(int) {}\nvoid h() { f(1); }",
+        'extern "C" void f(int) {}\nvoid h() { f(1); }',
+        not_replaced("f"),
+    ),
 ]
 
 

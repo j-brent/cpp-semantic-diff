@@ -117,7 +117,11 @@ CONTAINER_KINDS = frozenset(
         ci.CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
         ci.CursorKind.STRUCT_DECL,
         ci.CursorKind.UNION_DECL,
-        ci.CursorKind.UNEXPOSED_DECL,  # extern "C" { ... } and linkage specs
+        ci.CursorKind.UNEXPOSED_DECL,  # a linkage spec, from a libclang older than 18
+        # `extern "C" { ... }` and the one-line `extern "C" void f();` alike, from libclang 18
+        # on. Missing, the extractor stopped at the linkage spec and nothing declared in it --
+        # often a library's whole C API -- was in the model.
+        ci.CursorKind.LINKAGE_SPEC,
     }
 )
 
@@ -2258,6 +2262,8 @@ class _Extractor:
 
         usr = cursor.get_usr()
         if not usr:
+            # A kind the model covers, but with no identity to key it on: skipped, so counted.
+            self.note_unmodelled(cursor)
             return
 
         location = _location(cursor, self.root, self.base)
