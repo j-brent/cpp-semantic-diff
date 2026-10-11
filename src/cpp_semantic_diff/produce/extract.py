@@ -117,7 +117,11 @@ CONTAINER_KINDS = frozenset(
         ci.CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
         ci.CursorKind.STRUCT_DECL,
         ci.CursorKind.UNION_DECL,
-        ci.CursorKind.UNEXPOSED_DECL,  # extern "C" { ... } and linkage specs
+        ci.CursorKind.UNEXPOSED_DECL,  # a linkage spec, from a libclang older than 18
+        # `extern "C" { ... }` and the one-line `extern "C" void f();` alike, from libclang 18
+        # on. Missing, the extractor stopped at the linkage spec and nothing declared in it --
+        # often a library's whole C API -- was in the model.
+        ci.CursorKind.LINKAGE_SPEC,
     }
 )
 
@@ -2234,9 +2238,13 @@ class _Extractor:
         parameter belongs to its template, and counting either would report as missing what
         is not an entity. A skipped declaration is not descended into, so an unmodelled
         record's members are not counted again. Located in the repository or not at all:
-        `visit` has already pruned what lies outside the model.
+        `visit` has already pruned what lies outside the model. A C-style typedef that only
+        names its own struct is skipped on purpose and loses nothing -- the struct is the
+        node -- so it is not counted either.
         """
         if not cursor.kind.is_declaration() or cursor.kind in _NOT_ENTITIES:
+            return
+        if _names_its_own_tag(cursor):
             return
         location = _location(cursor, self.root, self.base)
         if location is None:
@@ -2258,6 +2266,8 @@ class _Extractor:
 
         usr = cursor.get_usr()
         if not usr:
+            # A kind the model covers, but with no identity to key it on: skipped, so counted.
+            self.note_unmodelled(cursor)
             return
 
         location = _location(cursor, self.root, self.base)
