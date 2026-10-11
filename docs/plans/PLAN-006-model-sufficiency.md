@@ -102,8 +102,11 @@ Suggested direction:
 
 For parameter types and template parameters this was done without changing identity: the USR
 stays the node id, and a name tier pairs the functions and methods tier 1 leaves
-([ADR-036](../adr/ADR-036-functions-pair-by-name.md)). Inline namespaces, aliases and unnamed
-records remain.
+([ADR-036](../adr/ADR-036-functions-pair-by-name.md)). Inline namespaces were done the same
+way: a tier pairs what a bumped inline namespace renamed
+([ADR-044](../adr/ADR-044-inline-namespace-bump-pairs.md)). Aliases remain. Unnamed
+records and same-named statics stay as they are in v0
+([ADR-045](../adr/ADR-045-same-named-statics-and-unnamed-records-stay-out-of-v0.md)).
 
 ### Step 5 · Add the entities that carry values
 
