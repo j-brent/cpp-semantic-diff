@@ -271,6 +271,8 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # declaration in the model shows it (ADR-039).
     "replacement_hash": 0.80,
     "function_like": 0.70,  # every use must now be written with, or without, an argument list
+    # A static assertion's message: what a failing build prints, and nothing else (ADR-039).
+    "message": 0.30,
 }
 
 # --------------------------------------------------------------------------------------

@@ -58,9 +58,10 @@ from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 
 #: The extraction scope (ARCH-001 §13): namespace, class, function, method, field, and the
 #: entities that carry values -- enum, enumerator, alias, and variable at namespace scope or
-#: as a static data member (ADR-038). Macros are modelled too, on a path of their own
-#: (`_Extractor.visit_macro`, ADR-039). Anything not named here is not modelled. Adding a kind
-#: is additive, and each kind's compared facts need a novelty weight in `rank/weights.py`.
+#: as a static data member (ADR-038). Macros and static assertions are modelled too, each on
+#: a path of its own (`_Extractor.visit_macro`, `_Extractor.visit_static_assertion`,
+#: ADR-039). Anything not named here is not modelled. Adding a kind is additive, and each
+#: kind's compared facts need a novelty weight in `rank/weights.py`.
 #:
 #: Templates map onto their underlying kind with `attrs["template"]`. A template and its
 #: instantiations need separate identity (ARCH-001 §5), and this gets that for free: only
@@ -1197,6 +1198,13 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["storage"] = str(cursor.storage_class.name).lower()
         attrs["linkage"] = str(cursor.linkage.name).lower()
         attrs["thread_local"] = cursor.tls_kind is not ci.TLSKind.NONE
+    if kind is NodeKind.STATIC_ASSERTION:
+        # The message as written, quotes included; None without one. The condition is not
+        # an attribute: it is the assertion's identity (`static_assertion_id`).
+        message = list(cursor.get_children())[1:2]
+        attrs["message"] = (
+            " ".join(t.spelling for t in message[0].get_tokens()) if message else None
+        )
     if kind is NodeKind.MACRO:
         # Everything after the name: the parameter list, if any, and the replacement.
         replacement = [t.spelling for t in cursor.get_tokens()][1:]
@@ -1431,6 +1439,20 @@ def macro_id(usr: str, ordinal: int) -> str:
     """
     stripped = _MACRO_OFFSET.sub(r"\1@macro@", usr, count=1)
     return stripped if ordinal == 1 else f"{stripped}#{ordinal}"
+
+
+def static_assertion_id(file: str, parent: str, condition: str | None, ordinal: int) -> str:
+    """A static assertion's identity, which clang does not give it: its USR is a bare `c:`.
+
+    `c:<file>@SA@<parent USR>@<condition hash>`, with `#n` from the second assertion of one
+    condition in one scope on. Made of what the assertion *is* -- where it is declared and
+    what it asserts -- so a line added above it changes nothing, while changing its condition
+    makes it a different assertion: the old one removed, the new one added (ADR-039). The file
+    is the file name, written first, as clang writes it into a file-scoped USR, so `usr_file`
+    reads it and a renamed file is resolved from git before matching (ARCH-001 §5).
+    """
+    sid = f"c:{file}@SA@{parent}@{condition or ''}"
+    return sid if ordinal == 1 else f"{sid}#{ordinal}"
 
 
 def _alias_target(cursor: ci.Cursor) -> str:
@@ -1931,6 +1953,10 @@ class _Extractor:
         #: on the USR so that a header included twice is not counted twice.
         self.macros: dict[str, str | None] = {}
         self.macro_counts: dict[tuple[str, str], int] = {}
+        #: A static assertion's position (file, offset) -> its node id, and how many of each id
+        #: this TU has seen. Keyed on the position for the reason `macros` is keyed on the USR.
+        self.static_assertions: dict[tuple[str, int], str] = {}
+        self.static_assertion_counts: dict[str, int] = {}
 
     def _defining_tu(self, usr: str, location: Location | None) -> str | None:
         """The defining translation unit, set only where it is a *fact* (ARCH-001 §5).
@@ -2119,7 +2145,50 @@ class _Extractor:
         self.macro_counts[key] = self.macro_counts.get(key, 0) + 1
         return macro_id(usr, self.macro_counts[key])
 
+    def visit_static_assertion(self, cursor: ci.Cursor) -> None:
+        """A `static_assert` at namespace or class scope, as a node (ADR-039).
+
+        One inside a function body is part of the body, which `body_hash` compares.
+        """
+        location = _location(cursor, self.root, self.base)
+        if location is None:
+            return
+        parent = cursor.semantic_parent
+        if parent is not None and parent.kind not in MODELLED_KINDS:
+            parent = None
+        parent_usr = parent.get_usr() if parent is not None else ""
+        position = (location.file, cursor.location.offset)
+        node_id = self.static_assertions.get(position)
+        if node_id is None:
+            children = list(cursor.get_children())
+            condition = _token_hash(children[0]) if children else None
+            file = location.file.rsplit("/", 1)[-1]
+            first = static_assertion_id(file, parent_usr, condition, 1)
+            count = self.static_assertion_counts.get(first, 0) + 1
+            self.static_assertion_counts[first] = count
+            node_id = static_assertion_id(file, parent_usr, condition, count)
+            self.static_assertions[position] = node_id
+        scope = _qualified_name(parent) if parent is not None else ""
+        self.add_node(
+            Node(
+                id=NodeId(node_id),
+                kind=NodeKind.STATIC_ASSERTION,
+                name="static_assert",
+                qualified_name=f"{scope}::static_assert" if scope else "static_assert",
+                attrs=_attributes(cursor, NodeKind.STATIC_ASSERTION),
+                location=location,
+                sites=(location,),
+                tu=self._defining_tu(node_id, location),
+            )
+        )
+        if parent is not None:
+            self.note_alias(parent, parent_usr)
+            self.add_edge(parent_usr, node_id, EdgeKind.CONTAINS, None)
+
     def visit_declaration(self, cursor: ci.Cursor) -> None:
+        if cursor.kind is ci.CursorKind.STATIC_ASSERT:
+            self.visit_static_assertion(cursor)
+            return
         kind = _node_kind(cursor)
         if kind is None:
             if cursor.kind in CONTAINER_KINDS:

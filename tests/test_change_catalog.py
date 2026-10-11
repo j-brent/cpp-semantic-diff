@@ -430,7 +430,6 @@ CATALOG = [
         "struct S { int x; };\nstatic_assert(sizeof(S) == 4);",
         "struct S { int x; };",
         removed_at(2),
-        fails="step 5: static assertions are not modelled",
     ),
     # Changes that arrived without their cause on 2026-10-10. Each has a second row for what
     # the tool already gets right, so that does not regress while the first is being fixed.
@@ -729,7 +728,6 @@ CATALOG = [
         "// layout\nstruct S { int x; };\nstatic_assert(alignof(S) == 4);",
         removed_at(2),
         nothing_added(),
-        fails="step 5: static assertions are not modelled, and have no identifier",
     ),
     # From the relationship probe (model-probes/tmpl.py): a namespace-scope initializer.
     case(

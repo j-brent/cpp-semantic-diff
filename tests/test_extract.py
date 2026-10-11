@@ -363,6 +363,54 @@ class TestMacros:
         assert [n.id for n in moved.nodes.values()] == ["c:a.cpp@macro@LIMIT"]
 
 
+class TestStaticAssertions:
+    """A `static_assert` at namespace or class scope. Clang gives it no identifier, so it is
+    identified by where it is declared and what it asserts (ADR-039)."""
+
+    SOURCE = """
+    struct S { int x; static_assert(sizeof(int) == 4, "int"); };
+    static_assert(sizeof(S) == 4);
+    static_assert(sizeof(S) == 4);
+    namespace n { static_assert(alignof(S) == 4, "msg"); }
+    void f() { static_assert(true); }
+    """
+
+    def ids(self, result: TuExtract) -> list[str]:
+        return [n.id for n in result.nodes.values() if n.kind is NodeKind.STATIC_ASSERTION]
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("asserts"), toolchain, {"a.cpp": self.SOURCE})
+
+    def test_each_assertion_outside_a_function_is_a_node(self, result: TuExtract) -> None:
+        """Four, not five: one in a function body is part of the body."""
+        assert len(self.ids(result)) == 4
+        assert all(usr_file(i) == "a.cpp" for i in self.ids(result))
+
+    def test_an_exact_duplicate_is_numbered(self, result: TuExtract) -> None:
+        top = sorted(i for i in self.ids(result) if i.startswith("c:a.cpp@SA@@"))
+        assert len(top) == 2 and top[1] == f"{top[0]}#2"
+
+    def test_it_is_contained_by_its_scope_and_carries_its_message(self, result: TuExtract) -> None:
+        assert {"S", "n"} <= {
+            src for src, dst in edge_pairs(result, EdgeKind.CONTAINS) if "static_assert" in dst
+        }
+        messages = {
+            n.qualified_name: n.attrs["message"]
+            for n in result.nodes.values()
+            if n.kind is NodeKind.STATIC_ASSERTION and n.qualified_name != "static_assert"
+        }
+        assert messages == {"S::static_assert": '"int"', "n::static_assert": '"msg"'}
+
+    def test_a_line_added_above_keeps_its_id(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        base, head = tmp_path / "base", tmp_path / "head"
+        base.mkdir()
+        head.mkdir()
+        left = run(base, toolchain, {"a.cpp": "static_assert(sizeof(int) == 4);\n"})
+        right = run(head, toolchain, {"a.cpp": "// note\nstatic_assert(sizeof(int) == 4);\n"})
+        assert self.ids(left) == self.ids(right) != []
+
+
 class TestEnums:
     """An enum and its enumerators, each with what a reviewer compares (ADR-038)."""
 

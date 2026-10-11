@@ -160,7 +160,8 @@ locate a change in source, it does not go in the model.
 Node
   id            stable identity key (§5)
   kind          namespace | class | struct | union | function | method | field
-                | enum | enumerator | alias | variable | macro | template | file | target
+                | enum | enumerator | alias | variable | macro | static_assertion
+                | template | file | target
   name          unqualified
   qualified_name
   signature     normalized: typedefs resolved, cv/ref qualifiers explicit; defaults are an attribute
@@ -219,6 +220,7 @@ The entities that carry values hold them in `attrs`, one compared fact per key
 | enumerator | `value`, `explicit_value` (written, or implied by the one before) |
 | alias | `target` (canonical), `template` |
 | macro | `replacement_hash` (its tokens after the name), `function_like` |
+| static_assertion | `message`; its condition is its identity |
 | variable, at namespace scope or a static data member | `type`, `value` (as clang evaluates it), `initializer_hash` (only where it cannot), `constexpr`, `storage`, `linkage`, `thread_local` |
 
 A function or method also carries `sugared_signature`: its type as written, aliases kept. When an
@@ -313,6 +315,8 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
   one preprocessor configuration; see §11. A macro's own USR holds the byte offset of its
   definition, so a macro is identified by its file and name instead, numbered where one file
   defines a name again ([ADR-039](adr/ADR-039-synthesized-identities.md)).
+- **Static assertions.** A `static_assert` has no USR. Its id is synthesized from its file, its
+  scope and a hash of its condition, so a changed condition is a different assertion (ADR-039).
 - **ODR.** The same declared identity can appear in multiple TUs with different definitions. Dedup
   by USR is a correctness requirement, not an optimization — the CodeAtlas measurements found
   15,656 method cursors collapsing to 161 classes in FTXUI, because every header is reparsed per TU.
@@ -766,7 +770,7 @@ is non-reproducible on one machine, let alone across two.
 
 The smallest slice that tests the thesis end to end.
 
-**In:** namespace / class / function / method / field / enum / enumerator / alias / variable / macro nodes · `contains`, `calls`, `inherits`,
+**In:** namespace / class / function / method / field / enum / enumerator / alias / variable / macro / static assertion nodes · `contains`, `calls`, `inherits`,
 `overrides` edges · **tier-1 identity, plus the inline namespace tier and the name tier for functions and methods** · node
 add/remove/attr/body/signature and edge add/remove/kind/attr change events · one derived change
 event, `CallerOfChangedSignature` · JSON + terminal output · the compression metric · fixtures `fmt` and

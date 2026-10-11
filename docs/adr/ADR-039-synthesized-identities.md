@@ -7,7 +7,7 @@ decided: 2026-10-11
 author: agent review during v0 orchestration
 -->
 
-# ADR-039 · A macro is identified by its file and name, not by clang's USR
+# ADR-039 · Macros and static assertions get identities clang does not give them
 
 *Frozen document: a decision record. Only the status line may change, when a later ADR supersedes it.*
 
@@ -15,13 +15,14 @@ author: agent review during v0 orchestration
 
 ## Context
 
-PLAN-006 step 5 adds macros to the model, and issue
+PLAN-006 step 5 adds macros and static assertions to the model, and issue
 [#9](https://github.com/j-brent/cpp-semantic-diff/issues/9) names their identity as the problem to
 solve first. Every other node is identified by its USR
 ([ADR-038](ADR-038-entities-that-carry-values.md)), and a macro's USR holds the byte offset of its
 definition: `c:a.cpp@8@macro@LIMIT` becomes `@23@` when a line is added above it. Paired by USR,
-every macro below an edit would read as removed and added. The change catalog's `macro-shifted`
-case pinned this before macros were modelled.
+every macro below an edit would read as removed and added. A `static_assert` has no USR at all.
+The change catalog's `macro-shifted` and `static-assert-shifted` cases pinned both before either
+was modelled.
 
 ## Decision
 
@@ -41,10 +42,24 @@ case pinned this before macros were modelled.
 - **Parsing keeps the detailed preprocessing record,** which is what puts macro definitions in the
   AST. Macro uses and `#include` directives in it are skipped before their location is read.
 
+**Static assertions.** Clang gives a `static_assert` no USR (a bare `c:`), and the extractor used
+to skip anything without one.
+
+- **Its id is synthesized** from what it is: `c:<file>@SA@<parent USR>@<condition hash>`. The
+  file name comes first, as clang writes it into a file-scoped USR, so `usr_file` reads it. The
+  condition is hashed from its tokens. An exact duplicate in one scope is numbered `#2`, `#3`.
+- **Changing the condition makes it a different assertion,** reported as one removed and one
+  added. The condition is the assertion, and it has no other identity to pair the two by.
+- **Compared:** `message`, as written. Weight 0.30: it is what a failing build prints.
+- **Contained by its scope** where that scope is modelled. One inside a function body is part of
+  the body and is not a node.
+
 ## Consequences
 
 - `macro-value` and `macro-shifted-and-changed` in the change catalog pass; `macro-shifted` still
   reports nothing.
+- `static-assert-removed` and `static-assert-one-of-two-removed` pass; `static-assert-shifted`
+  still reports nothing.
 - A changed macro is reported without the code that uses it; that is the uses relationship, out of
   v0 ([ADR-041](ADR-041-v0-scope-of-steps-6-and-7.md)).
 - One model is one preprocessor configuration (ARCH-001 §11). A macro defined differently on two
@@ -58,5 +73,7 @@ case pinned this before macros were modelled.
   one macro.
 - **Keep clang's USR and pair moved macros in a later tier.** Every edit would move every macro
   below it, and v0 builds no such tier.
+- **Identify a static assertion by its position among its siblings** (ARCH-001 §5's tier 3).
+  Removing the first of two would read as the second changing its condition.
 - **Model include guards.** Every header would gain a node whose only change is its header's
   rename.
