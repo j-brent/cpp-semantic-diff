@@ -160,6 +160,22 @@ class TestTheSetIsClosed:
             {"old_signature", "new_signature"}
         )
 
+    def test_a_signature_change_requires_both_spellings_to_construct(self) -> None:
+        """The two tests above check the declared requirement; this is the requirement
+        actually enforced. `_complete_the_event` reads `REQUIRED_PAYLOAD` for every kind
+        generically, but no test had ever constructed a `NodeSignatureChanged` -- the
+        kind ADR-035 just added -- so a typo in its `REQUIRED_PAYLOAD` entry, or a change
+        that dropped it from the dict, would pass every other test in this file."""
+        e = event(
+            ChangeEventKind.NODE_SIGNATURE_CHANGED,
+            payload={"old_signature": "void f()", "new_signature": "void f(int)"},
+        )
+        assert e.payload == {"old_signature": "void f()", "new_signature": "void f(int)"}
+        with pytest.raises(ValidationError, match="requires payload keys"):
+            event(ChangeEventKind.NODE_SIGNATURE_CHANGED, payload={"old_signature": "void f()"})
+        with pytest.raises(ValidationError, match="requires payload keys"):
+            event(ChangeEventKind.NODE_SIGNATURE_CHANGED, payload={})
+
     def test_the_applicability_table_is_the_one_arch_states(self) -> None:
         """ARCH-001 §6.1's table and `APPLIES_TO` say the same thing (ADR-035): two node
         change events apply only to functions and methods, and every other node change event
