@@ -440,12 +440,13 @@ its callee: the head destination of its subject edge, so there is exactly one ca
 stage creates those change events
 ([ADR-040](adr/ADR-040-callers-of-a-changed-signature-are-derived.md)). Classify links causes among
 change events that already exist; it never synthesizes one. A stage that may create change events is
-a stage that can hide a change inside a cause. Under one signature change, views list unedited
-callers first.
+a stage that can hide a change inside a cause. Under one signature change, views list broken
+overrides first, then unedited callers.
 
 `signature-change-breaks-overrides` covers the other thing a changed virtual signature breaks: an
 override that kept the old signature stops overriding, and its `overrides` edge is removed while
-both functions survive. It sits below the endpoint and overload rules, which give a better account
+both functions survive. It applies only while the override's class still derives from the virtual
+function's class at head; a class that stopped inheriting lost the override for that reason. It sits below the endpoint and overload rules, which give a better account
 where they apply.
 
 Change events with no matching rule get no cause link and are shown. **Collapse happens at render, never

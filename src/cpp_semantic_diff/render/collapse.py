@@ -40,7 +40,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, ChangeEventKind
+from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, ChangeEventKind, EdgeKind
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only at type-check time
     from cpp_semantic_diff.render.document import DiffDocument
@@ -93,7 +93,7 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     """Nest consequences under causes, in the document's ranking order (ARCH-001 §7).
 
     One exception to ranking order among siblings: unedited callers of a changed signature
-    come first (`_unedited_caller`).
+    come first, after broken overrides (`_sibling_rank`).
 
     `enabled=False` returns the same events as a flat forest rather than a different set.
     That is the point of the flag: "show me everything" and "show me the tree" must differ
@@ -130,8 +130,9 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
         if (cause := parent.get(event_id)) is not None:
             children[cause].append(event_id)
     for siblings in children.values():
-        # Stable, so this only lifts unedited callers ahead of their siblings.
-        siblings.sort(key=lambda i: not _unedited_caller(index[i]))
+        # Stable, so this only lifts broken overrides, then unedited callers, ahead of
+        # their siblings.
+        siblings.sort(key=lambda i: _sibling_rank(index[i]))
 
     def build(event_id: ChangeEventId) -> CollapseNode:
         return CollapseNode(
@@ -143,16 +144,29 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     return Collapsed(roots=roots, promoted=tuple(promoted))
 
 
-def _unedited_caller(event: ChangeEvent) -> bool:
-    """A caller of a changed signature that this diff did not touch (ADR-040).
+def _sibling_rank(event: ChangeEvent) -> int:
+    """Where an event goes among its siblings; equal ranks keep ranking order (ADR-040).
 
-    Read first among its siblings: the text diff never shows it, so only this view can send
-    the reviewer there. Edited callers follow, and every group keeps ranking order.
+    0. A removed `overrides` edge: under a signature change, an override that stopped
+       overriding. Calls through the base now skip it, which is worse than a call that may
+       convert its argument.
+    1. A caller of a changed signature that this diff did not touch. The text diff never
+       shows it, so only this view can send the reviewer there.
+    2. Everything else, edited callers included.
     """
-    return (
+    if event.kind is ChangeEventKind.EDGE_REMOVED and _is_overrides_edge(event.subject):
+        return 0
+    if (
         event.kind is ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
         and event.payload.get("caller_edited") is False
-    )
+    ):
+        return 1
+    return 2
+
+
+def _is_overrides_edge(subject: str) -> bool:
+    parts = subject.split("|")
+    return len(parts) == 3 and parts[1] == EdgeKind.OVERRIDES.value
 
 
 def _on_a_cycle(parent: dict[ChangeEventId, ChangeEventId]) -> set[ChangeEventId]:

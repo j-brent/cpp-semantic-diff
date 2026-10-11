@@ -757,35 +757,55 @@ class TestAnOverrideLeftBehindIsExplainedByTheSignatureChange:
     signature, an override keeps the old one, and the `overrides` edge is removed while both
     functions survive."""
 
+    B = NodeId("c:@S@B")
+    D = NodeId("c:@S@D")
     OVERRIDE = NodeId("c:@S@D@F@f#I#")
+    OLD = NodeId("c:@S@B@F@f#I#")
+    NEW = NodeId("c:@S@B@F@f#d#")
 
     def method(self, usr: str, qualified: str, signature: str) -> Node:
         return node(
             usr, name="f", qualified_name=qualified, kind=NodeKind.METHOD, signature=signature
         )
 
-    def overrides(self, dst: str) -> Edge:
-        return edge(self.OVERRIDE, dst, EdgeKind.OVERRIDES)
+    def side(self, rev: str, virtual: str, signature: str, *, inherits: bool) -> Model:
+        """`struct B { virtual void f(...); }; struct D : B { void f(int); };`"""
+        b = node(self.B, name="B", kind=NodeKind.STRUCT)
+        d = node(self.D, name="D", kind=NodeKind.STRUCT)
+        edges = [holds(self.B, virtual), holds(self.D, self.OVERRIDE)]
+        if inherits:
+            edges.append(edge(self.D, self.B, EdgeKind.INHERITS))
+        if virtual == self.OLD and signature == "void (int)" and inherits:
+            edges.append(edge(self.OVERRIDE, virtual, EdgeKind.OVERRIDES))
+        return model(
+            rev,
+            b,
+            d,
+            self.method(virtual, "B::f", signature),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=edges,
+        )
+
+    def removed_cause(self, head: Model) -> ChangeEvent | None:
+        base = self.side("a", self.OLD, "void (int)", inherits=True)
+        removed = edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES).id
+        return cause_of(classify(base, head), ChangeEventKind.EDGE_REMOVED, removed)
 
     def test_the_removed_override_is_caused_by_the_signature_change(self) -> None:
-        old_virtual = self.method("c:@S@B@F@f#I#", "B::f", "void (int)")
-        new_virtual = self.method("c:@S@B@F@f#d#", "B::f", "void (double)")
-        override = self.method(self.OVERRIDE, "D::f", "void (int)")
-        base = model("a", old_virtual, override, edges=[self.overrides(old_virtual.id)])
-        head = model("b", new_virtual, override)
-        removed = self.overrides(old_virtual.id).id
-        cause = cause_of(classify(base, head), ChangeEventKind.EDGE_REMOVED, removed)
+        cause = self.removed_cause(self.side("b", self.NEW, "void (double)", inherits=True))
         assert cause is not None
         assert cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
-        assert cause.subject == new_virtual.id
+        assert cause.subject == self.NEW
+
+    def test_a_class_that_stopped_inheriting_lost_the_override_for_that_reason(self) -> None:
+        """D no longer derives from B, so B::f's signature change is not why D::f stopped
+        overriding it, and the edge stays at top level."""
+        head = self.side("b", self.NEW, "void (double)", inherits=False)
+        assert self.removed_cause(head) is None
 
     def test_without_a_signature_change_the_removed_override_stays_unexplained(self) -> None:
-        virtual = self.method("c:@S@B@F@f#I#", "B::f", "void (int)")
-        override = self.method(self.OVERRIDE, "D::f", "void (int)")
-        base = model("a", virtual, override, edges=[self.overrides(virtual.id)])
-        head = model("b", virtual, override)
-        removed = self.overrides(virtual.id).id
-        assert cause_of(classify(base, head), ChangeEventKind.EDGE_REMOVED, removed) is None
+        head = self.side("b", self.OLD, "void (int)", inherits=False)
+        assert self.removed_cause(head) is None
 
 
 class TestTheUnreachableRuleIsImplementedNotPretended:

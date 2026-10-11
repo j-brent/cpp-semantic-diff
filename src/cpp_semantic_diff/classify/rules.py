@@ -237,13 +237,43 @@ def _overridden_function(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[N
     The signature change is the cause, so the locator names the edge's destination, mapped
     through the correspondence like every other cross-side id. Where that destination has no
     `NodeSignatureChanged`, the classifier finds no cause and the edge stays at top level.
+
+    Only while the override's class still derives from the overridden function's class at
+    head, directly or not. A class that stopped inheriting lost the override for that reason,
+    and filing it under the signature change would hide the real cause.
     """
     removed = ctx.base_edges.get(EdgeId(event.subject))
     if removed is None or removed.kind is not EdgeKind.OVERRIDES:
         return
     overridden = ctx.correspondence.head_for(removed.dst)
-    if overridden is not None:
-        yield overridden
+    if overridden is None or not _still_derives(ctx, removed.src, removed.dst):
+        return
+    yield overridden
+
+
+def _still_derives(ctx: ClassifyContext, override: NodeId, overridden: NodeId) -> bool:
+    """Whether the class holding `override` derives from the class holding `overridden` at
+    head, through `inherits` edges. Both arguments are base ids; the classes are mapped
+    through the correspondence."""
+    derived_class = ctx.base_parents.get(override)
+    base_class = ctx.base_parents.get(overridden)
+    if derived_class is None or base_class is None:
+        return False
+    start = ctx.correspondence.head_for(derived_class)
+    goal = ctx.correspondence.head_for(base_class)
+    if start is None or goal is None:
+        return False
+    seen = {start}
+    frontier = [start]
+    while frontier:
+        current = frontier.pop()
+        if current == goal:
+            return True
+        for edge in ctx.head_out_edges.get(current, ()):
+            if edge.kind is EdgeKind.INHERITS and edge.dst not in seen:
+                seen.add(edge.dst)
+                frontier.append(edge.dst)
+    return False
 
 
 # --------------------------------------------------------------------------------------

@@ -50,10 +50,11 @@ do not state, and classify may not create a change event.
 - **An override left behind.** When a virtual function's signature changes and an override keeps
   the old one, the override stops overriding: its `overrides` edge is removed while both
   functions survive. A new cause rule, `signature-change-breaks-overrides`, links that
-  `EdgeRemoved` to the signature change.
+  `EdgeRemoved` to the signature change, but only while the override's class still derives from
+  the virtual function's class at head.
 - **Novelty 0.70**: below the signature change that causes it, above a body change.
-- **Reading order:** under the signature change, unedited callers first, then edited ones, each
-  in ranking order. The JSON has no cap and no aggregation; the terminal shows the first ten
+- **Reading order:** under the signature change, broken overrides first, then unedited callers,
+  then edited ones, each in ranking order. The JSON has no cap and no aggregation; the terminal shows the first ten
   callers under each change and says how many more there are.
 - **A derive stage**, between diff and classify. Input: the diff's change events, both models
   and the correspondence. Output: the same change events plus the derived ones. It sets no

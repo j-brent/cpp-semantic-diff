@@ -1226,6 +1226,58 @@ class TestASignatureChangeShowsItsCallers:
         assert "+2 more caller(s)" in out
         assert draw(doc, limit=0).count("CallerOfChangedSignature") == CALLERS_SHOWN + 2
 
+    def test_a_broken_override_is_read_before_the_callers(self) -> None:
+        """An override that stopped overriding is worse than a call that may convert its
+        argument, so it leads the signature change's consequences, even when ranked last."""
+        b, d = "c:@S@B", "c:@S@D"
+        old, new, over = "c:@S@B@F@f#I#", "c:@S@B@F@f#d#", "c:@S@D@F@f#I#"
+
+        def side(rev: str, virtual: str, signature: str, *more: Edge) -> Model:
+            return model(
+                rev,
+                node(b, name="B", kind=NodeKind.STRUCT),
+                node(d, name="D", kind=NodeKind.STRUCT),
+                node(
+                    virtual,
+                    name="f",
+                    qualified_name="B::f",
+                    kind=NodeKind.METHOD,
+                    signature=signature,
+                ),
+                node(
+                    over,
+                    name="f",
+                    qualified_name="D::f",
+                    kind=NodeKind.METHOD,
+                    signature="void (int)",
+                ),
+                node("c:@F@g#", name="g", signature="void ()", body_hash="body"),
+                edges=[
+                    edge(b, virtual, EdgeKind.CONTAINS),
+                    edge(d, over, EdgeKind.CONTAINS),
+                    edge(d, b, EdgeKind.INHERITS),
+                    edge("c:@F@g#", virtual),
+                    *more,
+                ],
+            )
+
+        doc = pipeline(
+            side("a", old, "void (int)", edge(over, old, EdgeKind.OVERRIDES)),
+            side("b", new, "void (double)"),
+        )
+        broken = next(e.id for e in doc.events if e.kind is ChangeEventKind.EDGE_REMOVED)
+        doc = doc.model_copy(update={"ranking": [*(i for i in doc.ranking if i != broken), broken]})
+        (root,) = (
+            r
+            for r in collapse(doc).roots
+            if doc.event(r.event_id).kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        )
+        kinds = [doc.event(child.event_id).kind for child in root.children]
+        assert kinds == [
+            ChangeEventKind.EDGE_REMOVED,
+            ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
+        ]
+
 
 class TestANamePairedFunctionIsOnBothSides:
     """ADR-036: a function the name tier paired has one id at base and another at head, and
