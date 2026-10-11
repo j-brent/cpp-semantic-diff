@@ -40,7 +40,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, ChangeEventKind, EdgeKind
+from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, ChangeEventKind
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only at type-check time
     from cpp_semantic_diff.render.document import DiffDocument
@@ -129,10 +129,12 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     for event_id in order:  # ranking order in, ranking order out, at every depth
         if (cause := parent.get(event_id)) is not None:
             children[cause].append(event_id)
-    for siblings in children.values():
+    for cause, siblings in children.items():
         # Stable, so this only lifts broken overrides, then unedited callers, ahead of
         # their siblings.
-        siblings.sort(key=lambda i: _sibling_rank(index[i]))
+        cause_event = index[cause]
+        ranks = {i: _sibling_rank(index[i], cause_event) for i in siblings}
+        siblings.sort(key=ranks.__getitem__)
 
     def build(event_id: ChangeEventId) -> CollapseNode:
         return CollapseNode(
@@ -144,7 +146,7 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     return Collapsed(roots=roots, promoted=tuple(promoted))
 
 
-def _sibling_rank(event: ChangeEvent) -> int:
+def _sibling_rank(event: ChangeEvent, cause: ChangeEvent) -> int:
     """Where an event goes among its siblings; equal ranks keep ranking order (ADR-040).
 
     0. A removed `overrides` edge: under a signature change, an override that stopped
@@ -154,7 +156,13 @@ def _sibling_rank(event: ChangeEvent) -> int:
        shows it, so only this view can send the reviewer there.
     2. Everything else, edited callers included.
     """
-    if event.kind is ChangeEventKind.EDGE_REMOVED and _is_overrides_edge(event.subject):
+    # Only `signature-change-breaks-overrides` files an `EdgeRemoved` under a signature
+    # change, so the pair of kinds says it is a broken override. Read off the kinds rather
+    # than out of the edge id: a USR may contain anything, `|` included.
+    if (
+        event.kind is ChangeEventKind.EDGE_REMOVED
+        and cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+    ):
         return 0
     if (
         event.kind is ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
@@ -162,11 +170,6 @@ def _sibling_rank(event: ChangeEvent) -> int:
     ):
         return 1
     return 2
-
-
-def _is_overrides_edge(subject: str) -> bool:
-    parts = subject.split("|")
-    return len(parts) == 3 and parts[1] == EdgeKind.OVERRIDES.value
 
 
 def _on_a_cycle(parent: dict[ChangeEventId, ChangeEventId]) -> set[ChangeEventId]:
