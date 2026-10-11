@@ -28,10 +28,11 @@ from cpp_semantic_diff.acquire.third_party import (
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileDatabase
 from cpp_semantic_diff.classify import classify_events
 from cpp_semantic_diff.diff import diff_models
-from cpp_semantic_diff.errors import PreconditionError
+from cpp_semantic_diff.errors import PreconditionError, SemanticDiffError
 from cpp_semantic_diff.match import match_models
 from cpp_semantic_diff.model.ir import Crossing, EdgeKind, Model, Node, TuStatus
 from cpp_semantic_diff.produce.build import assemble, build_model, tu_extracts
+from cpp_semantic_diff.produce.cache import TuCache
 from cpp_semantic_diff.produce.extract import LIBCLANG_LIMITS
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
 from cpp_semantic_diff.rank import rank_events
@@ -519,6 +520,16 @@ class TestThirdPartyCodeIsOutsideTheModel:
         assert all(c.src in model.nodes for c in model.crossings)
         assert model.completeness.crossings_by_label == {"vendor": 3}
         assert not any("@N@lib" in e.dst for e in model.edges)
+
+    def test_a_cache_opened_with_another_boundary_is_refused(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The cache parses its misses with its own boundary and keys entries by it, so one
+        opened without the set would put the library back and store it as if it were absent."""
+        checkout = self.checkout(tmp_path)
+        cache = TuCache.open(checkout, toolchain=toolchain, store=tmp_path / "store")
+        with pytest.raises(SemanticDiffError, match="different third-party set"):
+            build_model(checkout, toolchain=toolchain, cache=cache, third_party=declared("vendor"))
 
     def test_a_declared_library_yields_no_nodes(self, tmp_path: Path, toolchain: Toolchain) -> None:
         model = self.build(tmp_path, toolchain, "vendor")

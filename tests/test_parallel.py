@@ -35,6 +35,11 @@ from typing import cast
 import pytest
 
 import cpp_semantic_diff.produce.parallel as parallel
+from cpp_semantic_diff.acquire.third_party import (
+    ThirdPartyEntry,
+    ThirdPartySet,
+    ThirdPartySource,
+)
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileDatabase, CompileEntry
 from cpp_semantic_diff.errors import ClangToolchainError, SemanticDiffError
 from cpp_semantic_diff.model.ir import Model, TuResult, TuStatus
@@ -165,6 +170,48 @@ class TestTheModelDoesNotDependOnHowItWasParsed:
         assert list(serial.nodes) == list(parallel_model.nodes)
         assert [e.id for e in serial.edges] == [e.id for e in parallel_model.edges]
         assert serial.completeness.notes == parallel_model.completeness.notes
+
+    def test_workers_apply_the_same_boundary(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        """ADR-025, ADR-037. Every layer between `build_model` and a worker defaults to no
+        boundary, so a hand-off dropped anywhere on the parallel path would quietly put the
+        third-party library and the untracked header back in the model."""
+        (tmp_path / "vendor").mkdir()
+        sources = {
+            "vendor/lib.h": "namespace lib { int f(); struct Base { virtual void run(); }; }\n",
+            "gen.h": "namespace gen { int value(); }\n",
+            "a.cpp": '#include "vendor/lib.h"\nint from_a() { return lib::f(); }\n',
+            "b.cpp": (
+                '#include "vendor/lib.h"\nstruct App : lib::Base { void run() override; };\n'
+            ),
+            "c.cpp": '#include "gen.h"\nint from_c() { return gen::value(); }\n',
+        }
+        checkout = project(tmp_path, sources, ("a.cpp", "b.cpp", "c.cpp"))
+        third_party = ThirdPartySet(
+            entries=(
+                ThirdPartyEntry(path="vendor", sources=frozenset({ThirdPartySource.DECLARED})),
+            )
+        )
+        models = [
+            build_model(
+                checkout,
+                toolchain=toolchain,
+                cache=False,
+                workers=count,
+                third_party=third_party,
+                tracked=frozenset({"a.cpp", "b.cpp", "c.cpp", "vendor"}),
+            )
+            for count in (1, 2)
+        ]
+        serial, parallel_model = models
+        assert not named(serial, "lib::f") and not named(serial, "gen::value")
+        assert serial.completeness.crossings_by_label == {"untracked": 1, "vendor": 3}
+        assert list(serial.nodes) == list(parallel_model.nodes)
+        assert [c.model_dump() for c in serial.crossings] == [
+            c.model_dump() for c in parallel_model.crossings
+        ]
+        assert (
+            serial.completeness.crossings_by_label == parallel_model.completeness.crossings_by_label
+        )
 
     def test_completion_order_does_not_reach_the_completeness_record(
         self, tmp_path: Path, toolchain: Toolchain

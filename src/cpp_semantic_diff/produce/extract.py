@@ -1284,6 +1284,8 @@ class _Extractor:
         self._outside_memo: dict[str, str | None] = {}
         self.crossings: dict[str, Crossing] = {}
         self.targets: dict[str, tuple[str, str]] = {}
+        #: USR → qualified name, for every target `relate` has named.
+        self._names: dict[str, str] = {}
         #: This TU's own primary source, repo-relative -- the same form `_location` produces,
         #: so `_defining_tu` compares like with like rather than a path against a path shape.
         self.tu = tu
@@ -1378,7 +1380,7 @@ class _Extractor:
             merge_crossing(
                 self.crossings,
                 src,
-                _qualified_name(target),
+                self._name(target, usr),
                 kind,
                 label,
                 () if location is None else (location,),
@@ -1386,8 +1388,16 @@ class _Extractor:
             return
         self.note_alias(target, usr)
         if usr not in self.targets:
-            self.targets[usr] = (_qualified_name(target), fallback_label(target, usr))
+            self.targets[usr] = (self._name(target, usr), fallback_label(target, usr))
         self.add_edge(src, usr, kind, location, **attrs)
+
+    def _name(self, cursor: ci.Cursor, usr: str) -> str:
+        """`_qualified_name`, once per USR per TU: it walks every ancestor, and a target is
+        met once per call site (ARCH-001 §9's budget is spent here)."""
+        name = self._names.get(usr)
+        if name is None:
+            name = self._names[usr] = _qualified_name(cursor)
+        return name
 
     def note_alias(self, cursor: ci.Cursor, usr: str) -> None:
         """Record `usr` as a possible instantiation of a template the builder may know."""

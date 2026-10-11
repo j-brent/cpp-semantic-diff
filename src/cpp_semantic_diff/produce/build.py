@@ -49,6 +49,7 @@ import clang.cindex as ci
 
 from cpp_semantic_diff.acquire.third_party import ThirdPartySet
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileEntry
+from cpp_semantic_diff.errors import SemanticDiffError
 from cpp_semantic_diff.model.ir import (
     UNRESOLVED,
     Completeness,
@@ -199,13 +200,15 @@ def assemble(
             # extractor saw the target was. Synthesizing nodes for entities nobody wrote would
             # put half a dozen phantoms on every class and make them diffable; recording the
             # crossing says what is true (ARCH-001 §11).
+            # Edges `relate` did not make -- `contains` from a parent no node answers -- have no
+            # table entry, and cross with the USR as the callee, labelled `unresolved`.
             name, label = targets.get(edge.dst, (edge.dst, UNRESOLVED))
             cross(edge.src, name, edge, label)
             continue
         if src is None:
             # A target in the model, and a source that is not -- e.g. the parent of a member
             # defined out of line for a class the model leaves out. Nothing to draw, but
-            # still a relation that leaves the model.
+            # still a relation that leaves the model, so it is counted as `unresolved`.
             orphaned[f"{edge.src}|{edge.kind.value}|{edge.dst}"] = UNRESOLVED
             continue
         # Aliasing merges as well as resolves: two calls to two instantiations of one template
@@ -218,12 +221,11 @@ def assemble(
     completeness = Completeness(
         tus_total=len(results),
         tus=results,
-        # Counted, not narrated. The drop is real and large -- 5,113 of fmt's 26,071 distinct
-        # edges, measured 2026-08-02 (v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md) --
-        # and it used to reach the output as one English sentence in `notes`, which made every
-        # consumer either parse prose or claim a completeness it did not have (ARCH-001 §10,
-        # §11). These two integers are the whole fact; whether it is alarming is
-        # `Completeness.edges_closed`'s question and not this module's.
+        # Counted, not narrated. The boundary is real and large on any repository that calls
+        # the standard library, and it used to reach the output as one English sentence in
+        # `notes`, which made every consumer either parse prose or claim a completeness it did
+        # not have (ARCH-001 §10, §11). These counts are the whole fact; whether it is
+        # alarming is `Completeness.edges_closed`'s question and not this module's.
         edges_total=len(edges) + len(crossings) + len(orphaned),
         edges_dropped=len(crossings) + len(orphaned),
         crossings_by_label=dict(
@@ -323,6 +325,8 @@ def build_model(
     paths = third_party.paths if third_party is not None else ()
     boundary = Boundary(third_party=paths, tracked=tracked)
     cpp_entries = checkout.cpp_entries
+    # `tu_path` falls back to the bare file name for a source outside the repository, which
+    # no third-party path can own, so such a TU is kept, as it was before.
     entries = [
         e for e in cpp_entries if third_party_owner(tu_path(e, checkout.path), paths) is None
     ]
@@ -350,6 +354,14 @@ def build_model(
         if cache is True
         else (cache or None)
     )
+    if tu_cache is not None and tu_cache.boundary != boundary:
+        # The cache extracts the TUs it misses with its own boundary and keys entries by it, so
+        # a mismatch would build this model from the wrong boundary and store it under a key
+        # that claims the other one.
+        raise SemanticDiffError(
+            "internal error: the TuCache passed to build_model was opened with a different "
+            "third-party set or tracked-file list than the build asked for"
+        )
 
     # One worker is the serial loop, not a pool of one: no spawn, no pickling, no second
     # `Index`. It is the path every measurement is compared against and the answer to a
