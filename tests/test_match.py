@@ -490,6 +490,13 @@ class TestTheInlineNamespaceTierPairsAcrossABump:
         q1, q2 = node("c:@F@q#$@N@lib@N@v1@S@S#"), node("c:@F@q#$@N@lib@N@v2@S@S#")
         assert (q1.id, q2.id) in pairs(self.bump([(q1, None)], [(q2, None)]))
 
+    def test_a_template_named_in_a_specialization_argument_is_rewritten_too(self) -> None:
+        """fmt's shape: `show(view<C>)` spells `view` after `>`, not after `$`."""
+        s1 = node("c:@N@lib@N@v1@FT@>1#Tshow#>@N@lib@N@v1@ST>1#T@view1t0.0#v#", name="show")
+        s2 = node("c:@N@lib@N@v2@FT@>1#Tshow#>@N@lib@N@v2@ST>1#T@view1t0.0#v#", name="show")
+        c = self.bump([(s1, self.V1)], [(s2, self.V2)])
+        assert c.by_base[s1.id].tier is MatchTier.INLINE_NAMESPACE
+
     def test_a_member_with_internal_linkage_is_rewritten_after_its_file_name(self) -> None:
         h1 = node("c:a.cpp@N@lib@N@v1@F@h#", tu="a.cpp")
         h2 = node("c:a.cpp@N@lib@N@v2@F@h#", tu="a.cpp")
@@ -580,6 +587,18 @@ class TestTheRewriteIsAnchored:
             (
                 "c:@N@lib@N@v1@F@g#$@N@lib@N@v1@S@X>#$@N@lib@N@v1@S@S#",
                 "c:@N@lib@N@v2@F@g#$@N@lib@N@v2@S@X>#$@N@lib@N@v2@S@S#",
+            ),
+            (
+                "c:@N@lib@N@v1@FT@>1#Tshow#>@N@lib@N@v1@ST>1#T@view1t0.0#v#",
+                "c:@N@lib@N@v2@FT@>1#Tshow#>@N@lib@N@v2@ST>1#T@view1t0.0#v#",
+            ),
+            (
+                "c:@N@lib@N@v1@S@fmt>#>@N@lib@N@v1@ST>1#T@view#I",
+                "c:@N@lib@N@v2@S@fmt>#>@N@lib@N@v2@ST>1#T@view#I",
+            ),
+            (
+                "c:@F@g#>@N@other@N@lib@N@v1@ST>1#T@X1t0.0#",
+                "c:@F@g#>@N@other@N@lib@N@v1@ST>1#T@X1t0.0#",
             ),
             ("c:@N@other@N@lib@N@v1@F@g#", "c:@N@other@N@lib@N@v1@F@g#"),
             ("c:@N@lib@N@v10@F@g#", "c:@N@lib@N@v10@F@g#"),

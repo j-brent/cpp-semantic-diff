@@ -33,6 +33,10 @@ from cpp_semantic_diff.model.ir import usr_file
 #: longer name that merely begins the same way.
 _PATH_ENDS = frozenset("@#>")
 
+#: What may precede a namespace path inside a USR, besides the USR's own start: `$` opens a
+#: type in a parameter list, `>` the template a specialization argument names. See `rewrite`.
+_PATH_STARTS = frozenset("$>")
+
 
 def _path(usr: str) -> str:
     """A USR's scope path: what follows `c:` and, for a file-scoped USR, its file name.
@@ -49,8 +53,12 @@ def rewrite(usr: str, paths: Mapping[str, str]) -> str:
     """`usr` with each old namespace path in `paths` replaced by its new one, anchored.
 
     A path is replaced only where it starts a USR -- right after `c:`, after a file-scoped
-    USR's file name, or after `$`, which opens a type USR embedded in a function's parameter
-    list -- and only where it ends there too (`_PATH_ENDS`). Unanchored, `@N@lib@N@v1` would
+    USR's file name, after `$`, which opens a type USR embedded in a function's parameter
+    list, or after `>`, which opens the template a specialization argument names
+    (`#>@N@fmt@N@v11@ST>1#T@basic_string_view1t0.0#`) -- and only where it ends there too
+    (`_PATH_ENDS`). Elsewhere a `>` is followed by a digit or `#` (`@ST>1#T@X`, `X>#`), so it
+    never starts a path. Without `>`, every fmt template taking a `basic_string_view<Char>`
+    kept its old version tag after the bump. Unanchored, `@N@lib@N@v1` would
     also match inside `other::lib::v1`, and `@N@v1` inside `lib::v10`, and pair entities that
     are not the same. The longest path wins at each anchor, so a nested bump (`v1::abi1` to
     `v2::abi2`) is not undone by its outer one.
@@ -58,7 +66,7 @@ def rewrite(usr: str, paths: Mapping[str, str]) -> str:
     if not usr.startswith("c:") or not paths:
         return usr
     start = len(usr) - len(_path(usr))
-    anchors = [start, *(i + 1 for i, ch in enumerate(usr) if ch == "$" and i >= start)]
+    anchors = [start, *(i + 1 for i, ch in enumerate(usr) if ch in _PATH_STARTS and i >= start)]
     ordered = sorted(paths.items(), key=lambda item: len(item[0]), reverse=True)
     out: list[str] = []
     done = 0

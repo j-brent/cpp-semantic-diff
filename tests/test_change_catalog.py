@@ -465,6 +465,32 @@ CATALOG = [
         untouched("lib::v2::S"),
         not_replaced("f"),
     ),
+    # fmt's shape: a template argument names a template in the bumped namespace, and the USR
+    # spells it after `>`. Overloaded, so the name tier cannot rescue what the rewrite misses.
+    case(
+        "inline-namespace-bumped-template-argument",
+        "namespace lib { inline namespace v1 { template <class C> struct view {};\n"
+        "template <class C> void show(view<C>) {}\n"
+        "template <class C> void show(view<C>, int) {} } }",
+        "namespace lib { inline namespace v2 { template <class C> struct view {};\n"
+        "template <class C> void show(view<C>) {}\n"
+        "template <class C> void show(view<C>, int) {} } }",
+        untouched("lib::v2::show"),
+        not_replaced("show"),
+    ),
+    case(
+        "inline-namespace-bumped-class-template-specialization",
+        "namespace lib { inline namespace v1 { template <class C> struct view {};\n"
+        "template <class T> struct fmt {};\n"
+        "template <> struct fmt<view<int>> { void go() {} }; } }",
+        "namespace lib { inline namespace v2 { template <class C> struct view {};\n"
+        "template <class T> struct fmt {};\n"
+        "template <> struct fmt<view<int>> { void go() {} }; } }",
+        untouched("lib::v2::fmt"),
+        untouched("lib::v2::fmt::go"),
+        not_replaced("fmt"),
+        not_replaced("go"),
+    ),
     case(
         "inline-namespace-bumped-nested-namespace",
         "namespace lib { inline namespace v1 { namespace detail { void g() {} } } }",
