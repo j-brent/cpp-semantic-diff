@@ -44,7 +44,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from cpp_semantic_diff.model import AnyId, ChangeEventId, Side
+from cpp_semantic_diff.model import AnyId, ChangeEvent, ChangeEventId, ChangeEventKind, Side
 from cpp_semantic_diff.rank import subject_endpoints
 from cpp_semantic_diff.rank.exposure import Exposure
 from cpp_semantic_diff.render.collapse import Collapsed, CollapseNode, collapse
@@ -55,6 +55,10 @@ from cpp_semantic_diff.render.document import CompletenessBlock, DiffDocument
 #: right default -- but truncation that does not announce itself is §11's failure in
 #: miniature, so the count of what was withheld is always printed.
 DEFAULT_LIMIT = 25
+
+#: Callers of one changed signature shown before the view says how many more there are. The
+#: document carries every one (ADR-040); `limit=0` shows them all here too.
+CALLERS_SHOWN = 10
 
 
 def render(
@@ -333,7 +337,7 @@ def _events(document: DiffDocument, tree: Collapsed, console: Console, *, limit:
         if component != current:
             current = component
             _component_header(document, component, console)
-        _event(document, root, console, depth=0)
+        _event(document, root, console, depth=0, limit=limit)
 
 
 def _component_header(document: DiffDocument, index: int | None, console: Console) -> None:
@@ -345,7 +349,9 @@ def _component_header(document: DiffDocument, index: int | None, console: Consol
     console.print(f"\n[bold]component {index}[/] [dim]· {size}[/]")
 
 
-def _event(document: DiffDocument, node: CollapseNode, console: Console, *, depth: int) -> None:
+def _event(
+    document: DiffDocument, node: CollapseNode, console: Console, *, depth: int, limit: int
+) -> None:
     event = document.by_id[node.event_id]
     score = document.score(node.event_id)
     indent = "  " + "   " * depth
@@ -363,33 +369,41 @@ def _event(document: DiffDocument, node: CollapseNode, console: Console, *, dept
 
     console.print(
         f"{indent}[dim]{total}[/] {marker} {glyph}[bold]{event.kind.value}[/]  "
-        f"{_subject(document, event.subject)}"
+        f"{_subject(document, event.subject)}{_caller_note(event)}"
     )
-
-    _called_by(document, node.event_id, console, indent=indent)
 
     if depth == 0:
         _why(document, node, console, indent=indent)
 
+    shown = withheld = 0
     for child in node.children:
-        _event(document, child, console, depth=depth + 1)
+        if limit and _is_caller(document, child):
+            if shown >= CALLERS_SHOWN:
+                withheld += 1 + child.hidden
+                continue
+            shown += 1
+        _event(document, child, console, depth=depth + 1, limit=limit)
+    if withheld:
+        # Announced, like the top-level truncation: a short list that does not say it is
+        # short reads as every caller.
+        console.print(
+            f"{indent}   [dim]└ +{withheld} more caller(s) (--limit 0 for all, or --json)[/]"
+        )
 
 
-def _called_by(
-    document: DiffDocument, event_id: ChangeEventId, console: Console, *, indent: str
-) -> None:
-    """The callers filed under a signature change (`DiffDocument.callers`), every one.
+def _is_caller(document: DiffDocument, node: CollapseNode) -> bool:
+    return document.by_id[node.event_id].kind is ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
 
-    Those calls produce no change events of their own -- the edges map through the
-    correspondence -- so this line is the only place on the page that says where the
-    changed function is called.
+
+def _caller_note(event: ChangeEvent) -> str:
+    """Whether a caller of a changed signature was edited in this diff (ADR-040).
+
+    An unedited caller is the one the text diff does not show, so the line says which it is.
     """
-    callers = document.callers.get(event_id)
-    if not callers:
-        return
-    names = ", ".join(document.entity_name(c) for c in callers)
-    line = Text(f"{indent}       called by {len(callers)}: {names}", style="dim", no_wrap=False)
-    console.print(line)
+    if event.kind is not ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE:
+        return ""
+    edited = event.payload.get("caller_edited") is True
+    return f"  [dim]{'caller edited' if edited else 'caller not edited'}[/]"
 
 
 def _subject(document: DiffDocument, subject: AnyId) -> str:

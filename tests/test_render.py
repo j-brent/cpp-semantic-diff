@@ -40,6 +40,7 @@ from cpp_semantic_diff.acquire import (
 )
 from cpp_semantic_diff.acquire.tokens import ExcludedFile
 from cpp_semantic_diff.classify import classify_events
+from cpp_semantic_diff.derive import derive_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.diff.coverage import Coverage, UncoveredFile
 from cpp_semantic_diff.match import Correspondence, match_models
@@ -74,7 +75,7 @@ from cpp_semantic_diff.render import (
     compression_sentence,
     render,
 )
-from cpp_semantic_diff.render.terminal import hidden_ids
+from cpp_semantic_diff.render.terminal import CALLERS_SHOWN, hidden_ids
 
 PUBLIC = "include/lib/thing.h"
 
@@ -149,7 +150,8 @@ def document(
 def pipeline(base: Model, head: Model, *, lines_changed: int = 100) -> DiffDocument:
     """The real stages, end to end, with no libclang -- models are the only input they need."""
     corr = match_models(base, head)
-    events = classify_events(diff_models(base, head, corr), base, head, corr)
+    derived = derive_events(diff_models(base, head, corr), base, head, corr)
+    events = classify_events(derived, base, head, corr)
     return document(base, head, events, correspondence=corr, lines_changed=lines_changed)
 
 
@@ -1152,34 +1154,77 @@ class TestTheDocumentIsTheContract:
 
 
 class TestASignatureChangeShowsItsCallers:
-    """ADR-035: a paired function's calls map through the correspondence and produce no
-    change events, so the document files its head-side callers under the signature change,
-    where a reviewer asks whether every caller followed."""
+    """ADR-040: each call into a changed signature that existed before is a
+    `CallerOfChangedSignature`, nested under the change. They replace the caller list the
+    document carried beside each signature change."""
 
-    def doc(self) -> DiffDocument:
-        def side(rev: str, signature: str, *callers: str) -> Model:
-            f = node("c:@F@f#", name="f", signature=signature)
-            nodes = [node(c, name=c.split("@")[-1].rstrip("#")) for c in callers]
-            return model(rev, f, *nodes, edges=[edge(c, "c:@F@f#") for c in callers])
+    F = "c:@F@f#"
 
-        return pipeline(
-            side("a", "int ()", "c:@F@g#", "c:@F@h#"),
-            side("b", "long ()", "c:@F@g#", "c:@F@h#", "c:@F@k#"),
-        )
+    def doc(
+        self,
+        *old: str,
+        new: tuple[str, ...] = (),
+        edited: tuple[str, ...] = (),
+    ) -> DiffDocument:
+        def side(rev: str, signature: str, callers: tuple[str, ...]) -> Model:
+            f = node(self.F, name="f", signature=signature)
+            nodes = [
+                node(
+                    c,
+                    name=c.split("@")[-1].rstrip("#"),
+                    signature="void ()",
+                    body_hash=f"{rev}-body" if c in edited else "body",
+                )
+                for c in callers
+            ]
+            return model(rev, f, *nodes, edges=[edge(c, self.F) for c in callers])
 
-    def test_the_document_lists_every_head_caller(self) -> None:
-        doc = self.doc()
+        return pipeline(side("a", "int ()", old), side("b", "long ()", (*old, *new)))
+
+    def callers(self, doc: DiffDocument) -> list[ChangeEvent]:
+        kind = ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
+        return [e for e in doc.events if e.kind is kind]
+
+    def test_each_old_caller_is_a_change_event_under_the_signature_change(self) -> None:
+        doc = self.doc("c:@F@g#", "c:@F@h#", new=("c:@F@k#",))
         (changed,) = (e for e in doc.events if e.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED)
-        assert doc.callers == {changed.id: ["c:@F@g#", "c:@F@h#", "c:@F@k#"]}
-        assert {"c:@F@g#", "c:@F@h#", "c:@F@k#"} <= doc.entities.keys()
+        callers = self.callers(doc)
+        assert {e.payload["caller"] for e in callers} == {"c:@F@g#", "c:@F@h#"}
+        assert all(e.caused_by == changed.id for e in callers)
+        assert {"c:@F@g#", "c:@F@h#"} <= doc.entities.keys()
 
-    def test_the_view_names_them_under_the_event(self) -> None:
-        out = draw(self.doc(), collapse_cascades=False)
-        assert "called by 3: g, h, k" in out
+    def test_the_caller_list_is_gone_from_the_document(self) -> None:
+        doc = self.doc("c:@F@g#")
+        assert "callers" not in DiffDocument.model_fields
+        assert '"callers"' not in doc.to_json()
+        assert DiffDocument.from_json(doc.to_json()) == doc
 
-    def test_it_survives_the_json_round_trip(self) -> None:
-        doc = self.doc()
-        assert DiffDocument.from_json(doc.to_json()).callers == doc.callers
+    def test_unedited_callers_are_read_first(self) -> None:
+        """The text diff never shows an unedited caller, so the view lists it first, even
+        where it ranks last."""
+        doc = self.doc("c:@F@a#", "c:@F@b#", "c:@F@c#", edited=("c:@F@a#", "c:@F@c#"))
+        # Rank the unedited caller last, so only the view's own ordering can lift it.
+        last = next(e.id for e in self.callers(doc) if e.payload["caller"] == "c:@F@b#")
+        doc = doc.model_copy(update={"ranking": [*(i for i in doc.ranking if i != last), last]})
+        (root,) = (
+            r
+            for r in collapse(doc).roots
+            if doc.event(r.event_id).kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        )
+        order = [doc.event(child.event_id).payload["caller"] for child in root.children]
+        assert order[0] == "c:@F@b#"
+        assert set(order[1:]) == {"c:@F@a#", "c:@F@c#"}
+        out = draw(doc)
+        assert "caller not edited" in out and "caller edited" in out
+
+    def test_the_view_shortens_a_long_list_and_says_so(self) -> None:
+        callers = tuple(f"c:@F@g{i:02}#" for i in range(CALLERS_SHOWN + 2))
+        doc = self.doc(*callers)
+        assert len(self.callers(doc)) == CALLERS_SHOWN + 2  # the document has every one
+        out = draw(doc)
+        assert out.count("CallerOfChangedSignature") == CALLERS_SHOWN
+        assert "+2 more caller(s)" in out
+        assert draw(doc, limit=0).count("CallerOfChangedSignature") == CALLERS_SHOWN + 2
 
 
 class TestANamePairedFunctionIsOnBothSides:

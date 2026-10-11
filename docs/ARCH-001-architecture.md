@@ -365,14 +365,12 @@ ChangeEvent
 direction the tool is a second disconnected artifact to read alongside the diff, which is a net
 increase in work.
 
-**A signature change carries its callers as evidence.** The call edges of a paired function map
-through the correspondence (§6.1), so a changed signature produces no edge change events, and
-nothing in the change event set says where the function is called. The output contract (§10)
-therefore lists, beside each `NodeSignatureChanged`, the head-side callers of its subject: the
-sources of its incoming `calls` edges at head. They are evidence attached to the change event,
-not change events, and they are a stopgap: derived change events for the callers replace them
-([ADR-035](adr/ADR-035-signature-and-body-apply-to-functions.md),
-[ADR-036](adr/ADR-036-functions-pair-by-name.md)).
+**A signature change has its callers as change events.** The call edges of a paired function map
+through the correspondence (§6.1), so a changed signature produces no edge change events. Each call
+into it that exists on both sides is a `CallerOfChangedSignature` instead, caused by the signature
+change (§6.3). They replace the list of callers the output carried beside each
+`NodeSignatureChanged` until then
+([ADR-040](adr/ADR-040-callers-of-a-changed-signature-are-derived.md)).
 
 ### 6.3 Cause and cascade
 

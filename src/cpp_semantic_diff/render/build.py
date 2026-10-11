@@ -20,7 +20,6 @@ bucket or threshold here that could flatter it.
 
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Sequence
 
 from cpp_semantic_diff import __version__
@@ -30,9 +29,6 @@ from cpp_semantic_diff.diff.coverage import Coverage
 from cpp_semantic_diff.match import Correspondence
 from cpp_semantic_diff.model import (
     ChangeEvent,
-    ChangeEventId,
-    ChangeEventKind,
-    EdgeKind,
     Model,
     Node,
     NodeId,
@@ -83,14 +79,7 @@ def build_document(
     being re-derived from the scores, because two implementations of one threshold is one
     too many.
     """
-    callers = _callers(events, head)
-    entities = _entities(
-        events,
-        base,
-        head,
-        correspondence,
-        extra={c for ids in callers.values() for c in ids},
-    )
+    entities = _entities(events, base, head, correspondence)
     completeness = CompletenessBlock(
         base=CompletenessReport.of(Side.BASE, base.rev, base.completeness),
         head=CompletenessReport.of(Side.HEAD, head.rev, head.completeness),
@@ -140,7 +129,6 @@ def build_document(
         ranking=ranking.order,
         scores={s.event_id: s for s in ranking.scores},
         components=list(ranking.components),
-        callers=callers,
         summary=Summary(
             lines_changed=lines_changed,
             files_changed=files_changed,
@@ -250,33 +238,11 @@ def _uncovered(coverage: Coverage | None) -> UncoveredReport | None:
     )
 
 
-def _callers(events: Sequence[ChangeEvent], head: Model) -> dict[ChangeEventId, list[NodeId]]:
-    """Who calls each function whose signature changed, at head (ARCH-001 §6.2).
-
-    A paired function's call edges map through the correspondence and produce no change
-    events, so without this a reviewer told that a signature changed is not told where it is
-    called -- the question a signature change raises. Head side, because those are the call
-    sites that have to compile against the new signature. Evidence assembled from the head
-    model, not analysis: a stopgap until derived change events for the callers exist
-    (ADR-036).
-    """
-    incoming: dict[NodeId, set[NodeId]] = defaultdict(set)
-    for edge in head.edges:
-        if edge.kind is EdgeKind.CALLS:
-            incoming[edge.dst].add(edge.src)
-    return {
-        event.id: sorted(incoming.get(NodeId(event.subject), ()))
-        for event in events
-        if event.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
-    }
-
-
 def _entities(
     events: Sequence[ChangeEvent],
     base: Model,
     head: Model,
     correspondence: Correspondence,
-    extra: set[NodeId] | None = None,
 ) -> dict[NodeId, EntitySummary]:
     """The node summaries the events reference, and only those (ARCH-001 §10).
 
@@ -295,9 +261,7 @@ def _entities(
     model only. Either id of a match is an entity both sides hold; read off the ids, the
     view would mark a changed function as added, or the callee of a removed call as removed.
     """
-    # `extra` is the callers listed beside signature changes, which a view must be able to
-    # name as well.
-    wanted: set[NodeId] = set(extra or ())
+    wanted: set[NodeId] = set()
     for event in events:
         wanted.update(subject_endpoints(event.subject))
         # `NodeMoved` names its parents in the payload, and a parent may have no event of

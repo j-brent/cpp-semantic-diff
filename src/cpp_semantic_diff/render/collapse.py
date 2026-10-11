@@ -40,7 +40,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from cpp_semantic_diff.model import ChangeEventId
+from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, ChangeEventKind
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only at type-check time
     from cpp_semantic_diff.render.document import DiffDocument
@@ -92,6 +92,9 @@ class Collapsed:
 def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     """Nest consequences under causes, in the document's ranking order (ARCH-001 §7).
 
+    One exception to ranking order among siblings: unedited callers of a changed signature
+    come first (`_unedited_caller`).
+
     `enabled=False` returns the same events as a flat forest rather than a different set.
     That is the point of the flag: "show me everything" and "show me the tree" must differ
     in shape only, so a reviewer who distrusts the collapse can turn it off and be certain
@@ -126,6 +129,9 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     for event_id in order:  # ranking order in, ranking order out, at every depth
         if (cause := parent.get(event_id)) is not None:
             children[cause].append(event_id)
+    for siblings in children.values():
+        # Stable, so this only lifts unedited callers ahead of their siblings.
+        siblings.sort(key=lambda i: not _unedited_caller(index[i]))
 
     def build(event_id: ChangeEventId) -> CollapseNode:
         return CollapseNode(
@@ -135,6 +141,18 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
 
     roots = tuple(build(i) for i in order if i not in parent)
     return Collapsed(roots=roots, promoted=tuple(promoted))
+
+
+def _unedited_caller(event: ChangeEvent) -> bool:
+    """A caller of a changed signature that this diff did not touch (ADR-040).
+
+    Read first among its siblings: the text diff never shows it, so only this view can send
+    the reviewer there. Edited callers follow, and every group keeps ranking order.
+    """
+    return (
+        event.kind is ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
+        and event.payload.get("caller_edited") is False
+    )
 
 
 def _on_a_cycle(parent: dict[ChangeEventId, ChangeEventId]) -> set[ChangeEventId]:
