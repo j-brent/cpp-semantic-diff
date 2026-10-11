@@ -313,6 +313,31 @@ class TestBaseOrderIsTheOrderOfTheBasesOnBothSides:
         assert self.events(None, "A; B") == []
 
 
+class TestBaseOrderCoexistsWithOtherAttributeChanges:
+    """The `BASE_ORDER` filter in `node_events` is a `continue` inside the per-attribute
+    loop (`diff/nodes.py`), not a guard around the whole node. A class can change its base
+    order and something else -- `final`, say -- in the same commit, and the filter must
+    drop only the `base_order` entry, never the attribute sitting beside it in the same
+    `attrs` map."""
+
+    def record(self, rev: str, order: str | None, final: bool) -> Model:
+        return model(
+            rev,
+            node(C, "C", kind=NodeKind.STRUCT, attrs={"base_order": order, "final": final}),
+        )
+
+    def test_a_pure_addition_still_reports_an_unrelated_attribute_change(self) -> None:
+        base = self.record("a", "A", final=False)
+        head = self.record("b", "A; B", final=True)
+        event = only(diff(base, head), ChangeEventKind.NODE_ATTR_CHANGED)
+        assert event.payload == {"attr": "final", "old": False, "new": True}
+
+    def test_a_real_reorder_and_an_unrelated_attribute_change_are_two_events(self) -> None:
+        base = self.record("a", "A; B", final=False)
+        head = self.record("b", "B; A", final=True)
+        assert {e.payload["attr"] for e in diff(base, head)} == {"base_order", "final"}
+
+
 class TestABodyChangeIsNotAnAttributeChange:
     """ARCH-001 §4.1: `body_hash` is deliberately outside `attrs`.
 
@@ -379,6 +404,38 @@ class TestASignatureChangeIsOneEvent:
         base = model("a", self.method("int ()", return_type="int", const=False))
         head = model("b", self.method("int ()", return_type="int", const=True))
         assert kinds(diff(base, head)) == ["NodeAttrChanged"]
+
+
+class TestDefaultArgumentsAreAttributesNotSignature:
+    """ADR-043 corrects ARCH-001 §4.1: a default argument is an attribute, not part of the
+    signature it used to be folded into. `SIGNATURE_ATTRS` exists to suppress exactly
+    `return_type` and `const` beside a signature change, because the signature already
+    spells them (ADR-035) -- folding `default_arguments` into that set by mistake would
+    silently swallow the fact ADR-043 exists to surface, and only on the one function
+    where a signature change happens to land in the same commit.
+    """
+
+    def test_signature_attrs_does_not_include_default_arguments(self) -> None:
+        from cpp_semantic_diff.diff.nodes import SIGNATURE_ATTRS
+
+        assert "default_arguments" not in SIGNATURE_ATTRS
+
+    def test_a_default_argument_change_is_not_swallowed_by_a_signature_change(self) -> None:
+        base = model("a", node(F, signature="void (int)", attrs={"default_arguments": "0"}))
+        head = model("b", node(F, signature="void (long)", attrs={"default_arguments": "1"}))
+        assert kinds(diff(base, head)) == ["NodeAttrChanged", "NodeSignatureChanged"]
+        event = only(diff(base, head), ChangeEventKind.NODE_ATTR_CHANGED)
+        assert event.payload == {"attr": "default_arguments", "old": "0", "new": "1"}
+
+    def test_a_default_argument_change_alone_is_an_attribute_change(self) -> None:
+        base = model("a", node(F, signature="void (int)", attrs={"default_arguments": "0"}))
+        head = model("b", node(F, signature="void (int)", attrs={"default_arguments": "1"}))
+        assert kinds(diff(base, head)) == ["NodeAttrChanged"]
+
+    def test_an_unchanged_default_argument_beside_a_signature_change_is_silent(self) -> None:
+        base = model("a", node(F, signature="void (int)", attrs={"default_arguments": "0"}))
+        head = model("b", node(F, signature="void (long)", attrs={"default_arguments": "0"}))
+        assert kinds(diff(base, head)) == ["NodeSignatureChanged"]
 
 
 class TestSignatureAndBodyApplyOnlyToFunctions:
@@ -1057,6 +1114,30 @@ class TestAFunctionPairsByNameAcrossAUsrChange:
         events = diff(base, head)
         assert kinds(events) == ["NodeAdded", "NodeRemoved"]
         assert {e.confidence.tier for e in events} == {None}
+
+    def test_a_default_argument_change_is_still_reported_when_paired_by_name(self) -> None:
+        """ADR-043's attribute comparisons flow through `changed_attrs` exactly like
+        `virtual` or `access` always have, and every test above pairs its node through
+        `MatchTier.DECLARED` -- none exercises a *new* attribute on a pair the name tier
+        itself produced. If the attribute loop ever read something other than the matched
+        pair's own tier, this is the test that would catch it: the USR differs (the
+        parameter type changed), so only the name tier can pair this function at all, and
+        the default argument changed on the same function in the same commit."""
+        base = model(
+            "a",
+            node("c:@F@f#i#", name="f", signature="void (int)", attrs={"default_arguments": "0"}),
+        )
+        head = model(
+            "b",
+            node(
+                "c:@F@f#d#", name="f", signature="void (double)", attrs={"default_arguments": "1"}
+            ),
+        )
+        events = diff(base, head)
+        assert kinds(events) == ["NodeAttrChanged", "NodeSignatureChanged"]
+        attr_event = only(events, ChangeEventKind.NODE_ATTR_CHANGED)
+        assert attr_event.payload == {"attr": "default_arguments", "old": "0", "new": "1"}
+        assert attr_event.confidence.tier is MatchTier.NAME
 
 
 class TestTheNameTiersConfidenceIsNeverLaundered:
