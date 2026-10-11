@@ -26,6 +26,7 @@ from collections.abc import Sequence
 from cpp_semantic_diff import __version__
 from cpp_semantic_diff.acquire import RenameLimitHit, RevPair, ThirdPartySet
 from cpp_semantic_diff.acquire.third_party import hint_message
+from cpp_semantic_diff.diff.coverage import Coverage
 from cpp_semantic_diff.match import Correspondence
 from cpp_semantic_diff.model import (
     ChangeEvent,
@@ -44,6 +45,7 @@ from cpp_semantic_diff.render.document import (
     CompletenessReport,
     DiffDocument,
     EntitySummary,
+    ExcludedFile,
     Meta,
     RenameDetection,
     Residue,
@@ -51,6 +53,8 @@ from cpp_semantic_diff.render.document import (
     ThirdPartyHint,
     ThirdPartyPath,
     Timings,
+    UncoveredFile,
+    UncoveredReport,
 )
 
 
@@ -70,6 +74,7 @@ def build_document(
     rename_limit: RenameLimitHit | None = None,
     third_party: ThirdPartySet | None = None,
     timings: Timings | None = None,
+    coverage: Coverage | None = None,
 ) -> DiffDocument:
     """Assemble ARCH-001 §10's document from the stage outputs.
 
@@ -101,6 +106,7 @@ def build_document(
                 [*SYSTEMATIC_LIMITS, *base.completeness.not_visible, *head.completeness.not_visible]
             )
         ),
+        uncovered=_uncovered(coverage),
     )
 
     third_party = third_party or ThirdPartySet()
@@ -140,10 +146,21 @@ def build_document(
             files_changed=files_changed,
             cpp_files_changed=cpp_files_changed,
             files_renamed=files_renamed,
+            changed_cpp_lines=coverage.changed_lines if coverage is not None else None,
+            uncovered_lines=coverage.uncovered_lines if coverage is not None else None,
+            uncovered_tokens=coverage.uncovered_tokens if coverage is not None else None,
             events_reported=count,
             vendored_events=ranking.vendored_count,
             compression=compression_sentence(
-                lines_changed, first_party, high_risk, ranking.vendored_count
+                lines_changed,
+                first_party,
+                high_risk,
+                ranking.vendored_count,
+                uncovered=(
+                    (coverage.uncovered_lines, coverage.changed_lines)
+                    if coverage is not None
+                    else None
+                ),
             ),
             compression_ratio=(lines_changed / first_party) if first_party else None,
             high_risk_count=high_risk,
@@ -160,7 +177,14 @@ def build_document(
     )
 
 
-def compression_sentence(lines_changed: int, events: int, high_risk: int, vendored: int = 0) -> str:
+def compression_sentence(
+    lines_changed: int,
+    events: int,
+    high_risk: int,
+    vendored: int = 0,
+    *,
+    uncovered: tuple[int, int] | None = None,
+) -> str:
     """§10's line, verbatim in shape: *2,431 lines changed -> 9 change events, 2 high-risk*.
 
     Built here rather than in a view so that every consumer prints the same claim, and so
@@ -184,18 +208,45 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int, vendor
 
     `summary.events_reported` is untouched and remains the complete set. It is the one figure
     nobody can audit from outside, and it may not shrink because a dependency moved.
+
+    **`uncovered` is (uncovered lines, changed C++ lines)**, and when it was measured it is
+    part of the claim. On its own the ratio improves when the model sees *less* -- a change it
+    cannot see is one fewer event over the same lines. Beside the count of changed lines no
+    event explains, it cannot (ADR-042).
     """
     head = f"{lines_changed:,} lines changed -> {events:,} change event{'' if events == 1 else 's'}"
+    unexplained = ""
+    if uncovered is not None:
+        missed, changed = uncovered
+        unexplained = (
+            f" · {missed:,} of {changed:,} changed C++ line{'' if changed == 1 else 's'} "
+            f"explained by no change event"
+        )
     if not events:
         if vendored:
             # Distinct from "nothing changed": a dependency moved and none of it reached
             # the reviewer's own code, which is a result rather than an absence of one.
-            return f"{head} (all {vendored:,} of it in bundled dependencies)"
-        return f"{head} (no semantic change the model can see)"
+            return f"{head} (all {vendored:,} of it in bundled dependencies){unexplained}"
+        return f"{head} (no semantic change the model can see){unexplained}"
     tail = f", {high_risk:,} high-risk"
     if vendored:
         tail += f" · {vendored:,} more in bundled dependencies, ranked last"
-    return f"{head}{tail}"
+    return f"{head}{tail}{unexplained}"
+
+
+def _uncovered(coverage: Coverage | None) -> UncoveredReport | None:
+    if coverage is None:
+        return None
+    return UncoveredReport(
+        files=[
+            UncoveredFile(side=f.side, path=f.path, lines=list(f.lines), tokens=f.tokens)
+            for f in coverage.files
+        ],
+        moved_tokens=coverage.moved_tokens,
+        excluded_files=[
+            ExcludedFile(path=e.path, reason=e.reason) for e in coverage.excluded_files
+        ],
+    )
 
 
 def _callers(events: Sequence[ChangeEvent], head: Model) -> dict[ChangeEventId, list[NodeId]]:

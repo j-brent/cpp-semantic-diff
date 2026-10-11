@@ -29,7 +29,8 @@ The page is ordered by what §11 and §10 say must be seen first:
 
 1. **Completeness, at the top, never in a log** (§11, rule 2). What was missing precedes what was
    found, because a reader who scrolls past the events has already formed a belief.
-2. **The compression line** (§10). The product's own success metric, printed on every run.
+2. **The compression line** (§10). The product's own success metric, printed on every run,
+   with the changes no change event explains beneath it (ADR-042).
 3. **The events**, in ranking order (§7), grouped by component and with consequences nested
    under their causes (§6.3, `collapse.py`).
 4. **The tier-1 residue** (§13). v0's deliberate rename damage, stated as a measurement rather
@@ -70,6 +71,7 @@ def render(
     _completeness(document, console)
     _third_party(document, console)
     _compression(document, tree, console)
+    _uncovered(document, console)
     _events(document, tree, console, limit=limit)
     _residue(document, console)
     _limits(document, console)
@@ -247,6 +249,38 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
         console.print(
             f"  [yellow]{len(tree.promoted)} change event(s) had an unusable cause link and are "
             f"shown at top level[/]"
+        )
+
+
+def _uncovered(document: DiffDocument, console: Console) -> None:
+    """Where the changes no change event explains are, beside the claim they qualify (ADR-042).
+
+    Printed on every run where it was measured, nothing to report included, because a missing
+    line would read as "everything was explained". The files are named, most first, so a reader
+    knows where to look; the JSON has every line.
+    """
+    s = document.summary
+    report = document.completeness.uncovered
+    if report is None or s.uncovered_lines is None or s.uncovered_tokens is None:
+        return
+    line = (
+        f"  [dim]{s.uncovered_lines:,} changed C++ line(s), {s.uncovered_tokens:,} token(s), "
+        f"are on no change event's lines — a lower bound on what the model cannot explain"
+    )
+    if report.moved_tokens:
+        line += f"; {report.moved_tokens:,} token(s) moved unchanged"
+    console.print(line + "[/]")
+    by_size = sorted(report.files, key=lambda f: (-f.tokens, f.path, f.side.value))
+    for f in by_size[:5]:
+        console.print(
+            f"  [dim]  {f.side.value:4} {escape(f.path)}: {f.tokens:,} token(s) on "
+            f"{len(f.lines):,} line(s)[/]"
+        )
+    if len(by_size) > 5:
+        console.print(f"  [dim]  … {len(by_size) - 5} more file(s) in the JSON[/]")
+    for excluded in report.excluded_files:
+        console.print(
+            f"  [dim]  not compared: {escape(excluded.path)} ({escape(excluded.reason)})[/]"
         )
 
 

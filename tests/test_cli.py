@@ -332,6 +332,7 @@ def cmake_branch(tmp_path_factory: pytest.TempPathFactory) -> Path:
     git(repo, "config", "user.name", "Test")
     git(repo, "config", "commit.gpgsign", "false")
     commit(repo, "a.cpp", "int f() { return 1; }\n", "A")
+    commit(repo, "orphan.h", "int limit = 1;\n", "a header no translation unit includes")
     commit(
         repo,
         "CMakeLists.txt",
@@ -340,6 +341,7 @@ def cmake_branch(tmp_path_factory: pytest.TempPathFactory) -> Path:
     )
     git(repo, "checkout", "-q", "-b", "feature")
     commit(repo, "a.cpp", "int f() { return 2; }\n", "change f")
+    commit(repo, "orphan.h", "int limit = 2;\n", "change what no model can see")
     return repo
 
 
@@ -383,6 +385,22 @@ def test_diff_json_carries_the_third_party_set_and_hints(cmake_branch: Path) -> 
     document = json.loads(result.stdout)
     assert document["third_party"] == []
     assert document["third_party_hints"] == []
+
+
+@pytest.mark.usefixtures("warm_cache")
+def test_a_change_no_model_can_see_is_reported_as_uncovered(cmake_branch: Path) -> None:
+    """`f`'s change is on its change event's lines; the header nothing includes is in no
+    model, so its change is uncovered rather than silently absent (ADR-042)."""
+    result = runner.invoke(cli.app, ["diff", str(cmake_branch), "--json", "-j", "1"])
+    assert_reported(result, ExitCode.OK)
+    document = json.loads(result.stdout)
+    summary = document["summary"]
+    assert (summary["changed_cpp_lines"], summary["uncovered_lines"]) == (4, 2)
+    assert {(f["side"], f["path"]) for f in document["completeness"]["uncovered"]["files"]} == {
+        ("base", "orphan.h"),
+        ("head", "orphan.h"),
+    }
+    assert "2 of 4 changed C++ lines explained by no change event" in summary["compression"]
 
 
 @pytest.mark.usefixtures("warm_cache")

@@ -293,6 +293,49 @@ class RenameDetection(BaseModel):
         )
 
 
+class UncoveredFile(BaseModel):
+    """One side of one file's changed tokens that no change event explains."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    side: Side
+    path: str
+    lines: list[int] = Field(description="The lines the uncovered tokens are on, ascending.")
+    tokens: int
+
+
+class ExcludedFile(BaseModel):
+    """A changed C++ file whose tokens were not compared, and why."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    reason: str
+
+
+class UncoveredReport(BaseModel):
+    """Where the changes no change event explains are (ADR-042).
+
+    The counts are in `summary`; this is the detail a reader needs to go and look. Not a
+    warning and not part of `degraded`: it is stated on every run, like the boundary, because
+    it is a standing measure of what the model sees rather than a sign that something failed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    files: list[UncoveredFile] = Field(default_factory=list)
+    moved_tokens: int = Field(
+        default=0,
+        description="Changed tokens in blocks deleted in one place and inserted token for "
+        "token in another. Textually identical, which is not the same as semantically "
+        "unchanged; counted apart from uncovered tokens, not as explained.",
+    )
+    excluded_files: list[ExcludedFile] = Field(
+        default_factory=list,
+        description="Changed C++ files whose tokens were not compared, such as binary files.",
+    )
+
+
 class CompletenessBlock(BaseModel):
     """§10's `completeness: { per-side completeness records }`, plus §11's standing limits."""
 
@@ -309,6 +352,12 @@ class CompletenessBlock(BaseModel):
         description="ARCH-001 §11's systematic limits, then what the producer cannot see "
         "(`Completeness.not_visible`, ADR-029), carried on every document so that every "
         "consumer states them rather than each remembering to.",
+    )
+
+    uncovered: UncoveredReport | None = Field(
+        default=None,
+        description="Where the changes no change event explains are. None when they were "
+        "not measured, which is not the same as none.",
     )
 
     @property
@@ -443,6 +492,11 @@ class Timings(BaseModel):
     match: float = 0.0
     diff: float = 0.0
     classify: float = 0.0
+    coverage: float = Field(
+        default=0.0,
+        description="Reading the C++ text diff as tokens and setting it against "
+        "the change events (ADR-042).",
+    )
     rank: float = 0.0
     total: float = 0.0
 
@@ -534,6 +588,25 @@ class Summary(BaseModel):
         "because it is the one input to identity that comes from outside the models: a "
         "reviewer comparing two runs cannot otherwise tell whether a rename was seen and "
         "applied or missed entirely, and those produce very different deltas.",
+    )
+
+    changed_cpp_lines: int | None = Field(
+        default=None,
+        description="Lines in C++ files, headers included, carrying a changed token; a "
+        "deleted line and its replacement count as two. Tokens, not text: a whitespace or "
+        "comment edit changes none (ADR-042). None when not measured.",
+    )
+    uncovered_lines: int | None = Field(
+        default=None,
+        description="Of `changed_cpp_lines`, those carrying a changed token on no change "
+        "event's lines. **A lower bound** on what the model cannot explain: an event's hunk "
+        "covers whole lines, so an unexplained edit inside a changed entity's span is counted "
+        "as explained. Reported beside the compression, so the ratio cannot improve by the "
+        "model seeing less. Includes vendored code until third-party code is excluded.",
+    )
+    uncovered_tokens: int | None = Field(
+        default=None,
+        description="The changed tokens behind `uncovered_lines`, moved tokens excluded.",
     )
 
     events_reported: int = Field(

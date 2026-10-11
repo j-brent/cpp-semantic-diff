@@ -509,12 +509,14 @@ CodeAtlas TypeScript.
 ```
 {
   meta:        { tool version, schema version, revs, timings }
-  completeness:{ per-side completeness records (§4.4) }
+  completeness:{ per-side completeness records (§4.4), standing limits (§11),
+                 where the uncovered changes are }
   entities:    { node id → node summary, for change events to reference }
   events:      [ ChangeEvent ]        -- complete, uncollapsed
   findings:    [ Finding ]            -- evidence, attached by node id
   ranking:     [ change event id ]    -- ordered
-  summary:     { lines_changed, events_reported, compression, high_risk_count }
+  summary:     { lines_changed, events_reported, compression, high_risk_count,
+                 changed_cpp_lines, uncovered_lines }
 }
 ```
 
@@ -522,6 +524,13 @@ CodeAtlas TypeScript.
 changed → 9 change events, 2 high-risk*. If that ratio is not dramatic on real commits, the
 thesis in RESEARCH-002 is wrong, and the design should surface that in week one rather than month
 six.
+
+On its own the ratio improves when the model sees less. So the sentence also states how many of
+the changed C++ lines no change event explains: *580 lines changed → 181 change events, 2
+high-risk · 37 of 412 changed C++ lines explained by no change event*. A changed line is one
+carrying a changed token, so whitespace and comment edits do not count; it is explained when a
+change event's provenance contains it, which makes the uncovered count a lower bound
+([ADR-042](adr/ADR-042-uncovered-changes-are-tokens-on-no-event-line.md)).
 
 ---
 
@@ -543,6 +552,10 @@ rename detection and says so only on stderr; the rename map (§5) then holds exa
 The output states this beside the completeness records, and every unpaired entity in a file the
 diff added or deleted counts as having a candidate, never as having none (rule 1). The limit is
 not lifted: `-l0` is potentially quadratic on the large diffs that hit it.
+
+Rule 2 also covers what a complete model still misses. Every run counts the changes in C++ files,
+headers included, that no change event explains (§10), so a change the model cannot see reads as
+unexplained rather than as no change.
 
 Three systematic limits get stated in the output itself, every time:
 
@@ -731,7 +744,7 @@ cpp_semantic_diff/
   acquire/     git revisions · worktrees · compile db · changed tokens  ✓
   produce/     toolchain ✓ · extraction ✓ · assembly ✓ · per-TU cache ✓
   match/       tiered matching (tier 1, name tier)      ✓
-  diff/        model × model → change events            ✓
+  diff/        model × model → change events · uncovered changes  ✓
   classify/    cause and cascade rules                  ✓
   evidence/    tool adapters                (post-v0)
   rank/        blast radius, scoring                     ✓
