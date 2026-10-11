@@ -288,7 +288,7 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
   differ between commits for reasons unrelated to the change — an unrelated new call site can
   materialize an instantiation. Instantiation-only deltas must be suppressible.
 - **Overloads.** Name is never identity on its own. Signature normalization (typedef
-  resolution, default arguments, cv/ref qualification) is required for tier 1 to work at all,
+  resolution, cv/ref qualification) is required for tier 1 to work at all,
   and the name tier pairs by name only where the name leaves no choice.
 - **Internal linkage and anonymous namespaces.** USRs incorporate the file path, so a file rename
   breaks tier 1 for everything in them. Identity must include the TU, and file renames must be

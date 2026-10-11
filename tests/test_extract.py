@@ -604,6 +604,24 @@ class TestAConstructorsInitializerListIsPartOfItsBody:
         ternary = self.ctor(tmp_path, toolchain, "struct S { S(int a = true ? 1 : 2) {} };")
         assert plain == ternary
 
+    def test_a_colon_in_a_template_header_is_not_read_as_its_start(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The template header is before the constructor's name, where reading starts."""
+        plain = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x(1) {} };")
+        templated = self.ctor(
+            tmp_path,
+            toolchain,
+            "struct S { int x; template <int N = (1 ? 2 : 3)> S() : x(1) {} };",
+        )
+        assert plain == templated
+        changed = self.ctor(
+            tmp_path,
+            toolchain,
+            "struct S { int x; template <int N = (1 ? 2 : 3)> S() : x(2) {} };",
+        )
+        assert changed != templated
+
     def test_known_gap_a_function_try_block_has_no_body_hash(
         self, tmp_path: Path, toolchain: Toolchain
     ) -> None:
@@ -1136,6 +1154,19 @@ class TestNodiscardDeprecatedAndFinalAreComparedState:
 
     def test_a_record_this_tu_never_defines_is_not_determined(self, result: TuExtract) -> None:
         assert self.attr(result, "Fwd", "final") is None
+        assert self.attr(result, "Fwd", "deprecated") is None
+
+    def test_a_records_deprecation_is_read_from_its_definition(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Clang does not deprecate a forward declaration written before the deprecated
+        definition, so reading it there would depend on which declaration a TU saw."""
+        result = run(
+            tmp_path,
+            toolchain,
+            {"a.cpp": "struct D;\nstruct [[deprecated]] D {};\n"},
+        )
+        assert self.attr(result, "D", "deprecated") is True
 
     def test_the_header_attributes_reach_the_out_of_line_definitions(
         self, tmp_path: Path, toolchain: Toolchain

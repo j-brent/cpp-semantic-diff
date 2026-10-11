@@ -54,9 +54,10 @@ plain attributes. Two needed a decision:
 
 ## Alternatives rejected
 
-- **Put default arguments in the signature, as ARCH-001 said.** The signature is tier-1
-  identity input (ARCH-001 §5). A changed default would read as a different function, when
-  every caller still calls the same one.
+- **Put default arguments in the signature, as ARCH-001 said.** A changed default would be
+  reported as `NodeSignatureChanged`, at novelty 1.00, which claims every caller may break.
+  They still compile: they call the same function, and only the ones that omit the argument
+  pass a different value.
 - **Report every change to `base_order`.** Adding one base would be two change events: the
   edge and the order.
 - **A cause rule linking the order change to the edge event.** It would hide a real reorder

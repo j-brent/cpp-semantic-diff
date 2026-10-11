@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import itertools
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -349,7 +350,8 @@ class _PrettyPrinter:
         self._print.argtypes = [ci.Cursor, ctypes.c_void_p]
         # The bindings' own CXString type and conversion, which also dispose of the string.
         # A second CXString declaration would clash with the argtypes cindex registered for
-        # `clang_getCString` and `clang_disposeString`.
+        # `clang_getCString` and `clang_disposeString`. `_CXString` is private to cindex:
+        # re-check it whenever the bindings are upgraded.
         self._print.restype = ci._CXString
         self._print.errcheck = ci._CXString.from_result
 
@@ -876,9 +878,10 @@ def body_hash(cursor: ci.Cursor) -> str | None:
     )
     if body is None:
         return None
-    tokens = list(body.get_tokens())
-    if cursor.kind is ci.CursorKind.CONSTRUCTOR:
-        tokens = _member_initializers(cursor, body) + tokens
+    tokens: Iterable[ci.Token] = body.get_tokens()
+    # A constructor template is a FUNCTION_TEMPLATE cursor; the kind it templates says.
+    if ci.CursorKind.CONSTRUCTOR in (cursor.kind, template_tag_kind(cursor)):
+        tokens = itertools.chain(_member_initializers(cursor, body), tokens)
     digest = hashlib.blake2b(digest_size=16)
     empty = True
     for token in tokens:
@@ -903,7 +906,9 @@ def _member_initializers(cursor: ci.Cursor, body: ci.Cursor) -> list[ci.Token]:
     after_name = False
     depth = 0
     initializers: list[ci.Token] = []
-    for token in cursor.get_tokens():
+    # Only the tokens from the name to the body: the body is tokenized once, by the caller.
+    span = ci.SourceRange.from_locations(cursor.location, body.extent.start)
+    for token in ci.TokenGroup.get_tokens(cursor.translation_unit, span):
         offset = token.extent.start.offset
         if offset >= end:
             break
@@ -1047,6 +1052,19 @@ def _final(cursor: ci.Cursor) -> bool | None:
     return any(c.kind is ci.CursorKind.CXX_FINAL_ATTR for c in definition.get_children())
 
 
+def _record_deprecated(cursor: ci.Cursor) -> bool | None:
+    """Whether a record is deprecated, or None where this TU does not see its definition.
+
+    Read from the definition, as `final` is: a forward declaration seen before a
+    `[[deprecated]]` definition is not deprecated in clang's eyes, so reading it there would
+    make the answer depend on which declaration a TU happened to see.
+    """
+    definition = cursor.get_definition()
+    if definition is None:
+        return None
+    return bool(definition.availability is ci.AvailabilityKind.DEPRECATED)
+
+
 def _base_order(cursor: ci.Cursor) -> str | None:
     """A record's bases in the order written, joined `"; "`, or None where this TU does not
     see its definition. `""` means no bases.
@@ -1090,13 +1108,6 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["nodiscard"] = any(
             c.kind is ci.CursorKind.WARN_UNUSED_RESULT_ATTR for c in cursor.get_children()
         )
-    if kind in (
-        NodeKind.FUNCTION,
-        NodeKind.METHOD,
-        NodeKind.CLASS,
-        NodeKind.STRUCT,
-        NodeKind.UNION,
-    ):
         # Clang's availability, which follows inherited attributes as `nodiscard` does. It is
         # the entity's own: a member of a deprecated class is not itself deprecated, and a
         # deleted function is unavailable, not deprecated.
@@ -1129,6 +1140,7 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         )
         attrs["abstract"] = cursor.is_abstract_record()
         attrs["final"] = _final(cursor)
+        attrs["deprecated"] = _record_deprecated(cursor)
         attrs["base_order"] = _base_order(cursor)
     return attrs
 
