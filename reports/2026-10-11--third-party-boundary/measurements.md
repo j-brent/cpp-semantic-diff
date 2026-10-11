@@ -48,7 +48,8 @@ the entities change events reference, so it cannot show that no node lies under 
 
 **What isolates PLAN-004's own effect.** On current `dev`, the same range run with and without
 the option differs by exactly what the boundary should remove: spdlog by the three edges into
-bundled fmt (84 against 81), and fmt by nothing (17 against 17), since googletest does not change
+bundled fmt (84 against 81), and fmt by nothing (17 against 17, the run without the option in
+[`runs/fmt-head12-noopt.json`](runs/fmt-head12-noopt.json), made with the cache on), since googletest does not change
 in that range.
 
 ---
@@ -68,7 +69,7 @@ the baseline:
 | `8585b96` | #53 | 29 | 5 | nothing |
 | `fa27d8b` | #52 compare more on existing entities | 33 | 7 | + 2 `NodeAttrChanged(default_arguments)` on the two `pattern_formatter` constructors, both high-risk; + 2 `NodeBodyChanged` on the `base_sink` and `ansicolor_sink` constructors, because a constructor's initializer list became part of its body hash |
 | `a122612` | #55 PLAN-004 step 5: no vendored ranking | 33 | 7 | nothing |
-| `9e21c1d` | #54 enums, aliases, variables, macros, static assertions | 81 | 13 | + 3 `NodeAdded` macros (`SPDLOG_NAMESPACE`, `_BEGIN`, `_END`); + 17 `NodeAttrChanged(replacement_hash)` on macros (`SPDLOG_LEVEL_NAME_*`, `SPDLOG_LOGGER_*` and the like); + 28 `NodeAttrChanged(sugared_signature)`, 6 of them high-risk |
+| `9e21c1d` | #54 enums, aliases, variables, macros, static assertions | 81 | 13 | + 3 `NodeAdded` macros (`SPDLOG_NAMESPACE`, `_BEGIN`, `_END`); + 16 `NodeAttrChanged(replacement_hash)` on macros (`SPDLOG_LEVEL_NAME_*`, `SPDLOG_LOGGER_*` and the like); + 29 `NodeAttrChanged(sugared_signature)`, 6 of them high-risk |
 | `8a9b6fd`, `67d24cc`, `62dc064` | #60 step 6, #65, #66 | 81 | 13 | nothing |
 
 Step 6's 33 and 7 is `fa27d8b`'s result: the step 6 branch was measured before #54 reached it.
@@ -91,16 +92,17 @@ SPDLOG_INLINE sinks::base_sink<Mutex>::base_sink(
 ```
 
 - `sugared_signature` is the signature as written. ADR-038 says an event for it alone "means the
-  spelling changed and the type did not", which is every one of these 28.
+  spelling changed and the type did not", which is every one of these 29.
 - `default_arguments` is each default as clang prints it (ADR-043), so
   `spdlog::details::os::default_eol` → `details::os::default_eol` is a change.
 - Bodies are compared as tokens, so a dropped qualifier in an initializer list is a change.
-- The 17 macros now write `SPDLOG_NAMESPACE::` where they wrote `spdlog::`, a real change: the
-  namespace became configurable.
+- The 16 macros' replacement lists changed. Those checked, such as `SPDLOG_LEVEL_NAME_TRACE`
+  and `SPDLOG_INFO`, now write `SPDLOG_NAMESPACE::` where they wrote `spdlog::`, a real change:
+  the namespace became configurable.
 
-**A finding for ranking, not for this plan.** The 28 signature changes and the 2 default-argument
+**A finding for ranking, not for this plan.** The 29 signature changes and the 2 default-argument
 changes name the same types and values as before. Yet the two `default_arguments` events are the
-top two of the 81, and 8 of the 13 high-risk change events are among these 30. Whether a change
+top two of the 81, and 8 of the 13 high-risk change events are among these 31. Whether a change
 of spelling alone should rank that high is a question for the weights in `rank/weights.py`.
 
 ---
@@ -128,7 +130,8 @@ count for each. None is labelled `untracked`, as the step 1 report predicted.
 **The JSON's crossings.** Measured by step 6 on fmt `HEAD~12` with `--third-party test/gtest`:
 every crossing would be 7,635 per side with 22,623 sites, about 3.4 MB of JSON per side against a
 40 KB document. The document lists only the crossings out of entities that change events
-reference: 30, about 15 KB.
+reference: 30, about 15 KB. Step 6's 7,635 and the 7,623 in the table above (5,371 + 2,252) were
+taken at different commits; the code between them changed what is extracted.
 
 ---
 

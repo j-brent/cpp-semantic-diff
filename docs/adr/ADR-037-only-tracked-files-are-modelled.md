@@ -21,7 +21,7 @@ The build directory is inside the worktree: `acquire/workspace.py` configures in
 library would be modelled as first-party code. That is the defect [#3](https://github.com/j-brent/cpp-semantic-diff/issues/3) fixes for third-party code
 the repository contains, reached through files it does not contain.
 
-[PLAN-004 §3.1](../plans/PLAN-004-third-party-boundary.md#31--recognizing-third-party-code) proposed a rule and left it to step 1's measurements. On fmt `HEAD~12`, spdlog
+[PLAN-004 §3.1](https://github.com/j-brent/cpp-semantic-diff/blob/62dc064/docs/plans/PLAN-004-third-party-boundary.md#31--recognizing-third-party-code) proposed a rule and left it to step 1's measurements. On fmt `HEAD~12`, spdlog
 `HEAD~30` and leveldb `HEAD~9..~1`, no node comes from an untracked file
 ([step 1 report §2](../../reports/2026-10-10--plan-004-baseline/measurements.md#2--nodes-per-label)).
 

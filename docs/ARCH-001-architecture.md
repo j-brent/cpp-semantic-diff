@@ -271,9 +271,14 @@ node ([ADR-025](adr/ADR-025-third-party-code-must-not-change.md)).
   revision is refused as a probable typo. A tracked directory whose name looks like third-party
   code (`third_party`, `vendor`, `bundled`, …) and is not in the set gets a note suggesting the
   option. The name alone never leaves anything out.
+- **A hint names the topmost such directory**, at either revision, that is neither in, under nor
+  above a set entry. A `third_party` folder that holds only submodules gets no hint.
+- **Where entries nest**, such as a submodule inside a declared folder, a file belongs to the
+  innermost entry, the more specific name.
 - **Third-party code must not change.** Before any worktree is built, the changed files are
   checked against the set, and a comparison where any third-party path changed is refused,
-  naming each one. Analyzing third-party changes is deferred, not rejected.
+  naming each one. A rename is checked at both ends. Analyzing third-party changes is deferred,
+  not rejected.
 - **Third-party translation units are not parsed.** Their compile-database entries are dropped,
   and the count is stated.
 - **Untracked files are outside the model too**, such as generated headers and downloaded
@@ -286,6 +291,12 @@ node ([ADR-025](adr/ADR-025-third-party-code-must-not-change.md)).
   `C library`, `compiler builtins`, `boost`); `untracked`; and, for a target inside the
   repository that no node holds, what the extractor saw (`implicit` for special members clang
   generated, `function-local`, `template instantiation`, else `unresolved`).
+- **The include directories that name a library** are the TU's `-I`, `-isystem`, `-iquote` and
+  `-idirafter` directories, the toolchain's builtin header directory, `/usr/local/include` and
+  `/usr/include`, with the multiarch subdirectory (`x86_64-linux-gnu`) skipped. None are
+  discovered from the compiler.
+- **A crossing whose caller is no node is dropped**, and still counted under its label. The
+  completeness record's `edges_total` is resolved edges plus crossings, dropped ones included.
 - **Crossings are for visualization only.** Match, diff, classify and rank never read them, and
   a test holds that adding or removing crossings leaves the change events and the ranking
   identical. A wrong label costs nothing beyond the picture it appears in.
