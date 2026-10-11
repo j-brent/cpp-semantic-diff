@@ -99,7 +99,8 @@ variables, `static` or not, are part of its body.
   typedefs of one name in two files of one name merge, as statics do
   ([ADR-022](ADR-022-same-basename-statics-merge.md)). A `using` alias has no linkage either,
   and its USR names no file, so two source files that each declare their own alias of one
-  qualified name give one node: whichever observation ranks highest.
+  qualified name give one node. The merge is silent: the observation that ranks highest is
+  kept whatever the TU order, and nothing reports that the two disagreed.
 - `constexpr-global-value` and `static-data-member-value` in the change catalog pass.
   `global-initializer-calls-another` now reports the initializer's hash changing; it stays an
   expected failure because it asks for the call, which is step 8, out of v0
