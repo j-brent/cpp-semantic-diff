@@ -39,8 +39,12 @@ although the superproject does not track it.
 - Downloaded dependencies and generated declarations cannot enter the model as first-party code.
 - No fixture result changes: the rule removes no node from any of the three.
 - The fixtures do not exercise the rule, so its tests need a repository with an untracked header.
-- Extraction needs each revision's tracked-file list. It is a function of the revision, which
-  the cache key already contains.
+- Extraction needs each revision's tracked-file list, read from the revision's tree
+  (`git ls-tree`). The per-TU cache key does not contain the revision: it hashes each header's
+  content under its repository-relative path. A header untracked at one revision and committed
+  unchanged at another would hash the same both times, so the key also records whether git
+  tracks each repository header the TU reads. Tracking a file the TU does not read changes
+  nothing in its key.
 
 ## Alternatives rejected
 

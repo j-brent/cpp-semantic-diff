@@ -40,7 +40,7 @@ from cpp_semantic_diff.errors import ClangToolchainError, SemanticDiffError
 from cpp_semantic_diff.model.ir import Model, TuResult, TuStatus
 from cpp_semantic_diff.produce.build import build_model
 from cpp_semantic_diff.produce.cache import find_scanner
-from cpp_semantic_diff.produce.extract import TuExtract
+from cpp_semantic_diff.produce.extract import NO_BOUNDARY, Boundary, TuExtract
 from cpp_semantic_diff.produce.toolchain import (
     PROBE_ARGS,
     PROBE_SOURCE,
@@ -261,7 +261,9 @@ class TestNothingVanishes:
         `marked_late` is the executor marking the dead pool's futures one at a time, so
         that TU's future may not even look broken yet when it reaches the head."""
         pool = _PoolWithScriptedDeaths({0: {"a.cpp", "b.cpp", "c.cpp"}}, marked_late=marked_late)
-        monkeypatch.setattr(parallel, "_Pool", lambda workers, toolchain: pool)
+        monkeypatch.setattr(
+            parallel, "_Pool", lambda workers, toolchain, boundary=NO_BOUNDARY: pool
+        )
 
         assert scripted_build(tmp_path) == [
             ("a.cpp", TuStatus.FAILED),
@@ -279,7 +281,9 @@ class TestNothingVanishes:
         pool = _PoolWithScriptedDeaths(
             {0: {"a.cpp", "b.cpp", "c.cpp"}, 1: {"b.cpp"}}, marked_late=marked_late
         )
-        monkeypatch.setattr(parallel, "_Pool", lambda workers, toolchain: pool)
+        monkeypatch.setattr(
+            parallel, "_Pool", lambda workers, toolchain, boundary=NO_BOUNDARY: pool
+        )
 
         assert scripted_build(tmp_path) == [
             ("a.cpp", TuStatus.FAILED),
@@ -479,8 +483,10 @@ def _die() -> TuExtract:
 class _PoolThatLosesAWorker(parallel._Pool):
     """The real pool, except that one TU's task kills the process it lands in."""
 
-    def __init__(self, workers: int, toolchain: Toolchain) -> None:
-        super().__init__(workers, toolchain)
+    def __init__(
+        self, workers: int, toolchain: Toolchain, boundary: Boundary = NO_BOUNDARY
+    ) -> None:
+        super().__init__(workers, toolchain, boundary)
         self.killed = False
 
     def submit(self, entry: CompileEntry, root: Path) -> tuple[int, Future[TuExtract]]:

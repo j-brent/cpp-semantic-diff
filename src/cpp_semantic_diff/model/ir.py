@@ -221,6 +221,41 @@ class Edge(BaseModel):
         return EdgeId(f"{self.src}|{self.kind.value}|{self.dst}")
 
 
+#: Crossing labels that name no path or library (ADR-025). A third-party crossing is
+#: labelled with its directory (`test/gtest`) and an outside-the-repository one with the library
+#: (`C++ standard library`, `boost`).
+UNTRACKED = "untracked"
+IMPLICIT = "implicit"
+FUNCTION_LOCAL = "function-local"
+TEMPLATE_INSTANTIATION = "template instantiation"
+COMPILER_BUILTINS = "compiler builtins"
+UNRESOLVED = "unresolved"
+
+
+class Crossing(BaseModel):
+    """A relation from the model to something outside it (ADR-025).
+
+    For visualization only: matching, diffing, classification and ranking never read it, and
+    `Model.fingerprint` leaves it out. The callee is a qualified name and not an identity,
+    because there is no node to identify -- overloads of one name are one crossing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    src: NodeId
+    callee: str = Field(description="Qualified name of what the relation leads to.")
+    kind: EdgeKind
+    label: str = Field(
+        description="Where it leads: a third-party path, a library outside the repository, "
+        "`untracked`, or what kind of in-repository entity no declaration produced."
+    )
+    locations: list[Location] = Field(default_factory=list)
+
+    @property
+    def id(self) -> str:
+        return f"{self.src}|{self.kind.value}|{self.callee}"
+
+
 class TuStatus(StrEnum):
     PARSED = "parsed"
     FAILED = "failed"
@@ -252,9 +287,10 @@ class Completeness(BaseModel):
     about entities in the TUs that did parse, because what is missing may be what would
     have contradicted them.
 
-    *Boundary* is what `edges_closed` measures: relations whose endpoint no declaration in this
-    repository owns, dropped by the builder because they cannot be nodes. Calls into `std::`,
-    into libc, and into implicit special members nobody wrote. This is not a hole in coverage;
+    *Boundary* is what `edges_closed` measures: relations whose endpoint is outside the model,
+    kept as crossings rather than edges because they cannot be nodes. Calls into `std::`, into
+    libc, into third-party code (ADR-025), and into implicit special members nobody wrote.
+    `crossings_by_label` itemizes them by where they lead. This is not a hole in coverage;
     it is where the modelled world ends, and with full coverage every dropped edge points
     outside it by construction. It is *expected*, it is large on any real repository
     (`produce/build.py` gives fmt's figure), and it must be stated as a number on every run
@@ -279,9 +315,15 @@ class Completeness(BaseModel):
     )
     edges_dropped: int = Field(
         default=0,
-        description="Distinct edges dropped because an endpoint resolves to no declared "
-        "node (ARCH-001 §11). The boundary of the model, quantified -- see the class "
-        "docstring on why this is not the same kind of incompleteness as a failed TU.",
+        description="Distinct relations that lead outside the model (ARCH-001 §11): the "
+        "total of `crossings_by_label`. The boundary of the model, quantified -- see the "
+        "class docstring on why this is not the same kind of incompleteness as a failed TU.",
+    )
+    crossings_by_label: dict[str, int] = Field(
+        default_factory=dict,
+        description="`edges_dropped`, itemized by where each relation leads. "
+        "Counts the model's crossings, and also the ones dropped because their caller is not a "
+        "node, under the same labels.",
     )
 
     build_available: bool = False
@@ -381,6 +423,11 @@ class Model(BaseModel):
     rev: str = Field(description="Resolved commit SHA, not a ref name.")
     nodes: dict[NodeId, Node] = Field(default_factory=dict)
     edges: list[Edge] = Field(default_factory=list)
+    crossings: list[Crossing] = Field(
+        default_factory=list,
+        description="Relations that leave the model, for visualization only (ADR-025). "
+        "Nothing that compares or ranks reads them.",
+    )
     completeness: Completeness = Field(default_factory=Completeness)
 
     def add_node(self, node: Node) -> None:

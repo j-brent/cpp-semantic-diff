@@ -35,6 +35,7 @@ from cpp_semantic_diff.acquire import (
     refuse_changed_third_party,
     resolve_revs,
     third_party_set,
+    tracked_files,
 )
 from cpp_semantic_diff.acquire.tokens import is_cpp
 from cpp_semantic_diff.acquire.workspace import checkout
@@ -430,8 +431,8 @@ def diff(
         )
 
     # ADR-025. Before any worktree, so a mistyped `--third-party` is refused in a
-    # second. Reported in the document and checked for changes below; not yet applied to
-    # extraction.
+    # second. Reported in the document, checked for changes below, and left out of both
+    # models.
     third_party_paths = third_party_set(repo, revs, third_party or ())
 
     changes = file_changes(repo, revs)
@@ -462,7 +463,15 @@ def diff(
             # that resolves flag > $CPPSD_WORKERS > what this machine can run, and a
             # default filled in at this layer would shadow the environment variable
             # for every run -- two mechanisms for one knob, disagreeing silently.
-            models[label] = build_model(co, toolchain=toolchain, cache=cache, workers=workers)
+            models[label] = build_model(
+                co,
+                toolchain=toolchain,
+                cache=cache,
+                workers=workers,
+                third_party=third_party_paths,
+                # ADR-037: only what git tracks at this revision is modelled.
+                tracked=tracked_files(repo, co.rev),
+            )
             setattr(timings, slot, time.perf_counter() - t)
         base_model, head_model = models["base"], models["head"]
 

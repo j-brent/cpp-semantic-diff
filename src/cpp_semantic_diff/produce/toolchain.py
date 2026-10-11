@@ -321,6 +321,9 @@ class Toolchain:
     resource_dir: Path | None = None
     #: What the library reported for the probe parse, or None if it would not say.
     target: str | None = None
+    #: The directory the probe found `stddef.h` in: the compiler's builtin headers. Used only
+    #: to label crossings into it, so it is not part of `id`.
+    builtin_dir: Path | None = None
 
     @property
     def major(self) -> int:
@@ -388,6 +391,15 @@ def _probe(resource_dir: Path | None) -> ci.TranslationUnit:
         args=args,
         unsaved_files=[("cppsd_probe.cpp", PROBE_SOURCE)],
     )
+
+
+def builtin_header_dir(probe: ci.TranslationUnit) -> Path | None:
+    """Where the probe's `stddef.h` came from, or None if it did not say."""
+    for inclusion in probe.get_includes():
+        name = inclusion.include.name if inclusion.include is not None else ""
+        if Path(name).name == "stddef.h":
+            return Path(name).resolve().parent
+    return None
 
 
 def load() -> Toolchain:
@@ -463,5 +475,6 @@ def load() -> Toolchain:
         release=release,
         resource_dir=resource_dir,
         target=library_target(probe),
+        builtin_dir=builtin_header_dir(probe),
     )
     return _loaded

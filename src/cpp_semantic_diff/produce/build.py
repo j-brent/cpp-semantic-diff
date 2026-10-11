@@ -18,9 +18,11 @@ an *explicit* specialization is hand-written code with its own identity and must
 collapsed into its primary template.
 
 **Fill `Completeness` honestly.** One `TuResult` per TU including the ones that failed, the
-producer that ran, and the count of what could not be resolved (ARCH-001 §4.4, §11). The
-last of those is `edges_total`/`edges_dropped` -- two integers rather than a sentence,
-because §10 makes the JSON the product and a consumer cannot act on prose.
+producer that ran, and the count of what leads outside the model (ARCH-001 §4.4, §11). The
+last of those is `edges_total`/`edges_dropped` and `crossings_by_label` -- numbers rather than
+a sentence, because §10 makes the JSON the product and a consumer cannot act on prose. The
+relations themselves are `Model.crossings` (ADR-025): extraction records the ones it sees leave,
+and this module turns every edge no node answers into one, labelled by `extract.fallback_label`.
 
 Parsing dominates extraction time, so the parse loop and the assembly are separate functions.
 `assemble` consumes an *iterable of partials* and never touches libclang or the disk, which is
@@ -39,14 +41,18 @@ them, so the model is the same one either way.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 
 import clang.cindex as ci
 
+from cpp_semantic_diff.acquire.third_party import ThirdPartySet
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileEntry
 from cpp_semantic_diff.model.ir import (
+    UNRESOLVED,
     Completeness,
+    Crossing,
     Edge,
     Model,
     Node,
@@ -56,13 +62,17 @@ from cpp_semantic_diff.model.ir import (
 from cpp_semantic_diff.produce.cache import TuCache
 from cpp_semantic_diff.produce.extract import (
     LIBCLANG_LIMITS,
+    NO_BOUNDARY,
+    Boundary,
     TuExtract,
     extract,
     language_mode,
+    merge_crossing,
     merge_edge,
     merge_node,
+    third_party_owner,
 )
-from cpp_semantic_diff.produce.parallel import parallel_extracts, worker_count
+from cpp_semantic_diff.produce.parallel import parallel_extracts, tu_path, worker_count
 from cpp_semantic_diff.produce.toolchain import Toolchain
 
 
@@ -72,6 +82,7 @@ def tu_extracts(
     root: Path,
     toolchain: Toolchain,
     index: ci.Index | None = None,
+    boundary: Boundary = NO_BOUNDARY,
 ) -> Iterator[TuExtract]:
     """Parse each entry into a partial model, one `Index` for all of them.
 
@@ -85,7 +96,7 @@ def tu_extracts(
     """
     index = index or ci.Index.create()
     for entry in entries:
-        yield extract(entry, root=root, toolchain=toolchain, index=index)
+        yield extract(entry, root=root, toolchain=toolchain, index=index, boundary=boundary)
 
 
 def resolve(usr: str, nodes: dict[NodeId, Node], aliases: dict[str, str]) -> NodeId | None:
@@ -132,12 +143,14 @@ def assemble(
     nodes: dict[NodeId, Node] = {}
     edges: dict[str, Edge] = {}
     aliases: dict[str, str] = {}
+    targets: dict[str, tuple[str, str]] = {}
     results: list[TuResult] = []
 
     # Edges cannot be resolved while nodes are still arriving: an endpoint declared by the
     # last TU is not dangling, it is early. So they are held and resolved in one pass once
     # the node set is closed.
     pending: list[Edge] = []
+    pending_crossings: list[Crossing] = []
 
     for tu in extracts:
         results.append(tu.result)
@@ -149,25 +162,51 @@ def assemble(
             merge_node(nodes, node if node.id in nodes else node.model_copy(deep=True))
         for instantiation, template in tu.aliases.items():
             aliases.setdefault(instantiation, template)
+        for usr, target in tu.targets.items():
+            # The least, so that two TUs that disagree give the same answer in any order.
+            if usr not in targets or target < targets[usr]:
+                targets[usr] = target
         pending.extend(tu.edges.values())
+        pending_crossings.extend(tu.crossings.values())
 
-    # Distinct dropped edges, not dropped arrivals. An edge arrives once per TU that sees it,
-    # so a count of arrivals would divide one population by another, and the ratio would mean
-    # nothing. The denominator this pairs with is `len(unresolved) + len(edges)`, so the ratio
-    # `Completeness.edge_residue` is over the same population on both sides of the bar.
-    unresolved: set[str] = set()
+    # Relations that leave the model: the ones extraction saw leave, and the edges no node
+    # answers. Distinct, not arrivals -- a relation arrives once per TU that sees it, so a count
+    # of arrivals would divide one population by another. `edges_total` pairs resolved edges
+    # with these, so `Completeness.edge_residue` is over one population on both sides of the bar.
+    crossings: dict[str, Crossing] = {}
+    #: Crossings whose caller is no node either, keyed like a crossing, valued by label.
+    #: Counted under their label and not kept: a crossing out of nothing has nothing to draw.
+    orphaned: dict[str, str] = {}
+
+    def cross(src: str, callee: str, crossing: Crossing | Edge, label: str) -> None:
+        caller = resolve(src, nodes, aliases)
+        if caller is None:
+            key = f"{src}|{crossing.kind.value}|{callee}"
+            orphaned[key] = min(label, orphaned.get(key, label))
+            return
+        merge_crossing(crossings, caller, callee, crossing.kind, label, crossing.locations)
+
+    for crossing in pending_crossings:
+        cross(crossing.src, crossing.callee, crossing, crossing.label)
 
     for edge in pending:
         src = resolve(edge.src, nodes, aliases)
         dst = resolve(edge.dst, nodes, aliases)
-        if src is None or dst is None:
-            # Dropped, and counted in `Completeness` rather than discarded quietly. An
-            # unresolvable endpoint is not a defect to hide: most of these are genuinely
-            # external (`std::`, libc, builtins) and the rest are calls to implicit special
-            # members that no one declared. Synthesizing nodes for entities nobody wrote would
-            # put half a dozen phantoms on every class and make them diffable; reporting the
-            # count says what is true (ARCH-001 §11).
-            unresolved.add(edge.id)
+        if dst is None:
+            # Declared in a file the model covers, yet no declaration produced a node: an
+            # implicit special member, a lambda's or local class's member, an instantiation
+            # whose template is no node. A crossing, labelled with what the
+            # extractor saw the target was. Synthesizing nodes for entities nobody wrote would
+            # put half a dozen phantoms on every class and make them diffable; recording the
+            # crossing says what is true (ARCH-001 §11).
+            name, label = targets.get(edge.dst, (edge.dst, UNRESOLVED))
+            cross(edge.src, name, edge, label)
+            continue
+        if src is None:
+            # A target in the model, and a source that is not -- e.g. the parent of a member
+            # defined out of line for a class the model leaves out. Nothing to draw, but
+            # still a relation that leaves the model.
+            orphaned[f"{edge.src}|{edge.kind.value}|{edge.dst}"] = UNRESOLVED
             continue
         # Aliasing merges as well as resolves: two calls to two instantiations of one template
         # are one call to the template, which is the answer ARCH-001 §5 asks for -- an
@@ -185,8 +224,11 @@ def assemble(
         # consumer either parse prose or claim a completeness it did not have (ARCH-001 §10,
         # §11). These two integers are the whole fact; whether it is alarming is
         # `Completeness.edges_closed`'s question and not this module's.
-        edges_total=len(unresolved) + len(edges),
-        edges_dropped=len(unresolved),
+        edges_total=len(edges) + len(crossings) + len(orphaned),
+        edges_dropped=len(crossings) + len(orphaned),
+        crossings_by_label=dict(
+            sorted(Counter([*(c.label for c in crossings.values()), *orphaned.values()]).items())
+        ),
         build_available=build_available,
         # `producers` names what ran, `producer_version` is the cache-key component
         # (ARCH-001 §9, §13). Both are the release triple rather than the library's own
@@ -212,6 +254,16 @@ def assemble(
         rev=rev,
         nodes=dict(sorted(nodes.items())),
         edges=sorted(edges.values(), key=lambda e: e.id),
+        crossings=[
+            c.model_copy(
+                update={
+                    "locations": sorted(
+                        c.locations, key=lambda loc: (loc.file, loc.line, loc.column or 0)
+                    )
+                }
+            )
+            for c in sorted(crossings.values(), key=lambda c: c.id)
+        ],
         completeness=completeness,
     )
 
@@ -236,6 +288,8 @@ def build_model(
     index: ci.Index | None = None,
     cache: TuCache | bool = True,
     workers: int | None = None,
+    third_party: ThirdPartySet | None = None,
+    tracked: frozenset[str] | None = None,
 ) -> Model:
     """The model of one revision, from a materialized checkout and a verified parser.
 
@@ -259,8 +313,19 @@ def build_model(
     parallel parsing of a fully warm build has nothing to parse, and a cached build with 20
     invalidated TUs is 20 serial parses. `index` applies to the serial path only -- a
     worker's `Index` belongs to the process that owns it.
+
+    `third_party` is the comparison's third-party set (ADR-025). Its translation units are not
+    parsed, and declarations in its headers are not modelled. `tracked` is every path git
+    tracks at this revision (`acquire.tracked_files`); declarations in any other file under the
+    worktree are not modelled (ADR-037). None skips that rule, for a checkout with no git
+    history. A `TuCache` passed in must have been opened with the same boundary.
     """
-    entries = checkout.cpp_entries
+    paths = third_party.paths if third_party is not None else ()
+    boundary = Boundary(third_party=paths, tracked=tracked)
+    cpp_entries = checkout.cpp_entries
+    entries = [
+        e for e in cpp_entries if third_party_owner(tu_path(e, checkout.path), paths) is None
+    ]
     notes: list[str] = []
 
     # The database describes the build, which is wider than the v0 model: C sources,
@@ -272,8 +337,19 @@ def build_model(
             f"{non_cpp} of {len(checkout.compile_db)} compile-database entries are not C++ "
             f"and were not modelled"
         )
+    # The same statement for third-party sources: excluded by decision (ADR-025), and said.
+    skipped = len(cpp_entries) - len(entries)
+    if skipped:
+        notes.append(
+            f"{skipped} of {len(cpp_entries)} C++ compile-database entries are third-party "
+            f"and were not parsed"
+        )
 
-    tu_cache = TuCache.open(checkout, toolchain=toolchain) if cache is True else (cache or None)
+    tu_cache = (
+        TuCache.open(checkout, toolchain=toolchain, boundary=boundary)
+        if cache is True
+        else (cache or None)
+    )
 
     # One worker is the serial loop, not a pool of one: no spawn, no pickling, no second
     # `Index`. It is the path every measurement is compared against and the answer to a
@@ -281,7 +357,13 @@ def build_model(
     count = worker_count(workers, tasks=len(entries))
     if count == 1:
         partials: Iterable[TuExtract] = (
-            tu_extracts(entries, root=checkout.path, toolchain=toolchain, index=index)
+            tu_extracts(
+                entries,
+                root=checkout.path,
+                toolchain=toolchain,
+                index=index,
+                boundary=boundary,
+            )
             if tu_cache is None
             else tu_cache.extracts(entries, index=index)
         )
@@ -292,6 +374,7 @@ def build_model(
             toolchain=toolchain,
             cache=tu_cache,
             workers=count,
+            boundary=boundary,
         )
     if tu_cache is not None:
         partials = _noting(tu_cache, partials, notes)

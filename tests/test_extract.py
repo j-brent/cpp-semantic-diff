@@ -30,8 +30,10 @@ from cpp_semantic_diff.produce.extract import (
     TuExtract,
     body_hash,
     extract,
+    library_label,
     merge_edge,
     merge_node,
+    multiarch,
     parse_arguments,
 )
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
@@ -1013,3 +1015,38 @@ class TestBodyHashHelper:
         result = run(tmp_path, toolchain, {"a.cpp": "struct S { int x; };"})
         assert body_hash is not None  # imported, exercised through nodes below
         assert named(result, "S::x").body_hash is None
+
+
+class TestNamingALibraryOutsideTheRepository:
+    """The header's path relative to the search directory that found it."""
+
+    BUILTINS = Path("/usr/lib/llvm-18/lib/clang/18/include")
+    DIRS = (Path("/opt/deps/include"), BUILTINS, Path("/usr/local/include"), Path("/usr/include"))
+    ARCH = "x86_64-linux-gnu"
+
+    def label(self, path: str) -> str:
+        return library_label(path, Path("/"), self.DIRS, self.BUILTINS, self.ARCH)
+
+    @pytest.mark.parametrize(
+        ("path", "expected"),
+        [
+            ("/usr/lib/llvm-18/lib/clang/18/include/stddef.h", "compiler builtins"),
+            ("/usr/include/c++/13/vector", "C++ standard library"),
+            ("/usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h", "C++ standard library"),
+            ("/usr/local/opt/llvm/include/c++/v1/vector", "C++ standard library"),
+            ("/usr/include/stdio.h", "C library"),
+            ("/usr/include/x86_64-linux-gnu/sys/stat.h", "C library"),
+            ("/usr/include/x86_64-linux-gnu/bits/types.h", "C library"),
+            ("/usr/include/boost/optional.hpp", "boost"),
+            ("/usr/include/zlib.h", "zlib"),
+            ("/opt/deps/include/openssl/ssl.h", "openssl"),
+        ],
+    )
+    def test_labels(self, path: str, expected: str) -> None:
+        assert self.label(path) == expected
+
+    def test_multiarch_drops_only_the_vendor(self) -> None:
+        assert multiarch("x86_64-pc-linux-gnu") == "x86_64-linux-gnu"
+        assert multiarch("aarch64-unknown-linux-gnu") == "aarch64-linux-gnu"
+        assert multiarch("x86_64-linux-gnu") == "x86_64-linux-gnu"
+        assert multiarch(None) is None
