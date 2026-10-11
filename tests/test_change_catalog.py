@@ -1,7 +1,7 @@
 """The change catalog: for each common change, does the reviewer get the right change event?
 
 Each case is a before, an after and the outcome a reviewer should get, run through the real
-extractor, matcher and differ. Where the cases come from, and what each produced on
+extractor, matcher, differ and derive stage. Where the cases come from, and what each produced on
 2026-10-10, is in reports/2026-10-10--up-to-speed/the-model.md (section 4) and the probe
 scripts in `model-probes/` beside it.
 
@@ -24,6 +24,7 @@ import pytest
 
 from cpp_semantic_diff.acquire.tokens import LineHunk, TokenDelta, changed_runs
 from cpp_semantic_diff.acquire.workspace import CompileEntry
+from cpp_semantic_diff.derive import derive_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.diff.coverage import measure_coverage
 from cpp_semantic_diff.errors import PreconditionError
@@ -234,6 +235,29 @@ def relation(entity: str, other: str) -> Expect:
         f"an event about {entity} naming {other}",
         lambda o: any(o.subject(e) == entity and other in o.names(e) for e in o.events),
     )
+
+
+def callers_flagged(*expected: tuple[str, str, bool]) -> Expect:
+    """Exactly these calls are flagged as calls into a changed signature: (caller, callee,
+    whether the caller was itself edited). None given means no call is flagged.
+
+    Read off the payload's `caller`, `callee` and `caller_edited` rather than the kind, like
+    the rest of the vocabulary (ADR-040).
+    """
+
+    def flags(o: Outcome) -> list[tuple[str, str, bool]]:
+        return sorted(
+            (o.name(str(e.payload["caller"])), o.name(str(e.payload["callee"])), edited)
+            for e in o.events
+            if {"caller", "callee"} <= e.payload.keys()
+            and isinstance(edited := e.payload.get("caller_edited"), bool)
+        )
+
+    says = ", ".join(
+        f"{caller} -> {callee} ({'edited' if edited else 'not edited'})"
+        for caller, callee, edited in expected
+    )
+    return Expect(f"calls flagged: {says or 'none'}", lambda o: flags(o) == sorted(expected))
 
 
 def refused(name: str) -> Expect:
@@ -615,6 +639,32 @@ CATALOG = [
         not_replaced("helper"),
         renamed_to="b.cpp",
     ),
+    # Each call into a changed signature that existed before is flagged, saying whether the
+    # caller was edited (ADR-040). A new call was written against the new signature.
+    case(
+        "unedited-caller-of-changed-signature",
+        "void f(int) {}\nvoid g() { f(1); }",
+        "void f(double) {}\nvoid g() { f(1); }",
+        callers_flagged(("g", "f", False)),
+    ),
+    case(
+        "edited-caller-of-changed-signature",
+        "void f(int) {}\nvoid g() { f(1); }",
+        "void f(double) {}\nvoid g() { f(2); }",
+        callers_flagged(("g", "f", True)),
+    ),
+    case(
+        "new-caller-of-changed-signature",
+        "void f(int) {}\nvoid g() {}",
+        "void f(double) {}\nvoid g() { f(1); }\nvoid h() { f(1); }",
+        callers_flagged(),
+    ),
+    case(
+        "caller-of-two-changed-signatures",
+        "void f(int) {}\nvoid h(int) {}\nvoid g() { f(1); h(1); }",
+        "void f(double) {}\nvoid h(long) {}\nvoid g() { f(1); h(1); }",
+        callers_flagged(("g", "f", False), ("g", "h", False)),
+    ),
     # The three probes that produced change events, but not all the ones a reviewer needs.
     case(
         "template-stops-calling",
@@ -713,7 +763,9 @@ def test_change_catalog(
     head = build_model(toolchain, tmp_path / "head", after, "b" * 40, file=head_file)
     renames = {"a.cpp": head_file} if head_file != "a.cpp" else None
     corr = match_models(base, head, renames=renames)
-    outcome = Outcome(base, head, diff_models(base, head, corr))
+    # Diff, then derive: the derived change events are part of what the reviewer gets.
+    events = derive_events(diff_models(base, head, corr), base, head, corr)
+    outcome = Outcome(base, head, events)
     unmet = [e.says for e in expect if not e.holds(outcome)]
     assert not unmet, f"expected {'; '.join(unmet)}. Got:\n{outcome.describe()}"
 
@@ -869,3 +921,29 @@ def test_a_refused_pairing_is_told_apart_from_a_plain_replacement_and_a_change()
     assert not expect.holds(
         hand_built([old, new], [], ambiguous(ChangeEventKind.NODE_ADDED, new.id))
     )
+
+
+def test_a_flagged_caller_is_told_apart_from_its_near_misses() -> None:
+    f, g, h = (entity(NodeKind.FUNCTION, name) for name in ("f", "g", "h"))
+    call = Edge(src=g.id, dst=f.id, kind=EdgeKind.CALLS)
+
+    def flagged(caller: Node, edited: bool) -> ChangeEvent:
+        return event(
+            ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
+            call.id,
+            caller=caller.id,
+            callee=f.id,
+            old_signature="void (int)",
+            new_signature="void (double)",
+            caller_edited=edited,
+        )
+
+    def holds(expect: Expect, *events: ChangeEvent) -> bool:
+        return expect.holds(hand_built([f, g, h], [call], *events))
+
+    assert holds(callers_flagged(("g", "f", False)), flagged(g, False))
+    assert not holds(callers_flagged(("g", "f", False)), flagged(g, True))
+    assert not holds(callers_flagged(("g", "f", False)), flagged(h, False))
+    assert not holds(callers_flagged(("g", "f", False)), flagged(g, False), flagged(h, False))
+    assert not holds(callers_flagged(("g", "f", False)))
+    assert holds(callers_flagged(), event(ChangeEventKind.EDGE_ADDED, call.id))
