@@ -1,0 +1,5 @@
+comparing HEAD~10...HEAD  (eb31d19999fd -> 7ee830d02b62)
+cannot analyze
+Third-party code changed between the two revisions: third_party/benchmark, third_party/googletest.
+v0 does not analyze changes to third-party code, so this comparison is refused (ADR-025).
+Compare a range in which these dependencies do not change.

@@ -1,0 +1,3558 @@
+{
+  "meta": {
+    "tool": "cpp-semantic-diff",
+    "tool_version": "0.0.1",
+    "schema_version": "2.0.dev",
+    "repo": "fmt",
+    "base_ref": "HEAD~12",
+    "head_ref": "HEAD",
+    "base_rev": "bcaa44d05579c75a83571821faee7acf6a9a0d55",
+    "head_rev": "e2243a6a7f4a8c09e9233a253f3d1f71e45d8cef",
+    "timings": {
+      "acquire": 0.011409184007789008,
+      "produce_base": 19.53742480900837,
+      "produce_head": 27.471441136003705,
+      "match": 0.14567608099605422,
+      "diff": 0.21229467500234023,
+      "derive": 0.00004582600377034396,
+      "classify": 0.13793158500629943,
+      "coverage": 0.17183472000760958,
+      "rank": 0.19371106498874724,
+      "total": 48.857008420993225
+    }
+  },
+  "completeness": {
+    "base": {
+      "side": "base",
+      "rev": "bcaa44d05579c75a83571821faee7acf6a9a0d55",
+      "tus_total": 49,
+      "tus_parsed": 49,
+      "tus_failed": 0,
+      "tus_cached": 0,
+      "edges_total": 18563,
+      "edges_dropped": 7623,
+      "crossings_by_label": {
+        "C library": 180,
+        "C++ standard library": 1153,
+        "compiler builtins": 2,
+        "function-local": 119,
+        "implicit": 305,
+        "template instantiation": 443,
+        "test/gtest": 5371,
+        "unresolved": 50
+      },
+      "build_available": false,
+      "producer_version": "libclang 18.1.3 x86_64-pc-linux-gnu",
+      "producers": [
+        "libclang 18.1.3 x86_64-pc-linux-gnu"
+      ],
+      "unmodelled": {
+        "friend": 45,
+        "linkage_spec": 3,
+        "using_declaration": 52,
+        "using_directive": 1
+      },
+      "language_modes": [],
+      "tus_complete": true,
+      "failures": [],
+      "notes": [
+        "2 of 51 compile-database entries are not C++ and were not modelled",
+        "1 of 50 C++ compile-database entries are third-party and were not parsed"
+      ]
+    },
+    "head": {
+      "side": "head",
+      "rev": "e2243a6a7f4a8c09e9233a253f3d1f71e45d8cef",
+      "tus_total": 49,
+      "tus_parsed": 49,
+      "tus_failed": 0,
+      "tus_cached": 0,
+      "edges_total": 18565,
+      "edges_dropped": 7623,
+      "crossings_by_label": {
+        "C library": 180,
+        "C++ standard library": 1153,
+        "compiler builtins": 2,
+        "function-local": 119,
+        "implicit": 305,
+        "template instantiation": 443,
+        "test/gtest": 5371,
+        "unresolved": 50
+      },
+      "build_available": false,
+      "producer_version": "libclang 18.1.3 x86_64-pc-linux-gnu",
+      "producers": [
+        "libclang 18.1.3 x86_64-pc-linux-gnu"
+      ],
+      "unmodelled": {
+        "friend": 45,
+        "linkage_spec": 3,
+        "using_declaration": 52,
+        "using_directive": 1
+      },
+      "language_modes": [],
+      "tus_complete": true,
+      "failures": [],
+      "notes": [
+        "2 of 51 compile-database entries are not C++ and were not modelled",
+        "1 of 50 C++ compile-database entries are third-party and were not parsed"
+      ]
+    },
+    "renames": {
+      "complete": true,
+      "limit_needed": null
+    },
+    "limits": [
+      "One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not implied.",
+      "Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.",
+      "Implicit special members are not visible. libclang does not expose the copy and move operations the compiler writes, so a change that adds or removes one implicitly -- adding a destructor removes the implicit move operations -- produces no change event."
+    ],
+    "uncovered": {
+      "files": [
+        {
+          "side": "base",
+          "path": "include/fmt/ostream.h",
+          "lines": [
+            150,
+            159
+          ],
+          "tokens": 2,
+          "modelled": true
+        },
+        {
+          "side": "head",
+          "path": "include/fmt/ostream.h",
+          "lines": [
+            73,
+            167
+          ],
+          "tokens": 2,
+          "modelled": true
+        },
+        {
+          "side": "head",
+          "path": "src/fmt.cc",
+          "lines": [
+            22
+          ],
+          "tokens": 5,
+          "modelled": false
+        },
+        {
+          "side": "base",
+          "path": "test/add-subdirectory-test/export-lib.cc",
+          "lines": [
+            1,
+            3
+          ],
+          "tokens": 22,
+          "modelled": false
+        },
+        {
+          "side": "base",
+          "path": "test/compile-test.cc",
+          "lines": [
+            483,
+            488
+          ],
+          "tokens": 2,
+          "modelled": true
+        },
+        {
+          "side": "head",
+          "path": "test/compile-test.cc",
+          "lines": [
+            487,
+            490
+          ],
+          "tokens": 5,
+          "modelled": true
+        }
+      ],
+      "moved_tokens": 0,
+      "excluded_files": [],
+      "lines_in_unmodelled_files": 3,
+      "renames_complete": true
+    }
+  },
+  "third_party": [
+    {
+      "path": "test/gtest",
+      "sources": [
+        "declared"
+      ]
+    }
+  ],
+  "third_party_hints": [],
+  "entities": {
+    "c:@N@fmt@N@v12@N@detail": {
+      "id": "c:@N@fmt@N@v12@N@detail",
+      "kind": "namespace",
+      "name": "detail",
+      "qualified_name": "fmt::v12::detail",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/scan.h",
+        "line": 375,
+        "end_line": 629,
+        "column": 11,
+        "start_line": 375
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0": {
+      "id": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0",
+      "kind": "struct",
+      "name": "is_named_arg",
+      "qualified_name": "fmt::v12::detail::is_named_arg",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/fmt/base.h",
+        "line": 1062,
+        "end_line": 1062,
+        "column": 30,
+        "start_line": 1062
+      },
+      "sides": [
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0": {
+      "id": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0",
+      "kind": "struct",
+      "name": "is_static_named_arg",
+      "qualified_name": "fmt::v12::detail::is_static_named_arg",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/fmt/base.h",
+        "line": 1064,
+        "end_line": 1064,
+        "column": 8,
+        "start_line": 1063
+      },
+      "sides": [
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg": {
+      "id": "c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg",
+      "kind": "struct",
+      "name": "is_named_arg",
+      "qualified_name": "fmt::v12::detail::is_named_arg",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/fmt/base.h",
+        "line": 1056,
+        "end_line": 1056,
+        "column": 30,
+        "start_line": 1056
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@N@detail@ST>1#T@is_static_named_arg": {
+      "id": "c:@N@fmt@N@v12@N@detail@ST>1#T@is_static_named_arg",
+      "kind": "struct",
+      "name": "is_static_named_arg",
+      "qualified_name": "fmt::v12::detail::is_static_named_arg",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/fmt/base.h",
+        "line": 1057,
+        "end_line": 1057,
+        "column": 30,
+        "start_line": 1057
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@S@compile_test_format_as_Test@F@TestBody#": {
+      "id": "c:@S@compile_test_format_as_Test@F@TestBody#",
+      "kind": "method",
+      "name": "TestBody",
+      "qualified_name": "compile_test_format_as_Test::TestBody",
+      "signature": "void ()",
+      "symbol": "_ZN27compile_test_format_as_Test8TestBodyEv",
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 492,
+        "end_line": 496,
+        "column": 1,
+        "start_line": 492
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@S@compile_test_named_Test@F@TestBody#": {
+      "id": "c:@S@compile_test_named_Test@F@TestBody#",
+      "kind": "method",
+      "name": "TestBody",
+      "qualified_name": "compile_test_named_Test::TestBody",
+      "signature": "void ()",
+      "symbol": "_ZN23compile_test_named_Test8TestBodyEv",
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 125,
+        "end_line": 171,
+        "column": 1,
+        "start_line": 125
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@S@type_with_format_as": {
+      "id": "c:@S@type_with_format_as",
+      "kind": "struct",
+      "name": "type_with_format_as",
+      "qualified_name": "type_with_format_as",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/std-test.cc",
+        "line": 587,
+        "end_line": 587,
+        "column": 8,
+        "start_line": 587
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@S@type_with_format_as@FI@value": {
+      "id": "c:@S@type_with_format_as@FI@value",
+      "kind": "field",
+      "name": "value",
+      "qualified_name": "type_with_format_as::value",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 488,
+        "end_line": 488,
+        "column": 7,
+        "start_line": 488
+      },
+      "sides": [
+        "head"
+      ]
+    },
+    "c:@aN": {
+      "id": "c:@aN",
+      "kind": "namespace",
+      "name": "",
+      "qualified_name": "",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/posix-mock-test.cc",
+        "line": 43,
+        "end_line": 60,
+        "column": 11,
+        "start_line": 43
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:base.h@macro@FMT_VERSION": {
+      "id": "c:base.h@macro@FMT_VERSION",
+      "kind": "macro",
+      "name": "FMT_VERSION",
+      "qualified_name": "FMT_VERSION",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/fmt/base.h",
+        "line": 24,
+        "end_line": 24,
+        "column": 9,
+        "start_line": 24
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:compile-test.cc@aN@F@format_as#$@aN@S@compile_format_as_type#": {
+      "id": "c:compile-test.cc@aN@F@format_as#$@aN@S@compile_format_as_type#",
+      "kind": "function",
+      "name": "format_as",
+      "qualified_name": "format_as",
+      "signature": "int ((anonymous namespace)::compile_format_as_type)",
+      "symbol": "_ZN12_GLOBAL__N_19format_asENS_22compile_format_as_typeE",
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 487,
+        "end_line": 487,
+        "column": 5,
+        "start_line": 487
+      },
+      "sides": [
+        "base"
+      ]
+    },
+    "c:compile-test.cc@aN@S@compile_format_as_type": {
+      "id": "c:compile-test.cc@aN@S@compile_format_as_type",
+      "kind": "struct",
+      "name": "compile_format_as_type",
+      "qualified_name": "compile_format_as_type",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 484,
+        "end_line": 486,
+        "column": 8,
+        "start_line": 484
+      },
+      "sides": [
+        "base"
+      ]
+    },
+    "c:compile-test.cc@aN@S@compile_format_as_type@FI@value": {
+      "id": "c:compile-test.cc@aN@S@compile_format_as_type@FI@value",
+      "kind": "field",
+      "name": "value",
+      "qualified_name": "compile_format_as_type::value",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "test/compile-test.cc",
+        "line": 485,
+        "end_line": 485,
+        "column": 7,
+        "start_line": 485
+      },
+      "sides": [
+        "base"
+      ]
+    }
+  },
+  "crossings": {
+    "base": [
+      {
+        "src": "c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg",
+        "callee": "std::false_type",
+        "kind": "inherits",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "include/fmt/base.h",
+            "line": 1056,
+            "end_line": 1056,
+            "column": 45,
+            "start_line": 1056
+          }
+        ]
+      },
+      {
+        "src": "c:@N@fmt@N@v12@N@detail@ST>1#T@is_static_named_arg",
+        "callee": "std::false_type",
+        "kind": "inherits",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "include/fmt/base.h",
+            "line": 1057,
+            "end_line": 1057,
+            "column": 52,
+            "start_line": 1057
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "compile_test_format_as_Test::TestBody::(lambda)::operator()",
+        "kind": "calls",
+        "label": "function-local",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 490,
+            "end_line": 490,
+            "column": 3,
+            "start_line": 490
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "compile_test_format_as_Test::TestBody::(lambda)::operator()::FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+        "kind": "calls",
+        "label": "implicit",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 490,
+            "end_line": 490,
+            "column": 3,
+            "start_line": 490
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "compile_test_format_as_Test::TestBody::(lambda)::operator()::FMT_COMPILE_STRING::operator basic_string_view",
+        "kind": "calls",
+        "label": "function-local",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 490,
+            "end_line": 490,
+            "column": 3,
+            "start_line": 490
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::AssertionResult::failure_message",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 490,
+            "end_line": 490,
+            "column": 3,
+            "start_line": 490
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::AssertionResult::operator bool",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 490,
+            "end_line": 490,
+            "column": 3,
+            "start_line": 490
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::Message::Message",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 490,
+            "end_line": 490,
+            "column": 3,
+            "start_line": 490
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::internal::AssertHelper::AssertHelper",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 490,
+            "end_line": 490,
+            "column": 3,
+            "start_line": 490
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::internal::AssertHelper::operator=",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 490,
+            "end_line": 490,
+            "column": 3,
+            "start_line": 490
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::internal::EqHelper::Compare",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 490,
+            "end_line": 490,
+            "column": 3,
+            "start_line": 490
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::Test::TestBody",
+        "kind": "overrides",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 489,
+            "end_line": 489,
+            "column": 1,
+            "start_line": 489
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 489,
+            "end_line": 491,
+            "column": 1,
+            "start_line": 489
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "compile_test_named_Test::TestBody::(lambda)::operator()",
+        "kind": "calls",
+        "label": "function-local",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 127,
+            "end_line": 127,
+            "column": 59,
+            "start_line": 127
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 152,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "compile_test_named_Test::TestBody::(lambda)::operator()::FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+        "kind": "calls",
+        "label": "implicit",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 127,
+            "end_line": 127,
+            "column": 59,
+            "start_line": 127
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 152,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "compile_test_named_Test::TestBody::(lambda)::operator()::FMT_COMPILE_STRING::operator basic_string_view",
+        "kind": "calls",
+        "label": "function-local",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 127,
+            "end_line": 127,
+            "column": 59,
+            "start_line": 127
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 152,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "std::__cxx11::basic_string::c_str",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 152,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "std::__cxx11::basic_string::operator+=",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "std::__cxx11::basic_string::operator=",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "std::exception::what",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::AssertionResult::failure_message",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::AssertionResult::operator bool",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 133,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 135,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 137,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 139,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 141,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 144,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 147,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 150,
+            "column": 3,
+            "start_line": 148
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::Message::Message",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 133,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 135,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 137,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 139,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 141,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 144,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 147,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 150,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::AlwaysTrue",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::AssertHelper::AssertHelper",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 133,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 135,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 137,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 139,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 141,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 144,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 147,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 150,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::AssertHelper::operator=",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 133,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 135,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 137,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 139,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 141,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 144,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 147,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 150,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::EqHelper::Compare",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::GetTypeName",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::TrueWithString::TrueWithString",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::TrueWithString::operator bool",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::Test::TestBody",
+        "kind": "overrides",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 125,
+            "column": 1,
+            "start_line": 125
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 167,
+            "column": 1,
+            "start_line": 125
+          }
+        ]
+      }
+    ],
+    "head": [
+      {
+        "src": "c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg",
+        "callee": "std::false_type",
+        "kind": "inherits",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "include/fmt/base.h",
+            "line": 1056,
+            "end_line": 1056,
+            "column": 45,
+            "start_line": 1056
+          }
+        ]
+      },
+      {
+        "src": "c:@N@fmt@N@v12@N@detail@ST>1#T@is_static_named_arg",
+        "callee": "std::false_type",
+        "kind": "inherits",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "include/fmt/base.h",
+            "line": 1057,
+            "end_line": 1057,
+            "column": 52,
+            "start_line": 1057
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "compile_test_format_as_Test::TestBody::(lambda)::operator()",
+        "kind": "calls",
+        "label": "function-local",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 495,
+            "end_line": 495,
+            "column": 3,
+            "start_line": 495
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "compile_test_format_as_Test::TestBody::(lambda)::operator()::FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+        "kind": "calls",
+        "label": "implicit",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 495,
+            "end_line": 495,
+            "column": 3,
+            "start_line": 495
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "compile_test_format_as_Test::TestBody::(lambda)::operator()::FMT_COMPILE_STRING::operator basic_string_view",
+        "kind": "calls",
+        "label": "function-local",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 495,
+            "end_line": 495,
+            "column": 3,
+            "start_line": 495
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::AssertionResult::failure_message",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 495,
+            "end_line": 495,
+            "column": 3,
+            "start_line": 495
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::AssertionResult::operator bool",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 495,
+            "end_line": 495,
+            "column": 3,
+            "start_line": 495
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::Message::Message",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 495,
+            "end_line": 495,
+            "column": 3,
+            "start_line": 495
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::internal::AssertHelper::AssertHelper",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 495,
+            "end_line": 495,
+            "column": 3,
+            "start_line": 495
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::internal::AssertHelper::operator=",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 495,
+            "end_line": 495,
+            "column": 3,
+            "start_line": 495
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::internal::EqHelper::Compare",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 495,
+            "end_line": 495,
+            "column": 3,
+            "start_line": 495
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_format_as_Test@F@TestBody#",
+        "callee": "testing::Test::TestBody",
+        "kind": "overrides",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 492,
+            "end_line": 492,
+            "column": 1,
+            "start_line": 492
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 492,
+            "end_line": 496,
+            "column": 1,
+            "start_line": 492
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "compile_test_named_Test::TestBody::(lambda)::operator()",
+        "kind": "calls",
+        "label": "function-local",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 127,
+            "end_line": 127,
+            "column": 59,
+            "start_line": 127
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 152,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "compile_test_named_Test::TestBody::(lambda)::operator()::FMT_COMPILE_STRING::FMT_COMPILE_STRING",
+        "kind": "calls",
+        "label": "implicit",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 127,
+            "end_line": 127,
+            "column": 59,
+            "start_line": 127
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 152,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "compile_test_named_Test::TestBody::(lambda)::operator()::FMT_COMPILE_STRING::operator basic_string_view",
+        "kind": "calls",
+        "label": "function-local",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 127,
+            "end_line": 127,
+            "column": 59,
+            "start_line": 127
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 152,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "std::__cxx11::basic_string::c_str",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 152,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "std::__cxx11::basic_string::operator+=",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "std::__cxx11::basic_string::operator=",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "std::exception::what",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::AssertionResult::failure_message",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::AssertionResult::operator bool",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 133,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 135,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 137,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 139,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 141,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 144,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 147,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 150,
+            "column": 3,
+            "start_line": 148
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::Message::Message",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 133,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 135,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 137,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 139,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 141,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 144,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 147,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 150,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::AlwaysTrue",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::AssertHelper::AssertHelper",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 133,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 135,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 137,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 139,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 141,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 144,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 147,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 150,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::AssertHelper::operator=",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 133,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 135,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 137,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 139,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 141,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 144,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 147,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 150,
+            "column": 3,
+            "start_line": 148
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::EqHelper::Compare",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 131,
+            "end_line": 131,
+            "column": 3,
+            "start_line": 131
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 134,
+            "end_line": 134,
+            "column": 3,
+            "start_line": 134
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 136,
+            "end_line": 136,
+            "column": 3,
+            "start_line": 136
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 138,
+            "end_line": 138,
+            "column": 3,
+            "start_line": 138
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 140,
+            "end_line": 140,
+            "column": 3,
+            "start_line": 140
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 143,
+            "end_line": 143,
+            "column": 3,
+            "start_line": 143
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 145,
+            "end_line": 145,
+            "column": 3,
+            "start_line": 145
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 148,
+            "end_line": 148,
+            "column": 3,
+            "start_line": 148
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::GetTypeName",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::TrueWithString::TrueWithString",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::internal::TrueWithString::operator bool",
+        "kind": "calls",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 152,
+            "end_line": 153,
+            "column": 3,
+            "start_line": 152
+          }
+        ]
+      },
+      {
+        "src": "c:@S@compile_test_named_Test@F@TestBody#",
+        "callee": "testing::Test::TestBody",
+        "kind": "overrides",
+        "label": "test/gtest",
+        "locations": [
+          {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 125,
+            "column": 1,
+            "start_line": 125
+          },
+          {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 171,
+            "column": 1,
+            "start_line": 125
+          }
+        ]
+      }
+    ]
+  },
+  "change_events": [
+    {
+      "id": "EdgeAdded:222048c278a18bfa",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0|inherits|c:@N@fmt@N@v12@N@detail@ST>1#T@is_named_arg",
+      "payload": {},
+      "caused_by": "NodeAdded:3a994c39fc554b96",
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 1062,
+            "end_line": 1062,
+            "column": 54,
+            "start_line": 1062
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:3d730cfe4cfc0386",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0|inherits|c:@N@fmt@N@v12@N@detail@ST>1#T@is_static_named_arg",
+      "payload": {},
+      "caused_by": "NodeAdded:598e742b0ecf0fd0",
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 1064,
+            "end_line": 1064,
+            "column": 39,
+            "start_line": 1064
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:24a2955b4b8aa215",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail|contains|c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0",
+      "payload": {},
+      "caused_by": "NodeAdded:3a994c39fc554b96",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:190173103ae8e5c7",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail|contains|c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0",
+      "payload": {},
+      "caused_by": "NodeAdded:598e742b0ecf0fd0",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:b930e1b67216743e",
+      "kind": "EdgeAdded",
+      "subject": "c:@S@type_with_format_as|contains|c:@S@type_with_format_as@FI@value",
+      "payload": {},
+      "caused_by": "NodeAdded:66b38f7ee3fac5b6",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:e9b8c8428cf2d35d",
+      "kind": "EdgeRemoved",
+      "subject": "c:@aN|contains|c:compile-test.cc@aN@F@format_as#$@aN@S@compile_format_as_type#",
+      "payload": {},
+      "caused_by": "NodeRemoved:2e0a5c400c229b42",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:c63caccfe474b24b",
+      "kind": "EdgeRemoved",
+      "subject": "c:@aN|contains|c:compile-test.cc@aN@S@compile_format_as_type",
+      "payload": {},
+      "caused_by": "NodeRemoved:ae5f0bd431c3f1c7",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:60849501e01e2319",
+      "kind": "EdgeRemoved",
+      "subject": "c:compile-test.cc@aN@S@compile_format_as_type|contains|c:compile-test.cc@aN@S@compile_format_as_type@FI@value",
+      "payload": {},
+      "caused_by": "NodeRemoved:ae5f0bd431c3f1c7",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeAdded:3a994c39fc554b96",
+      "kind": "NodeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_named_arg>#1t0.0",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 1062,
+            "end_line": 1062,
+            "column": 30,
+            "start_line": 1062
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeAdded:598e742b0ecf0fd0",
+      "kind": "NodeAdded",
+      "subject": "c:@N@fmt@N@v12@N@detail@SP>1#T@is_static_named_arg>#1t0.0",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 1064,
+            "end_line": 1064,
+            "column": 8,
+            "start_line": 1063
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeAdded:66b38f7ee3fac5b6",
+      "kind": "NodeAdded",
+      "subject": "c:@S@type_with_format_as@FI@value",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 488,
+            "end_line": 488,
+            "column": 7,
+            "start_line": 488
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeAttrChanged:f7eb21b9a9971086",
+      "kind": "NodeAttrChanged",
+      "subject": "c:base.h@macro@FMT_VERSION",
+      "payload": {
+        "attr": "replacement_hash",
+        "old": "deb893b9ae870c8e838119bea568c507",
+        "new": "e506ddde5965b1e636f73e0c7c0e7b32"
+      },
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 24,
+            "end_line": 24,
+            "column": 9,
+            "start_line": 24
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/fmt/base.h",
+            "line": 24,
+            "end_line": 24,
+            "column": 9,
+            "start_line": 24
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "unpaired": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:5927c10cb3324d67",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@S@compile_test_format_as_Test@F@TestBody#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 489,
+            "end_line": 491,
+            "column": 1,
+            "start_line": 489
+          }
+        },
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 489,
+            "end_line": 489,
+            "column": 1,
+            "start_line": 489
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 492,
+            "end_line": 496,
+            "column": 1,
+            "start_line": 492
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 492,
+            "end_line": 492,
+            "column": 1,
+            "start_line": 492
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "unpaired": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:1a92ff3da571c487",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@S@compile_test_named_Test@F@TestBody#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 167,
+            "column": 1,
+            "start_line": 125
+          }
+        },
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 125,
+            "column": 1,
+            "start_line": 125
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 171,
+            "column": 1,
+            "start_line": 125
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 125,
+            "end_line": 125,
+            "column": 1,
+            "start_line": 125
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "unpaired": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeRemoved:2e0a5c400c229b42",
+      "kind": "NodeRemoved",
+      "subject": "c:compile-test.cc@aN@F@format_as#$@aN@S@compile_format_as_type#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 487,
+            "end_line": 487,
+            "column": 5,
+            "start_line": 487
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeRemoved:ae5f0bd431c3f1c7",
+      "kind": "NodeRemoved",
+      "subject": "c:compile-test.cc@aN@S@compile_format_as_type",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 484,
+            "end_line": 486,
+            "column": 8,
+            "start_line": 484
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeRemoved:417612c48c4d07ce",
+      "kind": "NodeRemoved",
+      "subject": "c:compile-test.cc@aN@S@compile_format_as_type@FI@value",
+      "payload": {},
+      "caused_by": "NodeRemoved:ae5f0bd431c3f1c7",
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "test/compile-test.cc",
+            "line": 485,
+            "end_line": 485,
+            "column": 7,
+            "start_line": 485
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "unpaired": "none",
+        "models_complete": true
+      }
+    }
+  ],
+  "findings": [],
+  "ranking": [
+    "NodeAdded:3a994c39fc554b96",
+    "NodeAdded:598e742b0ecf0fd0",
+    "NodeAttrChanged:f7eb21b9a9971086",
+    "EdgeAdded:222048c278a18bfa",
+    "EdgeAdded:3d730cfe4cfc0386",
+    "EdgeAdded:190173103ae8e5c7",
+    "EdgeAdded:24a2955b4b8aa215",
+    "NodeRemoved:2e0a5c400c229b42",
+    "NodeRemoved:ae5f0bd431c3f1c7",
+    "NodeRemoved:417612c48c4d07ce",
+    "NodeAdded:66b38f7ee3fac5b6",
+    "EdgeRemoved:60849501e01e2319",
+    "NodeBodyChanged:1a92ff3da571c487",
+    "NodeBodyChanged:5927c10cb3324d67",
+    "EdgeRemoved:c63caccfe474b24b",
+    "EdgeRemoved:e9b8c8428cf2d35d",
+    "EdgeAdded:b930e1b67216743e"
+  ],
+  "scores": {
+    "NodeAdded:3a994c39fc554b96": {
+      "change_event_id": "NodeAdded:3a994c39fc554b96",
+      "total": 0.5676333382565816,
+      "impact": 0.6678039273606843,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.85,
+          "weight": 0.25,
+          "contribution": 0.2125,
+          "detail": "NodeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeAdded:598e742b0ecf0fd0": {
+      "change_event_id": "NodeAdded:598e742b0ecf0fd0",
+      "total": 0.5676333382565816,
+      "impact": 0.6678039273606843,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.85,
+          "weight": 0.25,
+          "contribution": 0.2125,
+          "detail": "NodeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeAttrChanged:f7eb21b9a9971086": {
+      "change_event_id": "NodeAttrChanged:f7eb21b9a9971086",
+      "total": 0.45,
+      "impact": 0.5294117647058824,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.0,
+          "weight": 0.35,
+          "contribution": 0.0,
+          "detail": "0 dependent(s), 0 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.8,
+          "weight": 0.25,
+          "contribution": 0.2,
+          "detail": "NodeAttrChanged(replacement_hash)"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeAdded:222048c278a18bfa": {
+      "change_event_id": "EdgeAdded:222048c278a18bfa",
+      "total": 0.4426333382565816,
+      "impact": 0.5207451038312725,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeAdded:3d730cfe4cfc0386": {
+      "change_event_id": "EdgeAdded:3d730cfe4cfc0386",
+      "total": 0.4426333382565816,
+      "impact": 0.5207451038312725,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeAdded:190173103ae8e5c7": {
+      "change_event_id": "EdgeAdded:190173103ae8e5c7",
+      "total": 0.4208161993561573,
+      "impact": 0.4950778815954792,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeAdded:24a2955b4b8aa215": {
+      "change_event_id": "EdgeAdded:24a2955b4b8aa215",
+      "total": 0.4208161993561573,
+      "impact": 0.4950778815954792,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeRemoved:2e0a5c400c229b42": {
+      "change_event_id": "NodeRemoved:2e0a5c400c229b42",
+      "total": 0.35256666912829077,
+      "impact": 0.41478431662151855,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "NodeRemoved:ae5f0bd431c3f1c7": {
+      "change_event_id": "NodeRemoved:ae5f0bd431c3f1c7",
+      "total": 0.35256666912829077,
+      "impact": 0.41478431662151855,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "NodeRemoved:417612c48c4d07ce": {
+      "change_event_id": "NodeRemoved:417612c48c4d07ce",
+      "total": 0.35256666912829077,
+      "impact": 0.41478431662151855,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 2,
+      "bounded_by": "NodeRemoved:ae5f0bd431c3f1c7",
+      "exposure": "test"
+    },
+    "NodeAdded:66b38f7ee3fac5b6": {
+      "change_event_id": "NodeAdded:66b38f7ee3fac5b6",
+      "total": 0.3150666691282908,
+      "impact": 0.37066666956269506,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.85,
+          "weight": 0.25,
+          "contribution": 0.2125,
+          "detail": "NodeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 3,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "EdgeRemoved:60849501e01e2319": {
+      "change_event_id": "EdgeRemoved:60849501e01e2319",
+      "total": 0.2025666691282908,
+      "impact": 0.23831372838622447,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "NodeBodyChanged:1a92ff3da571c487": {
+      "change_event_id": "NodeBodyChanged:1a92ff3da571c487",
+      "total": 0.17756666912829078,
+      "impact": 0.20890196368034208,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 4,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "NodeBodyChanged:5927c10cb3324d67": {
+      "change_event_id": "NodeBodyChanged:5927c10cb3324d67",
+      "total": 0.17756666912829078,
+      "impact": 0.20890196368034208,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 5,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "EdgeRemoved:c63caccfe474b24b": {
+      "change_event_id": "EdgeRemoved:c63caccfe474b24b",
+      "total": 0.15000000000000002,
+      "impact": 0.17647058823529416,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.0,
+          "weight": 0.35,
+          "contribution": 0.0,
+          "detail": "0 dependent(s), 0 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "EdgeRemoved:e9b8c8428cf2d35d": {
+      "change_event_id": "EdgeRemoved:e9b8c8428cf2d35d",
+      "total": 0.15000000000000002,
+      "impact": 0.17647058823529416,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.0,
+          "weight": 0.35,
+          "contribution": 0.0,
+          "detail": "0 dependent(s), 0 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "test"
+    },
+    "EdgeAdded:b930e1b67216743e": {
+      "change_event_id": "EdgeAdded:b930e1b67216743e",
+      "total": 0.1375,
+      "impact": 0.16176470588235295,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.0,
+          "weight": 0.35,
+          "contribution": 0.0,
+          "detail": "0 dependent(s), 0 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.2,
+          "weight": 0.25,
+          "contribution": 0.05,
+          "detail": "test"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "unmatched, no candidate"
+        }
+      ],
+      "component": 3,
+      "bounded_by": null,
+      "exposure": "test"
+    }
+  },
+  "components": [
+    {
+      "index": 0,
+      "change_events": [
+        "NodeAdded:3a994c39fc554b96",
+        "NodeAdded:598e742b0ecf0fd0",
+        "EdgeAdded:222048c278a18bfa",
+        "EdgeAdded:3d730cfe4cfc0386",
+        "EdgeAdded:190173103ae8e5c7",
+        "EdgeAdded:24a2955b4b8aa215"
+      ],
+      "top_score": 0.5676333382565816
+    },
+    {
+      "index": 1,
+      "change_events": [
+        "NodeAttrChanged:f7eb21b9a9971086"
+      ],
+      "top_score": 0.45
+    },
+    {
+      "index": 2,
+      "change_events": [
+        "NodeRemoved:2e0a5c400c229b42",
+        "NodeRemoved:ae5f0bd431c3f1c7",
+        "NodeRemoved:417612c48c4d07ce",
+        "EdgeRemoved:60849501e01e2319",
+        "EdgeRemoved:c63caccfe474b24b",
+        "EdgeRemoved:e9b8c8428cf2d35d"
+      ],
+      "top_score": 0.35256666912829077
+    },
+    {
+      "index": 3,
+      "change_events": [
+        "NodeAdded:66b38f7ee3fac5b6",
+        "EdgeAdded:b930e1b67216743e"
+      ],
+      "top_score": 0.3150666691282908
+    },
+    {
+      "index": 4,
+      "change_events": [
+        "NodeBodyChanged:1a92ff3da571c487"
+      ],
+      "top_score": 0.17756666912829078
+    },
+    {
+      "index": 5,
+      "change_events": [
+        "NodeBodyChanged:5927c10cb3324d67"
+      ],
+      "top_score": 0.17756666912829078
+    }
+  ],
+  "summary": {
+    "lines_changed": 179,
+    "files_changed": 11,
+    "cpp_files_changed": 5,
+    "files_renamed": 0,
+    "changed_cpp_lines": 21,
+    "uncovered_lines": 11,
+    "uncovered_tokens": 38,
+    "change_events_reported": 17,
+    "compression": "179 lines changed -> 17 change events, 2 high-risk · 11 of 21 changed C++ lines explained by no change event",
+    "compression_ratio": 10.529411764705882,
+    "high_risk_count": 2,
+    "top_level_change_events": 8,
+    "components": 6,
+    "residue": {
+      "matched": 8615,
+      "unmatched_base": 3,
+      "unmatched_head": 3,
+      "internal_linkage_residue": 3,
+      "tiers_run": [
+        "declared",
+        "inline-namespace",
+        "name"
+      ]
+    }
+  }
+}

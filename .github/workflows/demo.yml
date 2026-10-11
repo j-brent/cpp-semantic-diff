@@ -5,7 +5,7 @@ name: demo
 #
 # The page shows both halves of the compression metric (ARCH-001 §10): the *denominator*
 # from `cppsd plan` -- what a reviewer has to read today -- and the *numerator* from
-# `cppsd diff`, which runs the whole pipeline end to end. Seven of the eight stages exist;
+# `cppsd diff`, which runs the whole pipeline end to end. Eight of the nine stages exist;
 # `enrich` is deferred post-v0 by design (ARCH-001 §13) and the summary says so.
 #
 # Wherever it can, this file pastes tool output rather than asserting facts in YAML. An
@@ -280,7 +280,7 @@ jobs:
             echo
             echo "## Still deferred, on purpose"
             echo
-            echo "\`enrich\` is the one stage of eight not built. The evidence adapters (ARCH-001 §8)"
+            echo "\`enrich\` is the one stage of nine not built. The evidence adapters (ARCH-001 §8)"
             echo "are post-v0 by design (§13), so \`findings\` is empty in the JSON above; blast"
             echo "radius, which §3 lists under \`enrich\`, shipped inside \`rank\` instead."
             echo
