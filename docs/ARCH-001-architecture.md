@@ -665,8 +665,8 @@ Three systematic limits get stated in the output itself, every time:
   reachability delta is a lower bound, not a fact, and must be rendered as one.
 - **Some of the code is not visible to the model.** libclang does not expose implicit special
   members, so a destructor that removes a class's implicit move operations changes nothing the
-  model holds; and macros are not modelled. Each model's completeness record lists these
-  (`not_visible`), and the output states them beside the other two
+  model holds. Each model's completeness record lists this (`not_visible`), and the
+  output states it beside the other two
   ([ADR-029](adr/ADR-029-libclang-limits-are-reported.md)).
 
 ---

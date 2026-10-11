@@ -350,7 +350,7 @@ class Completeness(BaseModel):
     not_visible: list[str] = Field(
         default_factory=list,
         description="What no model from this producer can show, whatever the source: "
-        "implicit special members, which libclang does not expose, and macros (ADR-029). "
+        "implicit special members, which libclang does not expose (ADR-029). "
         "The same on every run, and stated on every run, so a change the model cannot see "
         "reads as unseen rather than as absent (ARCH-001 §11).",
     )

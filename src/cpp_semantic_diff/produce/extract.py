@@ -94,18 +94,16 @@ MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.VAR_DECL: NodeKind.VARIABLE,  # unless it is local; see below
 }
 
-#: What no model this extractor builds can show, stated on every run (ADR-029). The first is
-#: libclang's limit: it does not expose the copy and move operations the compiler writes, so
-#: adding a destructor -- which removes a class's implicit move operations and turns every move
-#: into a copy -- changes nothing the model holds. The second is this extractor's own scope:
-#: a macro is not a declaration it records. Neither is worked around; a run that cannot see
-#: a change says so rather than reporting that nothing changed (ARCH-001 §11).
+#: What no model this extractor builds can show, stated on every run (ADR-029). libclang
+#: does not expose the copy and move operations the compiler writes, so adding a destructor --
+#: which removes a class's implicit move operations and turns every move into a copy --
+#: changes nothing the model holds. It is not worked around; a run that cannot see a change
+#: says so rather than reporting that nothing changed (ARCH-001 §11). Declarations the
+#: extractor skips by choice are counted instead (`TuExtract.unmodelled`).
 LIBCLANG_LIMITS: tuple[str, ...] = (
     "Implicit special members are not visible. libclang does not expose the copy and move "
     "operations the compiler writes, so a change that adds or removes one implicitly -- adding "
     "a destructor removes the implicit move operations -- produces no change event.",
-    "Macros are not modelled. A change to a macro definition produces no change event of its "
-    "own; it shows only through the declarations it changes.",
 )
 
 #: Kinds whose children are worth descending into. A function body is walked separately
