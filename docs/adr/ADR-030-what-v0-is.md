@@ -2,16 +2,18 @@
 id: ADR-030
 type: adr
 kind: frozen
-status: accepted
+status: superseded in part
 decided: 2026-10-10
 author: Brent Runyan
+superseded_by: [ADR-041]
 -->
 
 # ADR-030 · v0 is a tool whose output can be trusted on changes the repository controls
 
 *Frozen document: a decision record. Only the status line may change, when a later ADR supersedes it.*
 
-**Status:** Accepted, 2026-10-10.
+**Status:** Accepted, 2026-10-10. Superseded in part by
+[ADR-041](ADR-041-v0-scope-of-steps-6-and-7.md) on 2026-10-11.
 
 ## Context
 
