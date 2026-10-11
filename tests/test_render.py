@@ -427,7 +427,7 @@ class TestCompressionCountsWhatItClaims:
     def test_the_sentence_has_the_shape_arch_10_prints(self) -> None:
         assert (
             compression_sentence(2431, 9, 2)
-            == "2,431 lines changed -> 9 semantic events, 2 high-risk"
+            == "2,431 lines changed -> 9 change events, 2 high-risk"
         )
 
     def test_the_ratio_does_not_straddle_two_universes(self) -> None:
@@ -1009,7 +1009,7 @@ class TestTheViewIsHonestAboutItself:
         nodes = [node(f"c:@F@f{i}#", name=f"f{i}") for i in range(12)]
         doc = pipeline(model("a", *nodes), model("b"))
         out = draw(doc, limit=3)
-        assert "more top-level events" in out
+        assert "more top-level change events" in out
 
     def test_no_truncation_shows_everything(self) -> None:
         nodes = [node(f"c:@F@f{i}#", name=f"f{i}") for i in range(6)]

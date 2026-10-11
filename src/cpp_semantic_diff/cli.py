@@ -352,7 +352,7 @@ def diff(
     ] = None,
     limit: Annotated[
         int,
-        typer.Option("--limit", min=0, help="Top-level events to show. 0 shows all."),
+        typer.Option("--limit", min=0, help="Top-level change events to show. 0 shows all."),
     ] = DEFAULT_LIMIT,
     expand: Annotated[
         bool,

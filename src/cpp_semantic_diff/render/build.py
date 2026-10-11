@@ -123,7 +123,7 @@ def build_document(
 
 
 def compression_sentence(lines_changed: int, events: int, high_risk: int, vendored: int = 0) -> str:
-    """§10's line, verbatim in shape: *2,431 lines changed -> 9 semantic events, 2 high-risk*.
+    """§10's line, verbatim in shape: *2,431 lines changed -> 9 change events, 2 high-risk*.
 
     Built here rather than in a view so that every consumer prints the same claim, and so
     that the claim is in the JSON -- §10 says it "prints on every run", and a sentence a
@@ -147,9 +147,7 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int, vendor
     `summary.events_reported` is untouched and remains the complete set. It is the one figure
     nobody can audit from outside, and it may not shrink because a dependency moved.
     """
-    head = (
-        f"{lines_changed:,} lines changed -> {events:,} semantic event{'' if events == 1 else 's'}"
-    )
+    head = f"{lines_changed:,} lines changed -> {events:,} change event{'' if events == 1 else 's'}"
     if not events:
         if vendored:
             # Distinct from "nothing changed": a dependency moved and none of it reached

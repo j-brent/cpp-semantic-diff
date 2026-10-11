@@ -198,7 +198,7 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
 
     parts = []
     if s.compression_ratio is not None:
-        parts.append(f"{s.compression_ratio:.1f} lines per event")
+        parts.append(f"{s.compression_ratio:.1f} lines per change event")
     # Counted over first-party events only, like the sentence above it. A collapse count
     # taken over the whole forest would sit beside a first-party headline and describe a
     # different set -- which is the straddle this line would otherwise reintroduce one row
@@ -228,7 +228,7 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
         # §6.3: when cause attribution is uncertain, show. Saying so is the other half --
         # a refusal nobody is told about looks exactly like a rule that never fired.
         console.print(
-            f"  [yellow]{len(tree.promoted)} event(s) had an unusable cause link and are "
+            f"  [yellow]{len(tree.promoted)} change event(s) had an unusable cause link and are "
             f"shown at top level[/]"
         )
 
@@ -268,7 +268,7 @@ def _events(document: DiffDocument, tree: Collapsed, console: Console, *, limit:
     for shown, root in enumerate(roots):
         if limit and shown >= limit:
             console.print(
-                f"\n[dim]… {len(tree.roots) - shown} more top-level events "
+                f"\n[dim]… {len(tree.roots) - shown} more top-level change events "
                 f"(--limit 0 for all, or --json for every one)[/]"
             )
             break
@@ -285,7 +285,7 @@ def _component_header(document: DiffDocument, index: int | None, console: Consol
         console.print("\n[bold dim]unranked[/]")
         return
     part = next((c for c in document.components if c.index == index), None)
-    size = f"{part.size} event{'' if part and part.size == 1 else 's'}" if part else "?"
+    size = f"{part.size} change event{'' if part and part.size == 1 else 's'}" if part else "?"
     console.print(f"\n[bold]component {index}[/] [dim]· {size}[/]")
 
 

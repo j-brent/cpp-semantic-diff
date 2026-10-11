@@ -188,6 +188,15 @@ Each step is one commit, and the suite passes after each one.
 6. **Schema 2.0 and the demo.** Add `--third-party test/gtest` for fmt and
    `--third-party include/spdlog/fmt/bundled` for spdlog to `.github/workflows/demo.yml`, and
    replace the `vendored_events` row in its summary table with crossing counts.
+   The rest of [#4](https://github.com/j-brent/cpp-semantic-diff/issues/4) lands here too; the
+   code and terminal output already say "change event":
+   - JSON fields: `events` → `change_events`, `summary.events_reported` →
+     `summary.change_events_reported`, `summary.top_level_events` →
+     `summary.top_level_change_events`; `summary.vendored_events` is removed by step 5, not
+     renamed.
+   - The demo summary table: the jq paths `$s.events_reported` and `$s.top_level_events`, and
+     the labels "semantic events (numerator)" → "change events (numerator)" and "lines per
+     event" → "lines per change event".
 7. **Documents.** [`ROADMAP.md`](../../ROADMAP.md) (the order, once #3 is done), the
    `exposure.py` docstring, `README.md`, and a frozen report with the measurements from §5.
 
