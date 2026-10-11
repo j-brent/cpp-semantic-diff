@@ -283,6 +283,36 @@ class TestOneAttributeChangeIsOneEvent:
         assert only(diff(base, head), ChangeEventKind.NODE_ATTR_CHANGED).payload["new"] == 0
 
 
+class TestBaseOrderIsTheOrderOfTheBasesOnBothSides:
+    """`base_order` is reported only where the bases present on both sides are in a different
+    relative order (ADR-043). An added or removed base is an `inherits` edge event already."""
+
+    def events(self, old: str | None, new: str | None) -> list[ChangeEvent]:
+        def record(rev: str, order: str | None) -> Model:
+            return model(rev, node(C, "C", kind=NodeKind.STRUCT, attrs={"base_order": order}))
+
+        return diff(record("a", old), record("b", new))
+
+    def test_a_pure_addition_is_not_a_reorder(self) -> None:
+        assert self.events("A", "A; B") == []
+        assert self.events("", "A") == []
+        assert self.events("A; B", "A; C; B") == []
+
+    def test_a_removal_is_not_a_reorder(self) -> None:
+        assert self.events("A; B; C", "A; C") == []
+
+    def test_a_reorder_is_reported(self) -> None:
+        event = only(self.events("A; B", "B; A"), ChangeEventKind.NODE_ATTR_CHANGED)
+        assert event.payload == {"attr": "base_order", "old": "A; B", "new": "B; A"}
+
+    def test_a_reorder_alongside_an_addition_stays_visible(self) -> None:
+        event = only(self.events("A; B", "C; B; A"), ChangeEventKind.NODE_ATTR_CHANGED)
+        assert event.payload == {"attr": "base_order", "old": "A; B", "new": "C; B; A"}
+
+    def test_an_order_not_determined_on_one_side_is_not_compared(self) -> None:
+        assert self.events(None, "A; B") == []
+
+
 class TestABodyChangeIsNotAnAttributeChange:
     """ARCH-001 §4.1: `body_hash` is deliberately outside `attrs`.
 

@@ -163,7 +163,7 @@ Node
                 | enum | enumerator | alias | variable | template | file | target
   name          unqualified
   qualified_name
-  signature     normalized: typedefs resolved, defaults included, cv/ref qualifiers explicit
+  signature     normalized: typedefs resolved, cv/ref qualifiers explicit; defaults are an attribute
   symbol        mangled symbol name, when the entity has linkage
   attrs         flat, comparable key→scalar map (§4.3)
   body_hash     normalized subtree hash — formatting- and comment-insensitive
@@ -175,6 +175,28 @@ Node
 `symbol` exists from day one even though the evidence layer (§8) is deferred. It is the join key
 between the model and every binary-level tool — `abidiff`, `bloaty`, `nm`, coverage. Adding it
 later means reprocessing every cached model.
+
+**Compared state.** What `attrs` holds, per kind. Each key has a novelty weight in
+`rank/weights.py`, and is set for every node of its kinds except where noted.
+
+| Entity | Attributes |
+|---|---|
+| function, method | `access` (members only), `return_type`, `template`, `template_parameters`, `deleted`, `defaulted`, `exception_spec`, `default_arguments`, `constexpr`, `nodiscard`, `deprecated` |
+| method only | `static`, `virtual`, `pure_virtual`, `const`, `explicit` |
+| field | `access` (members only), `type`, `mutable`, `default_member_init`, `bitfield_width` (bit-fields only) |
+| class, struct, union | `access` (members only), `template`, `abstract`, `deprecated`, `final`, `base_order` |
+| `inherits` edge | `access`, `virtual` |
+
+A constructor's member initializer list is part of its `body_hash`, not an attribute.
+
+Default arguments are not part of the signature, which is the function's type: a changed
+default is `NodeAttrChanged(default_arguments)` on the same function. `base_order` is reported
+only where the bases on both sides are in a different relative order, so a base added or
+removed is its `inherits` edge event alone. That is a diff rule, not a cause rule, and §6.3 has
+no row for it ([ADR-043](adr/ADR-043-default-arguments-and-base-order-are-attributes.md)).
+
+Known gaps: clang does not print `constexpr` on a defaulted special member, so it reads
+`false`; a function-try-block has no `body_hash`.
 
 `body_hash` is deliberately separate from `attrs`. An attribute change (`virtual` added, `const`
 dropped, access widened) is a *specific* change event with a known meaning. A body change is
@@ -195,7 +217,7 @@ Edge
   kind          contains | declares | defines | inherits | overrides | calls
                 | instantiates | has-a | holds-a | uses-in-interface
                 | uses-in-implementation | includes | needs-symbol | resolves-to
-  attrs         e.g. virtual/direct for calls, access for inherits
+  attrs         e.g. virtual/direct for calls, access and virtual for inherits
   location      call site or declaration site — provenance
 ```
 
@@ -266,7 +288,7 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
   differ between commits for reasons unrelated to the change — an unrelated new call site can
   materialize an instantiation. Instantiation-only deltas must be suppressible.
 - **Overloads.** Name is never identity on its own. Signature normalization (typedef
-  resolution, default arguments, cv/ref qualification) is required for tier 1 to work at all,
+  resolution, cv/ref qualification) is required for tier 1 to work at all,
   and the name tier pairs by name only where the name leaves no choice.
 - **Internal linkage and anonymous namespaces.** USRs incorporate the file path, so a file rename
   breaks tier 1 for everything in them. Identity must include the TU, and file renames must be

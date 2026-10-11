@@ -564,6 +564,71 @@ class TestBodyHash:
         assert named(result, "f").body_hash is not None
 
 
+class TestAConstructorsInitializerListIsPartOfItsBody:
+    """The member initializer list runs with the constructor, so it is in `body_hash` (#11)."""
+
+    def ctor(self, tmp_path: Path, toolchain: Toolchain, source: str) -> str | None:
+        directory = tmp_path / str(len(list(tmp_path.iterdir())))
+        directory.mkdir()
+        return named(run(directory, toolchain, {"a.cpp": source}), "S::S").body_hash
+
+    def test_a_changed_initializer_changes_the_hash(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        one = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x(1) {} };")
+        two = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x(2) {} };")
+        braced = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x{2} {} };")
+        assert len({one, two, braced}) == 3
+
+    def test_formatting_and_comments_in_the_list_do_not(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        plain = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x(1) {} };")
+        noisy = self.ctor(
+            tmp_path, toolchain, "struct S { int x;\n  S()\n    : x( 1 ) // one\n  {}\n};"
+        )
+        assert plain == noisy
+
+    def test_an_out_of_line_constructor_hashes_its_list(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        one = self.ctor(tmp_path, toolchain, "struct S { int x; S(); };\nS::S() : x(1) {}")
+        two = self.ctor(tmp_path, toolchain, "struct S { int x; S(); };\nS::S() : x(2) {}")
+        assert one is not None and one != two
+
+    def test_a_colon_before_the_list_is_not_read_as_its_start(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """A `?:` in a default argument is inside brackets, so it does not start a list."""
+        plain = self.ctor(tmp_path, toolchain, "struct S { S(int a) {} };")
+        ternary = self.ctor(tmp_path, toolchain, "struct S { S(int a = true ? 1 : 2) {} };")
+        assert plain == ternary
+
+    def test_a_colon_in_a_template_header_is_not_read_as_its_start(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The template header is before the constructor's name, where reading starts."""
+        plain = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x(1) {} };")
+        templated = self.ctor(
+            tmp_path,
+            toolchain,
+            "struct S { int x; template <int N = (1 ? 2 : 3)> S() : x(1) {} };",
+        )
+        assert plain == templated
+        changed = self.ctor(
+            tmp_path,
+            toolchain,
+            "struct S { int x; template <int N = (1 ? 2 : 3)> S() : x(2) {} };",
+        )
+        assert changed != templated
+
+    def test_known_gap_a_function_try_block_has_no_body_hash(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        source = "struct S { int x; S() try : x(1) {} catch (...) {} };"
+        assert self.ctor(tmp_path, toolchain, source) is None
+
+
 class TestEdges:
     def test_contains_follows_the_semantic_parent(
         self, tmp_path: Path, toolchain: Toolchain
@@ -923,6 +988,256 @@ class TestAnInlineNamespaceSaysSo:
     def test_a_plain_namespace_says_it_is_not(self, result: TuExtract) -> None:
         assert named(result, "lib").attrs["inline"] is False
         assert named(result, "lib::detail").attrs["inline"] is False
+
+
+class TestDefaultsAndConstexprAreComparedState:
+    """Default arguments, default member initializers and `constexpr` (#11, ADR-043).
+
+    The bindings expose none of the three, so they are read off clang's printed declaration:
+    what clang understood, with macros expanded and spacing gone.
+    """
+
+    SOURCE = """
+    #define LIMIT 10
+    #define CE constexpr
+    void none(int a, int b) {}
+    void one(int a, int b = 2) {}
+    void two(int a = 1, const char* s = "x, = y") {}
+    void macro(int a = LIMIT) {}
+    template <class T> void tpl(T t = T{}) {}
+    constexpr int ce() { return 1; }
+    CE int ce_macro() { return 1; }
+    int plain() { return 1; }
+    int lambda_default(int x = [] () constexpr { return 1; }()) { return x; }
+    template <class T> constexpr T ce_tpl(T t) { return t; }
+    struct S {
+      int bare;
+      int eq = 1;
+      int brace{2};
+      int from_macro = LIMIT;
+      constexpr S(int) {}
+      constexpr int get() const;
+      constexpr operator int() const { return 1; }
+      constexpr bool operator==(const S&) const { return true; }
+      static constexpr int make() { return 1; }
+      void defaults(int a = 3) const;
+    };
+    constexpr int S::get() const { return 1; }
+    struct D { int v = 0; constexpr D() = default; };
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("printed"), toolchain, {"a.cpp": self.SOURCE})
+
+    def attr(self, result: TuExtract, qualified: str, key: str) -> AttrValue:
+        return named(result, qualified).attrs[key]
+
+    def test_default_arguments_are_listed_in_order(self, result: TuExtract) -> None:
+        assert self.attr(result, "none", "default_arguments") == ""
+        assert self.attr(result, "one", "default_arguments") == "2"
+        assert self.attr(result, "two", "default_arguments") == '1; "x, = y"'
+        assert self.attr(result, "tpl", "default_arguments") == "T{}"
+        assert self.attr(result, "S::defaults", "default_arguments") == "3"
+
+    def test_a_macro_default_is_its_expansion(self, result: TuExtract) -> None:
+        assert self.attr(result, "macro", "default_arguments") == "10"
+        assert self.attr(result, "S::from_macro", "default_member_init") == "10"
+
+    def test_the_default_is_not_part_of_the_signature(self, result: TuExtract) -> None:
+        assert named(result, "one").signature == named(result, "none").signature
+
+    def test_default_member_initializers(self, result: TuExtract) -> None:
+        assert self.attr(result, "S::bare", "default_member_init") == ""
+        assert self.attr(result, "S::eq", "default_member_init") == "1"
+        assert self.attr(result, "S::brace", "default_member_init") == "{2}"
+
+    def test_constexpr_is_read_on_every_kind_of_function(self, result: TuExtract) -> None:
+        for qualified in (
+            "ce",
+            "ce_macro",
+            "ce_tpl",
+            "S::S",
+            "S::get",
+            "S::operator int",
+            "S::operator==",
+            "S::make",
+        ):
+            assert self.attr(result, qualified, "constexpr") is True, qualified
+        assert self.attr(result, "plain", "constexpr") is False
+
+    def test_a_constexpr_inside_a_default_argument_is_not_the_functions(
+        self, result: TuExtract
+    ) -> None:
+        assert self.attr(result, "lambda_default", "constexpr") is False
+
+    def test_the_out_of_line_definition_reads_constexpr_too(self, result: TuExtract) -> None:
+        assert named(result, "S::get").body_hash is not None, "the definition was not merged in"
+        assert self.attr(result, "S::get", "constexpr") is True
+
+    def test_known_gap_a_defaulted_constexpr_special_member_reads_false(
+        self, result: TuExtract
+    ) -> None:
+        """Clang does not print `constexpr` on `constexpr D() = default;`."""
+        assert self.attr(result, "D::D", "defaulted") is True
+        assert self.attr(result, "D::D", "constexpr") is False
+
+    def test_a_header_default_reaches_the_out_of_line_definition(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The definition wins the merge, and it does not spell the default. Clang prints the
+        one it inherits from the header, so the attribute holds the header's default."""
+        result = run(
+            tmp_path,
+            toolchain,
+            {"a.h": "void f(int x = 1);\n", "a.cpp": '#include "a.h"\nvoid f(int x) {}\n'},
+        )
+        node = named(result, "f")
+        assert node.body_hash is not None, "the definition did not win the merge"
+        assert node.attrs["default_arguments"] == "1"
+
+
+class TestNodiscardDeprecatedAndFinalAreComparedState:
+    """`[[nodiscard]]`, deprecation and `final` (#11)."""
+
+    SOURCE = """
+    #define ND [[nodiscard]]
+    #define DEP [[deprecated]]
+    [[nodiscard]] int nd();
+    ND int nd_macro();
+    int plain();
+    template <class T> [[nodiscard]] T nd_tpl(T t) { return t; }
+    DEP void old();
+    struct DEP Old { void member(); };
+    struct S {
+      [[nodiscard]] int get() const;
+      void gone() = delete;
+      [[deprecated("use get")]] int value() const;
+    };
+    struct F final {};
+    template <class T> struct TF final {};
+    struct NotFinal {};
+    struct Fwd;
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("flags"), toolchain, {"a.cpp": self.SOURCE})
+
+    def attr(self, result: TuExtract, qualified: str, key: str) -> AttrValue:
+        return named(result, qualified).attrs[key]
+
+    def test_nodiscard(self, result: TuExtract) -> None:
+        for qualified in ("nd", "nd_macro", "nd_tpl", "S::get"):
+            assert self.attr(result, qualified, "nodiscard") is True, qualified
+        assert self.attr(result, "plain", "nodiscard") is False
+
+    def test_deprecated(self, result: TuExtract) -> None:
+        assert self.attr(result, "old", "deprecated") is True
+        assert self.attr(result, "Old", "deprecated") is True
+        assert self.attr(result, "S::value", "deprecated") is True
+        assert self.attr(result, "plain", "deprecated") is False
+
+    def test_a_member_of_a_deprecated_class_is_not_itself_deprecated(
+        self, result: TuExtract
+    ) -> None:
+        assert self.attr(result, "Old::member", "deprecated") is False
+
+    def test_a_deleted_function_is_not_deprecated(self, result: TuExtract) -> None:
+        assert self.attr(result, "S::gone", "deleted") is True
+        assert self.attr(result, "S::gone", "deprecated") is False
+
+    def test_final(self, result: TuExtract) -> None:
+        assert self.attr(result, "F", "final") is True
+        assert self.attr(result, "TF", "final") is True
+        assert self.attr(result, "NotFinal", "final") is False
+
+    def test_a_record_this_tu_never_defines_is_not_determined(self, result: TuExtract) -> None:
+        assert self.attr(result, "Fwd", "final") is None
+        assert self.attr(result, "Fwd", "deprecated") is None
+
+    def test_a_records_deprecation_is_read_from_its_definition(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Clang does not deprecate a forward declaration written before the deprecated
+        definition, so reading it there would depend on which declaration a TU saw."""
+        result = run(
+            tmp_path,
+            toolchain,
+            {"a.cpp": "struct D;\nstruct [[deprecated]] D {};\n"},
+        )
+        assert self.attr(result, "D", "deprecated") is True
+
+    def test_the_header_attributes_reach_the_out_of_line_definitions(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The definition wins the merge and spells neither attribute. Both are inherited
+        from the header's declaration."""
+        result = run(
+            tmp_path,
+            toolchain,
+            {
+                "a.h": "[[nodiscard]] int f();\n[[deprecated]] void g();\n",
+                "a.cpp": '#include "a.h"\nint f() { return 1; }\nvoid g() {}\n',
+            },
+        )
+        for qualified in ("f", "g"):
+            assert named(result, qualified).body_hash is not None, qualified
+        assert self.attr(result, "f", "nodiscard") is True
+        assert self.attr(result, "g", "deprecated") is True
+
+    def test_final_is_read_from_the_definition_whichever_declaration_is_seen(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        result = run(
+            tmp_path,
+            toolchain,
+            {"a.cpp": "struct F;\nstruct F final {};\nstruct F;\n"},
+        )
+        assert self.attr(result, "F", "final") is True
+
+
+class TestInheritanceOrderAndVirtualBases:
+    """`base_order` on a record, and `virtual` on an `inherits` edge (#11)."""
+
+    SOURCE = """
+    namespace ns { struct A {}; }
+    struct B {};
+    template <class T> struct Tpl {};
+    struct None {};
+    struct Two : ns::A, B {};
+    struct Swapped : B, ns::A {};
+    struct Virt : virtual B, ns::A {};
+    struct OfTemplate : Tpl<int> {};
+    struct Fwd;
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("bases"), toolchain, {"a.cpp": self.SOURCE})
+
+    def order(self, result: TuExtract, qualified: str) -> AttrValue:
+        return named(result, qualified).attrs["base_order"]
+
+    def test_bases_are_listed_in_the_order_written(self, result: TuExtract) -> None:
+        assert self.order(result, "None") == ""
+        assert self.order(result, "Two") == "ns::A; B"
+        assert self.order(result, "Swapped") == "B; ns::A"
+        assert self.order(result, "OfTemplate") == "Tpl<int>"
+
+    def test_a_record_this_tu_never_defines_has_no_order(self, result: TuExtract) -> None:
+        assert self.order(result, "Fwd") is None
+
+    def test_a_virtual_base_is_an_attribute_of_the_edge(self, result: TuExtract) -> None:
+        names = {i: n.qualified_name for i, n in result.nodes.items()}
+        virtual = {
+            (names.get(e.src), names.get(e.dst)): e.attrs["virtual"]
+            for e in result.edges.values()
+            if e.kind is EdgeKind.INHERITS
+        }
+        assert virtual[("Virt", "B")] is True
+        assert virtual[("Virt", "ns::A")] is False
+        assert virtual[("Two", "B")] is False
 
 
 class TestFailureIsRecordedNotRaised:

@@ -18,12 +18,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from cpp_semantic_diff.acquire.tokens import LineHunk, TokenDelta, changed_runs
 from cpp_semantic_diff.acquire.workspace import CompileEntry
+from cpp_semantic_diff.classify import classify_events
 from cpp_semantic_diff.derive import derive_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.diff.coverage import measure_coverage
@@ -331,21 +332,18 @@ CATALOG = [
         "void f(int x = 2) {}",
         changed("f"),
         not_replaced("f"),
-        fails="step 7: default arguments are not compared",
     ),
     case(
         "constructor-initializer-list",
         "struct S { int x; S() : x(1) {} };",
         "struct S { int x; S() : x(2) {} };",
         changed("S::S"),
-        fails="step 7: the initializer list is outside the body fingerprint",
     ),
     case(
         "default-member-initializer",
         "struct S { int x = 1; };",
         "struct S { int x = 2; };",
         changed("S::x"),
-        fails="step 7: default member initializers are not compared",
     ),
     case(
         "macro-value",
@@ -394,42 +392,36 @@ CATALOG = [
         "struct A {}; struct B {}; struct S : A, B {};",
         "struct A {}; struct B {}; struct S : B, A {};",
         changed("S"),
-        fails="step 7: base order is not compared",
     ),
     case(
         "base-becomes-virtual",
         "struct A {}; struct S : A {};",
         "struct A {}; struct S : virtual A {};",
         changed("S", naming="A"),
-        fails="step 7: virtual inheritance is not compared",
     ),
     case(
         "constexpr-removed",
         "constexpr int f() { return 1; }",
         "int f() { return 1; }",
         changed("f"),
-        fails="step 7: constexpr is not compared",
     ),
     case(
         "class-becomes-final",
         "struct S { virtual void f(); };",
         "struct S final { virtual void f(); };",
         changed("S"),
-        fails="step 7: final is not compared",
     ),
     case(
         "nodiscard-added",
         "int f();",
         "[[nodiscard]] int f();",
         changed("f"),
-        fails="step 7: [[nodiscard]] is not compared",
     ),
     case(
         "deprecated-added",
         "void f();",
         "[[deprecated]] void f();",
         changed("f"),
-        fails="step 7: deprecation is not compared",
     ),
     case(
         "static-assert-removed",
@@ -804,6 +796,44 @@ def test_no_change_in_the_catalog_is_silent(
         coverage.explained_tokens + coverage.uncovered_tokens + coverage.moved_tokens
         == coverage.changed_tokens
     )
+
+
+#: The step 7 cases in v0 (ADR-041). Each is one change to one entity, so it must be one
+#: top-level change event: anything more is a cascade with no cause rule (ADR-023).
+STEP_7_CASES = (
+    "default-argument-value",
+    "default-member-initializer",
+    "constexpr-removed",
+    "class-becomes-final",
+    "nodiscard-added",
+    "deprecated-added",
+    "constructor-initializer-list",
+    "base-becomes-virtual",
+    "base-order",
+)
+
+
+def sources(case_id: str) -> tuple[str, str]:
+    """The before and after of the catalog row `case_id`."""
+    for row in CATALOG:
+        param = cast(Any, row)  # a `pytest.param`, whose type pytest does not export
+        if param.id == case_id:
+            return param.values[0], param.values[1]
+    raise KeyError(case_id)
+
+
+@pytest.mark.parametrize("case_id", STEP_7_CASES)
+def test_a_step_7_change_is_one_top_level_event(
+    toolchain: Toolchain, tmp_path: Path, case_id: str
+) -> None:
+    before, after = sources(case_id)
+    base = build_model(toolchain, tmp_path / "base", before, "a" * 40)
+    head = build_model(toolchain, tmp_path / "head", after, "b" * 40)
+    corr = match_models(base, head)
+    events = derive_events(diff_models(base, head, corr), base, head, corr)
+    events = classify_events(events, base, head, corr)
+    top = [e for e in events if e.caused_by is None]
+    assert len(top) == 1, Outcome(base, head, events).describe()
 
 
 # -- The vocabulary discriminates -------------------------------------------------------------

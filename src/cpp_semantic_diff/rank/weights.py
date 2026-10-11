@@ -225,6 +225,23 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # Below `access`: the names still exist, and the usual cause is a deliberate ABI version
     # step rather than an accident.
     "inline": 0.80,
+    # Changes what every call that omits the argument passes, silently: those callers still
+    # compile. Below a signature change, which can break them.
+    "default_arguments": 0.85,
+    # A function that stopped being constexpr breaks every use in a constant expression.
+    "constexpr": 0.80,
+    # Changes the state every constructor that does not name the field starts it in.
+    "default_member_init": 0.60,
+    # Gaining one makes every caller that discards the result warn; losing one only loses
+    # the warning. Nothing stops compiling unless warnings are errors.
+    "nodiscard": 0.55,
+    # A warning at every use, and notice that the entity is going away.
+    "deprecated": 0.55,
+    # Breaks every class that derives from it, and devirtualizes calls on it.
+    "final": 0.70,
+    # Base order is layout and construction order: every base's offset, and which base is
+    # constructed first.
+    "base_order": 0.90,
 }
 
 # --------------------------------------------------------------------------------------
