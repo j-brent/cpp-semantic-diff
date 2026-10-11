@@ -119,30 +119,59 @@ class DeclaredTier:
         base_pool: frozenset[NodeId],
         head_pool: frozenset[NodeId],
     ) -> Iterator[tuple[NodeId, NodeId]]:
-        head_index = _index(head, head_pool, self.key)
-        base_index = _index(base, base_pool, self.key)
+        head_index, _ = _index(head, head_pool, self.key)
+        base_index, _ = _index(base, base_pool, self.key)
         for key, base_id in base_index.items():
             if (head_id := head_index.get(key)) is not None:
                 yield base_id, head_id
 
+    def ambiguous(
+        self,
+        base: Model,
+        head: Model,
+        base_pool: frozenset[NodeId],
+        head_pool: frozenset[NodeId],
+    ) -> tuple[frozenset[NodeId], frozenset[NodeId]]:
+        """The nodes `propose` declined to pair because a key collided (ADR-034).
+
+        A collided key is ambiguous only where the other side has the key too: that is a
+        choice tier 1 refused to make. Two same-named statics that both vanished collided
+        on one side with nothing to choose between, and are ordinary removals.
+        """
+        base_index, base_collided = _index(base, base_pool, self.key)
+        head_index, head_collided = _index(head, head_pool, self.key)
+        base_keys = base_index.keys() | base_collided.keys()
+        head_keys = head_index.keys() | head_collided.keys()
+        refused = (base_collided.keys() | head_collided.keys()) & base_keys & head_keys
+
+        def members(
+            index: dict[DeclaredKey, NodeId], collided: dict[DeclaredKey, list[NodeId]]
+        ) -> frozenset[NodeId]:
+            return frozenset(
+                n for k in refused for n in (collided[k] if k in collided else [index[k]])
+            )
+
+        return members(base_index, base_collided), members(head_index, head_collided)
+
 
 def _index(
     model: Model, pool: Iterable[NodeId], key: Callable[[Node], DeclaredKey]
-) -> dict[DeclaredKey, NodeId]:
-    """Key -> node id, dropping any key two nodes share.
+) -> tuple[dict[DeclaredKey, NodeId], dict[DeclaredKey, list[NodeId]]]:
+    """Key -> node id, dropping any key two nodes share; and the dropped keys -> their nodes.
 
     A collision means the key does not identify a single entity on that side, and pairing
     either candidate would be a coin flip presented as a fact. Both go to the residue
-    instead, where a later tier or the reviewer can see them.
+    instead, where a later tier or the reviewer can see them -- and are reported as such, so
+    the residue says the pairing was refused rather than that there was nothing to pair.
     """
     index: dict[DeclaredKey, NodeId] = {}
-    collided: set[DeclaredKey] = set()
+    collided: dict[DeclaredKey, list[NodeId]] = {}
     for node_id in sorted(pool):
         k = key(model.nodes[node_id])
-        if k in index:
-            collided.add(k)
+        if k in collided:
+            collided[k].append(node_id)
+        elif k in index:
+            collided[k] = [index.pop(k), node_id]
         else:
             index[k] = node_id
-    for k in collided:
-        del index[k]
-    return index
+    return index, collided

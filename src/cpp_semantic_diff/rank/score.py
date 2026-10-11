@@ -27,6 +27,7 @@ from cpp_semantic_diff.model import (
     EventKind,
     Model,
     NodeId,
+    Unpaired,
 )
 from cpp_semantic_diff.rank import weights as w
 from cpp_semantic_diff.rank.exposure import EXPOSURE_ORDER, Exposure, exposure_map
@@ -54,8 +55,9 @@ class Factor(BaseModel):
     contribution: float = Field(description="value * weight -- what this term added.")
     detail: str = Field(
         description="The raw measurement in words: '37 dependent(s), 4 direct', 'public', "
-        "'NodeAttrChanged(virtual)', 'unmatched'. This is what a reviewer reads when the "
-        "ranking surprises them, and it is deliberately not reconstructible from `value`."
+        "'NodeAttrChanged(virtual)', 'unmatched, no candidate'. This is what a reviewer "
+        "reads when the ranking surprises them, and it is deliberately not reconstructible "
+        "from `value`."
     )
 
 
@@ -110,10 +112,10 @@ class RiskScore(BaseModel):
     def is_high_risk(self) -> bool:
         """ARCH-001 §10's `summary.high_risk_count`, one event at a time.
 
-        On `impact`, not on `total`, and the reason is structural rather than a retune. In v0
-        (tier-1 identity only, §13) every add and every remove is unmatched residue, so the
-        uncertainty factor is pinned at its maximum for that whole population -- a constant
-        offset, carrying no information *within* it. Against a fixed threshold that offset is
+        On `impact`, not on `total`, and the reason is structural rather than a retune. Until
+        ADR-034, every unmatched entity scored maximum uncertainty, and in v0 (tier-1 identity
+        only, §13) that is every add and every remove -- a constant offset, carrying no
+        information *within* that population. Against a fixed threshold that offset was
         decisive: a public `NodeAdded` with no dependents at all scored 0.25 + 0.2125 + 0.15 =
         0.6125 and cleared 0.6 on the strength of being new. On fmt at `HEAD~100` that made 133
         of 335 events (40 %) "high risk" (commit `ef2daff`, 2026-08-02), which is a measurement
@@ -314,6 +316,15 @@ def _novelty(event: Event) -> Factor:
 # -- 4 · confidence, inverted -----------------------------------------------------------
 
 
+#: What a reviewer reads for an unmatched subject. Says why, because "unmatched" alone reads
+#: as doubt and is not (ADR-034).
+_UNPAIRED_DETAIL: dict[Unpaired, str] = {
+    Unpaired.NONE: "unmatched, no candidate",
+    Unpaired.CANDIDATE: "unmatched, candidate on the other side",
+    Unpaired.AMBIGUOUS: "unmatched, ambiguous pairing",
+}
+
+
 def _uncertainty(confidence: Confidence) -> Factor:
     """**A low-confidence event ranks up, not down** (ARCH-001 §7).
 
@@ -324,8 +335,14 @@ def _uncertainty(confidence: Confidence) -> Factor:
     to a scalar (`events.py`) precisely so that this inversion is applied once, here, by the
     stage that owns the weighting.
     """
-    value = w.UNCERTAINTY_BY_TIER[confidence.tier]
-    detail = confidence.tier.value if confidence.tier else "unmatched"
+    if confidence.tier is not None:
+        value = w.UNCERTAINTY_BY_TIER[confidence.tier]
+        detail = confidence.tier.value
+    else:
+        # `Confidence` refuses a None tier without a reason, so this cannot fire.
+        assert confidence.unpaired is not None
+        value = w.UNCERTAINTY_BY_UNPAIRED[confidence.unpaired]
+        detail = _UNPAIRED_DETAIL[confidence.unpaired]
     if not confidence.models_complete:
         value += w.UNCERTAINTY_INCOMPLETE_MODELS
         detail = f"{detail}, incomplete models"

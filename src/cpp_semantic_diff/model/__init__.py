@@ -11,6 +11,7 @@ from cpp_semantic_diff.model.events import (
     EventKind,
     Hunk,
     Side,
+    Unpaired,
     events_at,
 )
 from cpp_semantic_diff.model.ir import (
@@ -57,5 +58,6 @@ __all__ = [
     "Side",
     "TuResult",
     "TuStatus",
+    "Unpaired",
     "events_at",
 ]

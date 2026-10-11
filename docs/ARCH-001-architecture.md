@@ -298,7 +298,7 @@ Event
   payload       kind-specific
   caused_by     optional event id (§6.3)
   provenance    source hunks: (side, file, line span) — bidirectional with the text diff
-  confidence    derived from match tier + model completeness
+  confidence    derived from match tier (or why unpaired) + model completeness
 ```
 
 **Provenance must be bidirectional.** The reviewer has to get from an event to the lines, *and*
@@ -483,6 +483,9 @@ six.
 into apparent evidence of absence. Three rules:
 
 1. Every event carries confidence derived from its match tier and the completeness of both models.
+   An unpaired subject has no tier; it carries why it is unpaired instead: no candidate, a candidate,
+   or an ambiguous pairing. Having no partner is not doubt
+   ([ADR-034](adr/ADR-034-uncertainty-is-doubt-about-the-pairing.md)).
 2. Any output built on an incomplete model states what was missing, at the top, not in a log.
 3. Conditions that eliminate the analysis — shallow clone, unresolvable base, no compile database —
    are **hard failures with actionable messages**, never partial output.

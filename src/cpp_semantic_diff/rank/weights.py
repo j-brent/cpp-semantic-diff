@@ -20,14 +20,14 @@ sum so that one threshold serves both.
 **Uncertainty is weighted lowest, and that is not a hedge.** ARCH-001 §7 is explicit that a
 low-confidence event ranks *up* -- uncertainty is a reason for a human to look. It is not a
 claim that uncertainty is the largest risk. Weighted at parity with blast radius it would
-put every unmatched leaf above every widely-called change, because in v0 (tier 1 only,
-§13) *every* add and remove is untiered. It belongs where it is: enough to break a tie
+put every doubtful leaf above every widely-called change, and in v0 (tier 1 only, §13)
+every rename is a doubtful leaf twice over. It belongs where it is: enough to break a tie
 toward looking, not enough to reorder the page.
 """
 
 from __future__ import annotations
 
-from cpp_semantic_diff.model import EventKind, MatchTier
+from cpp_semantic_diff.model import EventKind, MatchTier, Unpaired
 from cpp_semantic_diff.rank.exposure import Exposure
 
 # --------------------------------------------------------------------------------------
@@ -65,14 +65,15 @@ FACTOR_WEIGHTS: dict[str, float] = {
 #: factor orders the page; only these three decide whether an event is counted as high risk
 #: (`RiskScore.is_high_risk`, which carries the argument).
 #:
-#: The reason is that a fixed threshold on a sum only means something if every term in the sum
-#: can discriminate, and in v0 one of them cannot. Tier-1-only identity (§13) makes *every* add
-#: and remove unmatched residue, so `UNCERTAINTY_BY_TIER[None]` applies to that whole
-#: population at once: not a measurement, a constant offset -- and at 0.15 it is exactly the
-#: offset that lifts a public addition with zero dependents from 0.4625 to 0.6125 and over the
-#: line. Measured on fmt at `HEAD~100` on 2026-08-02: 133 of 335 events (40 %) "high risk"
-#: (commit `ef2daff`). A number that says "40 % of this diff is dangerous" when it means "40 %
-#: of this diff is new" is worse than no number, and §10 prints it on every run.
+#: The reason is that risk is a claim about consequences, and our doubt about a match is not
+#: one of them. It was found the hard way: until ADR-034 every unmatched entity scored the
+#: maximum uncertainty, so on tier-1-only identity (§13) every add and remove carried the same
+#: constant offset -- at 0.15 exactly the offset that lifted a public addition with zero
+#: dependents from 0.4625 to 0.6125 and over the line. Measured on fmt at `HEAD~100` on
+#: 2026-08-02: 133 of 335 events (40 %) "high risk" (commit `ef2daff`). A number that says
+#: "40 % of this diff is dangerous" when it means "40 % of this diff is new" is worse than no
+#: number, and §10 prints it on every run. ADR-034 removed the offset for plain additions;
+#: the argument above still holds for the ones that remain doubtful.
 IMPACT_FACTORS: frozenset[str] = frozenset({"blast_radius", "exposure", "novelty"})
 
 #: What `IMPACT_FACTORS` sums to, so the subtotal can be rescaled into [0, 1] and compared
@@ -216,15 +217,31 @@ NOVELTY_BY_ATTR: dict[str, float] = {
 #: is a weaker claim that these two entities are the same entity, and an event resting on a
 #: weaker claim is more worth a human's eye, not less.
 #:
-#: `None` -- unmatched residue -- is the maximum. It is also, in v0, every add, every remove
-#: and every rename (§13), which is precisely the population the tool is least sure about and
-#: the one v0 exists to measure rather than hide.
-UNCERTAINTY_BY_TIER: dict[MatchTier | None, float] = {
-    None: 1.00,
+#: Uncertainty means *the tool may have this pairing wrong* -- not *this entity has no
+#: partner*. An unmatched entity has no tier and is valued by `UNCERTAINTY_BY_UNPAIRED`.
+UNCERTAINTY_BY_TIER: dict[MatchTier, float] = {
     MatchTier.SIMILARITY: 0.75,
     MatchTier.POSITIONAL: 0.50,
     MatchTier.STRUCTURAL: 0.30,
     MatchTier.DECLARED: 0.00,
+}
+
+#: Keyed by why an entity is unmatched (ADR-034), on the same scale as the tiers. Every
+#: genuine addition and removal has no partner by definition, so "unmatched" alone is not
+#: doubt; the evidence that a partner was missed is.
+#:
+#: - `NONE` -- nothing on the other side could be its partner. A plain addition or removal
+#:   is as certain as a tier-1 match: nothing about it is in question.
+#: - `CANDIDATE` -- the other side's leftovers hold an entity of the same kind under the same
+#:   parent (§5's tier-4 candidate set, counted, not scored). Possibly a rename tier 1
+#:   cannot see. Midway: evidence that a partner may exist, which is less than a tier that
+#:   chose wrongly and more than nothing.
+#: - `AMBIGUOUS` -- a tier found partners and refused to choose between them. The pairing
+#:   is the thing in question, so it is the maximum.
+UNCERTAINTY_BY_UNPAIRED: dict[Unpaired, float] = {
+    Unpaired.NONE: 0.00,
+    Unpaired.CANDIDATE: 0.50,
+    Unpaired.AMBIGUOUS: 1.00,
 }
 
 #: Added when either model is incomplete (§4.4, §11). A global fact today -- `Confidence`

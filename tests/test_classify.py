@@ -32,6 +32,7 @@ from cpp_semantic_diff.model import (
     Node,
     NodeId,
     NodeKind,
+    Unpaired,
 )
 
 N = NodeId("c:@N@ns")
@@ -108,7 +109,7 @@ def synthetic(kind: EventKind, subject: str, **payload: AttrValue) -> Event:
         kind=kind,
         subject=NodeId(subject),
         payload=dict(payload),
-        confidence=Confidence(tier=None, models_complete=True),
+        confidence=Confidence(tier=None, unpaired=Unpaired.NONE, models_complete=True),
     )
 
 
@@ -553,6 +554,7 @@ class TestTheStageIsAPureFunction:
         corr = Correspondence(
             matches=[Match(base=renamed_base, head=renamed_head, tier=MatchTier.STRUCTURAL)],
             unmatched_base=[member],
+            unpaired_base={member: Unpaired.NONE},
             tiers_run=[MatchTier.DECLARED, MatchTier.STRUCTURAL],
         )
         events = classify(base, head, corr)

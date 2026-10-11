@@ -52,6 +52,7 @@ from cpp_semantic_diff.model import (
     NodeKind,
     TuResult,
     TuStatus,
+    Unpaired,
 )
 from cpp_semantic_diff.rank import rank_events
 from cpp_semantic_diff.render import (
@@ -68,7 +69,7 @@ from cpp_semantic_diff.render.terminal import hidden_ids
 PUBLIC = "include/lib/thing.h"
 
 SURE = Confidence(tier=MatchTier.DECLARED, models_complete=True)
-RESIDUE = Confidence(tier=None, models_complete=True)
+RESIDUE = Confidence(tier=None, unpaired=Unpaired.NONE, models_complete=True)
 
 
 # -- builders ---------------------------------------------------------------------------

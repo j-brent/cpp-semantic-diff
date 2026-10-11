@@ -38,6 +38,7 @@ from cpp_semantic_diff.model import (
     Node,
     NodeId,
     NodeKind,
+    Unpaired,
 )
 from cpp_semantic_diff.rank import (
     Exposure,
@@ -56,7 +57,9 @@ LIB_SOURCE = "src/format.cc"
 
 SURE = Confidence(tier=MatchTier.DECLARED, models_complete=True)
 UNSURE = Confidence(tier=MatchTier.SIMILARITY, models_complete=True)
-RESIDUE = Confidence(tier=None, models_complete=True)
+RESIDUE = Confidence(tier=None, unpaired=Unpaired.NONE, models_complete=True)
+CANDIDATE = Confidence(tier=None, unpaired=Unpaired.CANDIDATE, models_complete=True)
+AMBIGUOUS = Confidence(tier=None, unpaired=Unpaired.AMBIGUOUS, models_complete=True)
 
 
 # -- builders ---------------------------------------------------------------------------
@@ -154,17 +157,37 @@ class TestUncertaintyRanksUpNotDown:
         ranking = rank([certain, doubtful], self.side(), self.side())
         assert outranks(ranking, doubtful, certain)
 
-    def test_unmatched_residue_outranks_every_tier(self) -> None:
-        """None is the maximum, not a missing value. In v0 (tier 1 only, §13) it is also every
-        add, remove and rename -- the population v0 exists to measure."""
+    def test_an_ambiguous_pairing_outranks_every_tier(self) -> None:
+        """A tier that found partners and refused to choose is the most doubt there is: the
+        pairing itself is what is in question (ADR-034)."""
         events = [
             body("c:@F@f#", SURE),
             body("c:@F@g#", UNSURE),
-            body("c:@F@h#", RESIDUE),
+            body("c:@F@h#", AMBIGUOUS),
         ]
         head = model("m", node("c:@F@f#"), node("c:@F@g#"), node("c:@F@h#"))
         ranking = rank(events, head, head)
         assert ranking.order == [events[2].id, events[1].id, events[0].id]
+
+    def test_a_plain_addition_is_as_certain_as_a_declared_match(self) -> None:
+        """Issue #17. Every genuine addition has no partner by definition, so having none is
+        not doubt: with nothing on the other side that could be its partner, an addition
+        carries the uncertainty of a tier-1 match, not the maximum."""
+        added = event(EventKind.NODE_ADDED, "c:@F@f#", RESIDUE)
+        score = rank([added], self.side(), self.side()).score_for(added.id)
+        uncertainty = score.factor(FactorName.UNCERTAINTY)
+        assert uncertainty.value == w.UNCERTAINTY_BY_TIER[MatchTier.DECLARED] == 0.0
+        assert uncertainty.detail == "unmatched, no candidate"
+
+    def test_a_candidate_on_the_other_side_is_doubt_and_ranks_up(self) -> None:
+        """An addition with a same-kind sibling removed beside it may be a rename tier 1
+        cannot see, and that is worth a human's eye."""
+        plain = event(EventKind.NODE_ADDED, "c:@F@f#", RESIDUE)
+        maybe_renamed = event(EventKind.NODE_ADDED, "c:@F@g#", CANDIDATE)
+        ranking = rank([plain, maybe_renamed], self.side(), self.side())
+        assert outranks(ranking, maybe_renamed, plain)
+        detail = ranking.score_for(maybe_renamed.id).factor(FactorName.UNCERTAINTY).detail
+        assert detail == "unmatched, candidate on the other side"
 
     def test_the_tier_ladder_runs_the_same_direction_as_arch_5(self) -> None:
         """Each successive tier is a weaker claim that two entities are the same entity,
@@ -174,9 +197,23 @@ class TestUncertaintyRanksUpNotDown:
             w.UNCERTAINTY_BY_TIER[MatchTier.STRUCTURAL],
             w.UNCERTAINTY_BY_TIER[MatchTier.POSITIONAL],
             w.UNCERTAINTY_BY_TIER[MatchTier.SIMILARITY],
-            w.UNCERTAINTY_BY_TIER[None],
         ]
         assert ladder == sorted(ladder), "uncertainty must increase as the tier weakens"
+
+    def test_the_unpaired_ladder_runs_the_same_direction_as_the_diff_stage_orders_it(
+        self,
+    ) -> None:
+        """`diff.context.UNPAIRED_ORDER` picks an edge event's most doubtful endpoint; the
+        weights must agree with it about which that is, or an edge would report its less
+        doubtful endpoint."""
+        from cpp_semantic_diff.diff.context import UNPAIRED_ORDER
+
+        ladder = [w.UNCERTAINTY_BY_UNPAIRED[r] for r in UNPAIRED_ORDER]
+        assert ladder == sorted(ladder) and len(set(ladder)) == len(ladder)
+        assert set(UNPAIRED_ORDER) == set(Unpaired)
+        assert w.UNCERTAINTY_BY_UNPAIRED[Unpaired.AMBIGUOUS] == max(
+            *w.UNCERTAINTY_BY_TIER.values(), *w.UNCERTAINTY_BY_UNPAIRED.values()
+        )
 
     def test_an_incomplete_model_adds_uncertainty_rather_than_removing_it(self) -> None:
         """§11: output built on an incomplete model must say so. Saying so by ranking the
@@ -980,16 +1017,20 @@ class TestHighRiskCountsConsequencesNotNovelty:
         """The property the old threshold lacked: an event's risk must not move when a tier
         that has nothing to do with it starts or stops running. Tiers 2-4 may land later, and
         `high_risk_count` must not swing when they do."""
-        tiers = [None, MatchTier.SIMILARITY, MatchTier.POSITIONAL, MatchTier.DECLARED]
+        confidences = [
+            AMBIGUOUS,
+            CANDIDATE,
+            RESIDUE,
+            *(
+                Confidence(tier=t, models_complete=True)
+                for t in (MatchTier.SIMILARITY, MatchTier.POSITIONAL, MatchTier.DECLARED)
+            ),
+        ]
         verdicts = {
-            rank(
-                [body("c:@F@fresh#", Confidence(tier=t, models_complete=True))],
-                self.side(),
-                self.side(),
-            )
+            rank([body("c:@F@fresh#", c)], self.side(), self.side())
             .score_for(body("c:@F@fresh#").id)
             .is_high_risk
-            for t in tiers
+            for c in confidences
         }
         assert len(verdicts) == 1
 

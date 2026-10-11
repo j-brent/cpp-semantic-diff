@@ -45,13 +45,12 @@ from collections import defaultdict
 from collections.abc import Iterator
 
 from cpp_semantic_diff.diff.attrs import changed_attrs
-from cpp_semantic_diff.diff.context import DiffContext, edge_hunks
+from cpp_semantic_diff.diff.context import DiffContext, Footing, edge_hunks
 from cpp_semantic_diff.model import (
     Edge,
     EdgeKind,
     Event,
     EventKind,
-    MatchTier,
     NodeId,
     Side,
 )
@@ -107,7 +106,7 @@ def edge_events(ctx: DiffContext) -> Iterator[Event]:
             subject=new.id,
             payload={"old_kind": old.kind.value, "new_kind": new.kind.value},
             provenance=edge_hunks((Side.BASE, old), (Side.HEAD, new)),
-            confidence=ctx.confidence(_tier(ctx, new, Side.HEAD)),
+            confidence=ctx.confidence(*_footing(ctx, new, Side.HEAD)),
         )
 
     for edge in base_residue.values():
@@ -143,7 +142,7 @@ def _attr_changes(ctx: DiffContext, old: Edge, new: Edge) -> Iterator[Event]:
             subject=new.id,
             payload={"attr": attr, "old": old_value, "new": new_value},
             provenance=edge_hunks((Side.BASE, old), (Side.HEAD, new)),
-            confidence=ctx.confidence(_tier(ctx, new, Side.HEAD)),
+            confidence=ctx.confidence(*_footing(ctx, new, Side.HEAD)),
         )
 
 
@@ -177,7 +176,7 @@ def _removed(ctx: DiffContext, edge: Edge) -> Event:
         kind=EventKind.EDGE_REMOVED,
         subject=edge.id,
         provenance=edge_hunks((Side.BASE, edge)),
-        confidence=ctx.confidence(_tier(ctx, edge, Side.BASE)),
+        confidence=ctx.confidence(*_footing(ctx, edge, Side.BASE)),
     )
 
 
@@ -186,20 +185,18 @@ def _added(ctx: DiffContext, edge: Edge) -> Event:
         kind=EventKind.EDGE_ADDED,
         subject=edge.id,
         provenance=edge_hunks((Side.HEAD, edge)),
-        confidence=ctx.confidence(_tier(ctx, edge, Side.HEAD)),
+        confidence=ctx.confidence(*_footing(ctx, edge, Side.HEAD)),
     )
 
 
-def _tier(ctx: DiffContext, edge: Edge, side: Side) -> MatchTier | None:
-    """The tier an edge event rests on: the weaker of its two endpoints' matches.
+def _footing(ctx: DiffContext, edge: Edge, side: Side) -> Footing:
+    """What an edge event rests on: the weaker of its two endpoints' footings.
 
     An edge is a claim about two entities, so it is no more confident than the less
     confident of the two identifications -- and if either endpoint was never matched, there
     is no tier, which is what makes an add or a remove report itself as untiered rather
-    than borrowing the certainty of the endpoint that *was* matched (§11).
+    than borrowing the certainty of the endpoint that *was* matched (§11). It carries the
+    endpoint's `unpaired` reason instead, so a call to a plain addition is no more doubtful than the
+    addition itself (ADR-034).
     """
-    corr = ctx.correspondence
-    index = corr.by_base if side is Side.BASE else corr.by_head
-    return ctx.weakest(
-        *(m.tier if (m := index.get(node_id)) else None for node_id in (edge.src, edge.dst))
-    )
+    return ctx.weakest(*(ctx.footing(side, node_id) for node_id in (edge.src, edge.dst)))
