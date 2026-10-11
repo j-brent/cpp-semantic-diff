@@ -317,6 +317,62 @@ def is_inline_namespace(cursor: ci.Cursor) -> bool:
     return _inline_namespace(cursor)
 
 
+#: `CXPrintingPolicyProperty` values, from clang-c/Index.h. Named here because the C API takes
+#: them as bare integers, and a wrong one silently prints something else.
+_POLICY_SUPPRESS_INITIALIZERS = 6
+_POLICY_TERSE_OUTPUT = 17
+
+
+class _PrettyPrinter:
+    """`clang_getCursorPrettyPrinted`, which the Python bindings do not wrap.
+
+    Clang's own declaration printer, for the facts the bindings expose no predicate for:
+    `constexpr`, and the default arguments and default member initializers. It prints what
+    clang understood rather than what was typed, so a macro arrives expanded and spacing and
+    comments are gone -- the same insensitivity `body_hash` gets from hashing tokens.
+
+    Terse output always: a function prints as its declaration, without its body.
+    """
+
+    def __init__(self) -> None:
+        lib = ci.conf.lib
+        self._policy = lib.clang_getCursorPrintingPolicy
+        self._policy.argtypes = [ci.Cursor]
+        self._policy.restype = ctypes.c_void_p
+        self._set = lib.clang_PrintingPolicy_setProperty
+        self._set.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint]
+        self._set.restype = None
+        self._dispose = lib.clang_PrintingPolicy_dispose
+        self._dispose.argtypes = [ctypes.c_void_p]
+        self._dispose.restype = None
+        self._print = lib.clang_getCursorPrettyPrinted
+        self._print.argtypes = [ci.Cursor, ctypes.c_void_p]
+        # The bindings' own CXString type and conversion, which also dispose of the string.
+        # A second CXString declaration would clash with the argtypes cindex registered for
+        # `clang_getCString` and `clang_disposeString`.
+        self._print.restype = ci._CXString
+        self._print.errcheck = ci._CXString.from_result
+
+    def __call__(self, cursor: ci.Cursor, *, suppress_initializers: bool = False) -> str:
+        policy = self._policy(cursor)
+        try:
+            self._set(policy, _POLICY_TERSE_OUTPUT, 1)
+            self._set(policy, _POLICY_SUPPRESS_INITIALIZERS, int(suppress_initializers))
+            return str(self._print(cursor, policy))
+        finally:
+            self._dispose(policy)
+
+
+_pretty_printer: _PrettyPrinter | None = None
+
+
+def pretty_printed(cursor: ci.Cursor, *, suppress_initializers: bool = False) -> str:
+    global _pretty_printer
+    if _pretty_printer is None:
+        _pretty_printer = _PrettyPrinter()
+    return _pretty_printer(cursor, suppress_initializers=suppress_initializers)
+
+
 def _is_member(cursor: ci.Cursor) -> bool:
     """Whether this declaration belongs to a class-like scope (ARCH-001 §4.1).
 
@@ -830,6 +886,88 @@ def _exception_spec(cursor: ci.Cursor) -> str | None:
     return str(spec.name).lower()
 
 
+def _initializer(cursor: ci.Cursor) -> str | None:
+    """What follows a parameter's or a field's name: its default, `""` for none, or None
+    where it could not be read.
+
+    Printed twice, with and without initializers, and the difference is the initializer.
+    Read this way rather than from the cursor's tokens because clang prints the default a
+    redeclaration inherits: `void f(int x) {}` after a header's `void f(int x = 1);` prints
+    `int x = 1`, so the definition and the declaration agree. Its tokens would hold nothing.
+
+    The suppressed spelling must be a prefix of the full one. If it is not, the printer did
+    something this does not understand, and the answer is None rather than a guess.
+    """
+    full = pretty_printed(cursor)
+    bare = pretty_printed(cursor, suppress_initializers=True)
+    if not full.startswith(bare):
+        return None
+    rest = full[len(bare) :]
+    if not rest:
+        return ""
+    if rest.startswith(" = "):
+        return rest[len(" = ") :]
+    if rest.lstrip().startswith("{"):  # a field's brace initializer, `int x{1}`
+        return rest.strip()
+    return None
+
+
+def _default_arguments(cursor: ci.Cursor) -> str | None:
+    """The default arguments of a function's parameters, in order, joined `"; "`.
+
+    `""` means no parameter has one, and None that one of them could not be read. Only the
+    parameters that have a default are listed. Defaults are trailing, so with the signature
+    the list says which parameter each belongs to.
+
+    An attribute, not part of the signature. A default argument is not part of the function's
+    type, and changing one changes what callers that omit it pass, not which function they
+    call (ADR-043).
+    """
+    defaults: list[str] = []
+    for parameter in cursor.get_children():
+        if parameter.kind is not ci.CursorKind.PARM_DECL:
+            continue
+        value = _initializer(parameter)
+        if value is None:
+            return None
+        if value:
+            defaults.append(value)
+    return "; ".join(defaults)
+
+
+#: A string literal, so that text inside one is never read as a keyword.
+_STRING_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
+
+#: A word, or one bracket of any of the four kinds.
+_WORD_OR_BRACKET = re.compile(r"\w+|[()\[\]{}<>]")
+
+
+def _constexpr(cursor: ci.Cursor) -> bool | None:
+    """Whether a function is declared `constexpr`, or None where this could not be read.
+
+    The bindings have no predicate for it, so it is read off clang's printed declaration:
+    `constexpr` among the specifiers before the function's name, outside any brackets.
+    Before the name only, so a `constexpr` inside a parameter's default argument or a
+    template argument is not taken for the function's.
+
+    Known gap: clang does not print `constexpr` on a defaulted special member, so `constexpr
+    S() = default;` reads False.
+    """
+    text = pretty_printed(cursor)
+    name = re.search(rf"(?<![\w~]){re.escape(cursor.spelling)}\s*(?:<[^()]*>)?\s*\(", text)
+    if name is None:
+        return None
+    depth = 0
+    for token in _WORD_OR_BRACKET.findall(_STRING_LITERAL.sub('""', text[: name.start()])):
+        if token in "([{<":
+            depth += 1
+        elif token in ")]}>":
+            depth = max(0, depth - 1)
+        elif depth == 0 and token == "constexpr":
+            return True
+    return False
+
+
 def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
     """Flat, always-present-per-kind scalars (ARCH-001 §4.3).
 
@@ -848,6 +986,8 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["deleted"] = cursor.is_deleted_method()
         attrs["defaulted"] = cursor.is_default_method()
         attrs["exception_spec"] = _exception_spec(cursor)
+        attrs["default_arguments"] = _default_arguments(cursor)
+        attrs["constexpr"] = _constexpr(cursor)
     # Keyed on the node kind rather than on the cursor kind, which is what lets a member
     # function template carry exactly what an ordinary method carries. Clang's
     # `clang_CXXMethod_*` predicates unwrap a FunctionTemplateDecl to the function it
@@ -864,6 +1004,7 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
     if kind is NodeKind.FIELD:
         attrs["type"] = _canonical_spelling(cursor.type)
         attrs["mutable"] = cursor.is_mutable_field()
+        attrs["default_member_init"] = _initializer(cursor)
         if cursor.is_bitfield():
             attrs["bitfield_width"] = cursor.get_bitfield_width()
     if kind is NodeKind.NAMESPACE:
@@ -899,8 +1040,7 @@ def _template_parameters(cursor: ci.Cursor) -> str | None:
 
     Names are left out, so renaming `T` to `U` is no change. Each parameter is `class` for a
     type, its canonical type for a non-type parameter, or a nested list for a template
-    template parameter, and `...` marks a pack. Default arguments are left out, as they are
-    for function parameters.
+    template parameter, and `...` marks a pack. Default arguments are left out.
     """
     if cursor.kind is not ci.CursorKind.FUNCTION_TEMPLATE:
         return None

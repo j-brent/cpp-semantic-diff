@@ -225,6 +225,13 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # Below `access`: the names still exist, and the usual cause is a deliberate ABI version
     # step rather than an accident.
     "inline": 0.80,
+    # Changes what every call that omits the argument passes, silently: those callers still
+    # compile. Below a signature change, which can break them.
+    "default_arguments": 0.85,
+    # A function that stopped being constexpr breaks every use in a constant expression.
+    "constexpr": 0.80,
+    # Changes the state every constructor that does not name the field starts it in.
+    "default_member_init": 0.60,
 }
 
 # --------------------------------------------------------------------------------------
