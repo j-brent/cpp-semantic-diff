@@ -751,6 +751,40 @@ class TestASignatureChangeExplainsEachCaller:
         kinds = {e.kind for e in classify(base, head)}
         assert ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE not in kinds
 
+    def test_the_callee_comes_from_the_edges_real_destination_not_the_payload(self) -> None:
+        """`_callee_of_call`'s own reason for reading the head model instead of the payload:
+        "the ambiguity is an artifact of the payload being empty, not a property of the
+        relation ... this locator should read it from [the model]" -- and once the payload
+        does carry a `callee`, nothing stops it going stale against the edge it rides on. A
+        locator that read `payload["callee"]` instead of the edge's own destination would
+        pass every other test in this class, because there the two always agree."""
+        wrong_callee = NodeId("c:@F@not_the_real_callee#")
+        head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
+        signature_changed = ChangeEvent(
+            kind=ChangeEventKind.NODE_SIGNATURE_CHANGED,
+            subject=G,
+            payload={"old_signature": "void ()", "new_signature": "void (int)"},
+            confidence=Confidence(tier=MatchTier.DECLARED, models_complete=True),
+        )
+        caller = ChangeEvent(
+            kind=ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
+            subject=edge(F, G).id,
+            payload={
+                "caller": F,
+                "callee": wrong_callee,
+                "old_signature": "void ()",
+                "new_signature": "void (int)",
+                "caller_edited": False,
+            },
+            confidence=Confidence(tier=MatchTier.DECLARED, models_complete=True),
+        )
+        classified = classify_events(
+            [signature_changed, caller], head, head, match_models(head, head)
+        )
+        cause = cause_of(classified, ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE, caller.subject)
+        assert cause is not None
+        assert cause.subject == G
+
 
 class TestAnOverrideLeftBehindIsExplainedByTheSignatureChange:
     """§6.3's `signature-change-breaks-overrides` (ADR-040): a virtual function changes
@@ -806,6 +840,147 @@ class TestAnOverrideLeftBehindIsExplainedByTheSignatureChange:
     def test_without_a_signature_change_the_removed_override_stays_unexplained(self) -> None:
         head = self.side("b", self.OLD, "void (int)", inherits=False)
         assert self.removed_cause(head) is None
+
+
+class TestAnOverrideStaysExplainedThroughAnIndirectOrRenamedBase:
+    """ADR-040's own two extra claims about `signature-change-breaks-overrides`, neither
+    exercised by `TestAnOverrideLeftBehindIsExplainedByTheSignatureChange` (which only tests
+    one direct, unrenamed hop): the override's class must still derive from the virtual
+    function's class at head "directly or not", and that check goes "through the
+    correspondence" rather than by comparing ids. `_still_derives` walks `head_out_edges`
+    with a loop a one-hop test cannot tell from a single `==` comparison, and maps both
+    classes through `correspondence.head_for` before it starts."""
+
+    B = NodeId("c:@S@B")
+    M = NodeId("c:@S@M")
+    D = NodeId("c:@S@D")
+    OVERRIDE = NodeId("c:@S@D@F@f#I#")
+    OLD = NodeId("c:@S@B@F@f#I#")
+    NEW = NodeId("c:@S@B@F@f#d#")
+
+    def method(self, usr: str, qualified: str, signature: str) -> Node:
+        return node(
+            usr, name="f", qualified_name=qualified, kind=NodeKind.METHOD, signature=signature
+        )
+
+    def removed_cause(
+        self, base: Model, head: Model, corr: Correspondence | None = None
+    ) -> ChangeEvent | None:
+        removed = edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES).id
+        return cause_of(classify(base, head, corr), ChangeEventKind.EDGE_REMOVED, removed)
+
+    def test_two_inherits_hops_away_still_counts_as_deriving(self) -> None:
+        """D inherits M, M inherits B: not a direct base of D's, but still one "directly or
+        not" should reach."""
+        base = model(
+            "a",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.OLD, "B::f", "void (int)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.OLD),
+                holds(self.D, self.OVERRIDE),
+                edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES),
+            ],
+        )
+        head = model(
+            "b",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.M, name="M", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.NEW, "B::f", "void (double)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.NEW),
+                holds(self.D, self.OVERRIDE),
+                edge(self.D, self.M, EdgeKind.INHERITS),
+                edge(self.M, self.B, EdgeKind.INHERITS),
+            ],
+        )
+        cause = self.removed_cause(base, head)
+        assert cause is not None
+        assert cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        assert cause.subject == self.NEW
+
+    def test_a_break_partway_up_the_chain_leaves_it_unexplained(self) -> None:
+        """D inherits M, but M does not inherit B: D is not "directly or not" derived from
+        B, so the signature change is not why the override was lost. Distinguishes a real
+        indirect base from a locator that just checks "does D inherit *something*"."""
+        base = model(
+            "a",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.OLD, "B::f", "void (int)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.OLD),
+                holds(self.D, self.OVERRIDE),
+                edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES),
+            ],
+        )
+        head = model(
+            "b",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.M, name="M", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.NEW, "B::f", "void (double)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.NEW),
+                holds(self.D, self.OVERRIDE),
+                edge(self.D, self.M, EdgeKind.INHERITS),
+            ],
+        )
+        assert self.removed_cause(base, head) is None
+
+    def test_the_overridden_functions_class_is_mapped_through_the_correspondence(self) -> None:
+        """B is renamed to B2 at head, which v0's matcher never does on its own (rename
+        detection is tier 2, ARCH-001 §13) -- so the only way to pose this case is to hand
+        classify a correspondence that already made the pairing, the same way
+        `TestTheStageIsAPureFunction.test_links_go_through_the_correspondence_not_through_ids`
+        does for containment. If `_still_derives` compared `base_class` to a raw head id
+        instead of mapping it with `correspondence.head_for`, it would look for an `inherits`
+        edge to B's *base* id, which no head edge ever names, and wrongly decide D no longer
+        derives from it."""
+        b2 = NodeId("c:@S@B2")
+        base = model(
+            "a",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.OLD, "B::f", "void (int)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.OLD),
+                holds(self.D, self.OVERRIDE),
+                edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES),
+            ],
+        )
+        head = model(
+            "b",
+            node(b2, name="B2", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.NEW, "B2::f", "void (double)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(b2, self.NEW),
+                holds(self.D, self.OVERRIDE),
+                edge(self.D, b2, EdgeKind.INHERITS),
+            ],
+        )
+        corr = Correspondence(
+            matches=[
+                Match(base=self.B, head=b2, tier=MatchTier.STRUCTURAL),
+                Match(base=self.D, head=self.D, tier=MatchTier.DECLARED),
+                Match(base=self.OVERRIDE, head=self.OVERRIDE, tier=MatchTier.DECLARED),
+                Match(base=self.OLD, head=self.NEW, tier=MatchTier.NAME),
+            ],
+            tiers_run=[MatchTier.DECLARED, MatchTier.STRUCTURAL, MatchTier.NAME],
+        )
+        cause = self.removed_cause(base, head, corr)
+        assert cause is not None
+        assert cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        assert cause.subject == self.NEW
 
 
 class TestTheUnreachableRuleIsImplementedNotPretended:
