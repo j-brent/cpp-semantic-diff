@@ -332,7 +332,7 @@ def file_changes(
     writes the source file name into the USR of every internal-linkage entity: a renamed file
     breaks tier 1 for all of them at once.
 
-    Three flags, each load-bearing:
+    Four flags, each load-bearing:
 
     `--find-renames` is passed **explicitly even though detection is on by default**. A
     repository or reviewer with `diff.renames=false` in config would otherwise yield an empty
@@ -342,6 +342,11 @@ def file_changes(
     `-z` is not a formatting preference. Without it git applies `core.quotePath` and
     C-escapes any non-ASCII path, so the parser would need an unquoter to recover a name it
     is about to use as identity.
+
+    `--ignore-submodules=none` is passed because `ignore = all` in `.gitmodules`,
+    `diff.ignoreSubmodules` or `submodule.<name>.ignore` would otherwise drop a moved gitlink
+    from the list, and a dependency bump the refusal must see would vanish depending on the
+    repository's or the reviewer's config (ADR-025, ARCH-001 §12).
 
     `--find-copies` is deliberately **not** passed. A copy leaves the base file in place, so
     rewriting the base-side USR to the copy's name would claim the original moved -- a
@@ -357,6 +362,7 @@ def file_changes(
         "diff",
         "--name-status",
         f"--find-renames={similarity}%",
+        "--ignore-submodules=none",
         "-z",
         f"{revs.base_sha}..{revs.head_sha}",
     )

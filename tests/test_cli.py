@@ -194,6 +194,28 @@ def test_shallow_clone_is_refused_with_exit_3(shallow_repo: Path) -> None:
     assert_reported(result, ExitCode.REPOSITORY, "shallow clone", "fetch --unshallow")
 
 
+def test_a_changed_third_party_dependency_is_refused_with_exit_3(
+    submodule_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A submodule bump and a change in a declared path, both named, before any worktree, so
+    the refusal costs no checkout and no parse (ADR-025)."""
+    require_libclang()
+    git(submodule_repo, "checkout", "-q", "-b", "feature")
+    sha = commit(tmp_path / "inner", "vendor.h", "int vendored(int);\n", "vendor moves")
+    git(submodule_repo, "update-index", "--cacheinfo", f"160000,{sha},dep")
+    git(submodule_repo, "commit", "-q", "-m", "bump dep")
+    commit(submodule_repo, "libs/z/z.h", "// z\n", "copy z")
+
+    def no_checkout(*args: object, **kwargs: object) -> None:
+        raise AssertionError("a worktree was requested before the refusal")
+
+    monkeypatch.setattr(cli, "checkout", no_checkout)
+    result = runner.invoke(cli.app, ["diff", str(submodule_repo), "--third-party", "libs/z"])
+    assert_reported(
+        result, ExitCode.REPOSITORY, "cannot analyze", "Third-party code changed", "dep, libs/z."
+    )
+
+
 def test_a_missing_git_is_named_with_exit_3(
     diverged_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -3,7 +3,7 @@
 ADR-025. v0 analyzes only code the repository owns and contains, so a
 comparison first has to know which directories are someone else's. Two sources, and only two:
 
-- **Submodules**, automatically: every path `.gitmodules` records at the base or the head.
+- **Submodules**, automatically: every gitlink at the base or the head.
 - **Declared paths**, from `cppsd diff --third-party PATH`, for libraries copied into the tree.
 
 A declared path that exists in neither revision is refused. It is almost certainly a typo, and
@@ -15,7 +15,8 @@ a typo would silently leave a library in the model.
 copied under any other name (ADR-025, "Alternatives rejected").
 
 The set is computed once per comparison, after the revisions are resolved and before any
-worktree exists, so a refusal costs no checkout.
+worktree exists, so a refusal costs no checkout. So is the check that none of it changed
+between the two points: v0 refuses a comparison across a dependency change.
 """
 
 from __future__ import annotations
@@ -25,8 +26,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
-from cpp_semantic_diff.acquire.git import RevPair, run_git, run_git_z
-from cpp_semantic_diff.errors import ThirdPartyPathError
+from cpp_semantic_diff.acquire.git import FileChanges, RevPair, run_git, run_git_z
+from cpp_semantic_diff.errors import ThirdPartyChangedError, ThirdPartyPathError
 from cpp_semantic_diff.rank.exposure import VENDOR_SEGMENTS
 
 #: Directory names that suggest a dependency. `VENDOR_SEGMENTS` is still what ranking reads
@@ -89,19 +90,6 @@ def _within(path: str, directory: str) -> bool:
     return path == directory or path.startswith(directory + "/")
 
 
-def _spelling(raw: str) -> str:
-    """`raw` as a repository-relative directory, or "" if it cannot be one.
-
-    Drops the spelling that carries no meaning -- surrounding whitespace, a trailing slash,
-    `./`, repeated separators -- and rejects an absolute path or one with `..`.
-    """
-    text = raw.strip().replace("\\", "/")
-    parts = [p for p in PurePosixPath(text).parts if p != "."]
-    if text.startswith("/") or ".." in parts:
-        return ""
-    return "/".join(parts)
-
-
 def normalize_declared(raw: str) -> str:
     """A `--third-party` value as a repository-relative directory, or a refusal.
 
@@ -125,28 +113,6 @@ def normalize_declared(raw: str) -> str:
             f"repository root."
         )
     return "/".join(parts)
-
-
-def submodule_paths(repo: Path, rev: str) -> set[str]:
-    """Paths `.gitmodules` records at `rev`, spelled as declared paths are. Empty when `rev`
-    has no `.gitmodules`.
-
-    Read from the blob with `git config --blob`, so no checkout is needed and the working
-    tree's own `.gitmodules` -- which may belong to neither revision -- is never consulted.
-    This is what the file says, not what the revision pins: `third_party_set` keeps only the
-    paths that also have a gitlink.
-    """
-    if not run_git(repo, "ls-tree", "--full-tree", "--name-only", rev, "--", ".gitmodules"):
-        return set()
-    # `--list` rather than `--get-regexp`, which exits 1 when nothing matches and so cannot
-    # tell a `.gitmodules` with no paths from a failure.
-    fields, _ = run_git_z(repo, "config", "-z", "--blob", f"{rev}:.gitmodules", "--list")
-    paths: set[str] = set()
-    for record in fields:
-        key, _, value = record.partition("\n")
-        if key.startswith("submodule.") and key.endswith(".path") and (path := _spelling(value)):
-            paths.add(path)
-    return paths
 
 
 @dataclass(frozen=True)
@@ -206,9 +172,10 @@ def folder_hints(directories: Iterable[str], third_party: Sequence[str]) -> tupl
 def third_party_set(repo: Path, revs: RevPair, declared: Sequence[str] = ()) -> ThirdPartySet:
     """The third-party set for comparing `revs`, refusing a declared path neither side has.
 
-    The union of both revisions' submodules and the declared paths. A submodule counts at a
-    revision only where `.gitmodules` names it *and* the revision has a gitlink there: a stale
-    `.gitmodules` entry pins no code, so it leaves no code to exclude.
+    The union of both revisions' submodules and the declared paths. A submodule is a gitlink,
+    read from the tree, not from `.gitmodules`: a gitlink the file does not name still pins
+    code the repository does not contain, and a stale entry with no gitlink pins none.
+    `.gitmodules` is configuration for cloning, so it is not read at all.
 
     A declared path exists if it is a tracked directory or a gitlink at either revision; a
     file is refused as not a directory, and anything else as absent.
@@ -218,9 +185,7 @@ def third_party_set(repo: Path, revs: RevPair, declared: Sequence[str] = ()) -> 
     trees = {rev: _tracked_tree(repo, rev) for rev in revisions}
     existing = set().union(*(t.directories | t.gitlinks for t in trees.values()))
 
-    submodules = set().union(
-        *(submodule_paths(repo, rev) & trees[rev].gitlinks for rev in revisions)
-    )
+    submodules = set().union(*(t.gitlinks for t in trees.values()))
     wanted = dict.fromkeys(normalize_declared(raw) for raw in declared)
     missing = [path for path in wanted if path not in existing]
     if missing:
@@ -259,3 +224,29 @@ def third_party_set(repo: Path, revs: RevPair, declared: Sequence[str] = ()) -> 
         entries=entries,
         hints=folder_hints(directories, [e.path for e in entries]),
     )
+
+
+def changed_third_party(third_party: ThirdPartySet, changes: FileChanges) -> tuple[str, ...]:
+    """The set entries that `changes` touches, sorted.
+
+    A copied library shows its own changed files. A submodule bump is a modified gitlink at
+    the submodule's path, which `label_for` matches like a file inside it; adding or removing
+    a submodule is the same, as the set holds submodules from both revisions. A rename is
+    checked at both ends, so a file moved into or out of a third-party directory counts.
+    """
+    hit: set[str] = set()
+    for change in changes.changes:
+        for path in (change.path, change.old_path):
+            if path is not None and (label := third_party.label_for(path)) is not None:
+                hit.add(label)
+    return tuple(sorted(hit))
+
+
+def refuse_changed_third_party(third_party: ThirdPartySet, changes: FileChanges) -> None:
+    """Refuse the comparison if any third-party code changed between the two points.
+
+    ADR-025: third-party code must be identical at both points. Every changed entry is
+    named, so one run tells the user the whole of what blocks it.
+    """
+    if changed := changed_third_party(third_party, changes):
+        raise ThirdPartyChangedError(changed)

@@ -32,6 +32,7 @@ from cpp_semantic_diff import __version__
 from cpp_semantic_diff.acquire import (
     diff_line_count,
     file_changes,
+    refuse_changed_third_party,
     resolve_revs,
     third_party_set,
 )
@@ -429,10 +430,14 @@ def diff(
         )
 
     # ADR-025. Before any worktree, so a mistyped `--third-party` is refused in a
-    # second. Reported in the document; not yet applied to extraction.
+    # second. Reported in the document and checked for changes below; not yet applied to
+    # extraction.
     third_party_paths = third_party_set(repo, revs, third_party or ())
 
     changes = file_changes(repo, revs)
+    # ADR-025: third-party code must not change between the two points. Refused here,
+    # before any worktree, so a dependency bump costs no checkout and no parse.
+    refuse_changed_third_party(third_party_paths, changes)
     files = changes.paths
     lines = diff_line_count(repo, revs)
 
