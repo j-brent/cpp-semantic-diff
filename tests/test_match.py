@@ -570,6 +570,46 @@ class TestTheInlineNamespaceTierPairsAcrossABump:
         assert c.unpaired_base[new_s.id] is Unpaired.AMBIGUOUS
         assert c.unpaired_head[g2.id] is Unpaired.AMBIGUOUS
 
+    def test_a_member_whose_signature_also_changed_pairs_once_the_namespace_does(self) -> None:
+        """ADR-044: the inline-namespace tier runs before the name tier precisely so a
+        function whose own signature changed in the same bump still pairs -- the rewrite
+        itself cannot carry it (its old key does not match the new signature's), but once
+        `f`'s unchanged body gives the namespace mapping its evidence, `changed` is a
+        leftover under a now-paired parent, which is exactly what the name tier pairs
+        (ADR-036). This is the fmt measurement's own shape: a template the rewrite missed
+        still paired at the name tier."""
+        old_sig = node("c:@N@lib@N@v1@F@changed#I#", name="changed")
+        new_sig = node("c:@N@lib@N@v2@F@changed#J#", name="changed")
+        c = self.bump([(old_sig, self.V1)], [(new_sig, self.V2)])
+        assert {m.base: m.tier for m in c.matches} == {
+            self.LIB.id: MatchTier.DECLARED,
+            self.V1.id: MatchTier.INLINE_NAMESPACE,
+            self.F1.id: MatchTier.INLINE_NAMESPACE,
+            old_sig.id: MatchTier.NAME,
+        }
+
+    def test_two_bumps_under_different_paired_parents_do_not_cross_pair(self) -> None:
+        """Candidates are scoped per paired parent (`_inline_children` groups by parent), so
+        two unrelated libraries bumping in the same commit -- even reusing the same version
+        names and member names, the worst case for a key that forgot which parent it came
+        from -- each pair with their own sibling, never the other's."""
+        a, b = ns("c:@N@A", inline=False), ns("c:@N@B", inline=False)
+        a1, a2 = ns("c:@N@A@N@v1"), ns("c:@N@A@N@v2")
+        b1, b2 = ns("c:@N@B@N@v1"), ns("c:@N@B@N@v2")
+        fa1, fa2 = node("c:@N@A@N@v1@F@f#", name="f"), node("c:@N@A@N@v2@F@f#", name="f")
+        fb1, fb2 = node("c:@N@B@N@v1@F@f#", name="f"), node("c:@N@B@N@v2@F@f#", name="f")
+        base = tree("a", (a, None), (b, None), (a1, a), (b1, b), (fa1, a1), (fb1, b1))
+        head = tree("b", (a, None), (b, None), (a2, a), (b2, b), (fa2, a2), (fb2, b2))
+        c = match_models(base, head)
+        assert pairs(c) == {
+            (a.id, a.id),
+            (b.id, b.id),
+            (a1.id, a2.id),
+            (b1.id, b2.id),
+            (fa1.id, fa2.id),
+            (fb1.id, fb2.id),
+        }
+
 
 class TestTheRewriteIsAnchored:
     """`match.inline.rewrite` on its own: where a namespace path may be replaced."""
