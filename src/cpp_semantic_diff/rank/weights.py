@@ -226,7 +226,8 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # Changes what every call that omits the argument passes, silently: those callers still
     # compile. Below a signature change, which can break them.
     "default_arguments": 0.85,
-    # A function that stopped being constexpr breaks every use in a constant expression.
+    # A function or variable that stopped being constexpr breaks every use in a constant
+    # expression.
     "constexpr": 0.80,
     # Changes the state every constructor that does not name the field starts it in.
     "default_member_init": 0.60,
@@ -240,6 +241,38 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # Base order is layout and construction order: every base's offset, and which base is
     # constructed first.
     "base_order": 0.90,
+    # The entities that carry values (ADR-038).
+    "underlying_type": 0.95,  # an enum's size and signedness: layout and ABI of every use
+    "scoped": 0.90,  # every unqualified use of an enumerator, and every implicit conversion
+    # The value is what every use of an enumerator compiles to, and a changed one can break
+    # code outside the diff silently: a serialized or persisted value now means something else.
+    "value": 0.95,
+    # Low on its own: a value that becomes written without changing is a style edit, and one
+    # that changes reports the change through `value` as well.
+    "explicit_value": 0.30,
+    # What every use of an alias compiles to, so the signature of every function written
+    # with it: level with `type`.
+    "target": 0.95,
+    # The written spelling of a function type whose canonical form did not change -- an
+    # alias swapped for its target, or one alias for another. Where the canonical signature
+    # changed too, `NodeSignatureChanged` reports it and this is not repeated. No caller is
+    # affected, so it sits with a body change.
+    "sugared_signature": 0.30,
+    # A variable's `type`, `value` and `constexpr` are the keys above: a field's type, an
+    # enumerator's value and a function's constexpr are the same facts.
+    "linkage": 0.85,  # whether other translation units can name it at all
+    "thread_local": 0.80,  # one object per thread, or one shared by all
+    "storage": 0.75,  # `static`, `extern`: mostly restates linkage, and is reported beside it
+    # An initializer clang could not evaluate changed: a call, a constructor, an address. Real,
+    # but it says only that the text changed, as a body change does, with a little more weight
+    # because it runs before `main`.
+    "initializer_hash": 0.50,
+    # A macro's replacement changed: every use of it now compiles to something else, and no
+    # declaration in the model shows it (ADR-039).
+    "replacement_hash": 0.80,
+    "function_like": 0.70,  # every use must now be written with, or without, an argument list
+    # A static assertion's message: what a failing build prints, and nothing else (ADR-039).
+    "message": 0.30,
 }
 
 # --------------------------------------------------------------------------------------

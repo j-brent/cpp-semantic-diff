@@ -350,35 +350,37 @@ CATALOG = [
         "#define LIMIT 10\nint f() { return LIMIT; }",
         "#define LIMIT 20\nint f() { return LIMIT; }",
         changed("LIMIT"),
-        fails="step 5: macros are not modelled",
     ),
     case(
         "constexpr-global-value",
         "constexpr int kLimit = 10;\nint f() { return kLimit; }",
         "constexpr int kLimit = 20;\nint f() { return kLimit; }",
         changed("kLimit", was=10, now=20),
-        fails="step 5: variables are not modelled",
     ),
     case(
         "enumerator-value",
         "enum E { A = 1, B = 2 };\nint f() { return B; }",
         "enum E { A = 1, B = 3 };\nint f() { return B; }",
         changed("E::B", was=2, now=3),
-        fails="step 5: enumerators are not modelled",
     ),
     case(
         "enumerator-added",
         "enum E { A, B };",
         "enum E { A, B, C };",
         added("E::C"),
-        fails="step 5: enumerators are not modelled",
+    ),
+    case(
+        "enumerator-added-unhandled-in-switch",
+        "enum E { A, B };\nint f(E e) { switch (e) { case A: return 1; case B: return 2; } }",
+        "enum E { A, B, C };\nint f(E e) { switch (e) { case A: return 1; case B: return 2; } }",
+        relation("f", "E::C"),
+        fails="step 6 (#10, post-v0 per ADR-041): a switch is not checked against its enum",
     ),
     case(
         "static-data-member-value",
         "struct S { static constexpr int n = 4; };",
         "struct S { static constexpr int n = 8; };",
         changed("S::n", was=4, now=8),
-        fails="step 5: static data members are not modelled",
     ),
     case(
         "field-order",
@@ -428,7 +430,6 @@ CATALOG = [
         "struct S { int x; };\nstatic_assert(sizeof(S) == 4);",
         "struct S { int x; };",
         removed_at(2),
-        fails="step 5: static assertions are not modelled",
     ),
     # Changes that arrived without their cause on 2026-10-10. Each has a second row for what
     # the tool already gets right, so that does not regress while the first is being fixed.
@@ -438,7 +439,14 @@ CATALOG = [
         "using T = long;\nvoid f(T) {}\nvoid g() { f(1); }",
         changed("T", was="int", now="long"),
         not_replaced("f"),
-        fails="step 5: aliases are not modelled",
+    ),
+    case(
+        "typedef-in-a-renamed-file",
+        "typedef int Count;\nvoid f(Count) {}",
+        "typedef long Count;\nvoid f(Count) {}",
+        changed("Count", was="int", now="long"),
+        not_replaced("Count"),
+        renamed_to="b.cpp",
     ),
     case(
         "alias-target-changed-f-is-reported",
@@ -715,7 +723,6 @@ CATALOG = [
         "// the limit\n#define LIMIT 20\nint f() { return LIMIT; }",
         changed("LIMIT"),
         not_replaced("LIMIT"),
-        fails="step 5: macros are not modelled, and their identifier moves with the text",
     ),
     case(
         "static-assert-shifted",
@@ -729,7 +736,6 @@ CATALOG = [
         "// layout\nstruct S { int x; };\nstatic_assert(alignof(S) == 4);",
         removed_at(2),
         nothing_added(),
-        fails="step 5: static assertions are not modelled, and have no identifier",
     ),
     # From the relationship probe (model-probes/tmpl.py): a namespace-scope initializer.
     case(
@@ -737,7 +743,7 @@ CATALOG = [
         "int g();\nint h();\nint x = g();",
         "int g();\nint h();\nint x = h();",
         relation("x", "h"),
-        fails="steps 5 and 8: variables are not modelled, nor calls from initializers",
+        fails="step 8 (out of v0, ADR-030): calls from initializers are not relationships",
     ),
 ]
 

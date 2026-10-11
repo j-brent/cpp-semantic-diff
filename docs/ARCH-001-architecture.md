@@ -160,7 +160,8 @@ locate a change in source, it does not go in the model.
 Node
   id            stable identity key (§5)
   kind          namespace | class | struct | union | function | method | field
-                | enum | enumerator | alias | variable | template | file | target
+                | enum | enumerator | alias | variable | macro | static_assertion
+                | template | file | target
   name          unqualified
   qualified_name
   signature     normalized: typedefs resolved, cv/ref qualifiers explicit; defaults are an attribute
@@ -208,6 +209,23 @@ the entity is declared or defined, such as a header declaration and the definiti
 file. It is the one field merged as a union across observations rather than taken from the
 observation that wins, and it is never compared or hashed. A change event points at every site,
 so an edited header declaration leads to the change event about it (§6.2).
+
+The entities that carry values hold them in `attrs`, one compared fact per key
+([ADR-038](adr/ADR-038-entities-that-carry-values.md); macros,
+[ADR-039](adr/ADR-039-synthesized-identities.md)):
+
+| Kind | Compared |
+|---|---|
+| enum | `underlying_type` (canonical), `scoped` |
+| enumerator | `value`, `explicit_value` (written, or implied by the one before) |
+| alias | `target` (canonical), `template` |
+| macro | `replacement_hash` (its tokens after the name), `function_like` |
+| static_assertion | `message`; its condition is its identity |
+| variable, at namespace scope or a static data member | `type`, `value` (as clang evaluates it), `initializer_hash` (only where it cannot), `constexpr`, `storage`, `linkage`, `thread_local` |
+
+A function or method also carries `sugared_signature`: its type as written, aliases kept. When an
+alias's target changes, the canonical `signature` of every function written with it changes while
+this does not, which is how a cause rule (§6.3) tells that from an edit to the function.
 
 ### 4.2 Edges
 
@@ -294,7 +312,11 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
   breaks tier 1 for everything in them. Identity must include the TU, and file renames must be
   resolved from git before matching — not discovered by the matcher.
 - **Macros.** An entity's very existence may depend on a macro that itself changed. The model is
-  one preprocessor configuration; see §11.
+  one preprocessor configuration; see §11. A macro's own USR holds the byte offset of its
+  definition, so a macro is identified by its file and name instead, numbered where one file
+  defines a name again ([ADR-039](adr/ADR-039-synthesized-identities.md)).
+- **Static assertions.** A `static_assert` has no USR. Its id is synthesized from its file, its
+  scope and a hash of its condition, so a changed condition is a different assertion (ADR-039).
 - **ODR.** The same declared identity can appear in multiple TUs with different definitions. Dedup
   by USR is a correctness requirement, not an optimization — the CodeAtlas measurements found
   15,656 method cursors collapsing to 161 classes in FTXUI, because every header is reparsed per TU.
@@ -407,6 +429,8 @@ Rename one function and 200 call edges "change". That is one change event with 2
 | call-moved-to-another-overload | `EdgeAdded(caller→G)` | `EdgeRemoved(caller→F)`, F and G overloads of one name | active |
 | signature-change-breaks-overrides | `NodeSignatureChanged(F)` | `EdgeRemoved(override→F)` | active |
 | edge-gained-its-endpoint | `NodeAdded(N)` | `EdgeAdded` for edges touching N | active |
+| alias-target-changes-signature | `NodeAttrChanged(target)` of an alias | `NodeSignatureChanged` of a function whose written signature names it and did not change | active |
+| enumerator-implicit-value-shifted | `NodeAttrChanged(value)`, `NodeAdded` or `NodeRemoved` of the nearest enumerator above | `NodeAttrChanged(value)` of an enumerator whose value is implied on both sides | active |
 | rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **unreachable** |
 | signature-change-breaks-callers | `NodeSignatureChanged(F)` | `CallerOfChangedSignature` for each call into F | active |
 
@@ -449,6 +473,27 @@ overloads differ exactly in signature (§5). The cause is the `EdgeAdded` rather
 by `edge-gained-its-endpoint`, and both collapse under it. The row sits below
 `edge-lost-its-endpoint` because both explain an `EdgeRemoved` and the order is the tie-break — an
 endpoint that actually went away is a better explanation than one the caller merely stopped using.
+
+`alias-target-changes-signature` is the cascade an alias has. Change `using T = int` to `long` and
+every `f(T)` gets a new canonical signature without a character of it changing. The evidence is the
+pair of signatures (§4.1): canonical changed, written unchanged, and the alias named in the written
+one. A function whose written signature changed too was edited, and its change is its own.
+
+`enumerator-implicit-value-shifted` is the cascade an enum has. An enumerator with no written value
+is the one before it plus one, so inserting one enumerator changes every implied value below it.
+The cause is the nearest change above, of whichever kind, and a change farther up is linked by the
+enumerators between, so the chain runs up the enum the way the values do. One row rather than one
+per kind of cause, because the first row to find a cause wins, and a farther insertion must not win
+over a nearer value change; `CauseRule.also_caused_by` is how a row names more than one cause kind.
+A value written on either side is an edit of its own and is not explained. "Above" is source order,
+which orders siblings and is never identity (§4.1).
+
+Two rules are recorded here and not in the table, because their consequences need the uses
+relationship ([#10](https://github.com/j-brent/cpp-semantic-diff/issues/10)), which is out of v0
+([ADR-041](adr/ADR-041-v0-scope-of-steps-6-and-7.md)): a changed constant or enumerator value
+causes a change event on each entity that uses it, and an added enumerator causes one on each
+`switch` over its enum that does not name it. Neither has a row or dormant code until the
+relationship exists.
 
 `rename-retargets-edges` is **unreachable, not dormant** — and it is not revived by tier 2. Because
 base edges are rewritten into head coordinates through the correspondence before comparison, a
@@ -725,7 +770,7 @@ is non-reproducible on one machine, let alone across two.
 
 The smallest slice that tests the thesis end to end.
 
-**In:** namespace / class / function / method / field nodes · `contains`, `calls`, `inherits`,
+**In:** namespace / class / function / method / field / enum / enumerator / alias / variable / macro / static assertion nodes · `contains`, `calls`, `inherits`,
 `overrides` edges · **tier-1 identity, plus the inline namespace tier and the name tier for functions and methods** · node
 add/remove/attr/body/signature and edge add/remove/kind/attr change events · one derived change
 event, `CallerOfChangedSignature` · JSON + terminal output · the compression metric · fixtures `fmt` and

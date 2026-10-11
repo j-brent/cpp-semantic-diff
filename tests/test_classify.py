@@ -632,6 +632,121 @@ class TestTheStageIsAPureFunction:
         assert by_subject(events, ChangeEventKind.NODE_REMOVED, member).caused_by is None
 
 
+E = NodeId("c:@E@E")
+
+
+def enum(rev: str, *members: str) -> Model:
+    """Enum `E` with its enumerators in the order written. `"A"` has an implied value, `"A=5"`
+    a written one; implied values count up from the one before, as in C++."""
+    nodes = [node(E, name="E", kind=NodeKind.ENUM)]
+    edges = []
+    value = 0
+    for line, member in enumerate(members, start=2):
+        name, _, written = member.partition("=")
+        value = int(written) if written else value
+        nodes.append(
+            node(
+                f"{E}@{name}",
+                name=name,
+                qualified_name=f"E::{name}",
+                kind=NodeKind.ENUMERATOR,
+                attrs={"value": value, "explicit_value": bool(written)},
+                location=Location(file="a.cpp", line=line),
+            )
+        )
+        edges.append(holds(E, f"{E}@{name}"))
+        value += 1
+    return model(rev, *nodes, edges=edges)
+
+
+def value_change(events: list[ChangeEvent], name: str) -> ChangeEvent:
+    (found,) = (
+        e
+        for e in events
+        if e.kind is ChangeEventKind.NODE_ATTR_CHANGED
+        and e.subject == f"{E}@{name}"
+        and e.payload["attr"] == "value"
+    )
+    return found
+
+
+def cause_of_shift(events: list[ChangeEvent], name: str) -> ChangeEvent | None:
+    caused_by = value_change(events, name).caused_by
+    return next((e for e in events if e.id == caused_by), None)
+
+
+class TestAnImpliedEnumeratorValueIsExplainedByTheChangeAboveIt:
+    """ARCH-001 §6.3's `enumerator-implicit-value-shifted`. Insert one enumerator and every
+    implied value below it changes: one decision, reported once with its consequences under
+    it, rather than as a column of unrelated value changes."""
+
+    def test_an_insertion_explains_the_values_below_it_as_a_chain(self) -> None:
+        events = classify(enum("a", "A", "B", "C"), enum("b", "X", "A", "B", "C"))
+        inserted = by_subject(events, ChangeEventKind.NODE_ADDED, f"{E}@X")
+        assert cause_of_shift(events, "A") == inserted
+        assert cause_of_shift(events, "B") == value_change(events, "A")
+        assert roots_at(events, value_change(events, "C")) == inserted
+
+    def test_a_removal_explains_the_values_below_where_it_stood(self) -> None:
+        events = classify(enum("a", "A", "X", "B", "C"), enum("b", "A", "B", "C"))
+        assert cause_of_shift(events, "B") == by_subject(
+            events, ChangeEventKind.NODE_REMOVED, f"{E}@X"
+        )
+        assert cause_of_shift(events, "C") == value_change(events, "B")
+
+    def test_a_written_value_that_changed_explains_the_implied_ones_after_it(self) -> None:
+        events = classify(enum("a", "A=1", "B", "C"), enum("b", "A=5", "B", "C"))
+        assert cause_of_shift(events, "B") == value_change(events, "A")
+        assert cause_of_shift(events, "A") is None
+
+    def test_the_nearest_change_wins_over_a_farther_one_of_another_kind(self) -> None:
+        """An insertion at the top and a written value just above: the written value is the
+        one the implied value follows from."""
+        events = classify(enum("a", "A", "B", "C"), enum("b", "X", "A", "B=10", "C"))
+        assert cause_of_shift(events, "C") == value_change(events, "B")
+
+    def test_a_written_value_on_either_side_is_its_own_change(self) -> None:
+        """A value written on one side is an edit of that line, not a consequence, even when
+        an insertion above would also explain it."""
+        events = classify(enum("a", "A", "B=1"), enum("b", "X", "A", "B=7"))
+        assert cause_of_shift(events, "B") is None
+        events = classify(enum("a", "A", "B"), enum("b", "X", "A", "B=9"))
+        assert cause_of_shift(events, "B") is None
+
+
+T = NodeId("c:@T")
+
+
+def aliased(rev: str, target: str, written: str = "void (T)") -> Model:
+    """Alias `T` and a function `f` written with it."""
+    return model(
+        rev,
+        node(T, name="T", kind=NodeKind.ALIAS, attrs={"target": target}),
+        node(F, signature=f"void ({target})", attrs={"sugared_signature": written}),
+    )
+
+
+class TestAnAliasExplainsTheSignaturesItChanged:
+    """ARCH-001 §6.3's `alias-target-changes-signature`. `using T = int` becomes `long`, and
+    every function written with `T` changes signature without a character of it changing."""
+
+    def test_the_signature_change_is_filed_under_the_alias(self) -> None:
+        events = classify(aliased("a", "int"), aliased("b", "long"))
+        cause = cause_of(events, ChangeEventKind.NODE_SIGNATURE_CHANGED, F)
+        assert cause is not None and cause.subject == T
+        assert cause.payload["attr"] == "target"
+
+    def test_a_function_whose_written_signature_changed_was_edited(self) -> None:
+        events = classify(aliased("a", "int"), aliased("b", "long", written="void (T, int)"))
+        assert cause_of(events, ChangeEventKind.NODE_SIGNATURE_CHANGED, F) is None
+
+    def test_a_function_that_does_not_name_the_alias_is_not_explained_by_it(self) -> None:
+        events = classify(
+            aliased("a", "int", written="void (int)"), aliased("b", "long", written="void (int)")
+        )
+        assert cause_of(events, ChangeEventKind.NODE_SIGNATURE_CHANGED, F) is None
+
+
 class TestTheRuleTableIsExplicit:
     """ARCH-001 §6.3: cause links come from an explicit rule table, not inference.
 
@@ -665,6 +780,7 @@ class TestTheRuleTableIsExplicit:
         that silently never runs, which is why `RuleStatus` is on the record."""
         for rule in CAUSE_RULES:
             assert rule.cause in ChangeEventKind and rule.consequence in ChangeEventKind
+            assert all(kind in ChangeEventKind for kind in rule.also_caused_by)
 
     def test_no_dormant_or_unreachable_rule_fires_on_a_v0_delta(self) -> None:
         """If one ever does, either a later tier landed or a stage started emitting a kind

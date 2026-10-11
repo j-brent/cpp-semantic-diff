@@ -91,16 +91,20 @@ def _cause_for(ctx: ClassifyContext, index: EventIndex, event: ChangeEvent) -> C
         if rule.consequence is not event.kind:
             continue
         for subject in rule.subjects(ctx, event):
-            for candidate in index.get((rule.cause, subject), ()):
-                # An event cannot cause itself. Reachable in principle -- a malformed model
-                # containing a node in itself would ask for exactly that -- and §6.3 would
-                # rather show the event than record a link that means nothing.
-                if candidate.id != event.id and _payload_matches(candidate.payload, rule):
-                    return candidate.id
+            for kind in (rule.cause, *rule.also_caused_by):
+                for candidate in index.get((kind, subject), ()):
+                    # An event cannot cause itself. Reachable in principle -- a malformed
+                    # model containing a node in itself would ask for exactly that -- and
+                    # §6.3 would rather show the event than record a link that means nothing.
+                    if candidate.id != event.id and _payload_matches(candidate, rule):
+                        return candidate.id
     return None
 
 
-def _payload_matches(payload: Mapping[str, AttrValue], rule: CauseRule) -> bool:
+def _payload_matches(candidate: ChangeEvent, rule: CauseRule) -> bool:
+    if candidate.kind is not rule.cause:
+        return True
+    payload: Mapping[str, AttrValue] = candidate.payload
     return all(payload.get(key) == value for key, value in rule.cause_payload.items())
 
 

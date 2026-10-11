@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -24,9 +25,11 @@ from cpp_semantic_diff.model.ir import (
     Node,
     NodeId,
     NodeKind,
+    usr_file,
 )
 from cpp_semantic_diff.produce.extract import (
     DROPPED_FLAGS,
+    Boundary,
     TuExtract,
     body_hash,
     extract,
@@ -129,20 +132,417 @@ class TestScope:
             NodeKind.FUNCTION
         }
 
-    def test_ignores_kinds_outside_the_v0_scope(self, tmp_path: Path, toolchain: Toolchain) -> None:
+    def test_ignores_variables_local_to_a_function(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """A local, `static` or not, is part of its function's body, which `body_hash`
+        compares."""
         result = run(
             tmp_path,
             toolchain,
-            {
-                "a.cpp": """
-                enum class Color { red, green };
-                using Alias = int;
-                int global_counter = 0;
-                """
-            },
+            {"a.cpp": "void f() { static int calls = 0; int x = 1; ++calls; }\n"},
         )
         assert result.ok
-        assert result.nodes == {}
+        assert {n.qualified_name for n in result.nodes.values()} == {"f"}
+
+
+class TestAliases:
+    """A type alias, compared by the type it stands for (ADR-038)."""
+
+    SOURCE = """
+    using U = int;
+    typedef unsigned long Count;
+    namespace n { typedef long L; }
+    template <class T> using Ptr = T*;
+    struct K { using M = Count; };
+    typedef struct { int a; } Anon;
+    typedef struct Tagged { int b; } Tagged;
+    typedef struct Other_ { int c; } Other;
+    void f(Count c, U u) noexcept {}
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("aliases"), toolchain, {"a.cpp": self.SOURCE})
+
+    def test_an_alias_carries_its_canonical_target(self, result: TuExtract) -> None:
+        targets = {
+            name: named(result, name).attrs["target"]
+            for name in ("U", "Count", "n::L", "K::M", "Other")
+        }
+        assert targets == {
+            "U": "int",
+            "Count": "unsigned long",
+            "n::L": "long",
+            "K::M": "unsigned long",
+            "Other": "Other_",
+        }
+        assert named(result, "U").kind is NodeKind.ALIAS
+        assert named(result, "U").attrs["template"] is False
+
+    def test_an_alias_template_spells_its_parameters_by_position(self, result: TuExtract) -> None:
+        assert named(result, "Ptr").attrs == {"target": "type-parameter-0-0 *", "template": True}
+
+    def test_a_typedef_that_names_its_own_struct_is_the_struct(self, result: TuExtract) -> None:
+        """C's `typedef struct X {...} X;` declares one type under one name. A second node
+        called `X` would hold nothing the struct does not."""
+        for name in ("Anon", "Tagged"):
+            assert [n.kind for n in result.nodes.values() if n.qualified_name == name] == [
+                NodeKind.STRUCT
+            ]
+
+    def test_a_function_keeps_its_signature_as_written(self, result: TuExtract) -> None:
+        """Beside the canonical signature, the written one: what tells an alias's target
+        changing from an edit to the function. Without its exception specification, which
+        an implicit one makes differ between TUs."""
+        f = named(result, "f")
+        assert f.signature == "void (unsigned long, int)"
+        assert f.attrs["sugared_signature"] == "void (Count, U)"
+
+
+class TestVariables:
+    """A variable at namespace scope or a static data member, compared by its type, its value
+    and how it is stored (ADR-038)."""
+
+    SOURCE = """
+    constexpr int kLimit = 2 * 5;
+    static int counter = 2;
+    thread_local int per_thread = 0;
+    const char* greeting = "hi";
+    constexpr double half = 0.5;
+    constexpr double inf = __builtin_inf();
+    int next();
+    int computed = next();
+    namespace n { inline constexpr unsigned long long all = ~0ull; }
+    struct S { static constexpr int n = 4; static int m; };
+    int S::m = 9;
+    template <class T> struct TT { static constexpr int v = sizeof(T); };
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("variables"), toolchain, {"a.cpp": self.SOURCE})
+
+    def test_a_constant_carries_the_value_clang_folds_it_to(self, result: TuExtract) -> None:
+        values = {
+            name: named(result, name).attrs["value"]
+            for name in ("kLimit", "counter", "greeting", "half", "n::all", "S::n", "S::m")
+        }
+        assert values == {
+            "kLimit": 10,
+            "counter": 2,
+            "greeting": "hi",
+            "half": 0.5,
+            "n::all": 18446744073709551615,
+            "S::n": 4,
+            "S::m": 9,
+        }
+        assert named(result, "kLimit").kind is NodeKind.VARIABLE
+        assert named(result, "kLimit").attrs["initializer_hash"] is None
+
+    def test_an_infinite_value_is_spelled(self, result: TuExtract) -> None:
+        """JSON has no infinity, and NaN is unequal to itself: either stored as a float would
+        change on a cache round trip or on every comparison."""
+        assert named(result, "inf").attrs["value"] == "inf"
+
+    def test_an_initializer_clang_cannot_evaluate_is_hashed(self, result: TuExtract) -> None:
+        computed = named(result, "computed").attrs
+        assert computed["value"] is None
+        assert isinstance(computed["initializer_hash"], str)
+
+    def test_a_value_inside_a_template_is_hashed_not_evaluated(self, result: TuExtract) -> None:
+        """It may depend on a template argument, and clang's evaluator is not safe to ask."""
+        v = named(result, "TT::v").attrs
+        assert v["value"] is None
+        assert isinstance(v["initializer_hash"], str)
+
+    def test_how_it_is_stored_is_compared(self, result: TuExtract) -> None:
+        def facts(name: str) -> tuple[AttrValue, ...]:
+            a = named(result, name).attrs
+            return (a["constexpr"], a["storage"], a["linkage"], a["thread_local"])
+
+        assert facts("kLimit") == (True, "none", "internal", False)
+        assert facts("counter") == (False, "static", "internal", False)
+        assert facts("per_thread") == (False, "none", "external", True)
+        assert facts("S::n") == (True, "static", "external", False)
+        assert named(result, "S::n").attrs["type"] == "const int"
+
+    def test_a_static_data_member_is_contained_by_its_class(self, result: TuExtract) -> None:
+        assert {("S", "S::n"), ("S", "S::m"), ("n", "n::all")} <= edge_pairs(
+            result, EdgeKind.CONTAINS
+        )
+
+
+class TestAVariableDefinitionWins:
+    """`extern int x;` in a header, `int x = 5;` in one source file: one entity, and the
+    observation that holds its value is the one kept, whichever TU arrives first."""
+
+    SOURCES: ClassVar[dict[str, str]] = {
+        "lib.h": "#pragma once\nextern int x;\nextern int y;\n",
+        "a.cpp": '#include "lib.h"\nint use() { return x + y; }\n',
+        "b.cpp": '#include "lib.h"\nint x = 5;\nint y;\n',
+    }
+
+    def test_in_either_order(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        a, b = run_each(tmp_path, toolchain, self.SOURCES, "a.cpp", "b.cpp")
+        for first, second in ((a, b), (b, a)):
+            nodes: dict[NodeId, Node] = {}
+            for partial in (first, second):
+                for node in partial.nodes.values():
+                    merge_node(nodes, node)
+            x = next(n for n in nodes.values() if n.qualified_name == "x")
+            assert x.attrs["value"] == 5
+            assert x.attrs["storage"] == "none"
+            assert x.location is not None and x.location.file == "b.cpp"
+            # No value to tell them apart: `extern` is what marks the declaration.
+            y = next(n for n in nodes.values() if n.qualified_name == "y")
+            assert y.attrs["storage"] == "none"
+            assert y.location is not None and y.location.file == "b.cpp"
+
+
+class TestMacros:
+    """A macro the repository defines, identified by file and name rather than by where in
+    the file it is, and compared by its replacement (ADR-039)."""
+
+    HEADER = "#ifndef LIB_H\n#define LIB_H\n#define SHARED 1\n#endif\n"
+    SOURCE = """#include "lib.h"
+    #define LIMIT 10
+    #define TWICE(x) ((x) * 2)
+    #define EMPTY
+    #undef LIMIT
+    #define LIMIT 20
+    int f() { return LIMIT + TWICE(SHARED) + FROM_FLAGS; }
+    """
+
+    def macros(self, result: TuExtract) -> dict[str, Node]:
+        return {n.id: n for n in result.nodes.values() if n.kind is NodeKind.MACRO}
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        root = tmp_path_factory.mktemp("macros")
+        (root / "lib.h").write_text(self.HEADER, encoding="utf-8")
+        (root / "a.cpp").write_text(self.SOURCE, encoding="utf-8")
+        entry = CompileEntry(
+            file=root / "a.cpp",
+            directory=root,
+            arguments=["clang++", "-std=c++17", "-DFROM_FLAGS=3", "-c", "a.cpp"],
+        )
+        return extract(entry, root=root, toolchain=toolchain)
+
+    def test_only_macros_the_repository_writes_are_modelled(self, result: TuExtract) -> None:
+        """Not `FROM_FLAGS`, given on the command line, nor clang's own; not the include
+        guard, which is how a header is written rather than a value."""
+        assert sorted(self.macros(result)) == [
+            "c:a.cpp@macro@EMPTY",
+            "c:a.cpp@macro@LIMIT",
+            "c:a.cpp@macro@LIMIT#2",
+            "c:a.cpp@macro@TWICE",
+            "c:lib.h@macro@SHARED",
+        ]
+
+    def test_a_macro_is_identified_by_its_file_and_name(self, result: TuExtract) -> None:
+        """Clang's identifier carries the byte offset of the definition; the node id does not,
+        so a line added above leaves it the same macro. The file stays, as for a `static`."""
+        for node_id in self.macros(result):
+            assert usr_file(node_id) in ("a.cpp", "lib.h")
+        assert self.macros(result)["c:a.cpp@macro@LIMIT"].tu == "a.cpp"
+        assert self.macros(result)["c:lib.h@macro@SHARED"].tu is None
+
+    def test_a_macro_carries_a_hash_of_its_replacement(self, result: TuExtract) -> None:
+        macros = self.macros(result)
+        first, second = macros["c:a.cpp@macro@LIMIT"], macros["c:a.cpp@macro@LIMIT#2"]
+        assert isinstance(first.attrs["replacement_hash"], str)
+        assert first.attrs["replacement_hash"] != second.attrs["replacement_hash"]
+        assert macros["c:a.cpp@macro@EMPTY"].attrs["replacement_hash"] is None
+        assert macros["c:a.cpp@macro@TWICE"].attrs["function_like"] is True
+        assert first.attrs["function_like"] is False
+
+    def test_moving_a_macro_down_a_line_keeps_its_id(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        moved = run(tmp_path, toolchain, {"a.cpp": "// note\n\n#define LIMIT 10\n"})
+        assert [n.id for n in moved.nodes.values()] == ["c:a.cpp@macro@LIMIT"]
+
+
+class TestStaticAssertions:
+    """A `static_assert` at namespace or class scope. Clang gives it no identifier, so it is
+    identified by where it is declared and what it asserts (ADR-039)."""
+
+    SOURCE = """
+    struct S { int x; static_assert(sizeof(int) == 4, "int"); };
+    static_assert(sizeof(S) == 4);
+    static_assert(sizeof(S) == 4);
+    namespace n { static_assert(alignof(S) == 4, "msg"); }
+    void f() { static_assert(true); }
+    """
+
+    def ids(self, result: TuExtract) -> list[str]:
+        return [n.id for n in result.nodes.values() if n.kind is NodeKind.STATIC_ASSERTION]
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("asserts"), toolchain, {"a.cpp": self.SOURCE})
+
+    def test_each_assertion_outside_a_function_is_a_node(self, result: TuExtract) -> None:
+        """Four, not five: one in a function body is part of the body."""
+        assert len(self.ids(result)) == 4
+        assert all(usr_file(i) == "a.cpp" for i in self.ids(result))
+
+    def test_an_exact_duplicate_is_numbered(self, result: TuExtract) -> None:
+        top = sorted(i for i in self.ids(result) if i.startswith("c:a.cpp@SA@@"))
+        assert len(top) == 2 and top[1] == f"{top[0]}#2"
+
+    def test_it_is_contained_by_its_scope_and_carries_its_message(self, result: TuExtract) -> None:
+        assert {"S", "n"} <= {
+            src for src, dst in edge_pairs(result, EdgeKind.CONTAINS) if "static_assert" in dst
+        }
+        messages = {
+            n.qualified_name: n.attrs["message"]
+            for n in result.nodes.values()
+            if n.kind is NodeKind.STATIC_ASSERTION and n.qualified_name != "static_assert"
+        }
+        assert messages == {"S::static_assert": '"int"', "n::static_assert": '"msg"'}
+
+    def test_a_line_added_above_keeps_its_id(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        base, head = tmp_path / "base", tmp_path / "head"
+        base.mkdir()
+        head.mkdir()
+        left = run(base, toolchain, {"a.cpp": "static_assert(sizeof(int) == 4);\n"})
+        right = run(head, toolchain, {"a.cpp": "// note\nstatic_assert(sizeof(int) == 4);\n"})
+        assert self.ids(left) == self.ids(right) != []
+
+
+class TestValueEntitiesOutsideTheModelAreNotModelled:
+    """A macro, alias, variable, enum and static assertion in a third-party directory or in a
+    file git does not track produce no node, as a function there does not (ADR-025, ADR-037).
+    Macros take a path of their own through the extractor, so the boundary is checked on it
+    separately."""
+
+    HEADER = """#pragma once
+    #define OUTSIDE_LIMIT 10
+    using OutsideAlias = int;
+    constexpr int kOutside = 3;
+    enum OutsideEnum { OutsideA, OutsideB };
+    static_assert(sizeof(int) == 4, "outside");
+    struct Outside { static constexpr int n = 1; };
+    """
+
+    def extract_with(
+        self, tmp_path: Path, toolchain: Toolchain, header: str, boundary: Boundary
+    ) -> TuExtract:
+        (tmp_path / header).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / header).write_text(self.HEADER, encoding="utf-8")
+        (tmp_path / "a.cpp").write_text(f'#include "{header}"\nint inside = 1;\n')
+        entry = CompileEntry(
+            file=tmp_path / "a.cpp",
+            directory=tmp_path,
+            arguments=["clang++", "-std=c++17", "-c", "a.cpp"],
+        )
+        return extract(entry, root=tmp_path, toolchain=toolchain, boundary=boundary)
+
+    def test_under_a_third_party_path(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        result = self.extract_with(
+            tmp_path, toolchain, "vendor/lib.h", Boundary(third_party=("vendor",))
+        )
+        assert result.ok, result.result.detail
+        assert {n.qualified_name for n in result.nodes.values()} == {"inside"}
+
+    def test_in_an_untracked_file(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        result = self.extract_with(
+            tmp_path, toolchain, "gen.h", Boundary(tracked=frozenset({"a.cpp"}))
+        )
+        assert result.ok, result.result.detail
+        assert {n.qualified_name for n in result.nodes.values()} == {"inside"}
+
+    def test_the_same_header_tracked_is_modelled(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The control: without the boundary, every one of them is a node."""
+        result = self.extract_with(tmp_path, toolchain, "gen.h", Boundary())
+        kinds = {n.kind for n in result.nodes.values()}
+        assert {
+            NodeKind.MACRO,
+            NodeKind.ALIAS,
+            NodeKind.VARIABLE,
+            NodeKind.ENUM,
+            NodeKind.ENUMERATOR,
+            NodeKind.STATIC_ASSERTION,
+        } <= kinds
+
+
+class TestTwoAliasesOfOneNameInTwoFiles:
+    """`using Foo = int;` in one source file and `using Foo = long;` in another share a USR,
+    which names no file, so they are one node (ADR-038, a known limit). Nothing reports the
+    disagreement; what this pins is that the node kept does not depend on TU order."""
+
+    SOURCES: ClassVar[dict[str, str]] = {
+        "a.cpp": "using Foo = int;\n",
+        "b.cpp": "using Foo = long;\n",
+    }
+
+    def test_the_node_kept_does_not_depend_on_tu_order(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        a, b = run_each(tmp_path, toolchain, self.SOURCES, "a.cpp", "b.cpp")
+        kept = []
+        for first, second in ((a, b), (b, a)):
+            nodes: dict[NodeId, Node] = {}
+            for partial in (first, second):
+                for node in partial.nodes.values():
+                    merge_node(nodes, node)
+            assert len(nodes) == 1
+            kept.append(next(iter(nodes.values())))
+        assert kept[0] == kept[1]
+
+
+class TestEnums:
+    """An enum and its enumerators, each with what a reviewer compares (ADR-038)."""
+
+    SOURCE = """
+    enum E { A = 1, B, C = 5 };
+    enum class Color : unsigned char { red, green };
+    enum Neg { m = -1 };
+    struct K { enum In { q }; };
+    template <int N> struct X { enum { v = N, w = 4 }; };
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("enums"), toolchain, {"a.cpp": self.SOURCE})
+
+    def test_an_enum_carries_its_underlying_type_and_whether_it_is_scoped(
+        self, result: TuExtract
+    ) -> None:
+        assert named(result, "E").kind is NodeKind.ENUM
+        assert named(result, "E").attrs == {"underlying_type": "unsigned int", "scoped": False}
+        assert named(result, "Color").attrs == {"underlying_type": "unsigned char", "scoped": True}
+
+    def test_an_enumerator_carries_its_value_and_whether_it_was_written(
+        self, result: TuExtract
+    ) -> None:
+        values = {
+            name: (named(result, name).attrs["value"], named(result, name).attrs["explicit_value"])
+            for name in ("E::A", "E::B", "E::C", "Color::green", "Neg::m", "K::In::q")
+        }
+        assert values == {
+            "E::A": (1, True),
+            "E::B": (2, False),
+            "E::C": (5, True),
+            "Color::green": (1, False),
+            "Neg::m": (-1, True),
+            "K::In::q": (0, False),
+        }
+        assert named(result, "E::B").kind is NodeKind.ENUMERATOR
+
+    def test_an_enum_contains_its_enumerators(self, result: TuExtract) -> None:
+        contains = edge_pairs(result, EdgeKind.CONTAINS)
+        assert {("E", "E::A"), ("E", "E::B"), ("K", "K::In"), ("K::In", "K::In::q")} <= contains
+
+    def test_a_value_inside_a_template_is_not_recorded(self, result: TuExtract) -> None:
+        """Clang leaves every enumerator of an enum in a template at 0, even `w = 4`. A 0
+        that means "not computed" would read as a value."""
+        assert named(result, "X::(unnamed enum)::w").attrs["value"] is None
+        assert named(result, "X::(unnamed enum)::w").attrs["explicit_value"] is True
 
     def test_declarations_outside_the_repository_are_not_modelled(
         self, tmp_path: Path, toolchain: Toolchain

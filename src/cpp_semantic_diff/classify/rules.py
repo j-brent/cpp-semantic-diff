@@ -30,6 +30,7 @@ call edge it touched as an unexplained top-level event.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -43,6 +44,7 @@ from cpp_semantic_diff.model import (
     EdgeId,
     EdgeKind,
     NodeId,
+    NodeKind,
 )
 
 
@@ -85,10 +87,17 @@ class CauseRule:
     arch: str | None
     note: str
     cause_payload: Mapping[str, AttrValue] = field(default_factory=dict)
-    """Payload keys the cause event must carry. This is what would let a §6.3 row written
-    as `NodeAttrChanged(<attr>)` be a table entry rather than a special case in the driver:
-    the parenthesis is a payload filter, and it is spelled as one. No row needs one today --
-    the signature, which did, has its own kind (ADR-035)."""
+    """Payload keys the `cause` event must carry. This is what lets a §6.3 row written as
+    `NodeAttrChanged(<attr>)` be a table entry rather than a special case in the driver: the
+    parenthesis is a payload filter, and it is spelled as one. It filters `cause` only, never
+    `also_caused_by`."""
+    also_caused_by: tuple[ChangeEventKind, ...] = ()
+    """Further kinds that may cause the consequence, tried on the same subject as `cause`.
+
+    For a rule whose cause is "the nearest change of any kind" at a place the locator finds:
+    nearness is the locator's order, so every kind has to be tried at each subject before the
+    next subject is. Separate rows would try one kind at every subject first, and the nearest
+    change would lose to a farther one of an earlier row's kind."""
 
 
 # --------------------------------------------------------------------------------------
@@ -276,6 +285,97 @@ def _still_derives(ctx: ClassifyContext, override: NodeId, overridden: NodeId) -
     return False
 
 
+def _nearest_change_above_enumerator(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
+    """The enumerators above one whose implied value changed, **nearest first**.
+
+    An enumerator with no written value is the one before it plus one. So when its value
+    changes and it still has no written value, the cause is above it: an enumerator inserted,
+    removed, or whose value changed. The nearest such change is the cause, and a change above
+    that one is linked by the next enumerator's own event, so the chain runs up the enum the
+    way the values do.
+
+    Head enumerators are yielded as head ids (where an insertion or a value change is
+    reported), and removed ones as base ids, each at the place it held in the base order:
+    while walking up the head order, the removed enumerators that stood between two surviving
+    ones are yielded before the upper survivor. Order comes from source location. It is only
+    ever used to order siblings; it is never identity.
+    """
+    if event.payload.get("attr") != "value":
+        return
+    head_id = NodeId(event.subject)
+    base_id = ctx.correspondence.base_for(head_id)
+    if base_id is None:
+        return
+    head = ctx.head.nodes.get(head_id)
+    base = ctx.base.nodes.get(base_id)
+    if head is None or base is None or head.kind is not NodeKind.ENUMERATOR:
+        return
+    if (
+        head.attrs.get("explicit_value") is not False
+        or base.attrs.get("explicit_value") is not False
+    ):
+        return
+    head_above = _above(ctx.head_enumerators, ctx.head_parents.get(head_id), head_id)
+    base_above = iter(_above(ctx.base_enumerators, ctx.base_parents.get(base_id), base_id))
+    for above in head_above:
+        partner = ctx.correspondence.base_for(above)
+        if partner is not None:
+            for passed in base_above:
+                if passed == partner:
+                    break
+                if ctx.removed(passed):
+                    yield passed
+        yield above
+    for passed in base_above:
+        if ctx.removed(passed):
+            yield passed
+
+
+def _above(
+    enumerators: Mapping[NodeId, tuple[NodeId, ...]], enum: NodeId | None, member: NodeId
+) -> list[NodeId]:
+    """The enumerators before `member` in its enum, nearest first."""
+    siblings = enumerators.get(enum, ()) if enum is not None else ()
+    if member not in siblings:
+        return []
+    return list(reversed(siblings[: siblings.index(member)]))
+
+
+#: An identifier in a type spelling.
+_IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
+
+
+def _alias_named_in_unchanged_spelling(
+    ctx: ClassifyContext, event: ChangeEvent
+) -> Iterator[NodeId]:
+    """The aliases a function's signature is written with, where only the canonical form changed.
+
+    Change an alias's target and every function declared with the alias changes its canonical
+    signature, while its written signature (`sugared_signature`) stays as it was. That pair is
+    the evidence: the function's text did not change, its meaning did, and the alias it names
+    is what changed it. Where the written signature changed too, the function was edited and
+    its change is its own.
+
+    Candidates are the head aliases whose name appears in the written signature as an
+    identifier, sorted by id; the classifier takes the first whose target changed. Matching by
+    unqualified name can propose an alias from another scope, and the cause still has to be a
+    target change, so a wrong candidate needs two aliases of one name, both changed.
+    """
+    head_id = NodeId(event.subject)
+    base_id = ctx.correspondence.base_for(head_id)
+    if base_id is None:
+        return
+    head = ctx.head.nodes.get(head_id)
+    base = ctx.base.nodes.get(base_id)
+    if head is None or base is None:
+        return
+    written = head.attrs.get("sugared_signature")
+    if not isinstance(written, str) or base.attrs.get("sugared_signature") != written:
+        return
+    for name in sorted(set(_IDENTIFIER.findall(written))):
+        yield from ctx.head_aliases.get(name, ())
+
+
 # --------------------------------------------------------------------------------------
 # The table. Ordered; the first rule that finds a cause wins, which matters only if two
 # rules ever share a consequence kind -- `edge-lost-its-endpoint` and `call-moved-to-another
@@ -350,6 +450,35 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
         subjects=_added_endpoints,
         status=RuleStatus.ACTIVE,
         note="The mirror of `edge-lost-its-endpoint` on the head side.",
+    ),
+    CauseRule(
+        name="enumerator-implicit-value-shifted",
+        arch="§6.3: NodeAttrChanged(value), NodeAdded or NodeRemoved of the nearest enumerator "
+        "above causes NodeAttrChanged(value) of an enumerator with no written value",
+        cause=ChangeEventKind.NODE_ATTR_CHANGED,
+        cause_payload={"attr": "value"},
+        also_caused_by=(ChangeEventKind.NODE_ADDED, ChangeEventKind.NODE_REMOVED),
+        consequence=ChangeEventKind.NODE_ATTR_CHANGED,
+        subjects=_nearest_change_above_enumerator,
+        status=RuleStatus.ACTIVE,
+        note="Insert one enumerator and every implied value below it changes. Only an "
+        "enumerator whose value is implied on both sides is explained: a written value that "
+        "changed is an edit of its own. The nearest change above is the cause, and changes "
+        "farther up are linked by the enumerators between, one step per fact (ADR-038).",
+    ),
+    CauseRule(
+        name="alias-target-changes-signature",
+        arch="§6.3: NodeAttrChanged(target) of an alias causes NodeSignatureChanged of a "
+        "function written with it",
+        cause=ChangeEventKind.NODE_ATTR_CHANGED,
+        cause_payload={"attr": "target"},
+        consequence=ChangeEventKind.NODE_SIGNATURE_CHANGED,
+        subjects=_alias_named_in_unchanged_spelling,
+        status=RuleStatus.ACTIVE,
+        note="Change `using T = int` to `long` and every `f(T)` changes signature without its "
+        "text changing. Only where the function's written signature is unchanged and names "
+        "the alias: a function whose written signature changed was edited, and that is its "
+        "own change (ADR-038).",
     ),
     CauseRule(
         name="rename-retargets-edges",

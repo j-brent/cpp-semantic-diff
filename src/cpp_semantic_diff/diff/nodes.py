@@ -39,8 +39,11 @@ from cpp_semantic_diff.model import (
 #: (ARCH-001 §4.1), so it carries the return type and, for a method, the `const` qualifier.
 #: Where the signature changed, `NodeSignatureChanged` reports these too, and an attribute
 #: event beside it would say one change twice (ADR-035). Where the signature did not change,
-#: neither can these, so nothing is lost by the suppression.
-SIGNATURE_ATTRS: frozenset[str] = frozenset({"return_type", "const"})
+#: neither can these, so nothing is lost by the suppression. `sugared_signature` is the same
+#: function type as written: it changes with the signature in all but the alias case, where it
+#: does not change at all, so an event for it beside `NodeSignatureChanged` would always repeat
+#: it. Alone, it is the spelling changing while the type did not, and is reported.
+SIGNATURE_ATTRS: frozenset[str] = frozenset({"return_type", "const", "sugared_signature"})
 
 #: A record's bases in the order written (`extract._base_order`). Reported only where the
 #: bases present on both sides are in a different relative order: an added or removed base is

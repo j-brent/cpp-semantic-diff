@@ -25,6 +25,7 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import itertools
+import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -55,10 +56,12 @@ from cpp_semantic_diff.model.ir import (
 )
 from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 
-#: The v0 extraction scope (ARCH-001 §13): namespace, class, function, method, field.
-#: Anything not named here is not modelled -- enums, aliases, and namespace-scope variables
-#: are deliberate omissions, not oversights. Adding a kind is additive; every kind added
-#: before the delta exists is a kind whose events nothing consumes.
+#: The extraction scope (ARCH-001 §13): namespace, class, function, method, field, and the
+#: entities that carry values -- enum, enumerator, alias, and variable at namespace scope or
+#: as a static data member (ADR-038). Macros and static assertions are modelled too, each on
+#: a path of its own (`_Extractor.visit_macro`, `_Extractor.visit_static_assertion`,
+#: ADR-039). Anything not named here is not modelled. Adding a kind is additive, and each
+#: kind's compared facts need a novelty weight in `rank/weights.py`.
 #:
 #: Templates map onto their underlying kind with `attrs["template"]`. A template and its
 #: instantiations need separate identity (ARCH-001 §5), and this gets that for free: only
@@ -83,6 +86,12 @@ MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.DESTRUCTOR: NodeKind.METHOD,
     ci.CursorKind.CONVERSION_FUNCTION: NodeKind.METHOD,
     ci.CursorKind.FIELD_DECL: NodeKind.FIELD,
+    ci.CursorKind.ENUM_DECL: NodeKind.ENUM,
+    ci.CursorKind.ENUM_CONSTANT_DECL: NodeKind.ENUMERATOR,
+    ci.CursorKind.TYPEDEF_DECL: NodeKind.ALIAS,
+    ci.CursorKind.TYPE_ALIAS_DECL: NodeKind.ALIAS,
+    ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL: NodeKind.ALIAS,
+    ci.CursorKind.VAR_DECL: NodeKind.VARIABLE,  # unless it is local; see below
 }
 
 #: What no model this extractor builds can show, stated on every run (ADR-029). The first is
@@ -104,6 +113,7 @@ LIBCLANG_LIMITS: tuple[str, ...] = (
 CONTAINER_KINDS = frozenset(
     {
         ci.CursorKind.NAMESPACE,
+        ci.CursorKind.ENUM_DECL,  # its enumerators
         ci.CursorKind.CLASS_DECL,
         ci.CursorKind.CLASS_TEMPLATE,
         ci.CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
@@ -438,11 +448,47 @@ def _node_kind(cursor: ci.Cursor) -> NodeKind | None:
     kind = MODELLED_KINDS.get(cursor.kind)
     if kind is None:
         return None
+    if kind is NodeKind.ALIAS and _names_its_own_tag(cursor):
+        return None
+    # A function body is never descended into for declarations, so a local variable should
+    # not arrive here. Refused anyway: a local, `static` or not, is part of its function's
+    # body, which `body_hash` already compares.
+    if kind is NodeKind.VARIABLE and cursor.semantic_parent.kind in CALLABLE_KINDS:
+        return None
     if cursor.kind in TEMPLATED_RECORD_KINDS:
         return TAG_KINDS.get(template_tag_kind(cursor), kind)
     if cursor.kind is ci.CursorKind.FUNCTION_TEMPLATE and _is_member(cursor):
         return NodeKind.METHOD
     return kind
+
+
+#: The declarations a C-style `typedef struct X {...} X;` can name.
+_TAG_DECL_KINDS = frozenset(
+    {
+        ci.CursorKind.STRUCT_DECL,
+        ci.CursorKind.CLASS_DECL,
+        ci.CursorKind.UNION_DECL,
+        ci.CursorKind.ENUM_DECL,
+    }
+)
+
+
+def _names_its_own_tag(cursor: ci.Cursor) -> bool:
+    """Whether a typedef only gives a tag its own name again, as C does.
+
+    `typedef struct X {...} X;` and `typedef struct {...} X;` declare one type under one name,
+    and the struct is already a node called `X`. An alias node beside it would hold nothing
+    -- its target is the struct itself, and it cannot change unless the struct is renamed --
+    and two nodes with one qualified name would read as one entity seen twice.
+    """
+    if cursor.kind is not ci.CursorKind.TYPEDEF_DECL:
+        return False
+    tag = cursor.underlying_typedef_type.get_declaration()
+    return (
+        tag.kind in _TAG_DECL_KINDS
+        and tag.spelling == cursor.spelling
+        and tag.semantic_parent == cursor.semantic_parent
+    )
 
 
 #: Clang spells an unnamed entity with the source location that distinguishes it:
@@ -1096,6 +1142,7 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
 
     if kind in (NodeKind.FUNCTION, NodeKind.METHOD):
         attrs["return_type"] = _canonical_spelling(cursor.result_type)
+        attrs["sugared_signature"] = _sugared_signature(cursor)
         attrs["template"] = cursor.kind is ci.CursorKind.FUNCTION_TEMPLATE
         attrs["template_parameters"] = _template_parameters(cursor)
         attrs["deleted"] = cursor.is_deleted_method()
@@ -1142,7 +1189,319 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["final"] = _final(cursor)
         attrs["deprecated"] = _record_deprecated(cursor)
         attrs["base_order"] = _base_order(cursor)
+    if kind is NodeKind.VARIABLE:
+        attrs["type"] = _canonical_spelling(cursor.type)
+        value, initializer = _initial_value(cursor)
+        attrs["value"] = value
+        attrs["initializer_hash"] = initializer
+        attrs["constexpr"] = _is_constexpr(cursor)
+        attrs["storage"] = str(cursor.storage_class.name).lower()
+        attrs["linkage"] = str(cursor.linkage.name).lower()
+        attrs["thread_local"] = cursor.tls_kind is not ci.TLSKind.NONE
+    if kind is NodeKind.STATIC_ASSERTION:
+        # The message as written, quotes included; None without one. The condition is not
+        # an attribute: it is the assertion's identity (`static_assertion_id`).
+        message = list(cursor.get_children())[1:2]
+        attrs["message"] = (
+            " ".join(t.spelling for t in message[0].get_tokens()) if message else None
+        )
+    if kind is NodeKind.MACRO:
+        # Everything after the name: the parameter list, if any, and the replacement.
+        replacement = [t.spelling for t in cursor.get_tokens()][1:]
+        attrs["replacement_hash"] = _hash_spellings(replacement)
+        attrs["function_like"] = macro_queries().function_like(cursor)
+    if kind is NodeKind.ALIAS:
+        attrs["target"] = _alias_target(cursor)
+        attrs["template"] = cursor.kind is ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL
+    if kind is NodeKind.ENUM:
+        attrs["underlying_type"] = _canonical_spelling(cursor.enum_type)
+        attrs["scoped"] = cursor.is_scoped_enum()
+    if kind is NodeKind.ENUMERATOR:
+        attrs["value"] = _enumerator_value(cursor)
+        # Whether the value is written or follows from the one before. Kept beside the value
+        # because the two cases mean different things when the value changes: a written value
+        # changed is an edit to this line, an implied one is a consequence of an edit above it
+        # (the `enumerator-implicit-value-shifted` cause rule, ARCH-001 §6.3).
+        attrs["explicit_value"] = next(iter(cursor.get_children()), None) is not None
     return attrs
+
+
+class _Evaluate:
+    """`clang_Cursor_Evaluate`, which the Python bindings do not wrap.
+
+    Clang's constant evaluator, asked of a variable's initializer: the value the compiler
+    would fold it to, which is what a reviewer compares. `kLimit = 2 * 5` and `kLimit = 10` are
+    the same constant, and a hash of the text could not say so.
+
+    Here rather than in a module of its own because the producer's cache key hashes this
+    module and `ir.py` and nothing else (`produce/cache.py`). A value computed by code outside
+    them could change while every key stayed the same, and a stale entry would be served
+    (ARCH-001 §9).
+    """
+
+    #: `CXEvalResultKind`. Every other kind -- Objective-C and CoreFoundation strings,
+    #: `Other`, `UnExposed` -- is a value this model has no scalar for.
+    INT, FLOAT, STR = 1, 2, 4
+
+    def __init__(self) -> None:
+        lib = ci.conf.lib
+        self._evaluate = lib.clang_Cursor_Evaluate
+        self._evaluate.argtypes = [ci.Cursor]
+        self._evaluate.restype = ctypes.c_void_p
+        self._kind = lib.clang_EvalResult_getKind
+        self._kind.argtypes = [ctypes.c_void_p]
+        self._kind.restype = ctypes.c_int
+        self._is_unsigned = lib.clang_EvalResult_isUnsignedInt
+        self._is_unsigned.argtypes = [ctypes.c_void_p]
+        self._is_unsigned.restype = ctypes.c_uint
+        self._unsigned = lib.clang_EvalResult_getAsUnsigned
+        self._unsigned.argtypes = [ctypes.c_void_p]
+        self._unsigned.restype = ctypes.c_ulonglong
+        self._signed = lib.clang_EvalResult_getAsLongLong
+        self._signed.argtypes = [ctypes.c_void_p]
+        self._signed.restype = ctypes.c_longlong
+        self._double = lib.clang_EvalResult_getAsDouble
+        self._double.argtypes = [ctypes.c_void_p]
+        self._double.restype = ctypes.c_double
+        self._str = lib.clang_EvalResult_getAsStr
+        self._str.argtypes = [ctypes.c_void_p]
+        self._str.restype = ctypes.c_char_p
+        self._dispose = lib.clang_EvalResult_dispose
+        self._dispose.argtypes = [ctypes.c_void_p]
+        self._dispose.restype = None
+
+    def __call__(self, cursor: ci.Cursor) -> int | float | str | None:
+        """The value, or None where clang cannot evaluate it to a number or a string."""
+        result = self._evaluate(cursor)
+        if not result:
+            return None
+        try:
+            kind = self._kind(result)
+            if kind == self.INT:
+                return int(
+                    self._unsigned(result) if self._is_unsigned(result) else self._signed(result)
+                )
+            if kind == self.FLOAT:
+                number = float(self._double(result))
+                # Spelled rather than stored: NaN is unequal to itself, so it would read as a
+                # change on every comparison, and JSON has no infinity to round-trip through
+                # the cache.
+                return number if math.isfinite(number) else repr(number)
+            if kind == self.STR:
+                text = self._str(result)
+                return None if text is None else text.decode("utf-8", errors="replace")
+            return None
+        finally:
+            self._dispose(result)
+
+
+_evaluator: _Evaluate | None = None
+
+
+def evaluate(cursor: ci.Cursor) -> int | float | str | None:
+    global _evaluator
+    if _evaluator is None:
+        _evaluator = _Evaluate()
+    return _evaluator(cursor)
+
+
+def _initial_value(cursor: ci.Cursor) -> tuple[int | float | str | None, str | None]:
+    """A variable's initial value, else a hash of its initializer; both None without one.
+
+    The value where clang can evaluate it, so two spellings of one constant are no change. The
+    hash only where it cannot -- a call, a constructor, an address -- so that a changed
+    initializer is still seen. Hashing the written tokens means a macro in it is hashed by
+    name: a change to the macro's definition does not change the hash.
+
+    Never evaluated inside a template. The initializer may depend on a template argument, and
+    clang's evaluator is not safe to ask about a value-dependent expression.
+    """
+    initializer = next(
+        (c for c in reversed(list(cursor.get_children())) if c.kind.is_expression()), None
+    )
+    if initializer is None:
+        return None, None
+    if not _in_template(cursor):
+        value = evaluate(cursor)
+        if value is not None:
+            return value, None
+    return None, _token_hash(initializer)
+
+
+def _token_hash(cursor: ci.Cursor) -> str | None:
+    """Hash of a cursor's tokens, comments skipped; None when it has none."""
+    return _hash_spellings(
+        t.spelling for t in cursor.get_tokens() if t.kind is not ci.TokenKind.COMMENT
+    )
+
+
+def _hash_spellings(spellings: Iterable[str]) -> str | None:
+    digest = hashlib.blake2b(digest_size=16)
+    empty = True
+    for spelling in spellings:
+        digest.update(spelling.encode())
+        digest.update(b"\x00")
+        empty = False
+    return None if empty else digest.hexdigest()
+
+
+#: Preprocessor cursors that record a use rather than declare anything.
+_PREPROCESSOR_USES = frozenset(
+    {ci.CursorKind.MACRO_INSTANTIATION, ci.CursorKind.INCLUSION_DIRECTIVE}
+)
+
+
+def _is_include_guard(cursor: ci.Cursor) -> bool:
+    """Whether a macro is its header's include guard.
+
+    Three conditions: it is object-like with nothing after its name; clang reports its file
+    as guarded against a second inclusion; and the file tested the name with `#ifndef` or
+    `defined` before defining it. The last is read from the file's tokens up to the macro,
+    which is cheap because a guard comes first.
+    """
+    if len(list(cursor.get_tokens())) != 1 or macro_queries().function_like(cursor):
+        return False
+    if not macro_queries().guarded(cursor):
+        return False
+    tu = cursor.translation_unit
+    start = ci.SourceLocation.from_offset(tu, cursor.location.file, 0)
+    before = [
+        t.spelling
+        for t in tu.get_tokens(extent=ci.SourceRange.from_locations(start, cursor.extent.start))
+    ]
+    return any(
+        spelling == cursor.spelling and before[i - 1] in ("ifndef", "defined", "(")
+        for i, spelling in enumerate(before)
+        if i > 0
+    )
+
+
+def _is_constexpr(cursor: ci.Cursor) -> bool:
+    """Whether `constexpr` is written before the variable's name.
+
+    Read from the tokens, which the bindings leave as the only way to ask. A `constexpr`
+    spelled through a macro is missed.
+    """
+    name_at = cursor.location.offset
+    for token in cursor.get_tokens():
+        if token.extent.start.offset >= name_at:
+            return False
+        if token.spelling == "constexpr":
+            return True
+    return False
+
+
+class _MacroQueries:
+    """`clang_Cursor_isMacroFunctionLike` and `clang_isFileMultipleIncludeGuarded`, which the
+    Python bindings do not wrap."""
+
+    def __init__(self) -> None:
+        lib = ci.conf.lib
+        self._function_like = lib.clang_Cursor_isMacroFunctionLike
+        self._function_like.argtypes = [ci.Cursor]
+        self._function_like.restype = ctypes.c_uint
+        self._guarded = lib.clang_isFileMultipleIncludeGuarded
+        self._guarded.argtypes = [ci.TranslationUnit, ci.File]
+        self._guarded.restype = ctypes.c_uint
+
+    def function_like(self, cursor: ci.Cursor) -> bool:
+        return bool(self._function_like(cursor))
+
+    def guarded(self, cursor: ci.Cursor) -> bool:
+        """Whether the file the macro is defined in is guarded against a second inclusion."""
+        return bool(self._guarded(cursor.translation_unit, cursor.location.file))
+
+
+_macro_queries: _MacroQueries | None = None
+
+
+def macro_queries() -> _MacroQueries:
+    global _macro_queries
+    if _macro_queries is None:
+        _macro_queries = _MacroQueries()
+    return _macro_queries
+
+
+#: The byte offset clang writes into a macro's USR: `c:a.cpp@8@macro@LIMIT`.
+_MACRO_OFFSET = re.compile(r"^(c:[^@]*)@\d+@macro@")
+
+
+def macro_id(usr: str, ordinal: int) -> str:
+    """A macro's identity: its USR without the byte offset, and an ordinal from the second
+    definition of one name in one file on.
+
+    Clang writes the offset of the definition into a macro's USR, so a line added above it
+    would make it a different macro (ADR-039). The file name stays, so a macro is identified
+    by file and name, as a `static` is, and `usr_file` reads it as file-scoped. A name
+    defined again in the same file, after an `#undef`, is a second macro: `#2`, `#3`, in the
+    order the file defines them. A USR not in the expected form is kept whole, which costs
+    only the stability this function exists for.
+    """
+    stripped = _MACRO_OFFSET.sub(r"\1@macro@", usr, count=1)
+    return stripped if ordinal == 1 else f"{stripped}#{ordinal}"
+
+
+def static_assertion_id(file: str, parent: str, condition: str | None, ordinal: int) -> str:
+    """A static assertion's identity, which clang does not give it: its USR is a bare `c:`.
+
+    `c:<file>@SA@<parent USR>@<condition hash>`, with `#n` from the second assertion of one
+    condition in one scope on. Made of what the assertion *is* -- where it is declared and
+    what it asserts -- so a line added above it changes nothing, while changing its condition
+    makes it a different assertion: the old one removed, the new one added (ADR-039). The file
+    is the file name, written first, as clang writes it into a file-scoped USR, so `usr_file`
+    reads it and a renamed file is resolved from git before matching (ARCH-001 §5).
+    """
+    sid = f"c:{file}@SA@{parent}@{condition or ''}"
+    return sid if ordinal == 1 else f"{sid}#{ordinal}"
+
+
+def _alias_target(cursor: ci.Cursor) -> str:
+    """The type an alias stands for, canonical: what every use of the alias compiles to.
+
+    An alias template's target is on the `using` declaration it templates, its only
+    non-parameter child, and spells its parameters by position (`type-parameter-0-0 *`), so
+    renaming a parameter is no change.
+    """
+    if cursor.kind is ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL:
+        cursor = next(
+            (c for c in cursor.get_children() if c.kind is ci.CursorKind.TYPE_ALIAS_DECL), cursor
+        )
+    return _canonical_spelling(cursor.underlying_typedef_type)
+
+
+#: Cursor kinds that make everything inside them a template, whose values may depend on a
+#: template argument.
+_TEMPLATE_KINDS = frozenset(
+    {
+        ci.CursorKind.CLASS_TEMPLATE,
+        ci.CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
+        ci.CursorKind.FUNCTION_TEMPLATE,
+        ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL,
+    }
+)
+
+
+def _in_template(cursor: ci.Cursor) -> bool:
+    """Whether any semantic ancestor is a template."""
+    parent = cursor.semantic_parent
+    while parent is not None and parent.kind is not ci.CursorKind.TRANSLATION_UNIT:
+        if parent.kind in _TEMPLATE_KINDS:
+            return True
+        parent = parent.semantic_parent
+    return False
+
+
+def _enumerator_value(cursor: ci.Cursor) -> int | None:
+    """An enumerator's value, or None inside a template.
+
+    Clang does not compute the enumerators of an enum declared inside a template: every one
+    reads 0, even `z = 4`, since the enum as a whole may depend on a template argument. A 0 that
+    means "not computed" would read as a real value and change when the enum moves into or out
+    of a template, so it is not recorded.
+    """
+    if _in_template(cursor):
+        return None
+    return int(cursor.enum_value)
 
 
 #: The cursor kinds of a template's own parameter list, in the order they are declared.
@@ -1287,13 +1646,29 @@ def _signature(cursor: ci.Cursor, kind: NodeKind) -> str | None:
     return _EXCEPTION_SPEC.sub("", _canonical_spelling(cursor.type)) or None
 
 
+def _sugared_signature(cursor: ci.Cursor) -> str:
+    """The function type as written, aliases kept, exception specification stripped.
+
+    Compared state beside the canonical `signature`. When an alias's target changes, every
+    function declared with the alias gets a new canonical signature while this one stays as
+    written, and that pair -- canonical changed, written unchanged, the alias named in it -- is
+    how classify files the function's change under the alias's (the
+    `alias-target-changes-signature` rule, ARCH-001 §6.3). The canonical signature alone
+    cannot tell that change from an edit to the function.
+
+    The exception specification is stripped for the reason `_signature` gives: an implicit one
+    is computed lazily, so it differs between translation units that see the same declaration.
+    """
+    return _EXCEPTION_SPEC.sub("", _stable_spelling(cursor.type.spelling))
+
+
 def _observation_rank(node: Node) -> tuple[object, ...]:
     """A total order over the ways one entity can be observed. Highest wins.
 
     Three components, in order:
 
-    1. **A definition outranks a declaration.** It carries the body, and its location is
-       where a reviewer wants to be sent (ARCH-001 §5).
+    1. **A definition outranks a declaration** (`_is_definition`). It carries the body or the
+       value, and its location is where a reviewer wants to be sent (ARCH-001 §5).
     2. **Knowing outranks not knowing.** Whether a TU determined a given fact about an
        entity depends on what that TU needed -- clang leaves an unused special member's
        exception specification uncomputed, so one TU reports it and another reports None.
@@ -1307,7 +1682,7 @@ def _observation_rank(node: Node) -> tuple[object, ...]:
         for value in (node.signature, node.symbol, node.location, node.tu, *node.attrs.values())
     )
     return (
-        node.body_hash is not None,
+        _is_definition(node),
         known,
         node.name,
         node.qualified_name,
@@ -1338,6 +1713,20 @@ def _union_sites(have: tuple[Location, ...], more: tuple[Location, ...]) -> tupl
     if len(merged) == len(have):
         return have
     return tuple(sorted(merged, key=lambda location: location.sort_key))
+
+
+def _is_definition(node: Node) -> bool:
+    """Whether an observation is of a definition, as far as the node can tell.
+
+    A function's definition is the one with a body. A variable has none, so `extern` marks the
+    declaration: `extern int x;` in a header and `int x = 5;` in a source file are one entity,
+    and the definition holds its value and the `storage` it was defined with. A static data
+    member's declaration in its class is not `extern`, so it ties with the definition here, and
+    the definition wins on what it determined -- its value -- under `_observation_rank`.
+    """
+    if node.body_hash is not None:
+        return True
+    return node.kind is NodeKind.VARIABLE and node.attrs.get("storage") != "extern"
 
 
 def merge_node(nodes: dict[NodeId, Node], node: Node) -> None:
@@ -1559,6 +1948,15 @@ class _Extractor:
         self.nodes: dict[NodeId, Node] = {}
         self.edges: dict[str, Edge] = {}
         self.aliases: dict[str, str] = {}
+        #: A macro's clang USR -> its node id, or None for an include guard; and how many
+        #: macros of each (file, name) this TU has seen, for the ordinal in `macro_id`. Keyed
+        #: on the USR so that a header included twice is not counted twice.
+        self.macros: dict[str, str | None] = {}
+        self.macro_counts: dict[tuple[str, str], int] = {}
+        #: A static assertion's position (file, offset) -> its node id, and how many of each id
+        #: this TU has seen. Keyed on the position for the reason `macros` is keyed on the USR.
+        self.static_assertions: dict[tuple[str, int], str] = {}
+        self.static_assertion_counts: dict[str, int] = {}
 
     def _defining_tu(self, usr: str, location: Location | None) -> str | None:
         """The defining translation unit, set only where it is a *fact* (ARCH-001 §5).
@@ -1699,12 +2097,98 @@ class _Extractor:
         across headers: each reopening is a separate cursor with its own location.
         """
         for child in cursor.get_children():
+            # Checked before the location, which costs a call into libclang: a translation
+            # unit holds one of these per macro use and per `#include`, in every header.
+            if child.kind in _PREPROCESSOR_USES:
+                continue
             file = child.location.file
             if file is not None and self.outside(file.name) is not None:
                 continue
-            self.visit_declaration(child)
+            if child.kind is ci.CursorKind.MACRO_DEFINITION:
+                self.visit_macro(child)
+            else:
+                self.visit_declaration(child)
+
+    def visit_macro(self, cursor: ci.Cursor) -> None:
+        """A macro defined in the repository, as a node with its replacement hashed (ADR-039).
+
+        A macro with no file is built in or given on the command line, and is not a
+        declaration the repository wrote. An include guard is skipped: it is how a header is
+        written, not a value, and it would be renamed with its header.
+        """
+        location = _location(cursor, self.root, self.base)
+        usr = cursor.get_usr()
+        if location is None or not usr:
+            return
+        if usr not in self.macros:
+            self.macros[usr] = self._macro_node_id(cursor, usr, location)
+        node_id = self.macros[usr]
+        if node_id is None:
+            return
+        self.add_node(
+            Node(
+                id=NodeId(node_id),
+                kind=NodeKind.MACRO,
+                name=cursor.spelling,
+                qualified_name=cursor.spelling,
+                attrs=_attributes(cursor, NodeKind.MACRO),
+                location=location,
+                sites=(location,),
+                tu=self._defining_tu(node_id, location),
+            )
+        )
+
+    def _macro_node_id(self, cursor: ci.Cursor, usr: str, location: Location) -> str | None:
+        if _is_include_guard(cursor):
+            return None
+        key = (location.file, cursor.spelling)
+        self.macro_counts[key] = self.macro_counts.get(key, 0) + 1
+        return macro_id(usr, self.macro_counts[key])
+
+    def visit_static_assertion(self, cursor: ci.Cursor) -> None:
+        """A `static_assert` at namespace or class scope, as a node (ADR-039).
+
+        One inside a function body is part of the body, which `body_hash` compares.
+        """
+        location = _location(cursor, self.root, self.base)
+        if location is None:
+            return
+        parent = cursor.semantic_parent
+        if parent is not None and parent.kind not in MODELLED_KINDS:
+            parent = None
+        parent_usr = parent.get_usr() if parent is not None else ""
+        position = (location.file, cursor.location.offset)
+        node_id = self.static_assertions.get(position)
+        if node_id is None:
+            children = list(cursor.get_children())
+            condition = _token_hash(children[0]) if children else None
+            file = location.file.rsplit("/", 1)[-1]
+            first = static_assertion_id(file, parent_usr, condition, 1)
+            count = self.static_assertion_counts.get(first, 0) + 1
+            self.static_assertion_counts[first] = count
+            node_id = static_assertion_id(file, parent_usr, condition, count)
+            self.static_assertions[position] = node_id
+        scope = _qualified_name(parent) if parent is not None else ""
+        self.add_node(
+            Node(
+                id=NodeId(node_id),
+                kind=NodeKind.STATIC_ASSERTION,
+                name="static_assert",
+                qualified_name=f"{scope}::static_assert" if scope else "static_assert",
+                attrs=_attributes(cursor, NodeKind.STATIC_ASSERTION),
+                location=location,
+                sites=(location,),
+                tu=self._defining_tu(node_id, location),
+            )
+        )
+        if parent is not None:
+            self.note_alias(parent, parent_usr)
+            self.add_edge(parent_usr, node_id, EdgeKind.CONTAINS, None)
 
     def visit_declaration(self, cursor: ci.Cursor) -> None:
+        if cursor.kind is ci.CursorKind.STATIC_ASSERT:
+            self.visit_static_assertion(cursor)
+            return
         kind = _node_kind(cursor)
         if kind is None:
             if cursor.kind in CONTAINER_KINDS:
@@ -1820,7 +2304,12 @@ def extract(
     parser: ci.Index = index if index is not None else ci.Index.create()
 
     try:
-        tu = parser.parse(str(entry.file), args=parse_arguments(entry, toolchain))
+        # The detailed processing record is what puts macro definitions in the AST.
+        tu = parser.parse(
+            str(entry.file),
+            args=parse_arguments(entry, toolchain),
+            options=ci.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
+        )
     except ci.TranslationUnitLoadError as error:
         return TuExtract(
             path=relative,

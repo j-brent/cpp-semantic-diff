@@ -65,6 +65,8 @@ class NodeKind(StrEnum):
     ENUMERATOR = "enumerator"
     ALIAS = "alias"
     VARIABLE = "variable"
+    MACRO = "macro"
+    STATIC_ASSERTION = "static_assertion"
     TEMPLATE = "template"
     FILE = "file"
     TARGET = "target"
