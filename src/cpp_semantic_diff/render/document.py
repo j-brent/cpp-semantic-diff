@@ -71,10 +71,9 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #: apparently improve on precisely the commit where a dependency was bumped. `events_reported`
 #: is untouched and still the complete set -- the one number that may never quietly shrink.
 #:
-#: 1.2 -> 2.0.dev: 2.0 is in development on `dev` for milestone v0. Every v0 change to the
-#: output lands under it, so a consumer sees one bump for the milestone rather than one per
-#: change. It becomes "2.0" when `dev` merges to `main`; until then the `.dev` suffix keeps a
-#: document from a moving schema from passing for a finished one. What 2.0 changes so far:
+#: 1.2 -> 2.0: milestone v0. Every v0 change to the output landed under one bump, so a
+#: consumer sees one for the milestone rather than one per change; while it was in development
+#: on `dev` it was "2.0.dev". What 2.0 changes:
 #:
 #: - Renamed, for the term "change event" (ADR-027): `events` -> `change_events`,
 #:   `summary.events_reported` -> `summary.change_events_reported`,
@@ -87,9 +86,12 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #:   event.
 #: - Changed meaning: `completeness.*.edges_dropped` counts every relation that leads
 #:   outside the model, third-party code included, and `edges_total` is resolved edges plus
-#:   those.
-#: - Added: `third_party` and `third_party_hints`; `completeness.*.crossings_by_label`;
-#:   `crossings`, from the referenced entities only; `completeness.renames`;
+#:   those. The `uncertainty` factor in `scores{}.factors` is doubt about the pairing,
+#:   valued by `confidence.unpaired`, not the absence of a partner (ADR-034).
+#:   `high_risk_count` leaves out informational change events (ADR-046).
+#: - Added: `third_party` and `third_party_hints`; `completeness.*.crossings_by_label`
+#:   and `completeness.*.unmodelled`; `crossings`, from the referenced entities only;
+#:   `completeness.renames`;
 #:   `completeness.uncovered` with `summary.changed_cpp_lines`, `uncovered_lines` and
 #:   `uncovered_tokens` (ADR-042); what the producer cannot see in `completeness.limits`;
 #:   `meta.timings.derive` and `coverage`; `Location.start_line`; `scores{}.informational`,
@@ -99,7 +101,12 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #:   unmatched; the match tiers `inline-namespace` and `name` are new.
 #: - Entities: the kinds `macro` and `static_assertion` are new, and enums, enumerators,
 #:   aliases and variables are now modelled, so they appear as entities (ADR-038, ADR-039).
-SCHEMA_VERSION = "2.0.dev"
+#: - Attributes, and so `NodeAttrChanged` payloads: functions and methods gain
+#:   `sugared_signature`, `template_parameters`, `default_arguments` (ADR-043), `constexpr`,
+#:   `nodiscard` and `deprecated`; classes, structs and unions `final`, `deprecated` and
+#:   `base_order` (ADR-043); fields `default_member_init`; namespaces `inline`. The newly
+#:   modelled kinds carry their own.
+SCHEMA_VERSION = "2.0"
 
 #: ARCH-001 §11: systematic limits "get stated in the output itself, every time". These are the
 #: two that hold of any static model of one configuration; the third, what this producer cannot

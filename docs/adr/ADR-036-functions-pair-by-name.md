@@ -2,7 +2,7 @@
 id: ADR-036
 type: adr
 kind: frozen
-status: Pending Brent Runyan's review — decided by agent review during v0 orchestration, 2026-10-11. Becomes Accepted when the v0 branch merges to main. Amended by ADR-044 (name-tier key).
+status: accepted
 decided: 2026-10-11
 author: agent review during v0 orchestration
 -->
@@ -11,7 +11,7 @@ author: agent review during v0 orchestration
 
 *Frozen document: a decision record. Only the status line may change, when a later ADR supersedes it.*
 
-**Status:** Pending Brent Runyan's review — decided by agent review during v0 orchestration, 2026-10-11. Becomes Accepted when the v0 branch merges to main. Amended by ADR-044 (name-tier key).
+**Status:** Accepted, 2026-10-12. Decided by agent review during v0 orchestration, 2026-10-11; accepted by Brent Runyan by merging v0 to main. Amended by [ADR-044](ADR-044-inline-namespace-bump-pairs.md) (name-tier key).
 
 ## Context
 
