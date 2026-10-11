@@ -435,6 +435,13 @@ CATALOG = [
         some_event(),
     ),
     case(
+        "namespace-becomes-inline",
+        "namespace lib { namespace v1 { void f() {} } }",
+        "namespace lib { inline namespace v1 { void f() {} } }",
+        changed("lib::v1", was=False, now=True),
+        not_replaced("f"),
+    ),
+    case(
         "parameter-added",
         "void f(int) {}\nvoid g() { f(1); }",
         "void f(int, int = 0) {}\nvoid g() { f(1); }",

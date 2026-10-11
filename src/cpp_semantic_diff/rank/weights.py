@@ -213,6 +213,12 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # Breaks every call site that names the template arguments, as a parameter change
     # breaks every call site; the signature cannot show it (`extract._template_parameters`).
     "template_parameters": 0.90,
+    # A namespace that became inline, or stopped being. It changes which declaration an
+    # unqualified-through-the-parent name finds -- `lib::f` resolving into `lib::v1` or into
+    # `lib::v2` -- so code outside the diff can bind differently without a line changing.
+    # Below `access`: the names still exist, and the usual cause is a deliberate ABI version
+    # step rather than an accident.
+    "inline": 0.80,
 }
 
 # --------------------------------------------------------------------------------------
