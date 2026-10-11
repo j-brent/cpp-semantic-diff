@@ -476,6 +476,38 @@ class TestTheResidueSaysWhyItIsUnpaired:
         c = match_models(base, model("b"), renames=self.RENAMES)
         assert set(c.unpaired_base.values()) == {Unpaired.NONE}
 
+    def test_a_truncated_rename_map_leaves_no_confident_residue_in_added_or_deleted_files(
+        self,
+    ) -> None:
+        """ARCH-001 §11. Git skipped inexact rename detection, so `a.cpp -> a2.cpp` was not
+        applied. The members of a class in an anonymous namespace sit under a parent that is
+        itself unpaired, so the slot test says NONE -- a confident add and remove resting on a
+        rename map known to be short. Every leftover in a file the diff added or deleted is
+        floored at CANDIDATE; a leftover elsewhere is untouched."""
+
+        def at(usr: str, file: str, kind: NodeKind) -> Node:
+            return node(usr, kind=kind, location=Location(file=file, line=1))
+
+        old = at("c:a.cpp@aN@S@Impl", "src/a.cpp", NodeKind.STRUCT)
+        new = at("c:a2.cpp@aN@S@Impl", "src/a2.cpp", NodeKind.STRUCT)
+        m_old = at("c:a.cpp@aN@S@Impl@F@run#", "src/a.cpp", NodeKind.METHOD)
+        m_new = at("c:a2.cpp@aN@S@Impl@F@run#", "src/a2.cpp", NodeKind.METHOD)
+        elsewhere = at("c:@F@gone#", "src/kept.cpp", NodeKind.FUNCTION)
+        base = self.contained("a", old, m_old)
+        base.add_node(elsewhere)
+        head = self.contained("b", new, m_new)
+
+        complete = match_models(base, head)
+        assert complete.unpaired_base[m_old.id] is Unpaired.NONE, "the gap must exist"
+
+        c = match_models(base, head, missed_rename_files={"src/a.cpp", "src/a2.cpp"})
+        assert c.unpaired_base == {
+            old.id: Unpaired.CANDIDATE,
+            m_old.id: Unpaired.CANDIDATE,
+            elsewhere.id: Unpaired.NONE,
+        }
+        assert c.unpaired_head == {new.id: Unpaired.CANDIDATE, m_new.id: Unpaired.CANDIDATE}
+
     def test_every_leftover_has_a_reason_and_nothing_else_does(self) -> None:
         with pytest.raises(ValidationError, match="have no unpaired reason"):
             Correspondence(unmatched_base=[NodeId("a")])

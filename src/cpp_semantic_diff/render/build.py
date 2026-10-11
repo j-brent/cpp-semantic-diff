@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from cpp_semantic_diff import __version__
-from cpp_semantic_diff.acquire import RevPair
+from cpp_semantic_diff.acquire import RenameLimitHit, RevPair
 from cpp_semantic_diff.match import Correspondence
 from cpp_semantic_diff.model import Event, Model, Node, NodeId, Side
 from cpp_semantic_diff.rank import Ranking, subject_endpoints
@@ -33,6 +33,7 @@ from cpp_semantic_diff.render.document import (
     DiffDocument,
     EntitySummary,
     Meta,
+    RenameDetection,
     Residue,
     Summary,
     Timings,
@@ -52,6 +53,7 @@ def build_document(
     files_changed: int,
     cpp_files_changed: int,
     files_renamed: int = 0,
+    rename_limit: RenameLimitHit | None = None,
     timings: Timings | None = None,
 ) -> DiffDocument:
     """Assemble ARCH-001 §10's document from the stage outputs.
@@ -65,6 +67,10 @@ def build_document(
     completeness = CompletenessBlock(
         base=CompletenessReport.of(Side.BASE, base.rev, base.completeness),
         head=CompletenessReport.of(Side.HEAD, head.rev, head.completeness),
+        renames=RenameDetection(
+            complete=rename_limit is None,
+            limit_needed=rename_limit.needed if rename_limit is not None else None,
+        ),
     )
 
     high_risk = ranking.high_risk_count

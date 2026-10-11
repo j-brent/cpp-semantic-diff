@@ -490,6 +490,12 @@ into apparent evidence of absence. Three rules:
 3. Conditions that eliminate the analysis — shallow clone, unresolvable base, no compile database —
    are **hard failures with actionable messages**, never partial output.
 
+Rule 2 covers inputs as well as models. When a diff exceeds `diff.renameLimit`, git skips inexact
+rename detection and says so only on stderr; the rename map (§5) then holds exact renames only.
+The output states this beside the completeness records, and every unpaired entity in a file the
+diff added or deleted counts as having a candidate, never as having none (rule 1). The limit is
+not lifted: `-l0` is potentially quadratic on the large diffs that hit it.
+
 Two systematic limits get stated in the output itself, every time:
 
 - **One model is one preprocessor configuration.** Claims are conditional on the configuration
