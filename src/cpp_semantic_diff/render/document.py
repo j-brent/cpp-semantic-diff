@@ -7,9 +7,9 @@ and nothing else. That is what keeps delivery surfaces out of the analysis core,
 `terminal.py` and worth repeating here: **if a view needs a number this document does not
 carry, the fix is to put it here**, never to hand the view a `Model`.
 
-§10 gives seven top-level keys and this module gives those seven, plus `scores` and
-`components`. Where §10 is a sketch rather than a spec, the choice made is recorded on the
-field:
+§10 gives seven top-level keys and this module gives those seven, plus `scores`,
+`components` and `callers`. Where §10 is a sketch rather than a spec, the choice made is
+recorded on the field:
 
 - **`ranking`** is `[event id]` verbatim, so a consumer that only wants reading order gets
   it without parsing scores. But a view that must *explain* the order needs the factors,
@@ -397,9 +397,11 @@ class EntitySummary(BaseModel):
     )
     location: Location | None = None
     sides: list[Side] = Field(
-        description="Which model(s) contain this id. A one-sided entity is exactly what a "
-        "tier-1-only pipeline produces for a rename (STATUS §6), so the view can say "
-        "'gone' or 'new' without re-deriving it from the event kind."
+        description="Which sides hold this entity, through the correspondence: either id of "
+        "a match counts as both, since a function paired by name has a different id on each "
+        "side (ADR-036). A one-sided entity is exactly what a "
+        "pipeline without rename detection produces for a rename (STATUS §6), so the view "
+        "can say 'gone' or 'new' without re-deriving it from the event kind."
     )
 
 
@@ -729,6 +731,14 @@ class DiffDocument(BaseModel):
         default_factory=list,
         description="The §7 partition, numbered by descending risk. Component 0 is what to "
         "read first.",
+    )
+    callers: dict[ChangeEventId, list[NodeId]] = Field(
+        default_factory=dict,
+        description="For each `NodeSignatureChanged` event, the head-side callers of its "
+        "subject: the sources of its incoming `calls` edges at head. Evidence, not change "
+        "events -- the edges map through the correspondence, so a paired function's calls "
+        "produce no edge events, and this is where its call sites are filed (ARCH-001 §6.2, "
+        "ADR-035). A stopgap: derived change events for the callers replace it (ADR-036).",
     )
     summary: Summary
 

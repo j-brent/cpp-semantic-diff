@@ -1,4 +1,5 @@
-"""Node events (ARCH-001 §6.1): added, removed, moved, renamed, attr changed, body changed.
+"""Node events (ARCH-001 §6.1): added, removed, moved, renamed, attr changed, body changed,
+signature changed.
 
 The residue of the correspondence is the add/remove half and needs no comparison: a base
 node no tier claimed is removed, a head node no tier claimed is added. The matched half is
@@ -6,9 +7,10 @@ a field-by-field comparison of two nodes the match stage has already declared to
 same entity, which is what makes each difference a *change* to one thing rather than the
 disappearance of one thing and the appearance of another.
 
-Two of the six kinds cannot fire in v0, and that is the point rather than a gap. Tier 1 keys on
-the USR, which encodes the entity's name and its enclosing scope (ARCH-001 §5), so a node whose
-name or parent differs from its match's does not exist -- the pair would never have been
+Two of the seven kinds cannot fire in v0, and that is the point rather than a gap. Tier 1 keys
+on the USR, which encodes the entity's name and its enclosing scope (ARCH-001 §5), and the name
+tier keys on the qualified name under a parent that is already paired (ADR-036), so a node
+whose name or parent differs from its match's does not exist -- the pair would never have been
 matched. `NodeRenamed` and `NodeMoved` are therefore written against what a later tier will
 produce and are unreachable until one runs. Softening that here -- pairing a removed node with
 an added one because the names look related -- would move an identity decision out of the
@@ -23,12 +25,20 @@ from cpp_semantic_diff.diff.attrs import changed_attrs
 from cpp_semantic_diff.diff.context import DiffContext, node_hunks
 from cpp_semantic_diff.match import Correspondence, Match, containers
 from cpp_semantic_diff.model import (
+    APPLIES_TO,
     AttrValue,
     ChangeEvent,
     ChangeEventKind,
     NodeId,
     Side,
 )
+
+#: The attributes a signature already spells. The canonical signature is the function type
+#: (ARCH-001 §4.1), so it carries the return type and, for a method, the `const` qualifier.
+#: Where the signature changed, `NodeSignatureChanged` reports these too, and an attribute
+#: event beside it would say one change twice (ADR-035). Where the signature did not change,
+#: neither can these, so nothing is lost by the suppression.
+SIGNATURE_ATTRS: frozenset[str] = frozenset({"return_type", "const"})
 
 
 def node_events(ctx: DiffContext) -> Iterator[ChangeEvent]:
@@ -88,11 +98,28 @@ def _changes(
     if base.name != head.name:
         yield event(ChangeEventKind.NODE_RENAMED, old_name=base.name, new_name=head.name)
 
+    # The signature is a field of the node (§4.1), never an attribute, so it gets its own
+    # kind. Only a function or a method has one (§6.1's applicability table, `APPLIES_TO`).
+    signature_changed = (
+        head.kind in APPLIES_TO[ChangeEventKind.NODE_SIGNATURE_CHANGED]
+        and base.signature is not None
+        and head.signature is not None
+        and base.signature != head.signature
+    )
+    if signature_changed:
+        yield event(
+            ChangeEventKind.NODE_SIGNATURE_CHANGED,
+            old_signature=base.signature,
+            new_signature=head.signature,
+        )
+
     # One event per attribute, each naming the attribute it is about (§6.1). The rule --
     # union of the key sets, compared with the type -- is `attrs.changed_attrs`, shared with
     # the edge half so that `NodeAttrChanged` and `EdgeAttrChanged` cannot come to mean
     # different things.
     for attr, old, new in changed_attrs(base.attrs, head.attrs):
+        if signature_changed and attr in SIGNATURE_ATTRS:
+            continue
         yield event(ChangeEventKind.NODE_ATTR_CHANGED, attr=attr, old=old, new=new)
 
     # ARCH-001 §4.1: `body_hash` is deliberately not an attribute, so a differing body is
@@ -100,7 +127,8 @@ def _changes(
     # change only means "look closer", and the two carry different weight in rank (§7) and
     # render differently.
     both_have_bodies = base.body_hash is not None and head.body_hash is not None
-    if both_have_bodies and base.body_hash != head.body_hash:
+    has_a_body = head.kind in APPLIES_TO[ChangeEventKind.NODE_BODY_CHANGED]
+    if has_a_body and both_have_bodies and base.body_hash != head.body_hash:
         yield event(ChangeEventKind.NODE_BODY_CHANGED)
     # A hash on one side and None on the other is *not* a body change and gets no event.
     # It says a definition appeared or disappeared while the declaration stayed -- a

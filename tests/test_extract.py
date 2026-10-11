@@ -784,6 +784,63 @@ class TestAMemberFunctionTemplateIsAMethod:
         assert set(free.attrs) == set(named(result, "app::befriend").attrs)
 
 
+class TestTemplateParametersAreComparedState:
+    """A function template's parameter list is an attribute, `template_parameters`.
+
+    Two templates that differ only in their parameter lists can share a signature, because the
+    signature spells a template parameter by position. So once functions pair by name, a
+    changed parameter list is visible only here. Names are not part of it: renaming `T` is no
+    change.
+    """
+
+    SOURCE = """
+    template <class T> void one(T) {}
+    template <typename U> void renamed(U) {}
+    template <class T, class U = int> void two(T) {}
+    template <class T, int N, template <class...> class X, class... Ts> void mixed(T, Ts...) {}
+    template <auto... Vs> void values() {}
+    template <bool B> struct E {};
+    template <int N, class T = E<(N > 0)>, class... Ts> void guarded(Ts...) {}
+    template <template <class> class... Xs> void outer() {}
+    void plain(int) {}
+    struct S { template <class T> void m(T) {} void n() {} };
+    template <class... Ts> struct P { template <class U> void k(U); };
+    template <class... Ts> template <class U> void P<Ts...>::k(U) {}
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("tparams"), toolchain, {"a.cpp": self.SOURCE})
+
+    def params(self, result: TuExtract, qualified: str) -> AttrValue:
+        return named(result, qualified).attrs["template_parameters"]
+
+    def test_a_parameter_list_is_spelled_without_names(self, result: TuExtract) -> None:
+        assert self.params(result, "one") == "<class>"
+        assert self.params(result, "renamed") == self.params(result, "one")
+
+    def test_an_added_parameter_shows_where_the_signature_does_not(self, result: TuExtract) -> None:
+        assert named(result, "one").signature == named(result, "two").signature
+        assert self.params(result, "two") == "<class, class>"
+
+    def test_each_kind_of_parameter_and_packs_are_told_apart(self, result: TuExtract) -> None:
+        assert self.params(result, "mixed") == "<class, int, template <class...> class, class...>"
+        assert self.params(result, "values") == "<auto...>"
+        # A `>` inside a parenthesized default argument does not end the list.
+        assert self.params(result, "guarded") == "<int, class, class...>"
+        assert self.params(result, "outer") == "<template <class> class...>"
+
+    def test_a_function_that_is_not_a_template_has_none(self, result: TuExtract) -> None:
+        assert self.params(result, "plain") is None
+        assert self.params(result, "S::n") is None
+        assert self.params(result, "S::m") == "<class>"
+
+    def test_an_out_of_line_member_template_reads_its_own_list(self, result: TuExtract) -> None:
+        """Its definition is written after its class's header, which here is a pack."""
+        assert named(result, "P::k").body_hash is not None, "the definition was not merged in"
+        assert self.params(result, "P::k") == "<class>"
+
+
 class TestFailureIsRecordedNotRaised:
     def test_a_broken_tu_is_reported_as_incompleteness(
         self, tmp_path: Path, toolchain: Toolchain

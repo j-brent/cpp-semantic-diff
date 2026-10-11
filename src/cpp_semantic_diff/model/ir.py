@@ -98,6 +98,7 @@ class MatchTier(StrEnum):
     """
 
     DECLARED = "declared"  # tier 1: USR
+    NAME = "name"  # functions and methods left by tier 1: kind + qualified name (ADR-036)
     STRUCTURAL = "structural"  # tier 2: body hash
     POSITIONAL = "positional"  # tier 3: (parent, kind, ordinal)
     SIMILARITY = "similarity"  # tier 4: weighted similarity above threshold

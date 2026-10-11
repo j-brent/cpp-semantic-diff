@@ -20,7 +20,7 @@ decides what causes what.
    The rule is kept, marked `RuleStatus.UNREACHABLE`, because deleting it would lose the
    argument.
 
-2. `signature-change-breaks-callers` is dormant: "NodeAttrChanged(signature) causes
+2. `signature-change-breaks-callers` is dormant: "NodeSignatureChanged causes
    SignatureIncompatible on callers" is a correct rule about an event this pipeline does not
    yet emit. `SignatureIncompatible` is derived, §13 puts derived events out of v0, and
    `events.py` records their payloads as undesigned. **Classify links causes among events
@@ -85,9 +85,10 @@ class CauseRule:
     arch: str | None
     note: str
     cause_payload: Mapping[str, AttrValue] = field(default_factory=dict)
-    """Payload keys the cause event must carry. This is what lets §6.3's
-    `NodeAttrChanged(signature)` be a table entry rather than a special case in the driver:
-    the parenthesis in §6.3's prose is a payload filter, and it is spelled as one."""
+    """Payload keys the cause event must carry. This is what would let a §6.3 row written
+    as `NodeAttrChanged(<attr>)` be a table entry rather than a special case in the driver:
+    the parenthesis is a payload filter, and it is spelled as one. No row needs one today --
+    the signature, which did, has its own kind (ADR-035)."""
 
 
 # --------------------------------------------------------------------------------------
@@ -208,7 +209,10 @@ def _overload_the_caller_moved_to(ctx: ClassifyContext, event: ChangeEvent) -> I
     *caller's* outgoing edges and needs no opinion about whether B and C are the same thing.
 
     Same edge kind, and the overload set is `qualified_name` equality -- which is what an
-    overload set *is*, since overloads differ exactly in signature. Candidates arrive in
+    overload set *is*, since overloads differ exactly in signature. Where the old overload
+    was removed and the new one is the only other of its name, the name tier pairs them as
+    one function whose signature changed (ADR-036), the edge maps through the
+    correspondence, and this rule has nothing to explain. Candidates arrive in
     `head_out_edges` order, which is sorted by edge id, so a caller that gained two overloads
     gets a stable answer rather than one that depends on model construction.
     """
@@ -303,9 +307,8 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     ),
     CauseRule(
         name="signature-change-breaks-callers",
-        arch="§6.3: NodeAttrChanged(signature) causes SignatureIncompatible on callers",
-        cause=ChangeEventKind.NODE_ATTR_CHANGED,
-        cause_payload={"attr": "signature"},
+        arch="§6.3: NodeSignatureChanged(F) causes SignatureIncompatible on callers",
+        cause=ChangeEventKind.NODE_SIGNATURE_CHANGED,
         consequence=ChangeEventKind.SIGNATURE_INCOMPATIBLE,
         subjects=_callee_of,
         status=RuleStatus.DORMANT,

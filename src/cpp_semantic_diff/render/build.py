@@ -20,13 +20,23 @@ bucket or threshold here that could flatter it.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Sequence
 
 from cpp_semantic_diff import __version__
 from cpp_semantic_diff.acquire import RenameLimitHit, RevPair, ThirdPartySet
 from cpp_semantic_diff.acquire.third_party import hint_message
 from cpp_semantic_diff.match import Correspondence
-from cpp_semantic_diff.model import ChangeEvent, Model, Node, NodeId, Side
+from cpp_semantic_diff.model import (
+    ChangeEvent,
+    ChangeEventId,
+    ChangeEventKind,
+    EdgeKind,
+    Model,
+    Node,
+    NodeId,
+    Side,
+)
 from cpp_semantic_diff.rank import Ranking, subject_endpoints
 from cpp_semantic_diff.render.document import (
     CompletenessBlock,
@@ -67,7 +77,14 @@ def build_document(
     being re-derived from the scores, because two implementations of one threshold is one
     too many.
     """
-    entities = _entities(events, base, head)
+    callers = _callers(events, head)
+    entities = _entities(
+        events,
+        base,
+        head,
+        correspondence,
+        extra={c for ids in callers.values() for c in ids},
+    )
     completeness = CompletenessBlock(
         base=CompletenessReport.of(Side.BASE, base.rev, base.completeness),
         head=CompletenessReport.of(Side.HEAD, head.rev, head.completeness),
@@ -108,6 +125,7 @@ def build_document(
         ranking=ranking.order,
         scores={s.event_id: s for s in ranking.scores},
         components=list(ranking.components),
+        callers=callers,
         summary=Summary(
             lines_changed=lines_changed,
             files_changed=files_changed,
@@ -171,8 +189,33 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int, vendor
     return f"{head}{tail}"
 
 
+def _callers(events: Sequence[ChangeEvent], head: Model) -> dict[ChangeEventId, list[NodeId]]:
+    """Who calls each function whose signature changed, at head (ARCH-001 §6.2).
+
+    A paired function's call edges map through the correspondence and produce no change
+    events, so without this a reviewer told that a signature changed is not told where it is
+    called -- the question a signature change raises. Head side, because those are the call
+    sites that have to compile against the new signature. Evidence assembled from the head
+    model, not analysis: a stopgap until derived change events for the callers exist
+    (ADR-036).
+    """
+    incoming: dict[NodeId, set[NodeId]] = defaultdict(set)
+    for edge in head.edges:
+        if edge.kind is EdgeKind.CALLS:
+            incoming[edge.dst].add(edge.src)
+    return {
+        event.id: sorted(incoming.get(NodeId(event.subject), ()))
+        for event in events
+        if event.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+    }
+
+
 def _entities(
-    events: Sequence[ChangeEvent], base: Model, head: Model
+    events: Sequence[ChangeEvent],
+    base: Model,
+    head: Model,
+    correspondence: Correspondence,
+    extra: set[NodeId] | None = None,
 ) -> dict[NodeId, EntitySummary]:
     """The node summaries the events reference, and only those (ARCH-001 §10).
 
@@ -185,8 +228,15 @@ def _entities(
     is carried only through `sides`, which is what lets a view say "removed" without
     inspecting the event kind. Removals are base-only ids and are found in `base` alone,
     which is the reason both models are consulted rather than head only.
+
+    **`sides` goes through the correspondence, not through the ids.** A function the name
+    tier paired has one USR at base and another at head (ADR-036), so each id is in one
+    model only. Either id of a match is an entity both sides hold; read off the ids, the
+    view would mark a changed function as added, or the callee of a removed call as removed.
     """
-    wanted: set[NodeId] = set()
+    # `extra` is the callers listed beside signature changes, which a view must be able to
+    # name as well.
+    wanted: set[NodeId] = set(extra or ())
     for event in events:
         wanted.update(subject_endpoints(event.subject))
         # `NodeMoved` names its parents in the payload, and a parent may have no event of
@@ -208,11 +258,15 @@ def _entities(
             # through a subject. Omitting the summary is honest -- the view falls back to the
             # raw id, which is all that is actually known about it.
             continue
-        out[node_id] = _summary(node, in_base is not None, in_head is not None)
+        matched = node_id in correspondence.by_base or node_id in correspondence.by_head
+        out[node_id] = _summary(
+            node, matched or in_base is not None, matched or in_head is not None
+        )
     return out
 
 
 def _summary(node: Node, in_base: bool, in_head: bool) -> EntitySummary:
+    """`in_base` and `in_head` say which sides hold the entity, through the correspondence."""
     return EntitySummary(
         id=node.id,
         kind=node.kind,

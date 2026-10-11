@@ -508,6 +508,7 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
     if kind in (NodeKind.FUNCTION, NodeKind.METHOD):
         attrs["return_type"] = _canonical_spelling(cursor.result_type)
         attrs["template"] = cursor.kind is ci.CursorKind.FUNCTION_TEMPLATE
+        attrs["template_parameters"] = _template_parameters(cursor)
         attrs["deleted"] = cursor.is_deleted_method()
         attrs["defaulted"] = cursor.is_default_method()
         attrs["exception_spec"] = _exception_spec(cursor)
@@ -536,6 +537,114 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         )
         attrs["abstract"] = cursor.is_abstract_record()
     return attrs
+
+
+#: The cursor kinds of a template's own parameter list, in the order they are declared.
+_TEMPLATE_PARAMETER_KINDS = frozenset(
+    {
+        ci.CursorKind.TEMPLATE_TYPE_PARAMETER,
+        ci.CursorKind.TEMPLATE_NON_TYPE_PARAMETER,
+        ci.CursorKind.TEMPLATE_TEMPLATE_PARAMETER,
+    }
+)
+
+
+def _template_parameters(cursor: ci.Cursor) -> str | None:
+    """A function template's parameter list in a canonical spelling, or None for a function
+    that is not a template.
+
+    Compared state, not identity. Two function templates that differ only in their
+    parameter lists can have the same signature, because the signature spells a template
+    parameter by position (`type-parameter-0-0`), never by what it is. Where the matcher
+    pairs two such templates by name rather than by USR, this attribute is the only place a
+    reviewer can see that the parameter list changed.
+
+    Names are left out, so renaming `T` to `U` is no change. Each parameter is `class` for a
+    type, its canonical type for a non-type parameter, or a nested list for a template
+    template parameter, and `...` marks a pack. Default arguments are left out, as they are
+    for function parameters.
+    """
+    if cursor.kind is not ci.CursorKind.FUNCTION_TEMPLATE:
+        return None
+    return _template_parameter_list(cursor)
+
+
+def _template_parameter_list(owner: ci.Cursor) -> str:
+    params = [c for c in owner.get_children() if c.kind in _TEMPLATE_PARAMETER_KINDS]
+    # An out-of-line member template's definition also lists its class's parameters, first.
+    # Only its own header's are its own, or the attribute would differ between the TU that
+    # sees the definition and the TU that sees only the declaration.
+    packs = _packs(owner)
+    if packs is not None and len(packs) <= len(params):
+        params = params[len(params) - len(packs) :]
+    else:
+        packs = [False] * len(params)
+    return (
+        "<"
+        + ", ".join(_template_parameter(p, pack) for p, pack in zip(params, packs, strict=True))
+        + ">"
+    )
+
+
+def _template_parameter(param: ci.Cursor, pack: bool) -> str:
+    if param.kind is ci.CursorKind.TEMPLATE_TYPE_PARAMETER:
+        text = "class"
+    elif param.kind is ci.CursorKind.TEMPLATE_NON_TYPE_PARAMETER:
+        text = _canonical_spelling(param.type)
+    else:
+        text = f"template {_template_parameter_list(param)} class"
+    return text + ("..." if pack else "")
+
+
+def _packs(owner: ci.Cursor) -> list[bool] | None:
+    """For each parameter in `owner`'s own template header, whether it is a pack; None
+    where the tokens hold no header.
+
+    The bindings do not expose clang's pack flag, and an unnamed parameter's own extent
+    leaves out its `...`, so this reads the list as written: the last `template <...>`
+    header, split at its top-level commas, one part per parameter. The last, because an
+    out-of-line member template is written after its class's header. A part is a pack where
+    it holds `...` at its own level -- not inside a nested list, which is how
+    `template <class...> class X` takes a pack without being one -- and before any default
+    argument, which a pack cannot have.
+
+    Angle brackets inside parentheses are not counted, so a `>` used as an operator in a
+    default argument, such as `enable_if_t<(N > 0)>`, does not close the header. Known limit:
+    an unparenthesized `>` in a default argument still does; C++ requires those parentheses
+    in a template argument, so it should not arise in code that compiles.
+    """
+    header: list[bool] | None = None
+    parts: list[bool] | None = None  # the header being read, if any
+    angles = parens = 0
+    previous = ""
+    pack = in_default = False
+    for token in owner.get_tokens():
+        spelling = token.spelling
+        if spelling in ("(", "["):
+            parens += 1
+        elif spelling in (")", "]"):
+            parens = max(0, parens - 1)
+        elif parens:
+            pass  # inside parentheses: `<` and `>` are operators, and nothing is top level
+        elif spelling == "<":
+            if angles == 0 and previous == "template":
+                parts, pack, in_default = [], False, False
+            angles += 1
+        elif spelling in (">", ">>"):
+            angles = max(0, angles - (2 if spelling == ">>" else 1))
+            if angles == 0 and parts is not None:
+                header = [*parts, pack] if parts or pack or previous != "<" else []
+                parts = None
+        elif angles == 1 and parts is not None:
+            if spelling == ",":
+                parts.append(pack)
+                pack = in_default = False
+            elif spelling == "=":
+                in_default = True
+            elif spelling == "..." and not in_default:
+                pack = True
+        previous = spelling
+    return header
 
 
 #: The exception specification, which a canonical function type spells last: ` noexcept`,

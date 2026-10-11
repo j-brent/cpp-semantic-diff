@@ -60,8 +60,8 @@ class Correspondence(BaseModel):
     tiers_run: list[MatchTier] = Field(
         default_factory=list,
         description="Which tiers actually ran, in order. Unmatched means different things "
-        "depending on this: with only tier 1 (v0, ARCH-001 §13) it includes every rename, "
-        "and output that does not say so overstates what the residue means.",
+        "depending on this: without rename detection (v0, ARCH-001 §13) it includes every "
+        "rename, and output that does not say so overstates what the residue means.",
     )
 
     @model_validator(mode="after")

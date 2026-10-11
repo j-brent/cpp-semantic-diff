@@ -61,13 +61,15 @@ def toolchain() -> Toolchain:
         pytest.skip(f"no usable libclang: {error}")
 
 
-def build_model(toolchain: Toolchain, root: Path, source: str, rev: str) -> Model:
+def build_model(
+    toolchain: Toolchain, root: Path, source: str, rev: str, file: str = "a.cpp"
+) -> Model:
     root.mkdir()
-    (root / "a.cpp").write_text(source, encoding="utf-8")
+    (root / file).write_text(source, encoding="utf-8")
     entry = CompileEntry(
-        file=root / "a.cpp",
+        file=root / file,
         directory=root,
-        arguments=["clang++", "-std=c++20", "-c", "a.cpp", "-o", "a.o"],
+        arguments=["clang++", "-std=c++20", "-c", file, "-o", "a.o"],
     )
     model = assemble(rev, [extract(entry, root=root, toolchain=toolchain)], toolchain=toolchain)
     if not model.completeness.is_complete:
@@ -224,6 +226,32 @@ def relation(entity: str, other: str) -> Expect:
     )
 
 
+def refused(name: str) -> Expect:
+    """Every event about an entity called `name` is a removal or an addition, each reported
+    as a pairing the tool declined to choose. Which old one became which new one is a guess
+    the tool does not make."""
+
+    def holds(o: Outcome) -> bool:
+        nodes = [
+            e
+            for e in o.events
+            if e.kind in (ChangeEventKind.NODE_ADDED, ChangeEventKind.NODE_REMOVED)
+            and o.subject(e).rsplit("::", 1)[-1] == name
+        ]
+        changes = [
+            e
+            for e in o.events
+            if e.kind not in ADDITIONS | REMOVALS and o.subject(e).rsplit("::", 1)[-1] == name
+        ]
+        return (
+            bool(nodes)
+            and not changes
+            and all(e.confidence.unpaired is Unpaired.AMBIGUOUS for e in nodes)
+        )
+
+    return Expect(f"every {name} left unpaired as an ambiguous pairing", holds)
+
+
 def some_event() -> Expect:
     return Expect("at least one change event", lambda o: bool(o.events))
 
@@ -242,8 +270,13 @@ def not_visible(topic: str) -> Expect:
 # -- The catalog ------------------------------------------------------------------------------
 
 
-def case(id: str, before: str, after: str, *expect: Expect, fails: str = "") -> object:
+def case(
+    id: str, before: str, after: str, *expect: Expect, fails: str = "", renamed_to: str = ""
+) -> object:
     """One row. `fails` names the step expected to fix a case the tool gets wrong today.
+
+    `renamed_to` names the file the source is in after the change, given to the matcher as a
+    rename of `a.cpp`, as `acquire` would. By default the file keeps its name.
 
     `raises=AssertionError` because only an unmet expectation is the expected failure. A
     source that does not parse, or a crash in the pipeline, fails the suite.
@@ -253,7 +286,7 @@ def case(id: str, before: str, after: str, *expect: Expect, fails: str = "") -> 
         if fails
         else ()
     )
-    return pytest.param(before, after, expect, id=id, marks=marks)
+    return pytest.param(before, after, expect, renamed_to or "a.cpp", id=id, marks=marks)
 
 
 CATALOG = [
@@ -379,7 +412,7 @@ CATALOG = [
         "using T = long;\nvoid f(T) {}\nvoid g() { f(1); }",
         changed("T", was="int", now="long"),
         not_replaced("f"),
-        fails="steps 4 and 5: aliases are not modelled, and parameter types are identity",
+        fails="step 5: aliases are not modelled",
     ),
     case(
         "alias-target-changed-f-is-reported",
@@ -407,13 +440,64 @@ CATALOG = [
         "void f(int, int = 0) {}\nvoid g() { f(1); }",
         changed("f"),
         not_replaced("f"),
-        fails="step 4: parameter types are identity",
     ),
     case(
         "parameter-added-f-is-reported",
         "void f(int) {}\nvoid g() { f(1); }",
         "void f(int, int = 0) {}\nvoid g() { f(1); }",
         about("f"),
+    ),
+    # A changed signature is one change event on the function, not a removal plus an addition
+    # (ADR-035, ADR-036). Where several old and new functions share a name and none is
+    # unchanged, which is which is a guess, and the tool leaves them unpaired and says so.
+    case(
+        "const-added",
+        "struct S { int f(); };",
+        "struct S { int f() const; };",
+        changed("S::f", was="int ()", now="int () const"),
+        not_replaced("f"),
+    ),
+    case(
+        "return-type-changed",
+        "int f() { return 0; }",
+        "long f() { return 0; }",
+        changed("f", was="int ()", now="long ()"),
+        not_replaced("f"),
+    ),
+    case(
+        "class-template-constructor-gains-a-parameter",
+        "template <class T> struct S { S(int) {} };",
+        "template <class T> struct S { S(int, int) {} };",
+        changed("S::S<T>", was="void (int)", now="void (int, int)"),
+        not_replaced("S<T>"),
+    ),
+    case(
+        "template-parameter-added",
+        "template <class T> void f(T) {}",
+        "template <class T, class U = int> void f(T) {}",
+        changed("f", was="<class>", now="<class, class>"),
+        not_replaced("f"),
+    ),
+    case(
+        "overload-set-replaced-stays-unpaired",
+        "void f(int) {}\nvoid f(double) {}",
+        "void f(long) {}\nvoid f(char) {}",
+        refused("f"),
+    ),
+    case(
+        "one-of-two-overloads-changed",
+        "void f(int) {}\nvoid f(double) {}",
+        "void f(int) {}\nvoid f(long) {}",
+        changed("f", was="void (double)", now="void (long)"),
+        not_replaced("f"),
+    ),
+    case(
+        "static-in-a-renamed-file-changes-parameters",
+        "static int helper(int x) { return x; }\nint use() { return helper(1); }",
+        "static int helper(int x, int y = 0) { return x + y; }\nint use() { return helper(1); }",
+        changed("helper", was="int (int)", now="int (int, int)"),
+        not_replaced("helper"),
+        renamed_to="b.cpp",
     ),
     # The three probes that produced change events, but not all the ones a reviewer needs.
     case(
@@ -502,13 +586,20 @@ CATALOG = [
 ]
 
 
-@pytest.mark.parametrize(("before", "after", "expect"), CATALOG)
+@pytest.mark.parametrize(("before", "after", "expect", "head_file"), CATALOG)
 def test_change_catalog(
-    toolchain: Toolchain, tmp_path: Path, before: str, after: str, expect: tuple[Expect, ...]
+    toolchain: Toolchain,
+    tmp_path: Path,
+    before: str,
+    after: str,
+    expect: tuple[Expect, ...],
+    head_file: str,
 ) -> None:
     base = build_model(toolchain, tmp_path / "base", before, "a" * 40)
-    head = build_model(toolchain, tmp_path / "head", after, "b" * 40)
-    outcome = Outcome(base, head, diff_models(base, head, match_models(base, head)))
+    head = build_model(toolchain, tmp_path / "head", after, "b" * 40, file=head_file)
+    renames = {"a.cpp": head_file} if head_file != "a.cpp" else None
+    corr = match_models(base, head, renames=renames)
+    outcome = Outcome(base, head, diff_models(base, head, corr))
     unmet = [e.says for e in expect if not e.holds(outcome)]
     assert not unmet, f"expected {'; '.join(unmet)}. Got:\n{outcome.describe()}"
 
@@ -586,4 +677,45 @@ def test_a_replaced_callback_needs_the_relationship_not_only_the_body_change() -
             event(ChangeEventKind.NODE_REMOVED, s.id),
             event(ChangeEventKind.NODE_ADDED, s.id),
         )
+    )
+
+
+def test_a_refused_pairing_is_told_apart_from_a_plain_replacement_and_a_change() -> None:
+    old, new = entity(NodeKind.FUNCTION, "f"), entity(NodeKind.FUNCTION, "g")
+    expect = refused("f")
+
+    def ambiguous(kind: ChangeEventKind, subject: AnyId) -> ChangeEvent:
+        return ChangeEvent(
+            kind=kind,
+            subject=subject,
+            confidence=Confidence(tier=None, unpaired=Unpaired.AMBIGUOUS, models_complete=True),
+        )
+
+    assert expect.holds(
+        hand_built(
+            [old],
+            [],
+            ambiguous(ChangeEventKind.NODE_REMOVED, old.id),
+            ambiguous(ChangeEventKind.NODE_ADDED, old.id),
+        )
+    )
+    assert not expect.holds(
+        hand_built(
+            [old],
+            [],
+            event(ChangeEventKind.NODE_REMOVED, old.id),
+            event(ChangeEventKind.NODE_ADDED, old.id),
+        )
+    )
+    assert not expect.holds(
+        hand_built(
+            [old],
+            [],
+            event(
+                ChangeEventKind.NODE_SIGNATURE_CHANGED, old.id, old_signature="a", new_signature="b"
+            ),
+        )
+    )
+    assert not expect.holds(
+        hand_built([old, new], [], ambiguous(ChangeEventKind.NODE_ADDED, new.id))
     )

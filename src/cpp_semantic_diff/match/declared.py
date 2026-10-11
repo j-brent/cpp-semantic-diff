@@ -6,7 +6,11 @@ tier: the USR already encodes kind, qualified name and signature, so overloads a
 without any signature comparison of ours, and body edits, reformatting and file moves cannot
 disturb it.
 
-The one place the key is not simply the USR is **internal linkage**. See `DeclaredTier`.
+The same encoding is what tier 1 cannot survive: a function whose parameters changed has a
+new USR. The name tier (`match.name`) runs next and pairs those (ADR-036).
+
+The one place the key is not simply the USR is **internal linkage**. See `DeclaredTier`. Its
+file-and-TU part is `RenameMap.file_scope`, which the name tier keys on too.
 """
 
 from __future__ import annotations
@@ -64,6 +68,19 @@ class RenameMap:
         }
         return cls(by_path=by_path, by_name=by_name)
 
+    def file_scope(self, node: Node) -> tuple[str | None, str | None]:
+        """A file-scoped node's file name and defining TU, in head-side coordinates; (None,
+        None) for an external-linkage node.
+
+        The part of identity that internal linkage adds (ARCH-001 §5). One definition, so
+        every tier that keys on it agrees on what a file rename does to it.
+        """
+        file = usr_file(node.id)
+        if file is None:
+            return (None, None)
+        tu = self.by_path.get(_norm(node.tu), _norm(node.tu)) if node.tu else None
+        return (self.by_name.get(file, file), tu)
+
 
 def _norm(path: str) -> str:
     return path.replace("\\", "/")
@@ -104,13 +121,11 @@ class DeclaredTier:
         self.renames = RenameMap.of(renames)
 
     def key(self, node: Node) -> DeclaredKey:
-        file = usr_file(node.id)
-        if file is None:
+        original = usr_file(node.id)
+        if original is None:
             return (node.id, None)
-        renamed = self.renames.by_name.get(file, file)
-        usr = f"c:{renamed}{node.id[2 + len(file) :]}"
-        tu = self.renames.by_path.get(_norm(node.tu), _norm(node.tu)) if node.tu else None
-        return (usr, tu)
+        file, tu = self.renames.file_scope(node)
+        return (f"c:{file}{node.id[2 + len(original) :]}", tu)
 
     def propose(
         self,
@@ -118,6 +133,7 @@ class DeclaredTier:
         head: Model,
         base_pool: frozenset[NodeId],
         head_pool: frozenset[NodeId],
+        head_for: Mapping[NodeId, NodeId],
     ) -> Iterator[tuple[NodeId, NodeId]]:
         head_index, _ = _index(head, head_pool, self.key)
         base_index, _ = _index(base, base_pool, self.key)
@@ -131,6 +147,7 @@ class DeclaredTier:
         head: Model,
         base_pool: frozenset[NodeId],
         head_pool: frozenset[NodeId],
+        head_for: Mapping[NodeId, NodeId],
     ) -> tuple[frozenset[NodeId], frozenset[NodeId]]:
         """The nodes `propose` declined to pair because a key collided (ADR-034).
 

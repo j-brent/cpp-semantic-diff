@@ -28,6 +28,7 @@ from cpp_semantic_diff.model import (
 #: an event resting on two matches is no more confident than the weaker of them.
 TIER_ORDER: tuple[MatchTier, ...] = (
     MatchTier.DECLARED,
+    MatchTier.NAME,
     MatchTier.STRUCTURAL,
     MatchTier.POSITIONAL,
     MatchTier.SIMILARITY,
@@ -80,9 +81,9 @@ class DiffContext:
         and a plain addition is no more doubtful than the addition.
 
         One thing is lost, knowingly: with `tier` None, the matched endpoint's tier is not
-        carried, so an edge whose other endpoint is a tier-4 guess reads as doubtful as its
-        unpaired reason alone. It cannot arise in v0, where only tier 1 runs and carries no doubt;
-        ADR-034 records it for when tiers 2-4 land.
+        carried, so an edge between an entity paired by name and a plain addition reads as
+        doubtful as the addition alone, 0.0 rather than the name tier's 0.25. ADR-034 records
+        the trade, and ADR-036 that the name tier makes it reachable in v0.
         """
         reasons = [r for t, r in footings if t is None and r is not None]
         if reasons:

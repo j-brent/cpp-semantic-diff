@@ -12,7 +12,7 @@ a string.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -78,11 +78,12 @@ class TestAMovedEntityIsTheSameEntity:
 
 
 class TestOverloadsDoNotCollapse:
-    """ARCH-001 §5: "Name is never identity."
+    """ARCH-001 §5: an overload set does not collapse.
 
-    The USR carries the signature, so tier 1 gets this for free -- which is exactly why it
-    needs a test. The tempting "improvement" is to key on the qualified name, and it would
-    pass every other test in this file while silently merging an overload set.
+    The USR carries the signature, so tier 1 keeps overloads apart for free -- which is
+    exactly why it needs a test. The name tier keys on the qualified name, but only over
+    what tier 1 left and only where the name is one to one (ADR-036). Keying on the name
+    *first* would pass every other test in this file while silently merging an overload set.
     """
 
     INT = "c:@F@f#I#"
@@ -108,12 +109,43 @@ class TestOverloadsDoNotCollapse:
         assert pairs(c) == {(self.INT, self.INT)}
         assert c.unmatched_base == [self.DOUBLE]
 
-    def test_changing_a_signature_is_not_a_match(self) -> None:
-        """§5: a signature change breaks tier 1, by design. It surfaces as residue rather
-        than as a quiet claim that the two are the same function."""
+    def test_changing_a_signature_pairs_by_name_and_says_so(self) -> None:
+        """ADR-026: a function whose parameters changed is the same function. Tier 1 cannot
+        see it -- the USR changed -- so the name tier pairs it, and the match says which tier
+        made it, because that tier carries more doubt than a USR (ADR-036)."""
         c = match_models(model("a", node("c:@F@f#I#")), model("b", node("c:@F@f#Id#")))
+        assert c.matches == [
+            Match(base=NodeId("c:@F@f#I#"), head=NodeId("c:@F@f#Id#"), tier=MatchTier.NAME)
+        ]
+        assert not c.unmatched_base and not c.unmatched_head
+
+    def test_two_changed_overloads_are_left_unpaired_and_called_ambiguous(self) -> None:
+        """Two old `f` and two new `f`, none of them unchanged: which is which is a guess,
+        so none pairs, and the residue says the tier refused rather than found nothing."""
+        base = model("a", node(self.INT), node(self.DOUBLE))
+        head = model("b", node("c:@F@f#l#"), node("c:@F@f#c#"))
+        c = match_models(base, head)
         assert not c.matches
-        assert c.unmatched_base and c.unmatched_head
+        assert (
+            set(c.unpaired_base.values()) == set(c.unpaired_head.values()) == {Unpaired.AMBIGUOUS}
+        )
+
+    def test_one_new_overload_beside_two_removed_ones_pairs_neither(self) -> None:
+        base = model("a", node(self.INT), node(self.DOUBLE))
+        head = model("b", node("c:@F@f#l#"))
+        c = match_models(base, head)
+        assert not c.matches
+        assert c.unpaired_head == {"c:@F@f#l#": Unpaired.AMBIGUOUS}
+
+    def test_the_one_changed_overload_of_two_pairs_with_the_one_new_one(self) -> None:
+        """Accepted on purpose (ADR-036): tier 1 pairs the unchanged `f(int)`, which leaves
+        exactly one old `f` and one new one."""
+        base = model("a", node(self.INT), node(self.DOUBLE))
+        head = model("b", node(self.INT), node("c:@F@f#l#"))
+        assert pairs(match_models(base, head)) == {
+            (self.INT, self.INT),
+            (self.DOUBLE, "c:@F@f#l#"),
+        }
 
 
 class TestMatchingIsOneToOne:
@@ -159,6 +191,7 @@ class TestMatchingIsOneToOne:
                 head: Model,
                 base_pool: frozenset[NodeId],
                 head_pool: frozenset[NodeId],
+                head_for: Mapping[NodeId, NodeId],
             ) -> Iterator[tuple[NodeId, NodeId]]:
                 yield NodeId("c:@F@f#"), NodeId("c:@F@x#")
                 yield NodeId("c:@F@f#"), NodeId("c:@F@y#")
@@ -169,6 +202,7 @@ class TestMatchingIsOneToOne:
                 head: Model,
                 base_pool: frozenset[NodeId],
                 head_pool: frozenset[NodeId],
+                head_for: Mapping[NodeId, NodeId],
             ) -> tuple[frozenset[NodeId], frozenset[NodeId]]:
                 return frozenset(), frozenset()
 
@@ -196,7 +230,7 @@ class TestEveryMatchSaysHowItWasMade:
         """ "Unmatched" means different things depending on this. With only tier 1 it
         includes every rename (§13), and output that does not say so overstates it."""
         c = match_models(model("a"), model("b"))
-        assert c.tiers_run == [MatchTier.DECLARED]
+        assert c.tiers_run == [MatchTier.DECLARED, MatchTier.NAME]
 
     def test_lookups_work_in_both_directions(self) -> None:
         c = match_models(model("a", node("c:@F@f#")), model("b", node("c:@F@f#")))
@@ -206,11 +240,12 @@ class TestEveryMatchSaysHowItWasMade:
 
 
 class TestRenamesLookBadOnPurpose:
-    """ARCH-001 §13. v0 ships tier 1 only and measures the damage.
+    """ARCH-001 §13. v0 ships no rename detection and measures the damage.
 
     This test exists to be *deleted* when tier 2 lands. Until then it pins the decision so
-    that nobody softens it with a name-based fallback, which would destroy the measurement
-    that decides whether tiers 2-4 are worth building.
+    that nobody softens it with a similarity guess, which would destroy the measurement
+    that decides whether tiers 2-4 are worth building. The name tier keys on the qualified
+    name (ADR-036), so a renamed function is still a removal plus an addition.
     """
 
     def test_a_renamed_function_surfaces_as_remove_plus_add(self) -> None:
@@ -249,6 +284,7 @@ class TestTiersRunOverTheResidue:
             head: Model,
             base_pool: Iterable[NodeId],
             head_pool: Iterable[NodeId],
+            head_for: Mapping[NodeId, NodeId],
         ) -> Iterator[tuple[NodeId, NodeId]]:
             by_hash = {head.nodes[h].body_hash: h for h in head_pool}
             for b in sorted(base_pool):
@@ -261,6 +297,7 @@ class TestTiersRunOverTheResidue:
             head: Model,
             base_pool: frozenset[NodeId],
             head_pool: frozenset[NodeId],
+            head_for: Mapping[NodeId, NodeId],
         ) -> tuple[frozenset[NodeId], frozenset[NodeId]]:
             return frozenset(), frozenset()
 
@@ -290,6 +327,74 @@ class TestTiersRunOverTheResidue:
             "c:@F@compute#": MatchTier.STRUCTURAL,
         }
         assert c.tiers_run == [MatchTier.DECLARED, MatchTier.STRUCTURAL]
+
+
+class TestTheNameTierPairsOnlyWhatItCanTell:
+    """ADR-036. The name tier pairs a function or method tier 1 left over with the one
+    leftover of the same kind, qualified name and scope -- and refuses everything else."""
+
+    @staticmethod
+    def contained(rev: str, parent: Node, *children: Node) -> Model:
+        m = model(rev, parent, *children)
+        m.edges = [Edge(src=parent.id, dst=c.id, kind=EdgeKind.CONTAINS) for c in children]
+        return m
+
+    def test_a_method_pairs_under_its_paired_class(self) -> None:
+        cls = node("c:@S@C", name="C", kind=NodeKind.STRUCT)
+        old = node("c:@S@C@F@m#", name="C::m", kind=NodeKind.METHOD)
+        new = node("c:@S@C@F@m#1", name="C::m", kind=NodeKind.METHOD)
+        c = match_models(self.contained("a", cls, old), self.contained("b", cls, new))
+        assert {m.base: m.tier for m in c.matches} == {
+            cls.id: MatchTier.DECLARED,
+            old.id: MatchTier.NAME,
+        }
+
+    def test_nothing_pairs_under_a_parent_that_did_not(self) -> None:
+        """An inline namespace bump: `lib::v1` and `lib::v2` are different namespaces to
+        tier 1, and pairing their members would be a claim about the namespaces first. So
+        this tier never reports a move."""
+        v1 = node("c:@N@lib@N@v1", name="lib::v1", kind=NodeKind.NAMESPACE)
+        v2 = node("c:@N@lib@N@v2", name="lib::v2", kind=NodeKind.NAMESPACE)
+        f1 = node("c:@N@lib@N@v1@F@f#", name="lib::f")
+        f2 = node("c:@N@lib@N@v2@F@f#I#", name="lib::f")
+        c = match_models(self.contained("a", v1, f1), self.contained("b", v2, f2))
+        assert not c.matches
+
+    def test_a_different_kind_does_not_pair(self) -> None:
+        base = model("a", node("c:@F@f#", name="f"))
+        head = model("b", node("c:@S@f@F@f#", name="f", kind=NodeKind.METHOD))
+        assert not match_models(base, head).matches
+
+    def test_only_functions_and_methods_pair_by_name(self) -> None:
+        """Every other kind's USR is exactly its kind, name and scope, so a leftover of
+        another kind is not a signature change -- here, two unrelated unnamed records that
+        happen to print alike."""
+        base = model("a", node("c:@SA@S1", name="(anonymous)", kind=NodeKind.STRUCT))
+        head = model("b", node("c:@SA@S2", name="(anonymous)", kind=NodeKind.STRUCT))
+        assert not match_models(base, head).matches
+
+    STATIC = "c:util.cpp@F@helper#I#"
+    STATIC_CHANGED = "c:util.cpp@F@helper#I#I#"
+
+    def test_two_same_named_statics_in_different_files_do_not_pair(self) -> None:
+        """Internal linkage is identity (ARCH-001 §5): the TU tells them apart, here as it
+        does in tier 1."""
+        base = model("a", node(self.STATIC, name="helper", tu="a/util.cpp"))
+        head = model("b", node(self.STATIC_CHANGED, name="helper", tu="b/util.cpp"))
+        assert not match_models(base, head).matches
+
+    def test_a_static_in_a_renamed_file_pairs_through_the_rename_map(self) -> None:
+        base = model("a", node(self.STATIC, name="helper", tu="src/util.cpp"))
+        head = model("b", node("c:tool.cpp@F@helper#I#I#", name="helper", tu="src/tool.cpp"))
+        c = match_models(base, head, renames={"src/util.cpp": "src/tool.cpp"})
+        assert pairs(c) == {(self.STATIC, "c:tool.cpp@F@helper#I#I#")}
+        assert not match_models(base, head).matches
+
+    def test_a_template_and_a_non_template_of_one_name_pair(self) -> None:
+        """Accepted (ADR-036): the change shows as `template_parameters`, compared state."""
+        base = model("a", node("c:@F@f#I#", attrs={"template_parameters": None}))
+        head = model("b", node("c:@FT@>1#Tf#t0.0#v#", attrs={"template_parameters": "<class>"}))
+        assert len(match_models(base, head).matches) == 1
 
 
 class TestInternalLinkage:
@@ -412,7 +517,10 @@ class TestTheResidueSaysWhyItIsUnpaired:
     def test_a_rename_tier_1_cannot_see_leaves_a_candidate_on_both_sides(self) -> None:
         """Same kind, same parent (top level), one gone and one new: §5's tier-4 candidate
         set, counted. Possibly a rename, and worth a human's eye."""
-        c = match_models(model("a", node("c:@F@compute#")), model("b", node("c:@F@calculate#")))
+        c = match_models(
+            model("a", node("c:@F@compute#", name="compute")),
+            model("b", node("c:@F@calculate#", name="calculate")),
+        )
         assert c.unpaired_base == {"c:@F@compute#": Unpaired.CANDIDATE}
         assert c.unpaired_head == {"c:@F@calculate#": Unpaired.CANDIDATE}
 
@@ -428,9 +536,9 @@ class TestTheResidueSaysWhyItIsUnpaired:
         even though both are methods; `n2` under `C` is, because `C` matched."""
         cls = node("c:@S@C", kind=NodeKind.STRUCT)
         other = node("c:@S@D", kind=NodeKind.STRUCT)
-        m = node("c:@S@C@F@m#", kind=NodeKind.METHOD)
-        n = node("c:@S@D@F@n#", kind=NodeKind.METHOD)
-        n2 = node("c:@S@C@F@n2#", kind=NodeKind.METHOD)
+        m = node("c:@S@C@F@m#", name="C::m", kind=NodeKind.METHOD)
+        n = node("c:@S@D@F@n#", name="D::n", kind=NodeKind.METHOD)
+        n2 = node("c:@S@C@F@n2#", name="C::n2", kind=NodeKind.METHOD)
         base = self.contained("a", cls, m)
         base.add_node(other)
         head = self.contained("b", other, n)

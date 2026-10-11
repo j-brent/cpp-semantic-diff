@@ -218,9 +218,18 @@ on the match and propagates into the confidence of every change event derived fr
 | Tier | Key | Survives | Broken by |
 |---|---|---|---|
 | **1 · declared** | libclang USR — kind + qualified name + signature | body edits, file moves, reformatting | rename, signature change, namespace move |
+| **name** | kind + qualified name + file and TU for internal linkage + paired parent; functions and methods only | signature change: parameters, return type, `const` | rename, namespace move, an ambiguous name |
 | **2 · structural** | `body_hash` — normalized subtree hash | rename, move, reformatting | any body edit |
 | **3 · positional** | (parent id, kind, ordinal) | renames of unnamed things | reordering, parent change |
 | **4 · similarity** | weighted name + signature + body similarity over candidate pairs | rename *and* edit together | genuine rewrites |
+
+The **name** tier runs over what tier 1 left, and only over functions and methods, the only
+entities whose USR holds more than their kind, name and scope. It pairs a function with itself
+after its signature changed. Its parent must already be paired, so it never reports a move. A
+name with one leftover on each side pairs; leftovers on both sides that are not one to one pair
+none and are reported as an ambiguous pairing; there is no tie-break
+([ADR-036](adr/ADR-036-functions-pair-by-name.md)). The signature, the template parameters and
+the rest are then compared state.
 
 Tier 3 exists for entities with no name at all: lambdas, anonymous namespaces and structs, unnamed
 parameters. Tier 4 is the `git -M` analogue, with the same threshold-tuning problem and the same
@@ -236,8 +245,9 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
 - **Templates.** The template and each instantiation need separate identity. Instantiation sets
   differ between commits for reasons unrelated to the change — an unrelated new call site can
   materialize an instantiation. Instantiation-only deltas must be suppressible.
-- **Overloads.** Name is never identity. Signature normalization (typedef resolution, default
-  arguments, cv/ref qualification) is required for tier 1 to work at all.
+- **Overloads.** Name is never identity on its own. Signature normalization (typedef
+  resolution, default arguments, cv/ref qualification) is required for tier 1 to work at all,
+  and the name tier pairs by name only where the name leaves no choice.
 - **Internal linkage and anonymous namespaces.** USRs incorporate the file path, so a file rename
   breaks tier 1 for everything in them. Identity must include the TU, and file renames must be
   resolved from git before matching — not discovered by the matcher.
@@ -256,7 +266,26 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
 A closed, typed set. New signals become new change event kinds, never free-text.
 
 **Node** — `NodeAdded` · `NodeRemoved` · `NodeMoved` (parent changed) · `NodeRenamed` ·
-`NodeAttrChanged(attr, old, new)` · `NodeBodyChanged`
+`NodeAttrChanged(attr, old, new)` · `NodeBodyChanged` ·
+`NodeSignatureChanged(old_signature, new_signature)`
+
+Most node change events can happen to any kind of entity. Two cannot, and the set says which
+kinds they apply to rather than encoding it in their names
+([ADR-035](adr/ADR-035-signature-and-body-apply-to-functions.md)):
+
+| Change event | Applies to |
+|---|---|
+| `NodeSignatureChanged` | function, method |
+| `NodeBodyChanged` | function, method |
+| every other node change event | every node kind |
+
+"Method" includes constructors, destructors and conversion operators. The table is
+`APPLIES_TO` in `model/events.py`, and the diff stage reads it.
+
+`NodeSignatureChanged` is its own kind, not `NodeAttrChanged(signature)`, because the
+signature is a field of the node (§4.1), not an attribute. The signature spells the return
+type and a method's `const`, so where it changed, those two attributes are not also reported
+as `NodeAttrChanged`.
 
 **Edge** — `EdgeAdded` · `EdgeRemoved` · `EdgeRetargeted` · `EdgeKindChanged` ·
 `EdgeAttrChanged(attr, old, new)`
@@ -306,6 +335,15 @@ ChangeEvent
 direction the tool is a second disconnected artifact to read alongside the diff, which is a net
 increase in work.
 
+**A signature change carries its callers as evidence.** The call edges of a paired function map
+through the correspondence (§6.1), so a changed signature produces no edge change events, and
+nothing in the change event set says where the function is called. The output contract (§10)
+therefore lists, beside each `NodeSignatureChanged`, the head-side callers of its subject: the
+sources of its incoming `calls` edges at head. They are evidence attached to the change event,
+not change events, and they are a stopgap: derived change events for the callers replace them
+([ADR-035](adr/ADR-035-signature-and-body-apply-to-functions.md),
+[ADR-036](adr/ADR-036-functions-pair-by-name.md)).
+
 ### 6.3 Cause and cascade
 
 Rename one function and 200 call edges "change". That is one change event with 200 consequences, not
@@ -319,7 +357,7 @@ Rename one function and 200 call edges "change". That is one change event with 2
 | call-moved-to-another-overload | `EdgeAdded(caller→G)` | `EdgeRemoved(caller→F)`, F and G overloads of one name | active |
 | edge-gained-its-endpoint | `NodeAdded(N)` | `EdgeAdded` for edges touching N | active |
 | rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **unreachable** |
-| signature-change-breaks-callers | `NodeAttrChanged(signature)` | `SignatureIncompatible` on callers | dormant |
+| signature-change-breaks-callers | `NodeSignatureChanged(F)` | `SignatureIncompatible` on callers | dormant |
 
 **That is the whole table, and it is closed the way §6.1's change event set is closed.** The rows are
 `CAUSE_RULES` in `classify/rules.py` and the Status column is its `RuleStatus`; nothing outside that
@@ -607,8 +645,8 @@ is non-reproducible on one machine, let alone across two.
 The smallest slice that tests the thesis end to end.
 
 **In:** namespace / class / function / method / field nodes · `contains`, `calls`, `inherits`,
-`overrides` edges · **tier-1 identity only** · node add/remove/attr/body and edge
-add/remove/kind/attr change events · JSON + terminal output · the compression metric · fixtures `fmt` and
+`overrides` edges · **tier-1 identity, plus the name tier for functions and methods** · node
+add/remove/attr/body/signature and edge add/remove/kind/attr change events · JSON + terminal output · the compression metric · fixtures `fmt` and
 `spdlog`, with `leveldb` added later ([v0 tracker](../reports/2026-08-01--v0-build/STATUS.md) §3).
 
 **Out, deliberately:** rename detection (tiers 2–4), evidence adapters, derived change events, HTML.
@@ -639,10 +677,11 @@ in — see the [v0 tracker](../reports/2026-08-01--v0-build/STATUS.md) §3. The 
 bound on change events tiers 2–4 could remove is 3, 5 and 1, and on `leveldb` 0. That is an argument
 against building them next, which is what asking the question early was for.
 
-On 2026-10-10 that answer was reopened for one case: a function whose parameters changed is
-reported as removed plus added, and on current upstream spdlog that is every removal in a 30-commit
-range. Pairing it with its old version was decided and is not built
-([#8](https://github.com/j-brent/cpp-semantic-diff/issues/8)).
+On 2026-10-10 that answer was reopened for one case: a function whose parameters changed was
+reported as removed plus added, and on current upstream spdlog that was every removal in a
+30-commit range ([ADR-026](adr/ADR-026-changed-parameters-same-function.md)). The name tier (§5)
+pairs it with its old version. It keys on the qualified name, so it detects no rename, and the
+measurement above still stands for renames.
 
 ### Technology
 
@@ -677,7 +716,7 @@ cpp_semantic_diff/
   model/       IR types ✓ · JSON schema (not generated)
   acquire/     git revisions · worktrees · compile db  ✓
   produce/     toolchain ✓ · extraction ✓ · assembly ✓ · per-TU cache ✓
-  match/       tiered matching (tier 1)                 ✓
+  match/       tiered matching (tier 1, name tier)      ✓
   diff/        model × model → change events            ✓
   classify/    cause and cascade rules                  ✓
   evidence/    tool adapters                (post-v0)

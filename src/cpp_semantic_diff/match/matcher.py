@@ -1,6 +1,7 @@
 """The match stage: two `Model`s -> one `Correspondence` (ARCH-001 §3, §5).
 
-The stage is a driver over a *sequence* of tiers, even though v0 registers exactly one.
+The stage is a driver over a *sequence* of tiers. v0 registers two: tier 1, and the name
+tier for the functions and methods it leaves (ADR-036).
 ARCH-001 §5 defines the scheme as tiers running "most-confident first, each tier running
 only over the residue the previous tiers left unmatched", and that sequencing -- not the
 tier-1 lookup -- is the part that is expensive to retrofit. Tier 1 is a keyed intersection;
@@ -19,6 +20,7 @@ from typing import Protocol
 
 from cpp_semantic_diff.match.correspondence import Correspondence, Match
 from cpp_semantic_diff.match.declared import DeclaredTier
+from cpp_semantic_diff.match.name import NameTier
 from cpp_semantic_diff.match.unpaired import unpaired_reasons
 from cpp_semantic_diff.model import MatchTier, Model, NodeId
 
@@ -31,6 +33,10 @@ class Tier(Protocol):
     residue the previous tiers left. Resolving its own ambiguity is the tier's job: proposing
     two pairs that share a node is a contract violation, not something for the driver to
     break arbitrarily.
+
+    `head_for` is the pairs the earlier tiers made, base id to head id. A tier that asks
+    whether two nodes sit under the same parent asks it through these, the way
+    `unpaired.unpaired_reasons` does; the name tier pairs nothing under an unpaired parent.
     """
 
     tier: MatchTier
@@ -41,6 +47,7 @@ class Tier(Protocol):
         head: Model,
         base_pool: frozenset[NodeId],
         head_pool: frozenset[NodeId],
+        head_for: Mapping[NodeId, NodeId],
     ) -> Iterable[tuple[NodeId, NodeId]]: ...
 
     def ambiguous(
@@ -49,6 +56,7 @@ class Tier(Protocol):
         head: Model,
         base_pool: frozenset[NodeId],
         head_pool: frozenset[NodeId],
+        head_for: Mapping[NodeId, NodeId],
     ) -> tuple[Collection[NodeId], Collection[NodeId]]:
         """(base, head) nodes this tier found partners for but refused to pair, because it
         could not choose between them. Asked over the same pools as `propose`. Only the
@@ -58,14 +66,15 @@ class Tier(Protocol):
 
 
 def default_tiers(renames: Mapping[str, str] | None = None) -> tuple[Tier, ...]:
-    """v0 runs tier 1 and nothing else (ARCH-001 §13).
+    """v0 runs tier 1, then the name tier over the functions and methods it left (ARCH-001
+    §5, §13).
 
-    Tiers 2-4 are excluded on purpose: a rename surfaces as a remove plus an add, and how
-    badly that reads on real branches is a v0 deliverable. Softening it here -- a name-based
-    fallback, a similarity guess -- would destroy the measurement that decides whether the
-    remaining tiers are worth building.
+    The name tier pairs a function with itself after its signature changed (ADR-036). It
+    keys on the qualified name, so it cannot pair a rename: tiers 2-4 stay excluded, and a
+    renamed entity still surfaces as a remove plus an add, which is the measurement that
+    decides whether they are worth building.
     """
-    return (DeclaredTier(renames),)
+    return (DeclaredTier(renames), NameTier(renames))
 
 
 def match_models(
@@ -94,13 +103,15 @@ def match_models(
     ambiguous_head: set[NodeId] = set()
 
     for tier in tiers:
-        # Snapshot the pools: a tier reads the residue as it stood when the tier began, so
-        # its proposals cannot depend on the order the driver consumed its own output.
+        # Snapshot the pools and the pairs: a tier reads the residue as it stood when the
+        # tier began, so its proposals cannot depend on the order the driver consumed its
+        # own output.
         pools = (frozenset(base_pool), frozenset(head_pool))
-        refused_base, refused_head = tier.ambiguous(base, head, *pools)
+        made = {m.base: m.head for m in matches}
+        refused_base, refused_head = tier.ambiguous(base, head, *pools, made)
         ambiguous_base.update(refused_base)
         ambiguous_head.update(refused_head)
-        for base_id, head_id in tier.propose(base, head, *pools):
+        for base_id, head_id in tier.propose(base, head, *pools, made):
             if base_id not in base_pool or head_id not in head_pool:
                 raise ValueError(
                     f"tier {tier.tier.value!r} proposed {base_id!r} -> {head_id!r}, but one "

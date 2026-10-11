@@ -8,12 +8,15 @@ provenance chain that only runs one way all produce plausible-looking JSON.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
 from cpp_semantic_diff.model import (
+    APPLIES_TO,
     DERIVED_KINDS,
     EDGE_KINDS,
     NODE_KINDS,
@@ -30,6 +33,7 @@ from cpp_semantic_diff.model import (
     Location,
     MatchTier,
     NodeId,
+    NodeKind,
     Side,
     TuResult,
     TuStatus,
@@ -80,6 +84,7 @@ class TestTheSetIsClosed:
             "NodeRenamed",
             "NodeAttrChanged",
             "NodeBodyChanged",
+            "NodeSignatureChanged",
             "EdgeAdded",
             "EdgeRemoved",
             "EdgeRetargeted",
@@ -113,8 +118,8 @@ class TestTheSetIsClosed:
         for the wrong reason: they were checking against a set with room to spare.
 
         What remains outside is what v0 genuinely cannot produce, and each exclusion has a
-        different reason: renames and moves need a tier past 1 (the USR encodes name and
-        scope, so a matched pair agrees on both), `EdgeRetargeted` is refused outright, and
+        different reason: renames and moves need rename detection (both v0 tiers pair only
+        entities that agree on name and scope), `EdgeRetargeted` is refused outright, and
         the derived kinds are deferred.
         """
         assert {
@@ -146,6 +151,29 @@ class TestTheSetIsClosed:
         )
         with pytest.raises(ValidationError, match="requires payload keys"):
             event(ChangeEventKind.EDGE_ATTR_CHANGED, payload={"attr": "access", "old": "public"})
+
+    def test_a_signature_change_has_a_kind_of_its_own_and_carries_both_spellings(self) -> None:
+        """ADR-035. The signature is a field of the node (§4.1), not an attribute, so it is
+        not `NodeAttrChanged(signature)`."""
+        assert ChangeEventKind.NODE_SIGNATURE_CHANGED in NODE_KINDS & V0_KINDS
+        assert REQUIRED_PAYLOAD[ChangeEventKind.NODE_SIGNATURE_CHANGED] == frozenset(
+            {"old_signature", "new_signature"}
+        )
+
+    def test_the_applicability_table_is_the_one_arch_states(self) -> None:
+        """ARCH-001 §6.1's table and `APPLIES_TO` say the same thing (ADR-035): two node
+        change events apply only to functions and methods, and every other node change event
+        applies to every node kind."""
+        arch = (Path(__file__).parents[1] / "docs" / "ARCH-001-architecture.md").read_text(
+            encoding="utf-8"
+        )
+        rows = dict(re.findall(r"^\| `(Node\w+)` \| ([a-z, ]+) \|$", arch, re.MULTILINE))
+        stated = {
+            ChangeEventKind(kind): frozenset(NodeKind(k.strip()) for k in kinds.split(","))
+            for kind, kinds in rows.items()
+        }
+        assert stated == APPLIES_TO
+        assert set(APPLIES_TO) <= NODE_KINDS
 
     def test_there_is_no_catch_all_kind(self) -> None:
         assert not {k for k in ChangeEventKind if k.name in {"OTHER", "CUSTOM", "UNKNOWN"}}

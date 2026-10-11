@@ -773,11 +773,11 @@ class TestTheResidueIsReported:
 
         r = doc.summary.residue
         assert (r.unmatched_base, r.unmatched_head) == (1, 1)
-        assert r.tiers_run == [MatchTier.DECLARED]
+        assert r.tiers_run == [MatchTier.DECLARED, MatchTier.NAME]
         assert r.pairable_residue == 1, "the upper bound on what tiers 2-4 could remove"
 
         out = draw(doc)
-        assert "tier declared only" in out
+        assert "tiers declared, name only" in out
         assert "removal plus an addition" in out
 
     def test_bundled_dependency_churn_is_named_not_hidden(self) -> None:
@@ -930,6 +930,71 @@ class TestTheDocumentIsTheContract:
         labels = {doc.entity_name(NodeId(n.id)) for n in (one, two)}
         assert len(labels) == 2
         assert all("f" in label for label in labels)
+
+
+class TestASignatureChangeShowsItsCallers:
+    """ADR-035: a paired function's calls map through the correspondence and produce no
+    change events, so the document files its head-side callers under the signature change,
+    where a reviewer asks whether every caller followed."""
+
+    def doc(self) -> DiffDocument:
+        def side(rev: str, signature: str, *callers: str) -> Model:
+            f = node("c:@F@f#", name="f", signature=signature)
+            nodes = [node(c, name=c.split("@")[-1].rstrip("#")) for c in callers]
+            return model(rev, f, *nodes, edges=[edge(c, "c:@F@f#") for c in callers])
+
+        return pipeline(
+            side("a", "int ()", "c:@F@g#", "c:@F@h#"),
+            side("b", "long ()", "c:@F@g#", "c:@F@h#", "c:@F@k#"),
+        )
+
+    def test_the_document_lists_every_head_caller(self) -> None:
+        doc = self.doc()
+        (changed,) = (e for e in doc.events if e.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED)
+        assert doc.callers == {changed.id: ["c:@F@g#", "c:@F@h#", "c:@F@k#"]}
+        assert {"c:@F@g#", "c:@F@h#", "c:@F@k#"} <= doc.entities.keys()
+
+    def test_the_view_names_them_under_the_event(self) -> None:
+        out = draw(self.doc(), collapse_cascades=False)
+        assert "called by 3: g, h, k" in out
+
+    def test_it_survives_the_json_round_trip(self) -> None:
+        doc = self.doc()
+        assert DiffDocument.from_json(doc.to_json()).callers == doc.callers
+
+
+class TestANamePairedFunctionIsOnBothSides:
+    """ADR-036: a function the name tier paired has one id at base and another at head, and
+    each id is in one model only. Both are one entity both sides hold, so neither may read as
+    added or removed -- `sides` goes through the correspondence, not the ids."""
+
+    OLD = "c:@F@f#I#"
+    NEW = "c:@F@f#I#I#"
+
+    def doc(self) -> DiffDocument:
+        g = node("c:@F@g#", name="g")
+        base = model(
+            "a",
+            node(self.OLD, name="f", signature="void (int)"),
+            g,
+            edges=[edge("c:@F@g#", self.OLD)],
+        )
+        head = model("b", node(self.NEW, name="f", signature="void (int, int)"), g)
+        return pipeline(base, head)
+
+    def test_the_signature_change_does_not_mark_its_subject_added(self) -> None:
+        doc = self.doc()
+        assert doc.entities[NodeId(self.NEW)].sides == ["base", "head"]
+        out = draw(doc, collapse_cascades=False)
+        line = next(x for x in out.splitlines() if "NodeSignatureChanged" in x)
+        assert "+ " not in line and " f" in line
+
+    def test_the_callee_of_a_removed_call_does_not_read_as_removed(self) -> None:
+        doc = self.doc()
+        (removed,) = (e for e in doc.events if e.kind is ChangeEventKind.EDGE_REMOVED)
+        assert removed.subject == f"c:@F@g#|calls|{self.OLD}"
+        assert doc.entities[NodeId(self.OLD)].sides == ["base", "head"]
+        assert "- " not in draw(doc, collapse_cascades=False)
 
 
 # -- 6 · a label is not an identity, and must not pretend to be one ------------------------

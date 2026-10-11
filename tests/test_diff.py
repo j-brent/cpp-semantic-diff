@@ -312,6 +312,67 @@ class TestABodyChangeIsNotAnAttributeChange:
         assert kinds(diff(base, head)) == ["NodeAttrChanged", "NodeBodyChanged"]
 
 
+class TestASignatureChangeIsOneEvent:
+    """ADR-035: a changed signature is `NodeSignatureChanged`, and only that.
+
+    The canonical signature is the function type (§4.1), so it already spells the return
+    type and a method's `const`. Reporting those again as attribute changes beside it would
+    count one change twice.
+    """
+
+    M = NodeId("c:@S@C@F@m#")
+
+    def method(self, signature: str, **attrs: Any) -> Node:
+        return node(self.M, name="m", kind=NodeKind.METHOD, signature=signature, attrs=attrs)
+
+    def test_a_differing_signature_carries_both_spellings(self) -> None:
+        base = model("a", node(F, signature="void (int)"))
+        head = model("b", node(F, signature="void (long)"))
+        event = only(diff(base, head), ChangeEventKind.NODE_SIGNATURE_CHANGED)
+        assert event.payload == {"old_signature": "void (int)", "new_signature": "void (long)"}
+        assert kinds(diff(base, head)) == ["NodeSignatureChanged"]
+
+    def test_the_return_type_and_const_are_not_reported_twice(self) -> None:
+        base = model("a", self.method("int () const", return_type="int", const=True))
+        head = model("b", self.method("long ()", return_type="long", const=False))
+        assert kinds(diff(base, head)) == ["NodeSignatureChanged"]
+
+    def test_other_attributes_still_change_beside_it(self) -> None:
+        base = model("a", self.method("int ()", return_type="int", virtual=False))
+        head = model("b", self.method("long ()", return_type="long", virtual=True))
+        assert kinds(diff(base, head)) == ["NodeAttrChanged", "NodeSignatureChanged"]
+        assert only(diff(base, head), ChangeEventKind.NODE_ATTR_CHANGED).payload["attr"] == (
+            "virtual"
+        )
+
+    def test_without_a_signature_change_the_attributes_report_as_before(self) -> None:
+        base = model("a", self.method("int ()", return_type="int", const=False))
+        head = model("b", self.method("int ()", return_type="int", const=True))
+        assert kinds(diff(base, head)) == ["NodeAttrChanged"]
+
+
+class TestSignatureAndBodyApplyOnlyToFunctions:
+    """ARCH-001 §6.1's applicability table (`APPLIES_TO`, ADR-035). Only a function or a
+    method has a signature or a code body, so no other kind of node is reported with a
+    changed one, whatever the producer put in the fields."""
+
+    def test_a_class_never_gets_a_signature_or_body_event(self) -> None:
+        def cls(rev: str, signature: str, body: str) -> Model:
+            return model(
+                rev,
+                node(C, name="C", kind=NodeKind.CLASS, signature=signature, body_hash=body),
+            )
+
+        assert diff(cls("a", "x", "aaa"), cls("b", "y", "bbb")) == []
+
+    def test_the_table_names_function_and_method_for_both(self) -> None:
+        from cpp_semantic_diff.model import APPLIES_TO
+
+        both = {NodeKind.FUNCTION, NodeKind.METHOD}
+        assert APPLIES_TO[ChangeEventKind.NODE_SIGNATURE_CHANGED] == both
+        assert APPLIES_TO[ChangeEventKind.NODE_BODY_CHANGED] == both
+
+
 class TestEdgesAreMatchedThroughTheCorrespondence:
     """ARCH-001 §5 and §6.1. The most expensive mistake available in this stage.
 
