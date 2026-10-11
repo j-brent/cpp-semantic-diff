@@ -25,6 +25,7 @@ from cpp_semantic_diff.acquire.git import (
     rename_limit_hit,
     resolve_rename_similarity,
     resolve_revs,
+    tracked_files,
 )
 from cpp_semantic_diff.acquire.workspace import materialize_submodules
 from cpp_semantic_diff.errors import (
@@ -626,3 +627,15 @@ class TestATruncatedRenameMapIsReported:
     )
     def test_the_match_is_tolerant(self, stderr: str, expected: RenameLimitHit | None) -> None:
         assert rename_limit_hit(stderr) == expected
+
+
+class TestTrackedFiles:
+    """ADR-037: the files a revision models are the files git tracks at it."""
+
+    def test_lists_what_the_revision_tracks_and_nothing_untracked(self, bare_repo: Path) -> None:
+        first = commit(bare_repo, "src/a.h", "int a();\n", "a")
+        second = commit(bare_repo, "src/b.h", "int b();\n", "b")
+        (bare_repo / "build").mkdir()
+        (bare_repo / "build" / "gen.h").write_text("int gen();\n", encoding="utf-8")
+        assert tracked_files(bare_repo, first) == {"src/a.h"}
+        assert tracked_files(bare_repo, second) == {"src/a.h", "src/b.h"}

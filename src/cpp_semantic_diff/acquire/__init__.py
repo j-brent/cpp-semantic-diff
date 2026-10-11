@@ -7,6 +7,7 @@ from cpp_semantic_diff.acquire.git import (
     diff_line_count,
     file_changes,
     resolve_revs,
+    tracked_files,
 )
 from cpp_semantic_diff.acquire.third_party import (
     ThirdPartyEntry,
@@ -44,4 +45,5 @@ __all__ = [
     "refuse_changed_third_party",
     "resolve_revs",
     "third_party_set",
+    "tracked_files",
 ]

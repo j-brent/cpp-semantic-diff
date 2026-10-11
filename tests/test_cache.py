@@ -45,7 +45,7 @@ from cpp_semantic_diff.produce.cache import (
     find_scanner,
     loads,
 )
-from cpp_semantic_diff.produce.extract import TuExtract, extract
+from cpp_semantic_diff.produce.extract import Boundary, TuExtract, extract
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -167,6 +167,20 @@ class TestAHitIsIndistinguishableFromAParse:
 
         assert cache.stats.hits == 3
         assert cold.fingerprint() == warm.fingerprint()
+        assert cold.model_dump() == _without_cache_hits(warm)
+
+    def test_crossings_survive_the_round_trip(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        """Crossings recorded during parsing, and the target table the builder turns into
+        crossings, are part of the entry: a warm build draws the same boundary."""
+        sources = {
+            "a.cpp": "#include <stdlib.h>\nstruct S { virtual ~S(); };\n"
+            "int a() { S s; return abs(1); }\n"
+        }
+        checkout = project(tmp_path / "w", sources, ("a.cpp",))
+        cold, _ = build(checkout, toolchain, tmp_path)
+        warm, cache = build(checkout, toolchain, tmp_path)
+        assert cache.stats.hits == 1
+        assert {c.label for c in cold.crossings} == {"C library", "implicit"}
         assert cold.model_dump() == _without_cache_hits(warm)
 
     def test_a_hit_is_recorded_in_completeness(self, tmp_path: Path, toolchain: Toolchain) -> None:
@@ -325,6 +339,53 @@ class TestInvalidation:
         assert elsewhere.identity(entry) != cache.identity(entry)
         assert elsewhere.key(entry) != cache.key(entry)
         assert elsewhere.load(elsewhere.identity(entry), elsewhere.key(entry) or "") is None
+
+    def test_a_different_third_party_set_invalidates(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The third-party set decides what extraction keeps (ADR-025), and it comes from the
+        command line, not from the files the key hashes. Without it in the identity, a TU
+        extracted with `vendor` modelled would be served to a run that declared it
+        third-party, and the library would be back in the model."""
+        checkout = project(tmp_path / "w", SHARED, ("a.cpp",))
+        _, cache = build(checkout, toolchain, tmp_path)
+        entry = checkout.cpp_entries[0]
+
+        declared = TuCache(
+            root=checkout.path,
+            toolchain=toolchain,
+            store=store(tmp_path),
+            closures=cache.closures,
+            boundary=Boundary(third_party=("vendor",)),
+        )
+        assert declared.identity(entry) != cache.identity(entry)
+        assert declared.load(declared.identity(entry), declared.key(entry) or "") is None
+
+    def test_a_header_that_changes_tracking_invalidates(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Only tracked files are modelled (ADR-037), and tracking is not content: a header
+        generated untracked at one revision and committed byte for byte at the next hashes
+        the same both times. Its tracked bit is in the key, so the entry is not reused."""
+        checkout = project(tmp_path / "w", SHARED, ("a.cpp",))
+        entry = checkout.cpp_entries[0]
+        everything = frozenset({"a.cpp", "shared.h", "compile_commands.json"})
+
+        def key(tracked: frozenset[str]) -> str | None:
+            cache = TuCache.open(
+                checkout,
+                toolchain=toolchain,
+                store=store(tmp_path),
+                boundary=Boundary(tracked=tracked),
+            )
+            return cache.key(entry)
+
+        committed = key(everything)
+        assert committed is not None
+        assert key(everything - {"shared.h"}) != committed
+        # Tracking a file the TU never reads changes nothing: no base/head sharing is lost
+        # because a commit added a file somewhere else.
+        assert key(everything | {"elsewhere.cpp"}) == committed
 
     def test_repackaging_the_same_compiler_does_not_invalidate(
         self, tmp_path: Path, toolchain: Toolchain
@@ -534,6 +595,27 @@ class TestStorage:
             loads(entry.read_bytes())
         _, cache = build(checkout, toolchain, tmp_path)
         assert cache.stats.hits == 0
+
+    @pytest.mark.parametrize("key", ["crossings", "targets", "unmodelled"])
+    def test_an_entry_missing_a_section_is_a_miss(
+        self, tmp_path: Path, toolchain: Toolchain, key: str
+    ) -> None:
+        """Format 2 was filled by two branches. An entry written by one of them alone lacks
+        the other's section, and must be a miss, not a partial with no crossings in it."""
+        sources = {"a.cpp": "#include <stdlib.h>\nint a() { return abs(1); }\n"}
+        checkout = project(tmp_path / "w", sources, ("a.cpp",))
+        build(checkout, toolchain, tmp_path)
+
+        entry = next(store(tmp_path).rglob("*.json.gz"))
+        payload = json.loads(gzip.decompress(entry.read_bytes()))
+        del payload[key]
+        entry.write_bytes(gzip.compress(json.dumps(payload).encode()))
+
+        with pytest.raises(KeyError):
+            loads(entry.read_bytes())
+        model, cache = build(checkout, toolchain, tmp_path)
+        assert cache.stats.hits == 0
+        assert model.crossings
 
     def test_entries_for_one_tu_are_bounded(self, tmp_path: Path, toolchain: Toolchain) -> None:
         """A cache that grows once per edit of one file fills a disk during a rebase.
@@ -938,6 +1020,8 @@ def _partial_dump(partial: TuExtract) -> dict[str, object]:
         "edges": sorted(e.model_dump_json() for e in partial.edges.values()),
         "aliases": partial.aliases,
         "unmodelled": sorted(partial.unmodelled),
+        "crossings": sorted(c.model_dump_json() for c in partial.crossings.values()),
+        "targets": partial.targets,
     }
 
 

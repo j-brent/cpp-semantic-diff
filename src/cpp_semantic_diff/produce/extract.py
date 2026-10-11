@@ -34,7 +34,14 @@ import clang.cindex as ci
 
 from cpp_semantic_diff.acquire.workspace import CompileEntry
 from cpp_semantic_diff.model.ir import (
+    COMPILER_BUILTINS,
+    FUNCTION_LOCAL,
+    IMPLICIT,
+    TEMPLATE_INSTANTIATION,
+    UNRESOLVED,
+    UNTRACKED,
     AttrValue,
+    Crossing,
     Edge,
     EdgeKind,
     Location,
@@ -211,21 +218,23 @@ class _Overrides:
         self._dispose = lib.clang_disposeOverriddenCursors
         self._dispose.argtypes = [ctypes.POINTER(ci.Cursor)]
 
-    def __call__(self, cursor: ci.Cursor) -> list[str]:
+    def __call__(self, cursor: ci.Cursor) -> list[ci.Cursor]:
         array = ctypes.POINTER(ci.Cursor)()
         count = ctypes.c_uint()
         self._get(cursor, ctypes.byref(array), ctypes.byref(count))
         if not count.value:
             return []
         try:
-            usrs = []
+            cursors = []
             for i in range(count.value):
-                overridden = array[i]
+                # Copied out of the array, which is freed below. A cursor's own data points
+                # into the TU's AST, not into the array, so the copy stays valid.
+                overridden = ci.Cursor.from_buffer_copy(array[i])
                 # The bindings normally attach the owning TU in `from_result`; a cursor
                 # lifted straight out of the C array has to be told, or `get_usr` faults.
                 overridden._tu = cursor._tu
-                usrs.append(overridden.get_usr())
-            return usrs
+                cursors.append(overridden)
+            return cursors
         finally:
             self._dispose(array)
 
@@ -233,11 +242,15 @@ class _Overrides:
 _overridden_cursors: _Overrides | None = None
 
 
-def overridden_usrs(cursor: ci.Cursor) -> list[str]:
+def overridden_cursors(cursor: ci.Cursor) -> list[ci.Cursor]:
     global _overridden_cursors
     if _overridden_cursors is None:
         _overridden_cursors = _Overrides()
     return _overridden_cursors(cursor)
+
+
+def overridden_usrs(cursor: ci.Cursor) -> list[str]:
+    return [c.get_usr() for c in overridden_cursors(cursor)]
 
 
 class _TemplateTag:
@@ -466,6 +479,279 @@ def _relative(path: str, root: Path, base: Path) -> str | None:
         return candidate.resolve().relative_to(root).as_posix()
     except ValueError:
         return None
+
+
+def third_party_owner(relative: str, third_party: tuple[str, ...]) -> str | None:
+    """The third-party directory a repository-relative path lies in, or None (ADR-025).
+
+    `third_party` is `ThirdPartySet.paths`. Where entries nest, the innermost wins, because it
+    is the more specific name. Decided here rather than by asking `ThirdPartySet`, because
+    what this answers decides what extraction keeps, and only this module and `ir.py` are
+    hashed into the cache key (`cache._producer_code_digest`).
+    """
+    best: str | None = None
+    for directory in third_party:
+        if (relative == directory or relative.startswith(directory + "/")) and (
+            best is None or len(directory) > len(best)
+        ):
+            best = directory
+    return best
+
+
+@dataclass(frozen=True)
+class Boundary:
+    """What the model leaves out inside the repository (ADR-025, ADR-037).
+
+    `third_party` is `ThirdPartySet.paths`. `tracked` is every path git tracks at the revision
+    (`acquire.tracked_files`); a file under the repository root that is not in it is
+    `untracked` and not modelled. None means no tracked list was given, and every file under
+    the root counts as tracked -- what a synthetic checkout with no git history needs.
+    """
+
+    third_party: tuple[str, ...] = ()
+    tracked: frozenset[str] | None = None
+
+
+#: No third-party paths and no tracked list: everything under the repository root is modelled.
+NO_BOUNDARY = Boundary()
+
+
+#: C standard and POSIX headers, by name. A header with one of these names directly in a
+#: search directory, or in its architecture subdirectory, is labelled `C library`.
+C_HEADERS = frozenset(
+    [
+        "assert.h",
+        "complex.h",
+        "ctype.h",
+        "errno.h",
+        "fenv.h",
+        "float.h",
+        "inttypes.h",
+        "iso646.h",
+        "limits.h",
+        "locale.h",
+        "math.h",
+        "setjmp.h",
+        "signal.h",
+        "stdalign.h",
+        "stdarg.h",
+        "stdatomic.h",
+        "stdbool.h",
+        "stddef.h",
+        "stdint.h",
+        "stdio.h",
+        "stdlib.h",
+        "stdnoreturn.h",
+        "string.h",
+        "tgmath.h",
+        "threads.h",
+        "time.h",
+        "uchar.h",
+        "wchar.h",
+        "wctype.h",
+        "aio.h",
+        "cpio.h",
+        "dirent.h",
+        "dlfcn.h",
+        "fcntl.h",
+        "fmtmsg.h",
+        "fnmatch.h",
+        "ftw.h",
+        "glob.h",
+        "grp.h",
+        "iconv.h",
+        "langinfo.h",
+        "libgen.h",
+        "monetary.h",
+        "mqueue.h",
+        "ndbm.h",
+        "netdb.h",
+        "nl_types.h",
+        "poll.h",
+        "pthread.h",
+        "pwd.h",
+        "regex.h",
+        "sched.h",
+        "search.h",
+        "semaphore.h",
+        "spawn.h",
+        "strings.h",
+        "stropts.h",
+        "syslog.h",
+        "tar.h",
+        "termios.h",
+        "trace.h",
+        "ulimit.h",
+        "unistd.h",
+        "utime.h",
+        "utmpx.h",
+        "wordexp.h",
+        "alloca.h",
+        "byteswap.h",
+        "endian.h",
+        "execinfo.h",
+        "features.h",
+        "link.h",
+        "malloc.h",
+    ]
+)
+
+#: Subdirectories of a system search directory that hold the C library's own headers
+#: (`sys/stat.h`, `bits/types.h`), which would otherwise be labelled `sys` or `bits`.
+C_SUBDIRECTORIES = frozenset(
+    {"sys", "bits", "gnu", "asm", "asm-generic", "linux", "netinet", "arpa", "net"}
+)
+
+#: The toolchain's default search directories, beyond its builtin headers. Not discovered:
+#: libclang has no call that reports its header search list, and a wrong label costs nothing
+#: beyond the picture it appears in, because no analysis reads it.
+SYSTEM_INCLUDE_DIRS = (Path("/usr/local/include"), Path("/usr/include"))
+
+CXX_STANDARD_LIBRARY = "C++ standard library"
+C_LIBRARY = "C library"
+
+#: The flags that add a header search directory, in their joined (`-Idir`) or separate form.
+_SEARCH_FLAGS = ("-isystem", "-iquote", "-idirafter", "-I")
+
+#: A `c++/<version>` or `c++/v1` directory: libstdc++ or libc++.
+_CXX_VERSION = re.compile(r"(v1|\d+(\.\d+)*)")
+
+
+def multiarch(target: str | None) -> str | None:
+    """The Debian multiarch directory name for a target triple: `x86_64-pc-linux-gnu` →
+    `x86_64-linux-gnu`. Only the vendor field is dropped."""
+    if not target:
+        return None
+    parts = target.split("-")
+    if len(parts) >= 4 or (len(parts) == 3 and parts[1] in ("pc", "unknown")):
+        return "-".join([parts[0], *parts[2:]])
+    return target
+
+
+def search_dirs(entry: CompileEntry, toolchain: Toolchain) -> tuple[Path, ...]:
+    """The directories a TU's headers are found through: its own flags, then the toolchain's.
+
+    Includes the builtin header directory and the system directories. Only used to name a
+    library outside the repository, so anything this misses costs a label, not a model.
+    """
+    dirs: list[Path] = []
+    args = entry.arguments[1:]
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        value: str | None = None
+        for flag in _SEARCH_FLAGS:
+            if arg == flag and i + 1 < len(args):
+                value = args[i + 1]
+                i += 1
+                break
+            if arg.startswith(flag) and len(arg) > len(flag):
+                value = arg[len(flag) :]
+                break
+        if value is not None:
+            path = Path(value)
+            dirs.append((path if path.is_absolute() else entry.directory / path).resolve())
+        i += 1
+    if toolchain.builtin_dir is not None:
+        dirs.append(toolchain.builtin_dir)
+    dirs.extend(SYSTEM_INCLUDE_DIRS)
+    return tuple(dict.fromkeys(dirs))
+
+
+@lru_cache(maxsize=_RELATIVE_CACHE)
+def library_label(
+    path: str,
+    base: Path,
+    dirs: tuple[Path, ...],
+    builtin_dir: Path | None,
+    arch: str | None,
+) -> str:
+    """The name of the library a header outside the repository belongs to.
+
+    The header's path relative to the search directory that holds it: under the builtin
+    header directory, `compiler builtins`; under `c++/<version>` or `c++/v1`, the C++ standard
+    library; a C or POSIX header, the C library; inside a subdirectory, that subdirectory's
+    name (`boost`); directly in a search directory, the header's name without its suffix
+    (`zlib`). A header in no known search directory is named as if its own directory were one.
+
+    For display only. The label is stored in cached partials, and the system directories are
+    not in the cache key, so a host whose search list changes under the same toolchain keeps
+    the old labels until the TU is reparsed. No analysis reads them.
+    """
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = base / candidate
+    resolved = candidate.resolve()
+    if builtin_dir is not None and resolved.is_relative_to(builtin_dir):
+        return COMPILER_BUILTINS
+    parts = resolved.parts
+    if any(
+        parts[i] == "c++" and _CXX_VERSION.fullmatch(parts[i + 1]) for i in range(len(parts) - 1)
+    ):
+        return CXX_STANDARD_LIBRARY
+    owners = [d for d in dirs if resolved.is_relative_to(d)]
+    rest: tuple[str, ...] = (
+        resolved.relative_to(max(owners, key=lambda d: len(d.parts))).parts
+        if owners
+        else (resolved.name,)
+    )
+    if arch and len(rest) > 1 and rest[0] == arch:
+        rest = rest[1:]
+    if len(rest) > 1:
+        return C_LIBRARY if rest[0] in C_SUBDIRECTORIES else rest[0]
+    name = rest[0] if rest else resolved.name
+    return C_LIBRARY if name in C_HEADERS else Path(name).stem
+
+
+#: Members clang generates at their class's own location when nobody declares them.
+_SPECIAL_MEMBER_KINDS = frozenset(
+    {ci.CursorKind.CONSTRUCTOR, ci.CursorKind.DESTRUCTOR, ci.CursorKind.CXX_METHOD}
+)
+
+
+def fallback_label(cursor: ci.Cursor, usr: str) -> str:
+    """What an in-repository target is, should no declaration in the model produce it.
+
+    Read from the cursor while it is in hand and used by the builder only if the edge stays
+    unresolved. Measured on the fixtures (step 1 report §3), in the order
+    tested here:
+
+    - `compiler builtins`: `__builtin_*` functions, declared where first used;
+    - `function-local`: members of a lambda or of a class declared inside a function, which
+      v0 does not model;
+    - `implicit`: special members clang generated at their class's own location;
+    - `template instantiation`: an instantiation, or a member of one, whose template is no node;
+    - `unresolved`: anything else, e.g. inherited constructors and friend operators defined
+      in a class.
+    """
+    if cursor.spelling.startswith("__builtin"):
+        return COMPILER_BUILTINS
+    parent = cursor.semantic_parent
+    if parent is not None and parent.spelling.startswith("(lambda"):
+        return FUNCTION_LOCAL
+    if (
+        cursor.kind in _SPECIAL_MEMBER_KINDS
+        and parent is not None
+        and parent.location.file is not None
+        and cursor.location.file is not None
+        and parent.location.file.name == cursor.location.file.name
+        and (parent.location.line, parent.location.column)
+        == (cursor.location.line, cursor.location.column)
+    ):
+        return IMPLICIT
+    walk = parent
+    while walk is not None and walk.kind is not ci.CursorKind.TRANSLATION_UNIT:
+        if walk.kind in CALLABLE_KINDS:
+            return FUNCTION_LOCAL
+        walk = walk.semantic_parent
+    template = specialized_template_usr(cursor)
+    if template and template != usr:
+        return TEMPLATE_INSTANTIATION
+    if parent is not None:
+        parent_template = specialized_template_usr(parent)
+        if parent_template and parent_template != parent.get_usr():
+            return TEMPLATE_INSTANTIATION
+    return UNRESOLVED
 
 
 def _location(cursor: ci.Cursor, root: Path, base: Path) -> Location | None:
@@ -906,6 +1192,33 @@ def _edge_attr_rank(value: AttrValue) -> tuple[bool, str]:
     return (bool(value), repr(value))
 
 
+def merge_crossing(
+    crossings: dict[str, Crossing],
+    src: str,
+    callee: str,
+    kind: EdgeKind,
+    label: str,
+    locations: Iterable[Location] = (),
+) -> None:
+    """Merge by (src, kind, callee), as `merge_edge` merges edges: a repeated site is a location.
+
+    Two overloads of one name in two libraries are one crossing; the label kept is the least,
+    so the result does not depend on which arrived first.
+    """
+    if not src:
+        return
+    key = f"{src}|{kind.value}|{callee}"
+    crossing = crossings.get(key)
+    if crossing is None:
+        crossing = Crossing(src=NodeId(src), callee=callee, kind=kind, label=label)
+        crossings[key] = crossing
+    elif label < crossing.label:
+        crossing.label = label
+    for location in locations:
+        if location not in crossing.locations:
+            crossing.locations.append(location)
+
+
 def _qualified_name(cursor: ci.Cursor) -> str:
     # Every component is normalized, not just the cursor's own: a field of an anonymous
     # union is named through the union, so the leak reaches members that have perfectly
@@ -927,6 +1240,10 @@ class TuExtract:
     that depends on the others. `aliases` is the shape of that boundary: instantiation USR
     → the template it came from, offered to the builder rather than applied here, because
     whether an entity needs the alias depends on the merged node set.
+
+    `targets` has the same shape for the same reason: every in-model edge target's qualified
+    name and `fallback_label`, which the builder needs only if the edge stays unresolved and
+    becomes a crossing. `crossings` are the relations this TU already saw leave the model.
     """
 
     path: str
@@ -938,6 +1255,8 @@ class TuExtract:
     #: kind). A set, so a header seen through two include paths counts once. Reserved and not
     #: yet filled: the cache stores it already, so filling it changes no entry format.
     unmodelled: set[tuple[str, int, int, str]] = field(default_factory=set)
+    crossings: dict[str, Crossing] = field(default_factory=dict)
+    targets: dict[str, tuple[str, str]] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -945,10 +1264,28 @@ class TuExtract:
 
 
 class _Extractor:
-    def __init__(self, root: Path, base: Path, toolchain: Toolchain, tu: str) -> None:
+    def __init__(
+        self,
+        root: Path,
+        base: Path,
+        toolchain: Toolchain,
+        tu: str,
+        boundary: Boundary = NO_BOUNDARY,
+        dirs: tuple[Path, ...] = (),
+    ) -> None:
         self.root = root
         self.base = base
         self.toolchain = toolchain
+        self.boundary = boundary
+        #: This TU's header search directories (`search_dirs`), for naming libraries.
+        self.dirs = dirs
+        self.arch = multiarch(toolchain.target)
+        #: File name → where it lies, None for a file the model covers. Asked per cursor.
+        self._outside_memo: dict[str, str | None] = {}
+        self.crossings: dict[str, Crossing] = {}
+        self.targets: dict[str, tuple[str, str]] = {}
+        #: USR → qualified name, for every target `relate` has named.
+        self._names: dict[str, str] = {}
         #: This TU's own primary source, repo-relative -- the same form `_location` produces,
         #: so `_defining_tu` compares like with like rather than a path against a path shape.
         self.tu = tu
@@ -996,6 +1333,72 @@ class _Extractor:
             return None
         return self.tu
 
+    def outside(self, file_name: str) -> str | None:
+        """The crossing label for a file outside the model, or None if the model covers it.
+
+        Outside the repository, the library's name; under a third-party path, that path
+        (ADR-025), which wins over `untracked` for a submodule's files; a file git does not
+        track at this revision, `untracked` (ADR-037).
+        """
+        if file_name in self._outside_memo:
+            return self._outside_memo[file_name]
+        relative = _relative(file_name, self.root, self.base)
+        label: str | None
+        if relative is None:
+            label = library_label(
+                file_name, self.base, self.dirs, self.toolchain.builtin_dir, self.arch
+            )
+        elif owner := third_party_owner(relative, self.boundary.third_party):
+            label = owner
+        elif self.boundary.tracked is not None and relative not in self.boundary.tracked:
+            label = UNTRACKED
+        else:
+            label = None
+        self._outside_memo[file_name] = label
+        return label
+
+    def relate(
+        self,
+        src: str,
+        target: ci.Cursor,
+        kind: EdgeKind,
+        location: Location | None,
+        **attrs: AttrValue,
+    ) -> None:
+        """An edge to `target`, or a crossing if `target` is declared outside the model.
+
+        The label is known here, from the declaration's file, so nothing guesses it later
+        (ADR-025). A target inside the model gets an edge and a `targets` entry, which
+        the builder turns into a crossing only if no node answers the edge.
+        """
+        usr = target.get_usr()
+        if not usr:
+            return
+        file = target.location.file
+        label = self.outside(file.name) if file is not None else None
+        if label is not None:
+            merge_crossing(
+                self.crossings,
+                src,
+                self._name(target, usr),
+                kind,
+                label,
+                () if location is None else (location,),
+            )
+            return
+        self.note_alias(target, usr)
+        if usr not in self.targets:
+            self.targets[usr] = (self._name(target, usr), fallback_label(target, usr))
+        self.add_edge(src, usr, kind, location, **attrs)
+
+    def _name(self, cursor: ci.Cursor, usr: str) -> str:
+        """`_qualified_name`, once per USR per TU: it walks every ancestor, and a target is
+        met once per call site (ARCH-001 §9's budget is spent here)."""
+        name = self._names.get(usr)
+        if name is None:
+            name = self._names[usr] = _qualified_name(cursor)
+        return name
+
     def note_alias(self, cursor: ci.Cursor, usr: str) -> None:
         """Record `usr` as a possible instantiation of a template the builder may know."""
         if usr in self.aliases:
@@ -1021,15 +1424,16 @@ class _Extractor:
     # -- traversal ------------------------------------------------------------
 
     def visit(self, cursor: ci.Cursor) -> None:
-        """Descend the declaration structure, pruning anything outside the repository.
+        """Descend the declaration structure, pruning anything outside the model.
 
-        Pruning by the cursor's own file is what keeps a TU's cost proportional to the
-        project rather than to libstdc++. It is safe even for namespaces reopened across
-        headers: each reopening is a separate cursor with its own location.
+        Outside the model is outside the repository or inside a third-party directory
+        (ADR-025). Pruning by the cursor's own file is what keeps a TU's cost proportional
+        to the project rather than to libstdc++. It is safe even for namespaces reopened
+        across headers: each reopening is a separate cursor with its own location.
         """
         for child in cursor.get_children():
             file = child.location.file
-            if file is not None and _relative(file.name, self.root, self.base) is None:
+            if file is not None and self.outside(file.name) is not None:
                 continue
             self.visit_declaration(child)
 
@@ -1068,9 +1472,9 @@ class _Extractor:
             self.add_edge(parent_usr, usr, EdgeKind.CONTAINS, None)
 
         if cursor.kind in CALLABLE_KINDS:
-            for base_usr in overridden_usrs(cursor):
-                self.add_edge(
-                    usr, base_usr, EdgeKind.OVERRIDES, _location(cursor, self.root, self.base)
+            for overridden in overridden_cursors(cursor):
+                self.relate(
+                    usr, overridden, EdgeKind.OVERRIDES, _location(cursor, self.root, self.base)
                 )
             if cursor.is_definition():
                 self.visit_body(cursor, usr)
@@ -1088,11 +1492,9 @@ class _Extractor:
                 base = child.referenced
                 if base is not None:
                     # The base specifier's own USR is empty; identity is the base's.
-                    base_usr = base.get_usr()
-                    self.note_alias(base, base_usr)
-                    self.add_edge(
+                    self.relate(
                         usr,
-                        base_usr,
+                        base,
                         EdgeKind.INHERITS,
                         _location(child, self.root, self.base),
                         access=_access(child) or "private",
@@ -1113,11 +1515,9 @@ class _Extractor:
             callee = node.referenced
             if callee is None or callee.kind not in CALLABLE_KINDS:
                 continue
-            callee_usr = callee.get_usr()
-            self.note_alias(callee, callee_usr)
-            self.add_edge(
+            self.relate(
                 usr,
-                callee_usr,
+                callee,
                 EdgeKind.CALLS,
                 _location(node, self.root, self.base),
                 virtual=callee.is_virtual_method()
@@ -1132,8 +1532,13 @@ def extract(
     root: Path,
     toolchain: Toolchain,
     index: ci.Index | None = None,
+    boundary: Boundary = NO_BOUNDARY,
 ) -> TuExtract:
     """Parse one translation unit into a partial model.
+
+    `boundary` says what inside the repository is not modelled: third-party paths (ADR-025)
+    and untracked files (ADR-037). Relations into them, and out of the repository, are
+    crossings.
 
     Never raises for a bad translation unit: a TU that cannot be parsed is recorded as a
     `TuResult` and carried into `Completeness` (ARCH-001 §4.4, §11). One unparseable file
@@ -1167,7 +1572,9 @@ def extract(
             ),
         )
 
-    extractor = _Extractor(root, entry.directory, toolchain, relative)
+    extractor = _Extractor(
+        root, entry.directory, toolchain, relative, boundary, search_dirs(entry, toolchain)
+    )
     extractor.visit(tu.cursor)
     return TuExtract(
         path=relative,
@@ -1175,4 +1582,6 @@ def extract(
         nodes=extractor.nodes,
         edges=extractor.edges,
         aliases=extractor.aliases,
+        crossings=extractor.crossings,
+        targets=extractor.targets,
     )

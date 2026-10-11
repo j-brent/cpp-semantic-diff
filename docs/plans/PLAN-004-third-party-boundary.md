@@ -198,6 +198,28 @@ Each step is one commit, and the suite passes after each one.
 4. **Extraction boundary and crossings.** Prune, skip third-party TUs, record crossings, assign
    `implicit`, add the set to the cache key. Tests: a fixture with a declared library yields no
    nodes from it and labeled crossings into it; changing the set invalidates the cache.
+   **Built.** Decided 2026-10-11:
+   - Unresolved in-repository targets are labelled from what the extractor saw: `implicit`
+     (special members clang generated), `function-local` (members of lambdas and local
+     classes), `template instantiation`, `compiler builtins`, `unresolved` for the rest. The
+     builder uses the label only if the edge stays unresolved.
+   - A crossing is (caller, callee qualified name, kind, label, sites). A crossing whose
+     caller is no node is dropped and counted under its label.
+     `Completeness.crossings_by_label` itemizes `edges_dropped`, and `edges_total` is resolved
+     edges plus crossings. `Model.crossings` and the counts are in the model now. The JSON gets
+     them in step 6.
+   - Untracked files come from `git ls-tree` at each revision. The cache key records whether
+     each repository header the TU reads is tracked
+     ([ADR-037](../adr/ADR-037-only-tracked-files-are-modelled.md)). An untracked TU source is
+     still parsed.
+   - Libraries outside the repository are named from the header's path. The search directories
+     are the TU's `-I`/`-isystem`/`-iquote`/`-idirafter`, the builtin header directory the
+     toolchain probe found, `/usr/local/include` and `/usr/include`, with the multiarch
+     subdirectory skipped. None are discovered from the compiler.
+   - The cache entry format is 2, once for all of v0.
+
+   On §5's ranges, the first-party change events equal the baseline's. The three spdlog
+   `EdgeRemoved` into bundled fmt are now crossings.
 5. **Remove vendored from ranking and rendering.** Tests in `test_rank.py` and `test_render.py`
    that assert the partition are deleted or rewritten, not loosened.
 6. **Schema 2.0 and the demo.** Add `--third-party test/gtest` for fmt and

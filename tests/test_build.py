@@ -20,12 +20,22 @@ from typing import ClassVar
 
 import pytest
 
+from cpp_semantic_diff.acquire.third_party import (
+    ThirdPartyEntry,
+    ThirdPartySet,
+    ThirdPartySource,
+)
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileDatabase
-from cpp_semantic_diff.errors import PreconditionError
-from cpp_semantic_diff.model.ir import EdgeKind, Model, Node, TuStatus
+from cpp_semantic_diff.classify import classify_events
+from cpp_semantic_diff.diff import diff_models
+from cpp_semantic_diff.errors import PreconditionError, SemanticDiffError
+from cpp_semantic_diff.match import match_models
+from cpp_semantic_diff.model.ir import Crossing, EdgeKind, Model, Node, TuStatus
 from cpp_semantic_diff.produce.build import assemble, build_model, tu_extracts
+from cpp_semantic_diff.produce.cache import TuCache
 from cpp_semantic_diff.produce.extract import LIBCLANG_LIMITS
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
+from cpp_semantic_diff.rank import rank_events
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
@@ -453,3 +463,258 @@ class TestAssemblyIsSeparableFromParsing:
         first = assemble(REV, partials, toolchain=toolchain)
         second = assemble(REV, partials, toolchain=toolchain)
         assert first.model_dump() == second.model_dump()
+
+
+def declared(*paths: str) -> ThirdPartySet:
+    return ThirdPartySet(
+        entries=tuple(
+            ThirdPartyEntry(path=p, sources=frozenset({ThirdPartySource.DECLARED})) for p in paths
+        )
+    )
+
+
+class TestThirdPartyCodeIsOutsideTheModel:
+    """ADR-025: a declared library is parsed where the project includes it, and never modelled.
+
+    Its headers are pruned like the standard library's, and its own translation units are not
+    parsed at all, with a note saying how many were left out.
+    """
+
+    SOURCES: ClassVar[dict[str, str]] = {
+        "vendor/lib.h": (
+            "namespace lib { int f(); struct Base { virtual ~Base(); virtual void run(); }; }\n"
+        ),
+        "vendor/lib.cpp": '#include "lib.h"\nnamespace lib { int f() { return 1; } }\n',
+        "a.cpp": (
+            '#include "vendor/lib.h"\n'
+            "struct App : lib::Base { void run() override; };\n"
+            "int a() { return lib::f(); }\n"
+        ),
+    }
+
+    def checkout(self, tmp_path: Path) -> Checkout:
+        (tmp_path / "vendor").mkdir()
+        return project(tmp_path, self.SOURCES, ("vendor/lib.cpp", "a.cpp"))
+
+    def build(self, tmp_path: Path, toolchain: Toolchain, *paths: str) -> Model:
+        return build_model(
+            self.checkout(tmp_path), toolchain=toolchain, cache=False, third_party=declared(*paths)
+        )
+
+    def test_without_the_set_the_library_is_modelled(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        assert named(self.build(tmp_path, toolchain), "lib::f")
+
+    def test_relations_into_it_are_crossings_labelled_with_its_path(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Calls, bases and overrides into the library are recorded where extraction meets
+        them, with the label known at that moment."""
+        model = self.build(tmp_path, toolchain, "vendor")
+        assert {(c.kind, c.callee, c.label) for c in model.crossings} == {
+            (EdgeKind.CALLS, "lib::f", "vendor"),
+            (EdgeKind.INHERITS, "lib::Base", "vendor"),
+            (EdgeKind.OVERRIDES, "lib::Base::run", "vendor"),
+        }
+        assert all(c.src in model.nodes for c in model.crossings)
+        assert model.completeness.crossings_by_label == {"vendor": 3}
+        assert not any("@N@lib" in e.dst for e in model.edges)
+
+    def test_a_cache_opened_with_another_boundary_is_refused(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The cache parses its misses with its own boundary and keys entries by it, so one
+        opened without the set would put the library back and store it as if it were absent."""
+        checkout = self.checkout(tmp_path)
+        cache = TuCache.open(checkout, toolchain=toolchain, store=tmp_path / "store")
+        with pytest.raises(SemanticDiffError, match="different third-party set"):
+            build_model(checkout, toolchain=toolchain, cache=cache, third_party=declared("vendor"))
+
+    def test_a_declared_library_yields_no_nodes(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        model = self.build(tmp_path, toolchain, "vendor")
+        files = {n.location.file for n in model.nodes.values() if n.location is not None}
+        assert files == {"a.cpp"}
+        assert named(model, "a")
+
+    def test_its_translation_units_are_not_parsed_and_the_count_is_noted(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        model = self.build(tmp_path, toolchain, "vendor")
+        assert [t.path for t in model.completeness.tus] == ["a.cpp"]
+        assert (
+            "1 of 2 C++ compile-database entries are third-party and were not parsed"
+            in model.completeness.notes
+        )
+
+    def test_a_path_that_only_shares_a_prefix_is_modelled(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """`vend` covers `vend/...`, not `vendor/lib.h`."""
+        assert named(self.build(tmp_path, toolchain, "vend"), "lib::f")
+
+
+class TestUntrackedFilesAreOutsideTheModel:
+    """ADR-037: only what git tracks at the revision is modelled. A generated header in the
+    build directory, say, is parsed where it is included and never becomes first-party code."""
+
+    SOURCES: ClassVar[dict[str, str]] = {
+        "gen.h": "namespace gen { int value(); }\n",
+        "a.cpp": '#include "gen.h"\nint a() { return gen::value(); }\n',
+    }
+
+    def test_an_untracked_header_yields_no_nodes_and_an_untracked_crossing(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        checkout = project(tmp_path, self.SOURCES, ("a.cpp",))
+        model = build_model(
+            checkout, toolchain=toolchain, cache=False, tracked=frozenset({"a.cpp"})
+        )
+        assert not named(model, "gen::value")
+        assert [(c.callee, c.label) for c in model.crossings] == [("gen::value", "untracked")]
+
+    def test_a_tracked_header_is_modelled(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        checkout = project(tmp_path, self.SOURCES, ("a.cpp",))
+        model = build_model(
+            checkout, toolchain=toolchain, cache=False, tracked=frozenset({"a.cpp", "gen.h"})
+        )
+        assert named(model, "gen::value")
+        assert model.crossings == []
+
+    def test_a_third_party_path_wins_over_untracked(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """A submodule's files are not tracked by the superproject, and are labelled with the
+        submodule's path, not `untracked`."""
+        (tmp_path / "sub").mkdir()
+        checkout = project(
+            tmp_path,
+            {
+                "sub/lib.h": "namespace sub { int f(); }\n",
+                "a.cpp": '#include "sub/lib.h"\nint a() { return sub::f(); }\n',
+            },
+            ("a.cpp",),
+        )
+        model = build_model(
+            checkout,
+            toolchain=toolchain,
+            cache=False,
+            third_party=declared("sub"),
+            tracked=frozenset({"a.cpp", "sub"}),
+        )
+        assert [(c.callee, c.label) for c in model.crossings] == [("sub::f", "sub")]
+
+
+class TestCrossingLabels:
+    """Where a crossing leads (ADR-025). Outside the repository, the library is named
+    from the header's path; inside it, a target no declaration produced is labelled with what
+    the extractor saw it was (step 1 report §3)."""
+
+    SOURCE = r"""
+#include <stdlib.h>
+#include <vector>
+struct S { virtual ~S() = default; };
+template <class T> struct B { template <class U> void ap(U) {} };
+void implicit_member() { S s; (void)s; }
+int lambda_member() { auto f = [] { return 1; }; return f(); }
+int local_class_member() { struct L { int f() { return 1; } }; return L().f(); }
+void member_template() { B<int> b; b.ap(1); }
+int c_library() { return abs(-1); }
+int builtin() { return __builtin_abs(-2); }
+unsigned long standard_library() { std::vector<int> v; return v.size(); }
+"""
+
+    @pytest.fixture(scope="class")
+    def crossings(
+        self, tmp_path_factory: pytest.TempPathFactory
+    ) -> dict[str, set[tuple[str, str]]]:
+        toolchain = load()
+        tmp_path = tmp_path_factory.mktemp("labels")
+        model = build_model(
+            project(tmp_path, {"a.cpp": self.SOURCE}, ("a.cpp",)), toolchain=toolchain, cache=False
+        )
+        by_caller: dict[str, set[tuple[str, str]]] = {}
+        for c in model.crossings:
+            by_caller.setdefault(model.nodes[c.src].name, set()).add((c.callee, c.label))
+        return by_caller
+
+    def test_an_implicit_special_member_is_implicit(
+        self, crossings: dict[str, set[tuple[str, str]]]
+    ) -> None:
+        assert crossings["implicit_member"] == {("S::S", "implicit")}
+
+    def test_members_of_lambdas_and_local_classes_are_function_local(
+        self, crossings: dict[str, set[tuple[str, str]]]
+    ) -> None:
+        assert ("lambda_member::(lambda)::operator()", "function-local") in crossings[
+            "lambda_member"
+        ]
+        assert ("local_class_member::L::f", "function-local") in crossings["local_class_member"]
+
+    def test_an_instantiation_whose_template_is_no_node(
+        self, crossings: dict[str, set[tuple[str, str]]]
+    ) -> None:
+        assert ("B::ap", "template instantiation") in crossings["member_template"]
+
+    def test_libraries_outside_the_repository_are_named(
+        self, crossings: dict[str, set[tuple[str, str]]]
+    ) -> None:
+        assert crossings["c_library"] == {("abs", "C library")}
+        assert crossings["builtin"] == {("__builtin_abs", "compiler builtins")}
+        assert ("std::vector::size", "C++ standard library") in crossings["standard_library"]
+
+    def test_counts_are_per_label_and_total_the_dropped_edges(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        model = build_model(
+            project(tmp_path, {"a.cpp": self.SOURCE}, ("a.cpp",)), toolchain=toolchain, cache=False
+        )
+        c = model.completeness
+        assert sum(c.crossings_by_label.values()) == c.edges_dropped == len(model.crossings)
+        assert c.edges_total == len(model.edges) + c.edges_dropped
+
+
+class TestNothingDownstreamReadsCrossings:
+    """Crossings are for visualization. Adding or removing them leaves the
+    change events and the ranking identical."""
+
+    BASE: ClassVar[dict[str, str]] = {
+        "a.cpp": "#include <stdlib.h>\nint a() { return abs(1); }\nint b() { return a(); }\n",
+    }
+    HEAD: ClassVar[dict[str, str]] = {
+        "a.cpp": "#include <stdlib.h>\nint a() { return abs(2) + 1; }\nint b() { return 0; }\n",
+    }
+
+    def pipeline(self, base: Model, head: Model) -> tuple[object, object]:
+        correspondence = match_models(base, head)
+        events = classify_events(
+            diff_models(base, head, correspondence), base, head, correspondence
+        )
+        ranking = rank_events(events, base, head)
+        return [e.model_dump() for e in events], ranking.model_dump()
+
+    def test_crossings_change_neither_events_nor_ranking(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        (tmp_path / "base").mkdir()
+        (tmp_path / "head").mkdir()
+        base = build_model(
+            project(tmp_path / "base", self.BASE, ("a.cpp",)), toolchain=toolchain, cache=False
+        )
+        head = build_model(
+            project(tmp_path / "head", self.HEAD, ("a.cpp",)), toolchain=toolchain, cache=False
+        )
+        assert base.crossings and head.crossings
+        expected = self.pipeline(base, head)
+
+        def without(model: Model) -> Model:
+            return model.model_copy(update={"crossings": []})
+
+        def with_more(model: Model) -> Model:
+            extra = Crossing(
+                src=next(iter(model.nodes)), callee="x::y", kind=EdgeKind.CALLS, label="x"
+            )
+            return model.model_copy(update={"crossings": [*model.crossings, extra]})
+
+        assert self.pipeline(without(base), without(head)) == expected
+        assert self.pipeline(with_more(base), with_more(head)) == expected

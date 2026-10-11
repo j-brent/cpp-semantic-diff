@@ -155,6 +155,17 @@ def run_git_raw(repo: Path, *args: str) -> tuple[str, str]:
     return proc.stdout, proc.stderr
 
 
+def tracked_files(repo: Path, rev: str) -> frozenset[str]:
+    """Every path git tracks at `rev`, repository-relative (ADR-037).
+
+    Read from the commit's tree, not from a worktree's index, so the answer is a function of
+    the revision alone. A submodule is one entry, its gitlink: the superproject tracks
+    nothing inside it, and extraction labels those files with the submodule's path first.
+    """
+    fields, _ = run_git_z(repo, "ls-tree", "-r", "-z", "--name-only", "--full-tree", rev)
+    return frozenset(fields)
+
+
 def is_git_repository(repo: Path) -> bool:
     """Whether `repo` is inside a work tree. A missing git raises rather than answering no."""
     try:
