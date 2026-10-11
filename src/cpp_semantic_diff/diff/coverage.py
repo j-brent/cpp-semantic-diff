@@ -51,6 +51,9 @@ class Coverage:
     #: Lines, on either side, carrying at least one changed token. A deleted line and the
     #: line that replaced it are two.
     changed_lines: int = 0
+    #: Every changed token is exactly one of explained, uncovered or moved.
+    changed_tokens: int = 0
+    explained_tokens: int = 0
     uncovered_lines: int = 0
     uncovered_tokens: int = 0
     #: Changed tokens in a block that was deleted in one place and inserted, token for token,
@@ -58,6 +61,8 @@ class Coverage:
     moved_tokens: int = 0
     files: tuple[UncoveredFile, ...] = ()
     excluded_files: tuple[ExcludedFile, ...] = ()
+    #: False when git cut rename detection short for the text diff (`TokenDelta.rename_limit`).
+    renames_complete: bool = True
 
 
 def _moved(runs: Sequence[TokenRun]) -> set[int]:
@@ -124,7 +129,7 @@ def measure_coverage(delta: TokenDelta, events: Iterable[ChangeEvent]) -> Covera
 
     changed: set[tuple[Side, str, int]] = set()
     uncovered: dict[tuple[Side, str], dict[int, int]] = defaultdict(lambda: defaultdict(int))
-    moved_tokens = 0
+    moved_tokens = explained_tokens = 0
     for i, run in enumerate(runs):
         for token in run.tokens:
             changed.add((run.side, run.file, token.line))
@@ -132,7 +137,9 @@ def measure_coverage(delta: TokenDelta, events: Iterable[ChangeEvent]) -> Covera
             moved_tokens += len(run.tokens)
             continue
         for token in run.tokens:
-            if not spans.contains(run.side, run.file, token.line):
+            if spans.contains(run.side, run.file, token.line):
+                explained_tokens += 1
+            else:
                 uncovered[(run.side, run.file)][token.line] += 1
 
     files = tuple(
@@ -141,9 +148,12 @@ def measure_coverage(delta: TokenDelta, events: Iterable[ChangeEvent]) -> Covera
     )
     return Coverage(
         changed_lines=len(changed),
+        changed_tokens=sum(len(run.tokens) for run in runs),
+        explained_tokens=explained_tokens,
         uncovered_lines=sum(len(f.lines) for f in files),
         uncovered_tokens=sum(f.tokens for f in files),
         moved_tokens=moved_tokens,
         files=files,
         excluded_files=delta.excluded_files,
+        renames_complete=delta.rename_limit is None,
     )

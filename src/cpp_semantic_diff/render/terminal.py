@@ -278,6 +278,11 @@ def _uncovered(document: DiffDocument, console: Console) -> None:
         )
     if len(by_size) > 5:
         console.print(f"  [dim]  … {len(by_size) - 5} more file(s) in the JSON[/]")
+    if not report.renames_complete:
+        console.print(
+            "  [yellow]  git skipped inexact rename detection for this count: a file renamed "
+            "and edited counts as wholly changed[/]"
+        )
     for excluded in report.excluded_files:
         console.print(
             f"  [dim]  not compared: {escape(excluded.path)} ({escape(excluded.reason)})[/]"

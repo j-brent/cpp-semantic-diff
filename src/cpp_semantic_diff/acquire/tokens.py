@@ -28,7 +28,13 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path, PurePosixPath
 
-from cpp_semantic_diff.acquire.git import RevPair, resolve_rename_similarity, run_git_raw
+from cpp_semantic_diff.acquire.git import (
+    RenameLimitHit,
+    RevPair,
+    rename_limit_hit,
+    resolve_rename_similarity,
+    run_git_raw,
+)
 from cpp_semantic_diff.errors import GitError
 from cpp_semantic_diff.model.events import Side
 
@@ -62,7 +68,7 @@ class Token:
 #: change for the model to explain.
 _LEXEME = re.compile(
     r"""
-    (?P<space> [ \t\v\f\n]+ | \\\n )
+    (?P<space> [ \t\v\f\r\n]+ | \\\n )
   | (?P<comment> //(?:[^\n\\]|\\.)* | /\*.*?(?:\*/|\Z) )
   | (?P<raw> (?:u8|u|U|L)?R"(?P<delim>[^ ()\\\t\v\f\n"]{0,16})\(.*?\)(?P=delim)" )
   | (?P<string> (?:u8|u|U|L)?"(?:[^"\\\n]|\\.)*" )
@@ -393,6 +399,10 @@ class TokenDelta:
 
     runs: tuple[TokenRun, ...] = ()
     excluded_files: tuple[ExcludedFile, ...] = ()
+    #: Set when git skipped inexact rename detection for this diff, so a file renamed and
+    #: edited was compared as a deletion plus an addition and all of its tokens count as
+    #: changed. The same detection `file_changes` applies (ARCH-001 §11, rule 2).
+    rename_limit: RenameLimitHit | None = None
 
 
 def _pathspecs() -> list[str]:
@@ -401,7 +411,7 @@ def _pathspecs() -> list[str]:
     return [f":(glob,icase)**/*{suffix}" for suffix in sorted(CPP_SUFFIXES)]
 
 
-def _patch(repo: Path, revs: RevPair, similarity: int) -> str:
+def _patch(repo: Path, revs: RevPair, similarity: int) -> tuple[str, str]:
     """`git diff -U0` over the C++ files, independent of whoever's git config it runs under.
 
     Every flag answers a setting that would otherwise change the output: rename detection is
@@ -409,6 +419,8 @@ def _patch(repo: Path, revs: RevPair, similarity: int) -> str:
     old self here exactly when the matcher was told it was renamed; external diff drivers
     and textconv filters are off, so the patch is of the bytes in the repository; prefixes
     and quoting are fixed, so paths parse; `--full-index` gives blob ids `cat-file` can read.
+    Stderr is returned with the patch, because it is the only place git says it cut rename
+    detection short.
     """
     return run_git_raw(
         repo,
@@ -467,9 +479,10 @@ def read_blobs(repo: Path, oids: Iterable[str]) -> dict[str, bytes]:
 
 def token_delta(repo: Path, revs: RevPair, *, rename_similarity: int | None = None) -> TokenDelta:
     """The changed tokens of every C++ file the comparison touched."""
+    patch, stderr = _patch(repo, revs, resolve_rename_similarity(rename_similarity))
     patches = [
         p
-        for p in parse_patch(_patch(repo, revs, resolve_rename_similarity(rename_similarity)))
+        for p in parse_patch(patch)
         if any(path is not None and is_cpp(path) for path in (p.old_path, p.new_path))
     ]
     excluded = tuple(ExcludedFile(p.path, "binary") for p in patches if p.binary)
@@ -482,4 +495,6 @@ def token_delta(repo: Path, revs: RevPair, *, rename_similarity: int | None = No
         old = decode(blobs[p.old_blob]) if p.old_blob is not None else ""
         new = decode(blobs[p.new_blob]) if p.new_blob is not None else ""
         runs.extend(changed_runs(p.old_path, old, p.new_path, new, p.hunks))
-    return TokenDelta(runs=tuple(runs), excluded_files=excluded)
+    return TokenDelta(
+        runs=tuple(runs), excluded_files=excluded, rename_limit=rename_limit_hit(stderr)
+    )

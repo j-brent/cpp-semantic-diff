@@ -243,6 +243,7 @@ def _uncovered(coverage: Coverage | None) -> UncoveredReport | None:
             for f in coverage.files
         ],
         moved_tokens=coverage.moved_tokens,
+        renames_complete=coverage.renames_complete,
         excluded_files=[
             ExcludedFile(path=e.path, reason=e.reason) for e in coverage.excluded_files
         ],

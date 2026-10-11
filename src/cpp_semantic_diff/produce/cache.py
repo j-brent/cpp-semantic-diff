@@ -399,6 +399,11 @@ def dumps(partial: TuExtract) -> bytes:
     return gzip.compress(json.dumps(payload).encode(), compresslevel=1)
 
 
+def _require(raw: dict[str, object], key: str) -> None:
+    if key not in raw:
+        raise ValueError(f"entry lacks {key!r}; written by a different producer")
+
+
 def loads(blob: bytes) -> TuExtract:
     """Rebuild a partial model. Raises on anything it does not fully understand."""
     payload = json.loads(gzip.decompress(blob))
@@ -407,6 +412,15 @@ def loads(blob: bytes) -> TuExtract:
 
     nodes: dict[NodeId, Node] = {}
     for raw in payload["nodes"]:
+        # Fields with a default are still required here. The model would fill a missing one
+        # in, and an entry written by another build of the same format number -- a branch that
+        # stored less -- would then load as a partial claiming no sites, which is stale data
+        # served as a hit. `dumps` always writes every field, so a missing one means the entry
+        # is not ours.
+        _require(raw, "sites")
+        for location in (raw["location"], *raw["sites"]):
+            if location is not None:
+                _require(location, "start_line")
         node = Node.model_validate(raw)
         nodes[node.id] = node
     edges: dict[str, Edge] = {}

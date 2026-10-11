@@ -626,6 +626,12 @@ def test_no_change_in_the_catalog_is_silent(
     coverage = measure_coverage(delta, events)
     if delta.runs:
         assert events or coverage.uncovered_tokens or coverage.moved_tokens
+    # Every changed token is accounted for exactly once.
+    assert coverage.changed_tokens == sum(len(run.tokens) for run in delta.runs)
+    assert (
+        coverage.explained_tokens + coverage.uncovered_tokens + coverage.moved_tokens
+        == coverage.changed_tokens
+    )
 
 
 # -- The vocabulary discriminates -------------------------------------------------------------

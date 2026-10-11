@@ -447,12 +447,18 @@ def _location(cursor: ci.Cursor, root: Path, base: Path) -> Location | None:
     if relative is None:
         return None
     extent = cursor.extent
+    start = extent.start
+    # Only an extent that starts in the same file as the name says where the declaration's
+    # text starts. One that begins in another file -- a declaration whose first tokens come
+    # from a macro defined elsewhere -- carries that file's line number, and applied here it
+    # would widen the span over unrelated lines and count their changes as explained.
+    same_file = start.file is not None and start.file.name == cursor.location.file.name
     return Location(
         file=relative,
         line=cursor.location.line,
         end_line=extent.end.line,
         column=cursor.location.column,
-        start_line=extent.start.line,
+        start_line=start.line if same_file else None,
     )
 
 
@@ -786,10 +792,15 @@ def merge_node(nodes: dict[NodeId, Node], node: Node) -> None:
     if existing is None:
         nodes[node.id] = node
         return
-    sites = _union_sites(existing.sites, node.sites)
     # The overwhelmingly common case, and the reason ranking is affordable: the same header
     # declaration seen again through another include path or another TU. Many entities are seen
-    # by more than one TU, and very few of them are seen differently.
+    # by more than one TU, and very few of them are seen differently. Identical nodes have
+    # identical sites, so this one comparison settles it before any site is looked at; it runs
+    # millions of times on a real repository, and the field-by-field test below costs several
+    # times more.
+    if existing == node:
+        return
+    sites = _union_sites(existing.sites, node.sites)
     if _same_observation(existing, node):
         if sites is not existing.sites:
             nodes[node.id] = existing.model_copy(update={"sites": sites})

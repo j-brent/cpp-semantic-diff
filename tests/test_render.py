@@ -849,6 +849,7 @@ class TestTheGraphBoundaryIsStatedNumerically:
             moved_tokens=16,
             files=(UncoveredFile(Side.HEAD, "orphan.h", (3, 4), 9),),
             excluded_files=(ExcludedFile("blob.h", "binary"),),
+            renames_complete=False,
         )
         doc = build_document(
             repo="fixture",
@@ -873,6 +874,8 @@ class TestTheGraphBoundaryIsStatedNumerically:
         assert "orphan.h: 9 token(s) on 2 line(s)" in out
         assert "16 token(s) moved unchanged" in out
         assert "not compared: blob.h (binary)" in out
+        assert "skipped inexact rename detection for this count" in out
+        assert not again.completeness.uncovered.renames_complete
 
     def test_unmeasured_coverage_is_none_not_zero(self) -> None:
         """Zero would claim every change was explained."""

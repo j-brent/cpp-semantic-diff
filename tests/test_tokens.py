@@ -96,6 +96,9 @@ class TestLexing:
             ";",
         ]
 
+    def test_a_lone_carriage_return_is_whitespace(self) -> None:
+        assert texts("int x;\rint y;") == ["int", "x", ";", "int", "y", ";"]
+
     def test_crlf_is_not_a_change(self) -> None:
         assert decode(b"int x;\r\nint y;\r\n") == "int x;\nint y;\n"
 
@@ -256,6 +259,24 @@ class TestAskingGit:
         commit(bare_repo, "a.cpp", "int f()\r\n{\r\n    return 1; // one\r\n}\r\n", "B")
         commit(bare_repo, "notes.txt", "x = 1\n", "C")
         assert token_delta(bare_repo, self.revs(bare_repo, base)).runs == ()
+
+    def test_a_truncated_rename_map_is_recorded(self, bare_repo: Path) -> None:
+        """Git says so only on stderr; the count must not quietly differ from the rename map
+        the matcher was given."""
+        bodies = {
+            name: "".join(f"int {name}{i}() {{ return {i}; }}\n" for i in range(20))
+            for name in ("p", "q")
+        }
+        for name, body in bodies.items():
+            commit(bare_repo, f"{name}.cpp", body, name)
+        base = git(bare_repo, "rev-parse", "HEAD")
+        for name, body in bodies.items():
+            move(bare_repo, f"{name}.cpp", f"{name}2.cpp", "rename")
+            commit(bare_repo, f"{name}2.cpp", body + "int extra();\n", "edit")
+        revs = self.revs(bare_repo, base)
+        assert token_delta(bare_repo, revs).rename_limit is None
+        git(bare_repo, "config", "diff.renameLimit", "1")
+        assert token_delta(bare_repo, revs).rename_limit is not None
 
     def test_a_binary_file_is_excluded_by_name(self, bare_repo: Path) -> None:
         base = commit(bare_repo, "a.cpp", "int f();\n", "A")

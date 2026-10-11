@@ -334,6 +334,12 @@ class UncoveredReport(BaseModel):
         default_factory=list,
         description="Changed C++ files whose tokens were not compared, such as binary files.",
     )
+    renames_complete: bool = Field(
+        default=True,
+        description="False when git skipped inexact rename detection for the text diff, so a "
+        "file renamed and edited counts every token as changed. Detected separately from "
+        "`completeness.renames`, because this diff covers only C++ files and can differ.",
+    )
 
 
 class CompletenessBlock(BaseModel):

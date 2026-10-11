@@ -373,6 +373,19 @@ class TestDeclarationSpans:
         assert location is not None
         assert (location.start_line, location.line, location.end_line) == (1, 2, 2)
 
+    def test_an_extent_starting_in_another_file_is_not_used(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Its line number belongs to that other file; taken here it would widen the span
+        over unrelated lines and count their changes as explained."""
+        sources = {
+            "ret.h": "\n\n\n\n\n\n\n\nint\n",
+            "a.cpp": '#include "ret.h"\nf();\n',
+        }
+        location = named(run(tmp_path, toolchain, sources), "f").location
+        assert location is not None
+        assert (location.file, location.line, location.start_line) == ("a.cpp", 2, None)
+
 
 class TestMergingObservationsOfOneEdge:
     """The same rule as for nodes, and it was missing here.
