@@ -922,6 +922,17 @@ class TestTheGraphBoundaryIsStatedNumerically:
         assert "not compared: vendor/lib.cc (third-party)" in out
         assert "not compared: blob.bin (binary)" in out
 
+    def test_unmodelled_declarations_are_stated_per_side_and_never_a_warning(self) -> None:
+        counts = {"using_directive": 3, "friend": 12}
+        parsed = Completeness(
+            tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)], unmodelled=counts
+        )
+        doc = self._doc(parsed, parsed)
+        assert DiffDocument.from_json(doc.to_json()).completeness.head.unmodelled == counts
+        assert not doc.completeness.degraded
+        out = draw(doc)
+        assert "head 15 declaration(s) not modelled: 12 friend, 3 using_directive" in out
+
     def test_a_clean_model_does_not_claim_to_be_incomplete(self) -> None:
         doc = self._doc(
             Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)]),

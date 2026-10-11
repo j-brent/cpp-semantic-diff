@@ -253,8 +253,9 @@ how these systems rot.
 ### 4.4 Completeness record
 
 Every `Model` carries how it was built: TUs attempted, parsed, failed (with reasons); whether a
-build was available; which producers ran; producer version; and what the producer cannot see
-whatever the source (§11). This is not diagnostics — it is
+build was available; which producers ran; producer version; what the producer cannot see
+whatever the source (§11); and how many declarations in the repository's own files the model
+skips, counted by kind, each declaration once however many TUs saw it. This is not diagnostics — it is
 load-bearing input to §11.
 
 ---
