@@ -327,11 +327,30 @@ def _event(document: DiffDocument, node: CollapseNode, console: Console, *, dept
         f"{_subject(document, event.subject)}"
     )
 
+    _called_by(document, node.event_id, console, indent=indent)
+
     if depth == 0:
         _why(document, node, console, indent=indent)
 
     for child in node.children:
         _event(document, child, console, depth=depth + 1)
+
+
+def _called_by(
+    document: DiffDocument, event_id: ChangeEventId, console: Console, *, indent: str
+) -> None:
+    """The callers filed under a signature change (`DiffDocument.callers`), every one.
+
+    Those calls produce no change events of their own -- the edges map through the
+    correspondence -- so this line is the only place on the page that says where the
+    changed function is called.
+    """
+    callers = document.callers.get(event_id)
+    if not callers:
+        return
+    names = ", ".join(document.entity_name(c) for c in callers)
+    line = Text(f"{indent}       called by {len(callers)}: {names}", style="dim", no_wrap=False)
+    console.print(line)
 
 
 def _subject(document: DiffDocument, subject: AnyId) -> str:

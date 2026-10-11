@@ -20,7 +20,7 @@ decides what causes what.
    The rule is kept, marked `RuleStatus.UNREACHABLE`, because deleting it would lose the
    argument.
 
-2. `signature-change-breaks-callers` is dormant: "NodeAttrChanged(signature) causes
+2. `signature-change-breaks-callers` is dormant: "NodeSignatureChanged causes
    SignatureIncompatible on callers" is a correct rule about an event this pipeline does not
    yet emit. `SignatureIncompatible` is derived, §13 puts derived events out of v0, and
    `events.py` records their payloads as undesigned. **Classify links causes among events
@@ -85,9 +85,10 @@ class CauseRule:
     arch: str | None
     note: str
     cause_payload: Mapping[str, AttrValue] = field(default_factory=dict)
-    """Payload keys the cause event must carry. This is what lets §6.3's
-    `NodeAttrChanged(signature)` be a table entry rather than a special case in the driver:
-    the parenthesis in §6.3's prose is a payload filter, and it is spelled as one."""
+    """Payload keys the cause event must carry. This is what would let a §6.3 row written
+    as `NodeAttrChanged(<attr>)` be a table entry rather than a special case in the driver:
+    the parenthesis is a payload filter, and it is spelled as one. No row needs one today --
+    the signature, which did, has its own kind (ADR-035)."""
 
 
 # --------------------------------------------------------------------------------------
@@ -303,9 +304,8 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     ),
     CauseRule(
         name="signature-change-breaks-callers",
-        arch="§6.3: NodeAttrChanged(signature) causes SignatureIncompatible on callers",
-        cause=ChangeEventKind.NODE_ATTR_CHANGED,
-        cause_payload={"attr": "signature"},
+        arch="§6.3: NodeSignatureChanged(F) causes SignatureIncompatible on callers",
+        cause=ChangeEventKind.NODE_SIGNATURE_CHANGED,
         consequence=ChangeEventKind.SIGNATURE_INCOMPATIBLE,
         subjects=_callee_of,
         status=RuleStatus.DORMANT,

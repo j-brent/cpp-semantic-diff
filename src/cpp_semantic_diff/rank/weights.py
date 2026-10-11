@@ -149,6 +149,10 @@ NOVELTY_BY_KIND: dict[ChangeEventKind, float] = {
     # Also the fallback for an attribute `NOVELTY_BY_ATTR` does not name -- see below.
     ChangeEventKind.NODE_ATTR_CHANGED: 0.65,
     ChangeEventKind.NODE_BODY_CHANGED: 0.30,
+    # Level with a removal. Every caller compiled against the old signature, so a changed one
+    # can break code outside the diff exactly as a removal can -- it is §7's "signature"
+    # outranking body changes, at the top of the scale like `return_type` below.
+    ChangeEventKind.NODE_SIGNATURE_CHANGED: 1.00,
     ChangeEventKind.EDGE_REMOVED: 0.40,
     ChangeEventKind.EDGE_ADDED: 0.35,
     ChangeEventKind.EDGE_RETARGETED: 0.50,
@@ -179,11 +183,11 @@ NOVELTY_BY_KIND: dict[ChangeEventKind, float] = {
 #: signature changes the USR, which is tier-1 identity (§5), so the pair is never matched
 #: and the change surfaces as remove + add -- scored by `NOVELTY_BY_KIND`, not here.
 #:
-#: `return_type` is the part of the doc's intent that survives as a real attribute, and it
-#: is the interesting part: C++ cannot overload on return type, so the USR does *not*
-#: encode it, so a changed return type is a signature change that tier 1 matches straight
-#: through and this table is the only place that can weight it. `type` is the same fact for
-#: a field. Both are weighted at the top accordingly.
+#: `return_type` is the part of the doc's intent that survives as a real attribute. The
+#: signature spells it too, so a changed return type arrives as `NodeSignatureChanged` and
+#: the diff stage does not repeat it here (ADR-035); the weight covers the attribute where
+#: it does appear, and is kept level with `NodeSignatureChanged`. `type` is the same fact
+#: for a field. Both are weighted at the top accordingly.
 #:
 #: The remaining keys are listed whether or not ARCH names them, so that the table is a
 #: statement about the producer's output rather than about the doc's prose. An attribute

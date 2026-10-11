@@ -24,6 +24,7 @@ from cpp_semantic_diff.model.ir import (
     Completeness,
     Location,
     MatchTier,
+    NodeKind,
 )
 
 ChangeEventId = NewType("ChangeEventId", str)
@@ -44,6 +45,11 @@ class ChangeEventKind(StrEnum):
     NODE_RENAMED = "NodeRenamed"
     NODE_ATTR_CHANGED = "NodeAttrChanged"
     NODE_BODY_CHANGED = "NodeBodyChanged"
+    #: A function's or method's signature differs between two paired versions of it.
+    #: Its own kind rather than `NodeAttrChanged(signature)`: `signature` is a field of the
+    #: node (ARCH-001 §4.1), not an attribute, and a reviewer's question about it -- did
+    #: every caller follow? -- is not the question any attribute change raises (ADR-035).
+    NODE_SIGNATURE_CHANGED = "NodeSignatureChanged"
 
     # Edge
     EDGE_ADDED = "EdgeAdded"
@@ -77,6 +83,7 @@ NODE_KINDS: frozenset[ChangeEventKind] = frozenset(
         ChangeEventKind.NODE_RENAMED,
         ChangeEventKind.NODE_ATTR_CHANGED,
         ChangeEventKind.NODE_BODY_CHANGED,
+        ChangeEventKind.NODE_SIGNATURE_CHANGED,
     }
 )
 
@@ -92,7 +99,7 @@ EDGE_KINDS: frozenset[ChangeEventKind] = frozenset(
 
 DERIVED_KINDS: frozenset[ChangeEventKind] = frozenset(ChangeEventKind) - NODE_KINDS - EDGE_KINDS
 
-#: What v0 actually emits: ARCH-001 §13's "node add/remove/attr/body and edge
+#: What v0 actually emits: ARCH-001 §13's "node add/remove/attr/body/signature and edge
 #: add/remove/kind/attr". `EdgeKindChanged` and `EdgeAttrChanged` are reachable on tier-1
 #: input for one argument applied twice (§6.1, `diff/edges.py`) -- an edge's endpoints are
 #: identity and belong to the matcher, while its kind and its attrs are diffable state, so
@@ -111,6 +118,7 @@ V0_KINDS: frozenset[ChangeEventKind] = frozenset(
         ChangeEventKind.NODE_REMOVED,
         ChangeEventKind.NODE_ATTR_CHANGED,
         ChangeEventKind.NODE_BODY_CHANGED,
+        ChangeEventKind.NODE_SIGNATURE_CHANGED,
         ChangeEventKind.EDGE_ADDED,
         ChangeEventKind.EDGE_REMOVED,
         ChangeEventKind.EDGE_KIND_CHANGED,
@@ -122,6 +130,17 @@ V0_KINDS: frozenset[ChangeEventKind] = frozenset(
 #: amount of real v0 input can produce. A delta containing one of these means a later tier
 #: landed, or that some stage started inferring identity on its own.
 UNREACHABLE_IN_V0: frozenset[ChangeEventKind] = frozenset(ChangeEventKind) - V0_KINDS
+
+#: The node kinds a node change event can be about, for the kinds that cannot be about every
+#: node (ARCH-001 §6.1's applicability table; ADR-035). Only a function or a method has a
+#: signature or a code body: the producer leaves `signature` and `body_hash` empty for every
+#: other kind, and "methods" includes constructors, destructors and conversion operators,
+#: which the model classifies as methods. A kind absent here applies to every node kind.
+#: The diff stage reads this rather than trusting the producer to keep the fields empty.
+APPLIES_TO: dict[ChangeEventKind, frozenset[NodeKind]] = {
+    ChangeEventKind.NODE_SIGNATURE_CHANGED: frozenset({NodeKind.FUNCTION, NodeKind.METHOD}),
+    ChangeEventKind.NODE_BODY_CHANGED: frozenset({NodeKind.FUNCTION, NodeKind.METHOD}),
+}
 
 #: Payload keys a kind must carry, for the kinds ARCH-001 §6.1 names or directly implies.
 #: This is a floor, not a ceiling: a kind may carry more, but a consumer switching on the
@@ -136,6 +155,7 @@ REQUIRED_PAYLOAD: dict[ChangeEventKind, frozenset[str]] = {
     ChangeEventKind.NODE_RENAMED: frozenset({"old_name", "new_name"}),
     ChangeEventKind.NODE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
     ChangeEventKind.NODE_BODY_CHANGED: frozenset(),
+    ChangeEventKind.NODE_SIGNATURE_CHANGED: frozenset({"old_signature", "new_signature"}),
     ChangeEventKind.EDGE_ADDED: frozenset(),
     ChangeEventKind.EDGE_REMOVED: frozenset(),
     ChangeEventKind.EDGE_RETARGETED: frozenset({"old_dst", "new_dst"}),

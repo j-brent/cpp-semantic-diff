@@ -671,10 +671,10 @@ class TestTheRuleTableIsExplicit:
             node(N, name="ns", kind=NodeKind.NAMESPACE),
             node(C, name="C", kind=NodeKind.CLASS),
             node(M, name="m", kind=NodeKind.METHOD),
-            node(F, attrs={"signature": "void f()"}, body_hash="aaa"),
+            node(F, signature="void ()", body_hash="aaa"),
             edges=[holds(N, C), holds(C, M), edge(F, M)],
         )
-        head = model("b", node(F, attrs={"signature": "void f(int)"}, body_hash="bbb"))
+        head = model("b", node(F, signature="void (int)", body_hash="bbb"))
         live = {r.consequence for r in CAUSE_RULES if r.status is RuleStatus.ACTIVE}
         assert {e.kind for e in classify(base, head) if e.caused_by is not None} <= live
 
@@ -697,12 +697,15 @@ class TestTheDormantRulesAreImplementedNotPretended:
         assert {e.kind for e in classify(base, head)} & dormant == set()
 
     def test_a_signature_change_would_explain_an_incompatible_caller(self) -> None:
-        """§6.3's third rule. The payload filter in the table is what makes it *signature*
-        rather than any attribute -- a `virtual` flip does not break a caller's call site."""
+        """§6.3's third rule. The cause is `NodeSignatureChanged` and not any attribute
+        change -- a `virtual` flip does not break a caller's call site (ADR-035)."""
         head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
         events = [
             synthetic(
-                ChangeEventKind.NODE_ATTR_CHANGED, G, attr="signature", old="()", new="(int)"
+                ChangeEventKind.NODE_SIGNATURE_CHANGED,
+                G,
+                old_signature="void ()",
+                new_signature="void (int)",
             ),
             synthetic(ChangeEventKind.NODE_ATTR_CHANGED, G, attr="virtual", old=False, new=True),
             synthetic(ChangeEventKind.SIGNATURE_INCOMPATIBLE, F),
@@ -710,16 +713,14 @@ class TestTheDormantRulesAreImplementedNotPretended:
         corr = match_models(head, head)
         classified = classify_events(events, head, head, corr)
         cause = cause_of(classified, ChangeEventKind.SIGNATURE_INCOMPATIBLE, F)
-        assert cause is not None and cause.payload["attr"] == "signature"
+        assert cause is not None and cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
 
     def test_classify_does_not_synthesize_the_derived_event_itself(self) -> None:
         """The line this stage does not cross. §13 puts derived events out of v0 and
         `events.py` records their payloads as undesigned; a stage whose contract is
         relabeling must not put an event in the JSON that no stage owns."""
-        base = model("a", node(F), node(G, name="g", attrs={"signature": "()"}), edges=[edge(F, G)])
-        head = model(
-            "b", node(F), node(G, name="g", attrs={"signature": "(int)"}), edges=[edge(F, G)]
-        )
+        base = model("a", node(F), node(G, name="g", signature="void ()"), edges=[edge(F, G)])
+        head = model("b", node(F), node(G, name="g", signature="void (int)"), edges=[edge(F, G)])
         assert ChangeEventKind.SIGNATURE_INCOMPATIBLE not in {e.kind for e in classify(base, head)}
 
     def test_a_rename_would_explain_a_retargeted_edge(self) -> None:

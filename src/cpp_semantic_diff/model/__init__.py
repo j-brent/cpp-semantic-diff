@@ -1,4 +1,5 @@
 from cpp_semantic_diff.model.events import (
+    APPLIES_TO,
     DERIVED_KINDS,
     EDGE_KINDS,
     NODE_KINDS,
@@ -32,6 +33,7 @@ from cpp_semantic_diff.model.ir import (
 )
 
 __all__ = [
+    "APPLIES_TO",
     "DERIVED_KINDS",
     "EDGE_KINDS",
     "NODE_KINDS",

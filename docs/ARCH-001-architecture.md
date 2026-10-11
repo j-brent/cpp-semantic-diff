@@ -256,7 +256,26 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
 A closed, typed set. New signals become new change event kinds, never free-text.
 
 **Node** — `NodeAdded` · `NodeRemoved` · `NodeMoved` (parent changed) · `NodeRenamed` ·
-`NodeAttrChanged(attr, old, new)` · `NodeBodyChanged`
+`NodeAttrChanged(attr, old, new)` · `NodeBodyChanged` ·
+`NodeSignatureChanged(old_signature, new_signature)`
+
+Most node change events can happen to any kind of entity. Two cannot, and the set says which
+kinds they apply to rather than encoding it in their names
+([ADR-035](adr/ADR-035-signature-and-body-apply-to-functions.md)):
+
+| Change event | Applies to |
+|---|---|
+| `NodeSignatureChanged` | function, method |
+| `NodeBodyChanged` | function, method |
+| every other node change event | every node kind |
+
+"Method" includes constructors, destructors and conversion operators. The table is
+`APPLIES_TO` in `model/events.py`, and the diff stage reads it.
+
+`NodeSignatureChanged` is its own kind, not `NodeAttrChanged(signature)`, because the
+signature is a field of the node (§4.1), not an attribute. The signature spells the return
+type and a method's `const`, so where it changed, those two attributes are not also reported
+as `NodeAttrChanged`.
 
 **Edge** — `EdgeAdded` · `EdgeRemoved` · `EdgeRetargeted` · `EdgeKindChanged` ·
 `EdgeAttrChanged(attr, old, new)`
@@ -306,6 +325,14 @@ ChangeEvent
 direction the tool is a second disconnected artifact to read alongside the diff, which is a net
 increase in work.
 
+**A signature change carries its callers as evidence.** The call edges of a paired function map
+through the correspondence (§6.1), so a changed signature produces no edge change events, and
+nothing in the change event set says where the function is called. The output contract (§10)
+therefore lists, beside each `NodeSignatureChanged`, the head-side callers of its subject: the
+sources of its incoming `calls` edges at head. They are evidence attached to the change event,
+not change events, and they are a stopgap: derived change events for the callers replace them
+([ADR-035](adr/ADR-035-signature-and-body-apply-to-functions.md)).
+
 ### 6.3 Cause and cascade
 
 Rename one function and 200 call edges "change". That is one change event with 200 consequences, not
@@ -319,7 +346,7 @@ Rename one function and 200 call edges "change". That is one change event with 2
 | call-moved-to-another-overload | `EdgeAdded(caller→G)` | `EdgeRemoved(caller→F)`, F and G overloads of one name | active |
 | edge-gained-its-endpoint | `NodeAdded(N)` | `EdgeAdded` for edges touching N | active |
 | rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **unreachable** |
-| signature-change-breaks-callers | `NodeAttrChanged(signature)` | `SignatureIncompatible` on callers | dormant |
+| signature-change-breaks-callers | `NodeSignatureChanged(F)` | `SignatureIncompatible` on callers | dormant |
 
 **That is the whole table, and it is closed the way §6.1's change event set is closed.** The rows are
 `CAUSE_RULES` in `classify/rules.py` and the Status column is its `RuleStatus`; nothing outside that

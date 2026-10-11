@@ -559,12 +559,16 @@ class TestTheAttributeKeysAreAContractWithTheProducer:
         mechanical attribute diff can never emit `NodeAttrChanged(signature)`. In v0 a
         changed signature also changes the USR, which is tier-1 identity (§5), so the pair
         is never matched and the change arrives as remove + add. What *does* survive as an
-        attribute is `return_type` -- C++ cannot overload on it, so the USR does not encode
-        it, so it is the one part of a signature that changes while identity holds.
+        attribute is `return_type`; where it changes with the signature it arrives as
+        `NodeSignatureChanged` instead (ADR-035), weighted level with it.
         """
         assert "signature" not in self.producer_keys()
         assert "signature" not in w.NOVELTY_BY_ATTR
         assert w.NOVELTY_BY_ATTR["return_type"] >= max(w.NOVELTY_BY_ATTR.values())
+        assert (
+            w.NOVELTY_BY_KIND[ChangeEventKind.NODE_SIGNATURE_CHANGED]
+            == w.NOVELTY_BY_ATTR["return_type"]
+        )
 
 
 # -- exposure: the factor that decides whether this works on a real repository ------------

@@ -932,6 +932,37 @@ class TestTheDocumentIsTheContract:
         assert all("f" in label for label in labels)
 
 
+class TestASignatureChangeShowsItsCallers:
+    """ADR-035: a paired function's calls map through the correspondence and produce no
+    change events, so the document files its head-side callers under the signature change,
+    where a reviewer asks whether every caller followed."""
+
+    def doc(self) -> DiffDocument:
+        def side(rev: str, signature: str, *callers: str) -> Model:
+            f = node("c:@F@f#", name="f", signature=signature)
+            nodes = [node(c, name=c.split("@")[-1].rstrip("#")) for c in callers]
+            return model(rev, f, *nodes, edges=[edge(c, "c:@F@f#") for c in callers])
+
+        return pipeline(
+            side("a", "int ()", "c:@F@g#", "c:@F@h#"),
+            side("b", "long ()", "c:@F@g#", "c:@F@h#", "c:@F@k#"),
+        )
+
+    def test_the_document_lists_every_head_caller(self) -> None:
+        doc = self.doc()
+        (changed,) = (e for e in doc.events if e.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED)
+        assert doc.callers == {changed.id: ["c:@F@g#", "c:@F@h#", "c:@F@k#"]}
+        assert {"c:@F@g#", "c:@F@h#", "c:@F@k#"} <= doc.entities.keys()
+
+    def test_the_view_names_them_under_the_event(self) -> None:
+        out = draw(self.doc(), collapse_cascades=False)
+        assert "called by 3: g, h, k" in out
+
+    def test_it_survives_the_json_round_trip(self) -> None:
+        doc = self.doc()
+        assert DiffDocument.from_json(doc.to_json()).callers == doc.callers
+
+
 # -- 6 · a label is not an identity, and must not pretend to be one ------------------------
 
 #: The two fmt entities a misfiled defect was once written from (v0 tracker §5,
