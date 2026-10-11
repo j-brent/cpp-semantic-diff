@@ -218,12 +218,19 @@ on the match and propagates into the confidence of every change event derived fr
 | Tier | Key | Survives | Broken by |
 |---|---|---|---|
 | **1 · declared** | libclang USR — kind + qualified name + signature | body edits, file moves, reformatting | rename, signature change, namespace move |
-| **name** | kind + qualified name + file and TU for internal linkage + paired parent; functions and methods only | signature change: parameters, return type, `const` | rename, namespace move, an ambiguous name |
+| **inline namespace** | tier 1's key, with a bumped inline namespace's old path rewritten to its new one | an inline namespace version bump (`v1` to `v2`) | a plain namespace rename, a bump in which nothing inside pairs |
+| **name** | kind + name + file and TU for internal linkage + paired parent; functions and methods only | signature change: parameters, return type, `const` | rename, namespace move, an ambiguous name |
 | **2 · structural** | `body_hash` — normalized subtree hash | rename, move, reformatting | any body edit |
 | **3 · positional** | (parent id, kind, ordinal) | renames of unnamed things | reordering, parent change |
 | **4 · similarity** | weighted name + signature + body similarity over candidate pairs | rename *and* edit together | genuine rewrites |
 
-The **name** tier runs over what tier 1 left, and only over functions and methods, the only
+The **inline namespace** tier runs over what tier 1 left. Where one inline namespace replaced
+one other under the same paired parent, it rewrites the old namespace's path in base USRs, only
+where a USR starts, and keys the result as tier 1 does. The mapping stands only if something
+inside pairs through it, so the namespaces read as one rename and nothing in them moves
+([ADR-044](adr/ADR-044-inline-namespace-bump-pairs.md)).
+
+The **name** tier runs over what the tiers before it left, and only over functions and methods, the only
 entities whose USR holds more than their kind, name and scope. It pairs a function with itself
 after its signature changed. Its parent must already be paired, so it never reports a move. A
 name with one leftover on each side pairs; leftovers on both sides that are not one to one pair
@@ -645,7 +652,7 @@ is non-reproducible on one machine, let alone across two.
 The smallest slice that tests the thesis end to end.
 
 **In:** namespace / class / function / method / field nodes · `contains`, `calls`, `inherits`,
-`overrides` edges · **tier-1 identity, plus the name tier for functions and methods** · node
+`overrides` edges · **tier-1 identity, plus the inline namespace tier and the name tier for functions and methods** · node
 add/remove/attr/body/signature and edge add/remove/kind/attr change events · JSON + terminal output · the compression metric · fixtures `fmt` and
 `spdlog`, with `leveldb` added later ([v0 tracker](../reports/2026-08-01--v0-build/STATUS.md) §3).
 
@@ -680,8 +687,9 @@ against building them next, which is what asking the question early was for.
 On 2026-10-10 that answer was reopened for one case: a function whose parameters changed was
 reported as removed plus added, and on current upstream spdlog that was every removal in a
 30-commit range ([ADR-026](adr/ADR-026-changed-parameters-same-function.md)). The name tier (§5)
-pairs it with its old version. It keys on the qualified name, so it detects no rename, and the
-measurement above still stands for renames.
+pairs it with its old version. It keys on the name, so it detects no rename. The inline
+namespace tier (§5) pairs one rename, a bumped inline namespace's version tag, on evidence from
+what is inside it. The measurement above still stands for every other rename.
 
 ### Technology
 

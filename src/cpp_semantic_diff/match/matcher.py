@@ -1,7 +1,8 @@
 """The match stage: two `Model`s -> one `Correspondence` (ARCH-001 §3, §5).
 
-The stage is a driver over a *sequence* of tiers. v0 registers two: tier 1, and the name
-tier for the functions and methods it leaves (ADR-036).
+The stage is a driver over a *sequence* of tiers. v0 registers three: tier 1, the
+inline-namespace tier for what an inline namespace bump left (ADR-044), and the name tier for
+the functions and methods left after that (ADR-036).
 ARCH-001 §5 defines the scheme as tiers running "most-confident first, each tier running
 only over the residue the previous tiers left unmatched", and that sequencing -- not the
 tier-1 lookup -- is the part that is expensive to retrofit. Tier 1 is a keyed intersection;
@@ -20,6 +21,7 @@ from typing import Protocol
 
 from cpp_semantic_diff.match.correspondence import Correspondence, Match
 from cpp_semantic_diff.match.declared import DeclaredTier
+from cpp_semantic_diff.match.inline import InlineNamespaceTier
 from cpp_semantic_diff.match.name import NameTier
 from cpp_semantic_diff.match.unpaired import unpaired_reasons
 from cpp_semantic_diff.model import MatchTier, Model, NodeId
@@ -66,15 +68,18 @@ class Tier(Protocol):
 
 
 def default_tiers(renames: Mapping[str, str] | None = None) -> tuple[Tier, ...]:
-    """v0 runs tier 1, then the name tier over the functions and methods it left (ARCH-001
-    §5, §13).
+    """v0 runs tier 1, then the inline-namespace tier, then the name tier over the functions
+    and methods left (ARCH-001 §5, §13).
 
-    The name tier pairs a function with itself after its signature changed (ADR-036). It
-    keys on the qualified name, so it cannot pair a rename: tiers 2-4 stay excluded, and a
-    renamed entity still surfaces as a remove plus an add, which is the measurement that
-    decides whether they are worth building.
+    The inline-namespace tier pairs what an inline namespace bump renamed, `lib::v1::f` with
+    `lib::v2::f` (ADR-044). It runs before the name tier because it pairs the namespaces, and
+    the name tier pairs nothing under a parent that is not paired: a function whose signature
+    changed in the same bump pairs only once its namespace has. The name tier pairs a function
+    with itself after its signature changed (ADR-036). Neither pairs a rename: tiers 2-4 stay
+    excluded, and a renamed entity still surfaces as a remove plus an add, which is the
+    measurement that decides whether they are worth building.
     """
-    return (DeclaredTier(renames), NameTier(renames))
+    return (DeclaredTier(renames), InlineNamespaceTier(renames), NameTier(renames))
 
 
 def match_models(

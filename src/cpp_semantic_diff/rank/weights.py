@@ -213,6 +213,12 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # Breaks every call site that names the template arguments, as a parameter change
     # breaks every call site; the signature cannot show it (`extract._template_parameters`).
     "template_parameters": 0.90,
+    # A namespace that became inline, or stopped being. It changes which declaration an
+    # unqualified-through-the-parent name finds -- `lib::f` resolving into `lib::v1` or into
+    # `lib::v2` -- so code outside the diff can bind differently without a line changing.
+    # Below `access`: the names still exist, and the usual cause is a deliberate ABI version
+    # step rather than an accident.
+    "inline": 0.80,
 }
 
 # --------------------------------------------------------------------------------------
@@ -236,6 +242,12 @@ UNCERTAINTY_BY_TIER: dict[MatchTier, float] = {
     # replaced by an unrelated one of the same name pairs as readily as one that changed.
     # Below `STRUCTURAL`, whose matched body says more than a matched name.
     MatchTier.NAME: 0.25,
+    # An entity paired across an inline namespace bump (`lib::v1::f` with `lib::v2::f`,
+    # ADR-044): its USR is the old one with the version tag swapped, and the swap stands only
+    # where one inline namespace was replaced by one other under the same parent and something
+    # inside them paired through it. Nearly a USR match, so close to zero; not zero, because
+    # the version tag was part of the identity and the tool chose to look past it.
+    MatchTier.INLINE_NAMESPACE: 0.10,
     MatchTier.DECLARED: 0.00,
 }
 

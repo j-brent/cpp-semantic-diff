@@ -262,6 +262,34 @@ def template_tag_kind(cursor: ci.Cursor) -> ci.CursorKind | None:
     return _template_tag(cursor)
 
 
+class _InlineNamespace:
+    """`clang_Cursor_isInlineNamespace`, which the Python bindings do not wrap.
+
+    Whether a namespace is inline is not in its USR or its spelling, and it decides how the
+    matcher may treat a bump: `inline namespace v1` becoming `v2` keeps every unqualified
+    name working, so its members are the same entities under a new version tag, while a
+    plain `namespace v1` becoming `v2` breaks every caller that names it.
+    """
+
+    def __init__(self) -> None:
+        self._get = ci.conf.lib.clang_Cursor_isInlineNamespace
+        self._get.argtypes = [ci.Cursor]
+        self._get.restype = ctypes.c_uint
+
+    def __call__(self, cursor: ci.Cursor) -> bool:
+        return bool(self._get(cursor))
+
+
+_inline_namespace: _InlineNamespace | None = None
+
+
+def is_inline_namespace(cursor: ci.Cursor) -> bool:
+    global _inline_namespace
+    if _inline_namespace is None:
+        _inline_namespace = _InlineNamespace()
+    return _inline_namespace(cursor)
+
+
 def _is_member(cursor: ci.Cursor) -> bool:
     """Whether this declaration belongs to a class-like scope (ARCH-001 §4.1).
 
@@ -530,6 +558,8 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["mutable"] = cursor.is_mutable_field()
         if cursor.is_bitfield():
             attrs["bitfield_width"] = cursor.get_bitfield_width()
+    if kind is NodeKind.NAMESPACE:
+        attrs["inline"] = is_inline_namespace(cursor)
     if kind in (NodeKind.CLASS, NodeKind.STRUCT, NodeKind.UNION):
         attrs["template"] = cursor.kind in (
             ci.CursorKind.CLASS_TEMPLATE,

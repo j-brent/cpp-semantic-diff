@@ -186,6 +186,20 @@ def removed_at(line: int) -> Expect:
     )
 
 
+def removed(entity: str) -> Expect:
+    return Expect(
+        f"a removal of {entity}",
+        lambda o: any(e.kind in REMOVALS and o.subject(e) == entity for e in o.events),
+    )
+
+
+def untouched(entity: str) -> Expect:
+    """No event about `entity`: it is the same entity, with nothing about it changed."""
+    return Expect(
+        f"no event about {entity}", lambda o: not any(o.subject(e) == entity for e in o.events)
+    )
+
+
 def nothing_added() -> Expect:
     return Expect("no addition", lambda o: not any(e.kind in ADDITIONS for e in o.events))
 
@@ -424,15 +438,121 @@ CATALOG = [
         "inline-namespace-bumped",
         "namespace lib { inline namespace v1 { void f() {} } }",
         "namespace lib { inline namespace v2 { void f() {} } }",
+        changed("lib::v2", was="v1", now="v2"),
         not_replaced("f"),
         some_event(),
-        fails="step 4: inline namespace names are identity",
     ),
     case(
         "inline-namespace-bumped-is-reported",
         "namespace lib { inline namespace v1 { void f() {} } }",
         "namespace lib { inline namespace v2 { void f() {} } }",
         some_event(),
+    ),
+    # An inline namespace bump is one rename of the namespace, not a removal and an addition
+    # of everything in it (ADR-044). Only an inline namespace, only one for one, and only
+    # where something inside pairs through it.
+    case(
+        "inline-namespace-bumped-and-signature-changed",
+        "namespace lib { inline namespace v1 { void f(int) {} void g() {} } }",
+        "namespace lib { inline namespace v2 { void f(long) {} void g() {} } }",
+        changed("lib::v2::f", was="void (int)", now="void (long)"),
+        not_replaced("f"),
+    ),
+    case(
+        "inline-namespace-bumped-type-in-signature",
+        "namespace lib { inline namespace v1 { struct S {}; void f(S) {} } }",
+        "namespace lib { inline namespace v2 { struct S {}; void f(S) {} } }",
+        untouched("lib::v2::f"),
+        untouched("lib::v2::S"),
+        not_replaced("f"),
+    ),
+    # fmt's shape: a template argument names a template in the bumped namespace, and the USR
+    # spells it after `>`. Overloaded, so the name tier cannot rescue what the rewrite misses.
+    case(
+        "inline-namespace-bumped-template-argument",
+        "namespace lib { inline namespace v1 { template <class C> struct view {};\n"
+        "template <class C> void show(view<C>) {}\n"
+        "template <class C> void show(view<C>, int) {} } }",
+        "namespace lib { inline namespace v2 { template <class C> struct view {};\n"
+        "template <class C> void show(view<C>) {}\n"
+        "template <class C> void show(view<C>, int) {} } }",
+        untouched("lib::v2::show"),
+        not_replaced("show"),
+    ),
+    case(
+        "inline-namespace-bumped-class-template-specialization",
+        "namespace lib { inline namespace v1 { template <class C> struct view {};\n"
+        "template <class T> struct fmt {};\n"
+        "template <> struct fmt<view<int>> { void go() {} }; } }",
+        "namespace lib { inline namespace v2 { template <class C> struct view {};\n"
+        "template <class T> struct fmt {};\n"
+        "template <> struct fmt<view<int>> { void go() {} }; } }",
+        untouched("lib::v2::fmt"),
+        untouched("lib::v2::fmt::go"),
+        not_replaced("fmt"),
+        not_replaced("go"),
+    ),
+    case(
+        "inline-namespace-bumped-nested-namespace",
+        "namespace lib { inline namespace v1 { namespace detail { void g() {} } } }",
+        "namespace lib { inline namespace v2 { namespace detail { void g() {} } } }",
+        untouched("lib::v2::detail"),
+        untouched("lib::v2::detail::g"),
+        not_replaced("g"),
+    ),
+    case(
+        "inline-namespace-bumped-at-global-scope",
+        "inline namespace v1 { void f() {} }",
+        "inline namespace v2 { void f() {} }",
+        changed("v2"),
+        not_replaced("f"),
+    ),
+    case(
+        "inline-namespace-bumped-leaves-a-namesake-alone",
+        "namespace lib { inline namespace v1 { void f() {} } }\n"
+        "namespace other { namespace v1 { void g() {} } }",
+        "namespace lib { inline namespace v2 { void f() {} } }\n"
+        "namespace other { namespace v1 { void g() {} } }",
+        untouched("other::v1"),
+        untouched("other::v1::g"),
+        not_replaced("f"),
+    ),
+    case(
+        "plain-namespace-renamed-does-not-pair",
+        "namespace lib { namespace v1 { void f() {} } }",
+        "namespace lib { namespace v2 { void f() {} } }",
+        removed("lib::v1::f"),
+        added("lib::v2::f"),
+    ),
+    case(
+        "inline-namespace-split-in-two-stays-unpaired",
+        "namespace lib { inline namespace v1 { void f() {} void g() {} } }",
+        "namespace lib { inline namespace v2 { void f() {} } inline namespace v3 { void g() {} } }",
+        refused("v1"),
+        refused("v2"),
+        refused("v3"),
+    ),
+    case(
+        "inline-namespace-kept-for-abi-and-new-one-added",
+        "namespace lib { inline namespace v1 { void f() {} } }",
+        "namespace lib { namespace v1 { void f() {} } inline namespace v2 { void f() {} } }",
+        changed("lib::v1", was=True, now=False),
+        added("lib::v2"),
+        untouched("lib::v1::f"),
+    ),
+    case(
+        "unrelated-inline-namespaces-do-not-pair",
+        "namespace lib { inline namespace v12 { void a() {} } }",
+        "namespace lib { inline namespace literals { void b() {} } }",
+        removed("lib::v12"),
+        added("lib::literals"),
+    ),
+    case(
+        "namespace-becomes-inline",
+        "namespace lib { namespace v1 { void f() {} } }",
+        "namespace lib { inline namespace v1 { void f() {} } }",
+        changed("lib::v1", was=False, now=True),
+        not_replaced("f"),
     ),
     case(
         "parameter-added",

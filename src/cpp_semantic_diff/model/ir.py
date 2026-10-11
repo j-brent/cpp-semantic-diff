@@ -98,6 +98,7 @@ class MatchTier(StrEnum):
     """
 
     DECLARED = "declared"  # tier 1: USR
+    INLINE_NAMESPACE = "inline-namespace"  # tier-1 leftovers under a bumped inline namespace
     NAME = "name"  # functions and methods left by tier 1: kind + qualified name (ADR-036)
     STRUCTURAL = "structural"  # tier 2: body hash
     POSITIONAL = "positional"  # tier 3: (parent, kind, ordinal)

@@ -841,6 +841,35 @@ class TestTemplateParametersAreComparedState:
         assert self.params(result, "P::k") == "<class>"
 
 
+class TestAnInlineNamespaceSaysSo:
+    """`inline` is an attribute of every namespace, written whether true or false.
+
+    Neither the USR nor the spelling carries it, and the matcher needs it: a bumped inline
+    namespace keeps its members' unqualified names working, a bumped plain one does not.
+    """
+
+    SOURCE = """
+    namespace lib {
+    inline namespace v1 { void f(); }
+    namespace v1 { void g(); }
+    namespace detail {}
+    }
+    namespace { inline namespace a1 {} }
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("inline"), toolchain, {"a.cpp": self.SOURCE})
+
+    def test_an_inline_namespace_is_inline(self, result: TuExtract) -> None:
+        assert named(result, "lib::v1").attrs["inline"] is True
+        assert named(result, "a1").attrs["inline"] is True
+
+    def test_a_plain_namespace_says_it_is_not(self, result: TuExtract) -> None:
+        assert named(result, "lib").attrs["inline"] is False
+        assert named(result, "lib::detail").attrs["inline"] is False
+
+
 class TestFailureIsRecordedNotRaised:
     def test_a_broken_tu_is_reported_as_incompleteness(
         self, tmp_path: Path, toolchain: Toolchain

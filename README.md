@@ -31,7 +31,7 @@ past v0 by design. Where things stand, the known problems and the work ahead are
 |---|---|
 | `acquire` — worktrees + compile databases at both revs | done |
 | `produce` — worktree → `Model`, cached per TU, parsed in parallel | done |
-| `match` — two models → `Correspondence` | done, tier 1 only |
+| `match` — two models → `Correspondence` | done: tier 1, inline namespace, name |
 | `diff` · `classify` · `rank` · `render` | done |
 | `enrich` — evidence adapters | post-v0 |
 

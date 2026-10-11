@@ -3,7 +3,7 @@
 A function's USR encodes its parameter types, and a method's encodes its `const` as well, so
 tier 1 cannot pair a function with itself after its parameters changed: the old version is
 reported removed and the new one added (ADR-026). This tier pairs what tier 1 left, on what a
-signature change keeps -- the kind, the qualified name and the scope -- and refuses wherever
+signature change keeps -- the kind, the name and the scope -- and refuses wherever
 that is not enough to say which old function is which new one. The signature, the template
 parameters and everything else become compared state, which the diff stage reports.
 
@@ -32,7 +32,11 @@ class NameKey(NamedTuple):
     """What identifies a function once its signature is set aside, in head coordinates."""
 
     kind: NodeKind
-    qualified_name: str
+    #: The unqualified name. The paired parent below already says where it is, and the
+    #: qualified name would say it again in base coordinates: under a bumped inline
+    #: namespace (ADR-044) `lib::v1::f` and `lib::v2::f` are one function in one paired
+    #: scope, and keying on the spelling of that scope would refuse them.
+    name: str
     #: For an internal-linkage function, its file name and defining TU, through the git
     #: rename map -- the same rule tier 1 applies (`RenameMap.file_scope`). Two same-named
     #: statics in different files are different functions.
@@ -53,9 +57,10 @@ class NameTier:
     The rules (ADR-036):
 
     - **The parent must already be paired.** A function whose class or namespace is itself
-      unpaired is left alone, so this tier never produces a `NodeMoved`. An inline namespace
-      bump (`v1` to `v2`) therefore pairs nothing: the namespaces are different entities to
-      tier 1, and pairing their members would be a claim about the namespaces first.
+      unpaired is left alone, so this tier never produces a `NodeMoved`. Pairing members of
+      two unpaired namespaces would be a claim about the namespaces first. An inline
+      namespace bump (`v1` to `v2`) is paired by the tier before this one (ADR-044), so a
+      function whose signature changed in the same bump pairs here under its paired namespace.
     - **One to one, or nothing.** A key with exactly one leftover on each side pairs. A key
       with leftovers on both sides that are not one to one -- two old overloads and two new
       ones, say -- pairs none of them and reports them as ambiguous. There is no tie-break:
@@ -141,4 +146,4 @@ class NameTier:
 
     def _key(self, node: Node, parent: NodeId | None) -> NameKey:
         file, tu = self.renames.file_scope(node)
-        return NameKey(node.kind, node.qualified_name, file, tu, parent)
+        return NameKey(node.kind, node.name, file, tu, parent)
