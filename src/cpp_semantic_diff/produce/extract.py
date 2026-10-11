@@ -836,8 +836,13 @@ def body_hash(cursor: ci.Cursor) -> str | None:
     """Hash of a definition's body, insensitive to formatting and comments.
 
     Tier-2 identity (ARCH-001 §5) has to survive a rename, so the name and signature are
-    deliberately *not* hashed -- only the compound statement. Hashing token spellings
-    rather than source text is what makes reindentation and comment edits invisible.
+    deliberately *not* hashed -- only the compound statement, and a constructor's member
+    initializer list before it. Hashing token spellings rather than source text is what
+    makes reindentation and comment edits invisible.
+
+    The initializer list is code that runs when the constructor does, so a changed
+    initializer is a body change (#11). Known gap: a function-try-block, `S() try : x(1)
+    {} catch (...) {}`, has no compound statement of its own, and has no body hash at all.
     """
     body = next(
         (c for c in cursor.get_children() if c.kind is ci.CursorKind.COMPOUND_STMT),
@@ -845,15 +850,50 @@ def body_hash(cursor: ci.Cursor) -> str | None:
     )
     if body is None:
         return None
+    tokens = list(body.get_tokens())
+    if cursor.kind is ci.CursorKind.CONSTRUCTOR:
+        tokens = _member_initializers(cursor, body) + tokens
     digest = hashlib.blake2b(digest_size=16)
     empty = True
-    for token in body.get_tokens():
+    for token in tokens:
         if token.kind is ci.TokenKind.COMMENT:
             continue
         digest.update(token.spelling.encode())
         digest.update(b"\x00")
         empty = False
     return None if empty else digest.hexdigest()
+
+
+def _member_initializers(cursor: ci.Cursor, body: ci.Cursor) -> list[ci.Token]:
+    """A constructor's member initializer list, from its `:` to the body; empty if none.
+
+    The tokens between the constructor's name and its body, from the first `:` outside any
+    brackets. Anchored at the name, so a `:` in the template header before it is not read;
+    outside brackets, so a `?:` in a default argument is not read either. `::` is a token
+    of its own and never matches.
+    """
+    name = cursor.location.offset
+    end = body.extent.start.offset
+    after_name = False
+    depth = 0
+    initializers: list[ci.Token] = []
+    for token in cursor.get_tokens():
+        offset = token.extent.start.offset
+        if offset >= end:
+            break
+        if not after_name:
+            after_name = offset == name
+            continue
+        spelling = token.spelling
+        if initializers:
+            initializers.append(token)
+        elif spelling in ("(", "[", "{"):
+            depth += 1
+        elif spelling in (")", "]", "}"):
+            depth = max(0, depth - 1)
+        elif spelling == ":" and depth == 0:
+            initializers.append(token)
+    return initializers
 
 
 def _access(cursor: ci.Cursor) -> str | None:

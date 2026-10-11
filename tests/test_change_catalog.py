@@ -338,7 +338,6 @@ CATALOG = [
         "struct S { int x; S() : x(1) {} };",
         "struct S { int x; S() : x(2) {} };",
         changed("S::S"),
-        fails="step 7: the initializer list is outside the body fingerprint",
     ),
     case(
         "default-member-initializer",
@@ -810,6 +809,7 @@ STEP_7_CASES = (
     "class-becomes-final",
     "nodiscard-added",
     "deprecated-added",
+    "constructor-initializer-list",
 )
 
 

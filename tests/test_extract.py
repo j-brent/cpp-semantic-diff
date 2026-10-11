@@ -564,6 +564,53 @@ class TestBodyHash:
         assert named(result, "f").body_hash is not None
 
 
+class TestAConstructorsInitializerListIsPartOfItsBody:
+    """The member initializer list runs with the constructor, so it is in `body_hash` (#11)."""
+
+    def ctor(self, tmp_path: Path, toolchain: Toolchain, source: str) -> str | None:
+        directory = tmp_path / str(len(list(tmp_path.iterdir())))
+        directory.mkdir()
+        return named(run(directory, toolchain, {"a.cpp": source}), "S::S").body_hash
+
+    def test_a_changed_initializer_changes_the_hash(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        one = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x(1) {} };")
+        two = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x(2) {} };")
+        braced = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x{2} {} };")
+        assert len({one, two, braced}) == 3
+
+    def test_formatting_and_comments_in_the_list_do_not(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        plain = self.ctor(tmp_path, toolchain, "struct S { int x; S() : x(1) {} };")
+        noisy = self.ctor(
+            tmp_path, toolchain, "struct S { int x;\n  S()\n    : x( 1 ) // one\n  {}\n};"
+        )
+        assert plain == noisy
+
+    def test_an_out_of_line_constructor_hashes_its_list(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        one = self.ctor(tmp_path, toolchain, "struct S { int x; S(); };\nS::S() : x(1) {}")
+        two = self.ctor(tmp_path, toolchain, "struct S { int x; S(); };\nS::S() : x(2) {}")
+        assert one is not None and one != two
+
+    def test_a_colon_before_the_list_is_not_read_as_its_start(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """A `?:` in a default argument is inside brackets, so it does not start a list."""
+        plain = self.ctor(tmp_path, toolchain, "struct S { S(int a) {} };")
+        ternary = self.ctor(tmp_path, toolchain, "struct S { S(int a = true ? 1 : 2) {} };")
+        assert plain == ternary
+
+    def test_known_gap_a_function_try_block_has_no_body_hash(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        source = "struct S { int x; S() try : x(1) {} catch (...) {} };"
+        assert self.ctor(tmp_path, toolchain, source) is None
+
+
 class TestEdges:
     def test_contains_follows_the_semantic_parent(
         self, tmp_path: Path, toolchain: Toolchain
