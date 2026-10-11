@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from cpp_semantic_diff import __version__
 from cpp_semantic_diff.acquire import RenameLimitHit, RevPair
 from cpp_semantic_diff.match import Correspondence
-from cpp_semantic_diff.model import Event, Model, Node, NodeId, Side
+from cpp_semantic_diff.model import ChangeEvent, Model, Node, NodeId, Side
 from cpp_semantic_diff.rank import Ranking, subject_endpoints
 from cpp_semantic_diff.render.document import (
     CompletenessBlock,
@@ -47,7 +47,7 @@ def build_document(
     base: Model,
     head: Model,
     correspondence: Correspondence,
-    events: Sequence[Event],
+    events: Sequence[ChangeEvent],
     ranking: Ranking,
     lines_changed: int,
     files_changed: int,
@@ -162,7 +162,9 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int, vendor
     return f"{head}{tail}"
 
 
-def _entities(events: Sequence[Event], base: Model, head: Model) -> dict[NodeId, EntitySummary]:
+def _entities(
+    events: Sequence[ChangeEvent], base: Model, head: Model
+) -> dict[NodeId, EntitySummary]:
     """The node summaries the events reference, and only those (ARCH-001 §10).
 
     An event's subject is a node id or an edge id (§6.2); `subject_endpoints` resolves both,

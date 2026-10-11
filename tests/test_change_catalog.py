@@ -28,11 +28,11 @@ from cpp_semantic_diff.match import match_models
 from cpp_semantic_diff.model import (
     AnyId,
     AttrValue,
+    ChangeEvent,
+    ChangeEventKind,
     Confidence,
     Edge,
     EdgeKind,
-    Event,
-    EventKind,
     Model,
     Node,
     NodeId,
@@ -46,8 +46,8 @@ from cpp_semantic_diff.produce.toolchain import Toolchain, load
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
-ADDITIONS = frozenset({EventKind.NODE_ADDED, EventKind.EDGE_ADDED})
-REMOVALS = frozenset({EventKind.NODE_REMOVED, EventKind.EDGE_REMOVED})
+ADDITIONS = frozenset({ChangeEventKind.NODE_ADDED, ChangeEventKind.EDGE_ADDED})
+REMOVALS = frozenset({ChangeEventKind.NODE_REMOVED, ChangeEventKind.EDGE_REMOVED})
 
 
 # -- Running a case ---------------------------------------------------------------------------
@@ -83,25 +83,25 @@ class Outcome:
 
     base: Model
     head: Model
-    events: list[Event]
+    events: list[ChangeEvent]
 
     def name(self, node_id: str) -> str:
         key = NodeId(node_id)
         node = self.head.nodes.get(key) or self.base.nodes.get(key)
         return node.qualified_name if node else node_id
 
-    def subject(self, event: Event) -> str:
+    def subject(self, event: ChangeEvent) -> str:
         """The entity an event is about. An edge's event is about the edge's source."""
         edge = self._edge(event)
         return self.name(edge[0]) if edge else self.name(event.subject)
 
-    def names(self, event: Event) -> set[str]:
+    def names(self, event: ChangeEvent) -> set[str]:
         """Everything else the event names: an edge's target, and its payload values."""
         edge = self._edge(event)
         named = {str(value) for value in event.payload.values()}
         return named | {self.name(edge[1])} if edge else named
 
-    def _edge(self, event: Event) -> tuple[str, str] | None:
+    def _edge(self, event: ChangeEvent) -> tuple[str, str] | None:
         for model in (self.base, self.head):
             for edge in model.edges:
                 if edge.id == event.subject:
@@ -194,7 +194,7 @@ def not_replaced(name: str) -> Expect:
     By unqualified name, so it also catches a replacement whose scope was renamed.
     """
 
-    def kinds(o: Outcome, of: frozenset[EventKind], model: Model) -> set[str]:
+    def kinds(o: Outcome, of: frozenset[ChangeEventKind], model: Model) -> set[str]:
         return {
             model.nodes[NodeId(e.subject)].kind
             for e in o.events
@@ -520,7 +520,7 @@ def test_change_catalog(
 # hand-built events: the event a fixed tool would plausibly emit, and the near misses.
 
 
-def hand_built(nodes: list[Node], edges: list[Edge], *events: Event) -> Outcome:
+def hand_built(nodes: list[Node], edges: list[Edge], *events: ChangeEvent) -> Outcome:
     def side(rev: str) -> Model:
         model = Model(rev=rev * 40, edges=edges)
         for node in nodes:
@@ -530,8 +530,8 @@ def hand_built(nodes: list[Node], edges: list[Edge], *events: Event) -> Outcome:
     return Outcome(side("a"), side("b"), list(events))
 
 
-def event(kind: EventKind, subject: AnyId, **payload: AttrValue) -> Event:
-    return Event(
+def event(kind: ChangeEventKind, subject: AnyId, **payload: AttrValue) -> ChangeEvent:
+    return ChangeEvent(
         kind=kind,
         subject=subject,
         payload=payload,
@@ -548,13 +548,15 @@ def test_an_enumerator_value_change_is_told_apart_from_its_near_misses() -> None
     a, b = entity(NodeKind.ENUMERATOR, "E::A"), entity(NodeKind.ENUMERATOR, "E::B")
     expect = changed("E::B", was=2, now=3)
 
-    def holds(*events: Event) -> bool:
+    def holds(*events: ChangeEvent) -> bool:
         return expect.holds(hand_built([a, b], [], *events))
 
-    assert holds(event(EventKind.NODE_ATTR_CHANGED, b.id, attr="value", old=2, new=3))
-    assert not holds(event(EventKind.NODE_ATTR_CHANGED, b.id, attr="value", old=2, new=4))
-    assert not holds(event(EventKind.NODE_ATTR_CHANGED, a.id, attr="value", old=2, new=3))
-    assert not holds(event(EventKind.NODE_REMOVED, b.id), event(EventKind.NODE_ADDED, b.id))
+    assert holds(event(ChangeEventKind.NODE_ATTR_CHANGED, b.id, attr="value", old=2, new=3))
+    assert not holds(event(ChangeEventKind.NODE_ATTR_CHANGED, b.id, attr="value", old=2, new=4))
+    assert not holds(event(ChangeEventKind.NODE_ATTR_CHANGED, a.id, attr="value", old=2, new=3))
+    assert not holds(
+        event(ChangeEventKind.NODE_REMOVED, b.id), event(ChangeEventKind.NODE_ADDED, b.id)
+    )
     assert not holds()
 
 
@@ -564,19 +566,24 @@ def test_a_replaced_callback_needs_the_relationship_not_only_the_body_change() -
     fixed = hand_built(
         [s, cb, cb2],
         uses,
-        event(EventKind.EDGE_REMOVED, uses[0].id),
-        event(EventKind.EDGE_ADDED, uses[1].id),
+        event(ChangeEventKind.EDGE_REMOVED, uses[0].id),
+        event(ChangeEventKind.EDGE_ADDED, uses[1].id),
     )
     today = hand_built(
         [s, cb, cb2],
         [],
-        event(EventKind.NODE_ADDED, cb2.id),
-        event(EventKind.NODE_BODY_CHANGED, s.id),
+        event(ChangeEventKind.NODE_ADDED, cb2.id),
+        event(ChangeEventKind.NODE_BODY_CHANGED, s.id),
     )
     for expect in (relation("s", "cb"), relation("s", "cb2")):
         assert expect.holds(fixed)
         assert not expect.holds(today)
     assert not_replaced("cb").holds(fixed)
     assert not not_replaced("s").holds(
-        hand_built([s], [], event(EventKind.NODE_REMOVED, s.id), event(EventKind.NODE_ADDED, s.id))
+        hand_built(
+            [s],
+            [],
+            event(ChangeEventKind.NODE_REMOVED, s.id),
+            event(ChangeEventKind.NODE_ADDED, s.id),
+        )
     )

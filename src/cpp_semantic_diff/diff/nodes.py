@@ -24,20 +24,20 @@ from cpp_semantic_diff.diff.context import DiffContext, node_hunks
 from cpp_semantic_diff.match import Correspondence, Match, containers
 from cpp_semantic_diff.model import (
     AttrValue,
-    Event,
-    EventKind,
+    ChangeEvent,
+    ChangeEventKind,
     NodeId,
     Side,
 )
 
 
-def node_events(ctx: DiffContext) -> Iterator[Event]:
+def node_events(ctx: DiffContext) -> Iterator[ChangeEvent]:
     corr = ctx.correspondence
 
     for node_id in corr.unmatched_base:
         node = ctx.base.nodes[node_id]
-        yield Event(
-            kind=EventKind.NODE_REMOVED,
+        yield ChangeEvent(
+            kind=ChangeEventKind.NODE_REMOVED,
             # Base coordinates: the subject does not exist at head, so head has no name for
             # it. Everything else in this stage is expressed in head coordinates, which is
             # what lets classify (§6.3) join an event about a node to events about its
@@ -49,8 +49,8 @@ def node_events(ctx: DiffContext) -> Iterator[Event]:
 
     for node_id in corr.unmatched_head:
         node = ctx.head.nodes[node_id]
-        yield Event(
-            kind=EventKind.NODE_ADDED,
+        yield ChangeEvent(
+            kind=ChangeEventKind.NODE_ADDED,
             subject=node_id,
             provenance=node_hunks((Side.HEAD, node)),
             confidence=ctx.confidence(None, corr.unpaired_head[node_id]),
@@ -67,12 +67,12 @@ def _changes(
     match: Match,
     base_parents: dict[NodeId, NodeId],
     head_parents: dict[NodeId, NodeId],
-) -> Iterator[Event]:
+) -> Iterator[ChangeEvent]:
     base = ctx.base.nodes[match.base]
     head = ctx.head.nodes[match.head]
 
-    def event(kind: EventKind, **payload: AttrValue) -> Event:
-        return Event(
+    def event(kind: ChangeEventKind, **payload: AttrValue) -> ChangeEvent:
+        return ChangeEvent(
             kind=kind,
             subject=match.head,
             payload=dict(payload),
@@ -83,17 +83,17 @@ def _changes(
     old_parent = base_parents.get(match.base)
     new_parent = head_parents.get(match.head)
     if _parent_changed(ctx.correspondence, old_parent, new_parent):
-        yield event(EventKind.NODE_MOVED, old_parent=old_parent, new_parent=new_parent)
+        yield event(ChangeEventKind.NODE_MOVED, old_parent=old_parent, new_parent=new_parent)
 
     if base.name != head.name:
-        yield event(EventKind.NODE_RENAMED, old_name=base.name, new_name=head.name)
+        yield event(ChangeEventKind.NODE_RENAMED, old_name=base.name, new_name=head.name)
 
     # One event per attribute, each naming the attribute it is about (§6.1). The rule --
     # union of the key sets, compared with the type -- is `attrs.changed_attrs`, shared with
     # the edge half so that `NodeAttrChanged` and `EdgeAttrChanged` cannot come to mean
     # different things.
     for attr, old, new in changed_attrs(base.attrs, head.attrs):
-        yield event(EventKind.NODE_ATTR_CHANGED, attr=attr, old=old, new=new)
+        yield event(ChangeEventKind.NODE_ATTR_CHANGED, attr=attr, old=old, new=new)
 
     # ARCH-001 §4.1: `body_hash` is deliberately not an attribute, so a differing body is
     # never a `NodeAttrChanged`. An attribute change has a specific known meaning; a body
@@ -101,7 +101,7 @@ def _changes(
     # render differently.
     both_have_bodies = base.body_hash is not None and head.body_hash is not None
     if both_have_bodies and base.body_hash != head.body_hash:
-        yield event(EventKind.NODE_BODY_CHANGED)
+        yield event(ChangeEventKind.NODE_BODY_CHANGED)
     # A hash on one side and None on the other is *not* a body change and gets no event.
     # It says a definition appeared or disappeared while the declaration stayed -- a
     # `defines`/`declares` edge fact in ARCH-001 §4.2's vocabulary, and §13 keeps both

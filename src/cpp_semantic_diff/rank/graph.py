@@ -80,7 +80,7 @@ _EDGE_KIND_VALUES: frozenset[str] = frozenset(k.value for k in EdgeKind)
 def subject_endpoints(subject: AnyId) -> tuple[NodeId, ...]:
     """The node ids an event's subject is about: one for a node, two for an edge.
 
-    `Event.subject` is an `AnyId` -- a node id or an edge id -- and the two are not
+    `ChangeEvent.subject` is an `AnyId` -- a node id or an edge id -- and the two are not
     distinguished by type (ARCH-001 §6.2). `Edge.id` is `src|kind|dst` (§4.2), so an edge
     id is recognised by having exactly three `|`-separated parts whose middle is a declared
     edge kind. Anything else is a node id, including the pathological case of a USR that

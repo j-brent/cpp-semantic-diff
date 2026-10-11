@@ -1,7 +1,7 @@
 """The terminal view: a consumer of the document, and nothing more. ARCH-001 §10.
 
 **Every number on this page comes out of a `DiffDocument`.** No `Model`, no `Correspondence`,
-no `Ranking`, no `Event` that is not already in `document.events`. The function signatures
+no `Ranking`, no `ChangeEvent` that is not already in `document.events`. The function signatures
 enforce it -- `render()` takes a document and a handful of display flags -- and the reason is
 §10's: the moment a view can reach a model, a number that "was easier to get from the model"
 lands in the presentation layer, and the analysis core has a delivery surface inside it. That
@@ -43,7 +43,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from cpp_semantic_diff.model import AnyId, EventId, Side
+from cpp_semantic_diff.model import AnyId, ChangeEventId, Side
 from cpp_semantic_diff.rank import subject_endpoints
 from cpp_semantic_diff.rank.exposure import Exposure
 from cpp_semantic_diff.render.collapse import Collapsed, CollapseNode, collapse
@@ -430,7 +430,7 @@ def _limits(document: DiffDocument, console: Console) -> None:
         console.print(f"  [dim]{escape(limit)}[/]")
 
 
-def hidden_ids(tree: Collapsed) -> set[EventId]:
+def hidden_ids(tree: Collapsed) -> set[ChangeEventId]:
     """Every event the view nested under a cause. Exposed for tests of the §6.3 invariant:
     the document must still carry all of these."""
     return {node.event_id for root in tree.roots for node, depth in root.walk() if depth}

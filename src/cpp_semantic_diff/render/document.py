@@ -39,9 +39,9 @@ from functools import cached_property
 from pydantic import BaseModel, ConfigDict, Field
 
 from cpp_semantic_diff.model import (
+    ChangeEvent,
+    ChangeEventId,
     Completeness,
-    Event,
-    EventId,
     Location,
     MatchTier,
     NodeId,
@@ -675,13 +675,13 @@ class DiffDocument(BaseModel):
     meta: Meta
     completeness: CompletenessBlock
     entities: dict[NodeId, EntitySummary] = Field(default_factory=dict)
-    events: list[Event] = Field(default_factory=list)
+    events: list[ChangeEvent] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
-    ranking: list[EventId] = Field(
+    ranking: list[ChangeEventId] = Field(
         default_factory=list,
         description="§10 verbatim: event ids, highest risk first. Reading order.",
     )
-    scores: dict[EventId, RiskScore] = Field(
+    scores: dict[ChangeEventId, RiskScore] = Field(
         default_factory=dict,
         description="Beside `ranking`, not instead of it. `RiskScore.factors` carries the "
         "per-factor `detail` that lets a view say *why* something is first without "
@@ -709,18 +709,18 @@ class DiffDocument(BaseModel):
 
     # -- accessors a view needs, so no view re-derives them ------------------------------
 
-    def event(self, event_id: EventId) -> Event:
+    def event(self, event_id: ChangeEventId) -> ChangeEvent:
         return self.by_id[event_id]
 
     @property
-    def by_id(self) -> dict[EventId, Event]:
+    def by_id(self) -> dict[ChangeEventId, ChangeEvent]:
         # Recomputed per access rather than cached: `DiffDocument` is not frozen, and a cached
         # index on a mutable model is the kind of staleness this project spends its whole
         # design budget avoiding. Documents are built once and read tens of times; the cost is
         # a dict comprehension over a list a reviewer could read.
         return {e.id: e for e in self.events}
 
-    def ranked(self) -> list[Event]:
+    def ranked(self) -> list[ChangeEvent]:
         """Events in reading order (ARCH-001 §7). Anything unranked follows, in document
         order -- an event omitted from `ranking` is a defect, but dropping it here would
         turn a broken ranking into a missing change."""
@@ -731,7 +731,7 @@ class DiffDocument(BaseModel):
             *(e for e in self.events if e.id not in seen),
         ]
 
-    def score(self, event_id: EventId) -> RiskScore | None:
+    def score(self, event_id: ChangeEventId) -> RiskScore | None:
         return self.scores.get(event_id)
 
     def label(self, subject: str) -> str:

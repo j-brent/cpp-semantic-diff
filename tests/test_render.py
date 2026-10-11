@@ -37,13 +37,13 @@ from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.match import Correspondence, match_models
 from cpp_semantic_diff.model import (
     AttrValue,
+    ChangeEvent,
+    ChangeEventId,
+    ChangeEventKind,
     Completeness,
     Confidence,
     Edge,
     EdgeKind,
-    Event,
-    EventId,
-    EventKind,
     Location,
     MatchTier,
     Model,
@@ -100,9 +100,9 @@ def edge(src: str, dst: str, kind: EdgeKind = EdgeKind.CALLS) -> Edge:
 
 
 def event(
-    kind: EventKind, subject: str, confidence: Confidence = RESIDUE, **payload: AttrValue
-) -> Event:
-    return Event(kind=kind, subject=NodeId(subject), payload=payload, confidence=confidence)
+    kind: ChangeEventKind, subject: str, confidence: Confidence = RESIDUE, **payload: AttrValue
+) -> ChangeEvent:
+    return ChangeEvent(kind=kind, subject=NodeId(subject), payload=payload, confidence=confidence)
 
 
 REVS = RevPair(base_ref="main", head_ref="HEAD", base_sha="a" * 40, head_sha="b" * 40)
@@ -111,7 +111,7 @@ REVS = RevPair(base_ref="main", head_ref="HEAD", base_sha="a" * 40, head_sha="b"
 def document(
     base: Model,
     head: Model,
-    events: list[Event],
+    events: list[ChangeEvent],
     *,
     correspondence: Correspondence | None = None,
     lines_changed: int = 100,
@@ -238,7 +238,7 @@ class TestNothingIsHiddenWithoutACause:
     top level rather than losing it.
     """
 
-    def _doc(self, events: list[Event]) -> DiffDocument:
+    def _doc(self, events: list[ChangeEvent]) -> DiffDocument:
         f = node("c:@F@f#", name="f")
         g = node("c:@F@g#", name="g")
         return document(model("a", f, g), model("b", f, g), events)
@@ -246,8 +246,8 @@ class TestNothingIsHiddenWithoutACause:
     def test_an_event_with_no_cause_is_top_level(self) -> None:
         doc = self._doc(
             [
-                event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE),
-                event(EventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE),
+                event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE),
+                event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE),
             ]
         )
         tree = collapse(doc)
@@ -261,10 +261,10 @@ class TestNothingIsHiddenWithoutACause:
         which is exactly why it must not be trusted. Burying the event under a cause that
         is not there would make it invisible in every view at once.
         """
-        # `model_copy`, because `Event` is frozen (ARCH-001 §3): the way to get a modified
+        # `model_copy`, because `ChangeEvent` is frozen (ARCH-001 §3): the way to get a modified
         # event is to make one, which is also what classify does to set this same field.
-        orphan = event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE).model_copy(
-            update={"caused_by": EventId("NodeRemoved:deadbeef")}
+        orphan = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE).model_copy(
+            update={"caused_by": ChangeEventId("NodeRemoved:deadbeef")}
         )
         doc = self._doc([orphan])
 
@@ -278,8 +278,8 @@ class TestNothingIsHiddenWithoutACause:
         A cycle is precisely the case where "which of these is the cause" has no answer, so
         §6.3 says show -- and showing both is the only reading that loses nothing.
         """
-        first = event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE)
-        second = event(EventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE)
+        first = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE)
+        second = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE)
         # Frozen events, so the cycle is built by copying rather than by assignment. The
         # ids are unchanged by the copy -- they exclude `caused_by` on purpose -- which is
         # what makes each of these still point at the other.
@@ -319,7 +319,7 @@ class TestNothingIsHiddenWithoutACause:
             doc.by_id[n.event_id].subject: d
             for root in tree.roots
             for n, d in root.walk()
-            if doc.by_id[n.event_id].kind is EventKind.NODE_REMOVED
+            if doc.by_id[n.event_id].kind is ChangeEventKind.NODE_REMOVED
         }
         assert (
             depths[NodeId("c:@N@n")]
@@ -708,7 +708,7 @@ class TestTheResidueIsReported:
         doc = pipeline(model("a", before), model("b", after))
 
         kinds = sorted(e.kind for e in doc.events)
-        assert kinds == [EventKind.NODE_ADDED, EventKind.NODE_REMOVED]
+        assert kinds == [ChangeEventKind.NODE_ADDED, ChangeEventKind.NODE_REMOVED]
 
         r = doc.summary.residue
         assert (r.unmatched_base, r.unmatched_head) == (1, 1)
@@ -928,7 +928,7 @@ class TestALabelNamesOneEntity:
         doc = specialization_document(
             record(TEMPLATE_USR, line=1056), record(PARTIAL_USR, line=1062)
         )
-        edges = [e for e in doc.events if e.kind is EventKind.EDGE_ADDED]
+        edges = [e for e in doc.events if e.kind is ChangeEventKind.EDGE_ADDED]
         rendered = [doc.label(e.subject) for e in edges]
 
         self_edges = [r for r in rendered if len(set(r.split(" -> "))) == 1]

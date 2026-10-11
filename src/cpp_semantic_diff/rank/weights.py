@@ -27,7 +27,7 @@ toward looking, not enough to reorder the page.
 
 from __future__ import annotations
 
-from cpp_semantic_diff.model import EventKind, MatchTier, Unpaired
+from cpp_semantic_diff.model import ChangeEventKind, MatchTier, Unpaired
 from cpp_semantic_diff.rank.exposure import Exposure
 
 # --------------------------------------------------------------------------------------
@@ -126,7 +126,7 @@ EXPOSURE_WEIGHT: dict[Exposure, float] = {
 # Novelty
 # --------------------------------------------------------------------------------------
 
-#: ARCH-001 §7: "added and removed outrank modified". Every `EventKind` appears, following
+#: ARCH-001 §7: "added and removed outrank modified". Every `ChangeEventKind` appears, following
 #: the convention `REQUIRED_PAYLOAD` sets in `events.py` -- adding a kind without deciding
 #: its weight should be a deliberate act, not an omission that silently scores zero.
 #:
@@ -141,18 +141,18 @@ EXPOSURE_WEIGHT: dict[Exposure, float] = {
 #: The derived kinds (§6.1) are mostly weighted high and none of them can fire in v0 (§13). They
 #: are computed conclusions rather than observations: an event that says "this became
 #: unreachable" has already done the reasoning a reviewer would otherwise have to do.
-NOVELTY_BY_KIND: dict[EventKind, float] = {
-    EventKind.NODE_REMOVED: 1.00,
-    EventKind.NODE_ADDED: 0.85,
-    EventKind.NODE_MOVED: 0.60,
-    EventKind.NODE_RENAMED: 0.55,
+NOVELTY_BY_KIND: dict[ChangeEventKind, float] = {
+    ChangeEventKind.NODE_REMOVED: 1.00,
+    ChangeEventKind.NODE_ADDED: 0.85,
+    ChangeEventKind.NODE_MOVED: 0.60,
+    ChangeEventKind.NODE_RENAMED: 0.55,
     # Also the fallback for an attribute `NOVELTY_BY_ATTR` does not name -- see below.
-    EventKind.NODE_ATTR_CHANGED: 0.65,
-    EventKind.NODE_BODY_CHANGED: 0.30,
-    EventKind.EDGE_REMOVED: 0.40,
-    EventKind.EDGE_ADDED: 0.35,
-    EventKind.EDGE_RETARGETED: 0.50,
-    EventKind.EDGE_KIND_CHANGED: 0.50,
+    ChangeEventKind.NODE_ATTR_CHANGED: 0.65,
+    ChangeEventKind.NODE_BODY_CHANGED: 0.30,
+    ChangeEventKind.EDGE_REMOVED: 0.40,
+    ChangeEventKind.EDGE_ADDED: 0.35,
+    ChangeEventKind.EDGE_RETARGETED: 0.50,
+    ChangeEventKind.EDGE_KIND_CHANGED: 0.50,
     # Above add/remove of an edge and level with `EdgeKindChanged`, for the reason
     # `diff/edges.py` gives: between two entities whose identity is already settled, a
     # relation that changed *state* is a specific semantic claim, where an edge that merely
@@ -160,13 +160,13 @@ NOVELTY_BY_KIND: dict[EventKind, float] = {
     # refined by `NOVELTY_BY_ATTR`: that table is calibrated for entity attributes, and the
     # edge attribute vocabulary is not settled yet -- reusing it would put `access` on an
     # `inherits` edge above a removed public function on the strength of a shared key name.
-    EventKind.EDGE_ATTR_CHANGED: 0.50,
-    EventKind.BECAME_UNREACHABLE: 0.80,
-    EventKind.BECAME_REACHABLE: 0.55,
-    EventKind.CYCLE_INTRODUCED: 0.90,
-    EventKind.FAN_IN_CHANGED: 0.40,
-    EventKind.LAYER_VIOLATION_INTRODUCED: 0.90,
-    EventKind.SIGNATURE_INCOMPATIBLE: 1.00,
+    ChangeEventKind.EDGE_ATTR_CHANGED: 0.50,
+    ChangeEventKind.BECAME_UNREACHABLE: 0.80,
+    ChangeEventKind.BECAME_REACHABLE: 0.55,
+    ChangeEventKind.CYCLE_INTRODUCED: 0.90,
+    ChangeEventKind.FAN_IN_CHANGED: 0.40,
+    ChangeEventKind.LAYER_VIOLATION_INTRODUCED: 0.90,
+    ChangeEventKind.SIGNATURE_INCOMPATIBLE: 1.00,
 }
 
 #: ARCH-001 §7: "attribute changes to `virtual`, `const`, access, and signature outrank body

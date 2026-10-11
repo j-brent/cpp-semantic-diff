@@ -18,7 +18,7 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from cpp_semantic_diff.model import Event, EventId, Model
+from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, Model
 from cpp_semantic_diff.rank import weights as w
 from cpp_semantic_diff.rank.components import Component, components
 from cpp_semantic_diff.rank.exposure import Exposure
@@ -41,7 +41,7 @@ class Ranking(BaseModel):
     )
 
     @property
-    def order(self) -> list[EventId]:
+    def order(self) -> list[ChangeEventId]:
         """ARCH-001 §10's `ranking: [event id]`."""
         return [s.event_id for s in self.scores]
 
@@ -85,14 +85,14 @@ class Ranking(BaseModel):
         """
         return sum(1 for s in self.scores if s.is_high_risk and s.exposure is not Exposure.VENDORED)
 
-    def score_for(self, event_id: EventId) -> RiskScore:
+    def score_for(self, event_id: ChangeEventId) -> RiskScore:
         for s in self.scores:
             if s.event_id == event_id:
                 return s
         raise KeyError(f"no score for {event_id}")
 
 
-def _cause_depth(events: Sequence[Event]) -> dict[EventId, int]:
+def _cause_depth(events: Sequence[ChangeEvent]) -> dict[ChangeEventId, int]:
     """How far down a cascade each event sits: 0 for a cause or an unlinked event.
 
     Used only as a tie-break. `_bound_by_cause` can leave a consequence scoring *exactly*
@@ -103,9 +103,9 @@ def _cause_depth(events: Sequence[Event]) -> dict[EventId, int]:
     """
     cause_of = {e.id: e.caused_by for e in events if e.caused_by is not None}
     known = {e.id for e in events}
-    depth: dict[EventId, int] = {}
+    depth: dict[ChangeEventId, int] = {}
 
-    def resolve(event_id: EventId, guard: frozenset[EventId]) -> int:
+    def resolve(event_id: ChangeEventId, guard: frozenset[ChangeEventId]) -> int:
         if event_id in depth:
             return depth[event_id]
         cause = cause_of.get(event_id)
@@ -126,7 +126,7 @@ def _cause_depth(events: Sequence[Event]) -> dict[EventId, int]:
     return depth
 
 
-def _bound_by_cause(scores: list[RiskScore], events: Sequence[Event]) -> list[RiskScore]:
+def _bound_by_cause(scores: list[RiskScore], events: Sequence[ChangeEvent]) -> list[RiskScore]:
     """No consequence outscores its cause (ARCH-001 §6.3, §7).
 
     §6.3 says a rename with 200 call-edge consequences is *one* event with 200
@@ -146,9 +146,9 @@ def _bound_by_cause(scores: list[RiskScore], events: Sequence[Event]) -> list[Ri
     """
     cause_of = {e.id: e.caused_by for e in events if e.caused_by is not None}
     by_id = {s.event_id: s for s in scores}
-    bounded: dict[EventId, RiskScore] = {}
+    bounded: dict[ChangeEventId, RiskScore] = {}
 
-    def resolve(event_id: EventId, guard: frozenset[EventId]) -> RiskScore:
+    def resolve(event_id: ChangeEventId, guard: frozenset[ChangeEventId]) -> RiskScore:
         if event_id in bounded:
             return bounded[event_id]
         score = by_id[event_id]
@@ -169,7 +169,7 @@ def _bound_by_cause(scores: list[RiskScore], events: Sequence[Event]) -> list[Ri
     return [resolve(s.event_id, frozenset({s.event_id})) for s in scores]
 
 
-def rank_events(events: Sequence[Event], base: Model, head: Model) -> Ranking:
+def rank_events(events: Sequence[ChangeEvent], base: Model, head: Model) -> Ranking:
     """Order the delta by risk and partition it into independent changes.
 
     **Vendored code sorts after everything first-party, whatever the scores say.** A reviewer

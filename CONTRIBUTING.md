@@ -98,7 +98,7 @@ record) in `docs/adr/`, one per file, numbered in the order decisions were made.
 - **Reserve the shared contracts when work is split across concurrent agents.** `model/ir.py` and
   `model/events.py` are what every stage agrees on; letting several workstreams edit them
   concurrently produces four partial versions of one decision. Held as read-only with a
-  stop-and-report rule, it caught four separate requests to change `Completeness` and `EventKind`,
+  stop-and-report rule, it caught four separate requests to change `Completeness` and `ChangeEventKind`,
   which were then done once as a coherent pass. **Commit coupled work together** — a stage emitting
   a new event kind and the ranker learning its weight are one commit, because either alone is a
   `KeyError`.

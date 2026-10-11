@@ -23,11 +23,11 @@ from cpp_semantic_diff.match import Correspondence, Match, match_models
 from cpp_semantic_diff.model import (
     UNREACHABLE_IN_V0,
     V0_KINDS,
+    ChangeEvent,
+    ChangeEventKind,
     Completeness,
     Edge,
     EdgeKind,
-    Event,
-    EventKind,
     Location,
     MatchTier,
     Model,
@@ -67,15 +67,17 @@ def calls(src: str, dst: str, line: int = 1, **kw: Any) -> Edge:
     )
 
 
-def diff(base: Model, head: Model, correspondence: Correspondence | None = None) -> list[Event]:
+def diff(
+    base: Model, head: Model, correspondence: Correspondence | None = None
+) -> list[ChangeEvent]:
     return diff_models(base, head, correspondence or match_models(base, head))
 
 
-def kinds(events: list[Event]) -> list[str]:
+def kinds(events: list[ChangeEvent]) -> list[str]:
     return sorted(e.kind.value for e in events)
 
 
-def only(events: list[Event], kind: EventKind) -> Event:
+def only(events: list[ChangeEvent], kind: ChangeEventKind) -> ChangeEvent:
     matching = [e for e in events if e.kind is kind]
     assert len(matching) == 1, f"expected one {kind.value}, got {kinds(events)}"
     return matching[0]
@@ -153,8 +155,8 @@ class TestRenamesLookBadOnPurpose:
         head = model("b", node("c:@F@calculate#", name="calculate", body_hash="same"))
         events = diff(base, head)
         assert kinds(events) == ["NodeAdded", "NodeRemoved"]
-        assert only(events, EventKind.NODE_REMOVED).subject == "c:@F@compute#"
-        assert only(events, EventKind.NODE_ADDED).subject == "c:@F@calculate#"
+        assert only(events, ChangeEventKind.NODE_REMOVED).subject == "c:@F@compute#"
+        assert only(events, ChangeEventKind.NODE_ADDED).subject == "c:@F@calculate#"
 
     def test_the_two_halves_of_a_rename_carry_no_tier(self) -> None:
         """ARCH-001 §11. Neither half rests on a match, so neither may claim one."""
@@ -170,7 +172,7 @@ class TestRenamesLookBadOnPurpose:
         base = model("a", node("c:@F@compute#", name="compute", body_hash="same"))
         head = model("b", node("c:@F@calculate#", name="calculate", body_hash="same"))
         corr = paired(base, head, ("c:@F@compute#", "c:@F@calculate#"), tier=MatchTier.STRUCTURAL)
-        event = only(diff(base, head, corr), EventKind.NODE_RENAMED)
+        event = only(diff(base, head, corr), ChangeEventKind.NODE_RENAMED)
         assert event.payload == {"old_name": "compute", "new_name": "calculate"}
         assert event.subject == "c:@F@calculate#"
         assert event.confidence.tier is MatchTier.STRUCTURAL
@@ -204,7 +206,7 @@ class TestAMoveIsAChangeOfContainerNotOfFile:
             self.child(),
             edges=[calls("c:@S@D", self.CHILD, kind=EdgeKind.CONTAINS)],
         )
-        event = only(diff(base, head), EventKind.NODE_MOVED)
+        event = only(diff(base, head), ChangeEventKind.NODE_MOVED)
         assert event.payload == {"old_parent": C, "new_parent": "c:@S@D"}
 
     def test_a_member_of_a_renamed_container_has_not_moved(self) -> None:
@@ -244,7 +246,7 @@ class TestOneAttributeChangeIsOneEvent:
     def test_one_changed_attribute_names_itself_and_nothing_else(self) -> None:
         base = model("a", node(F, attrs={"virtual": False, "const": True}))
         head = model("b", node(F, attrs={"virtual": True, "const": True}))
-        event = only(diff(base, head), EventKind.NODE_ATTR_CHANGED)
+        event = only(diff(base, head), ChangeEventKind.NODE_ATTR_CHANGED)
         assert event.payload == {"attr": "virtual", "old": False, "new": True}
 
     def test_two_changed_attributes_are_two_events(self) -> None:
@@ -255,7 +257,7 @@ class TestOneAttributeChangeIsOneEvent:
     def test_an_attribute_that_appears_is_a_change(self) -> None:
         base = model("a", node(F, attrs={}))
         head = model("b", node(F, attrs={"virtual": True}))
-        event = only(diff(base, head), EventKind.NODE_ATTR_CHANGED)
+        event = only(diff(base, head), ChangeEventKind.NODE_ATTR_CHANGED)
         assert event.payload == {"attr": "virtual", "old": None, "new": True}
 
     def test_an_attribute_that_disappears_is_a_change(self) -> None:
@@ -263,7 +265,7 @@ class TestOneAttributeChangeIsOneEvent:
         false are the same shape, and `if not old` would swallow both."""
         base = model("a", node(F, attrs={"virtual": False}))
         head = model("b", node(F, attrs={}))
-        event = only(diff(base, head), EventKind.NODE_ATTR_CHANGED)
+        event = only(diff(base, head), ChangeEventKind.NODE_ATTR_CHANGED)
         assert event.payload == {"attr": "virtual", "old": False, "new": None}
 
     def test_absent_and_explicitly_none_are_the_same_state(self) -> None:
@@ -278,7 +280,7 @@ class TestOneAttributeChangeIsOneEvent:
         past an `==` comparison -- exactly the sort of drift that is invisible later."""
         base = model("a", node(F, attrs={"bitfield_width": False}))
         head = model("b", node(F, attrs={"bitfield_width": 0}))
-        assert only(diff(base, head), EventKind.NODE_ATTR_CHANGED).payload["new"] == 0
+        assert only(diff(base, head), ChangeEventKind.NODE_ATTR_CHANGED).payload["new"] == 0
 
 
 class TestABodyChangeIsNotAnAttributeChange:
@@ -352,7 +354,7 @@ class TestEdgesAreMatchedThroughTheCorrespondence:
     def test_a_dropped_call_between_two_matched_nodes_is_one_removal(self) -> None:
         base = model("a", node(F), node(G, name="g"), edges=[calls(F, G)])
         head = model("b", node(F), node(G, name="g"))
-        event = only(diff(base, head), EventKind.EDGE_REMOVED)
+        event = only(diff(base, head), ChangeEventKind.EDGE_REMOVED)
         assert event.subject == f"{F}|calls|{G}"
         assert [h.side for h in event.provenance] == [Side.BASE]
 
@@ -379,7 +381,7 @@ class TestEdgesAreMatchedThroughTheCorrespondence:
         both = (node(F), node(G, name="g"))
         base = model("a", *both, edges=[calls(F, G)])
         head = model("b", *both, edges=[calls(F, G, kind=EdgeKind.OVERRIDES)])
-        event = only(diff(base, head), EventKind.EDGE_KIND_CHANGED)
+        event = only(diff(base, head), ChangeEventKind.EDGE_KIND_CHANGED)
         assert event.payload == {"old_kind": "calls", "new_kind": "overrides"}
         assert {h.side for h in event.provenance} == {Side.BASE, Side.HEAD}
 
@@ -456,7 +458,7 @@ class TestAnEdgeAttributeChangeIsAChange:
 
     def test_a_base_class_going_private_is_reported(self) -> None:
         base, head = self.sides("public", "private")
-        event = only(diff(base, head), EventKind.EDGE_ATTR_CHANGED)
+        event = only(diff(base, head), ChangeEventKind.EDGE_ATTR_CHANGED)
         assert event.payload == {"attr": "access", "old": "public", "new": "private"}
         assert event.subject == f"{self.DERIVED}|inherits|{self.BASE_CLASS}"
 
@@ -467,7 +469,7 @@ class TestAnEdgeAttributeChangeIsAChange:
     def test_the_event_points_at_both_sides(self) -> None:
         """§6.2: the reviewer has to reach the old attribute as well as the new one."""
         base, head = self.sides("public", "private")
-        event = only(diff(base, head), EventKind.EDGE_ATTR_CHANGED)
+        event = only(diff(base, head), ChangeEventKind.EDGE_ATTR_CHANGED)
         assert {h.side for h in event.provenance} == {Side.BASE, Side.HEAD}
 
     def test_the_comparison_is_the_one_nodes_already_use(self) -> None:
@@ -479,14 +481,14 @@ class TestAnEdgeAttributeChangeIsAChange:
             "a", node(F), node(G, name="g"), edges=[calls(F, G, attrs={"virtual": False})]
         )
         vanished = model("b", node(F), node(G, name="g"), edges=[calls(F, G)])
-        assert only(diff(appeared, vanished), EventKind.EDGE_ATTR_CHANGED).payload == {
+        assert only(diff(appeared, vanished), ChangeEventKind.EDGE_ATTR_CHANGED).payload == {
             "attr": "virtual",
             "old": False,
             "new": None,
         }
 
         flipped = model("b", node(F), node(G, name="g"), edges=[calls(F, G, attrs={"virtual": 0})])
-        assert only(diff(appeared, flipped), EventKind.EDGE_ATTR_CHANGED).payload["new"] == 0
+        assert only(diff(appeared, flipped), ChangeEventKind.EDGE_ATTR_CHANGED).payload["new"] == 0
 
     def test_two_changed_attributes_on_one_edge_are_two_events(self) -> None:
         """One event per attribute, each naming its own -- the same shape §6.1 gives
@@ -523,7 +525,9 @@ class TestAnEdgeAttributeChangeIsAChange:
         )
         events = diff(base, head, corr)
         assert kinds(events) == ["EdgeAttrChanged", "NodeRenamed", "NodeRenamed"]
-        assert only(events, EventKind.EDGE_ATTR_CHANGED).confidence.tier is MatchTier.STRUCTURAL
+        assert (
+            only(events, ChangeEventKind.EDGE_ATTR_CHANGED).confidence.tier is MatchTier.STRUCTURAL
+        )
 
 
 class TestTheEventSetIsComplete:
@@ -589,7 +593,7 @@ class TestTheEventSetIsComplete:
         produced = {e.kind for e in diff(base, head)}
         assert produced <= V0_KINDS
         assert not produced & UNREACHABLE_IN_V0
-        assert {EventKind.EDGE_KIND_CHANGED, EventKind.EDGE_ATTR_CHANGED} <= produced
+        assert {ChangeEventKind.EDGE_KIND_CHANGED, ChangeEventKind.EDGE_ATTR_CHANGED} <= produced
 
 
 class TestConfidenceIsNeverLaundered:
@@ -599,7 +603,7 @@ class TestConfidenceIsNeverLaundered:
     def test_a_matched_node_reports_the_tier_that_matched_it(self) -> None:
         base = model("a", node(F, body_hash="aaa"))
         head = model("b", node(F, body_hash="bbb"))
-        assert only(diff(base, head), EventKind.NODE_BODY_CHANGED).confidence.tier is (
+        assert only(diff(base, head), ChangeEventKind.NODE_BODY_CHANGED).confidence.tier is (
             MatchTier.DECLARED
         )
 
@@ -617,9 +621,9 @@ class TestConfidenceIsNeverLaundered:
         whole = Completeness(tus_total=1, tus=[TuResult(path="a.cpp", status=TuStatus.PARSED)])
         base = model("a", node(F, body_hash="aaa"), completeness=broken)
         head = model("b", node(F, body_hash="bbb"), completeness=whole)
-        assert only(diff(base, head), EventKind.NODE_BODY_CHANGED).confidence.models_complete is (
-            False
-        )
+        assert only(
+            diff(base, head), ChangeEventKind.NODE_BODY_CHANGED
+        ).confidence.models_complete is (False)
 
     def test_an_edge_is_no_more_confident_than_its_weaker_endpoint(self) -> None:
         """An edge event is a claim about two entities. Taking the stronger tier -- or the
@@ -638,21 +642,21 @@ class TestConfidenceIsNeverLaundered:
             ],
             tiers_run=[MatchTier.DECLARED, MatchTier.SIMILARITY],
         )
-        assert only(diff(base, head, corr), EventKind.EDGE_REMOVED).confidence.tier is (
+        assert only(diff(base, head, corr), ChangeEventKind.EDGE_REMOVED).confidence.tier is (
             MatchTier.SIMILARITY
         )
 
     def test_an_edge_with_an_unmatched_endpoint_has_no_tier(self) -> None:
         base = model("a", node(F), node(G, name="g"), edges=[calls(F, G)])
         head = model("b", node(F))
-        assert only(diff(base, head), EventKind.EDGE_REMOVED).confidence.tier is None
+        assert only(diff(base, head), ChangeEventKind.EDGE_REMOVED).confidence.tier is None
 
     def test_an_unmatched_node_carries_why_it_is_unmatched(self) -> None:
         """ADR-034: no partner is not doubt. The match stage says which it is, and the
         event carries that verbatim for rank to weigh."""
         base = model("a", node(F))
         head = model("b", node(F), node(G, name="g"))
-        confidence = only(diff(base, head), EventKind.NODE_ADDED).confidence
+        confidence = only(diff(base, head), ChangeEventKind.NODE_ADDED).confidence
         assert (confidence.tier, confidence.unpaired) == (None, Unpaired.NONE)
 
     def test_an_edge_to_an_unmatched_node_carries_that_node_s_unpaired_reason(self) -> None:
@@ -661,7 +665,7 @@ class TestConfidenceIsNeverLaundered:
         maximum because one endpoint had no tier."""
         base = model("a", node(F))
         head = model("b", node(F), node(G, name="g"), edges=[calls(F, G)])
-        confidence = only(diff(base, head), EventKind.EDGE_ADDED).confidence
+        confidence = only(diff(base, head), ChangeEventKind.EDGE_ADDED).confidence
         assert (confidence.tier, confidence.unpaired) == (None, Unpaired.NONE)
 
     def test_an_edge_takes_the_more_doubtful_of_two_unmatched_endpoints(self) -> None:
@@ -674,7 +678,7 @@ class TestConfidenceIsNeverLaundered:
             unpaired_base={a: Unpaired.CANDIDATE},
             unpaired_head={x: Unpaired.AMBIGUOUS, y: Unpaired.CANDIDATE},
         )
-        confidence = only(diff(base, head, corr), EventKind.EDGE_ADDED).confidence
+        confidence = only(diff(base, head, corr), ChangeEventKind.EDGE_ADDED).confidence
         assert (confidence.tier, confidence.unpaired) == (None, Unpaired.AMBIGUOUS)
 
 
@@ -685,7 +689,7 @@ class TestProvenanceRunsBothWays:
     def test_a_two_sided_event_carries_a_hunk_from_each_side(self) -> None:
         base = model("a", node(F, body_hash="aaa", location=Location(file="a.h", line=3)))
         head = model("b", node(F, body_hash="bbb", location=Location(file="a.h", line=91)))
-        event = only(diff(base, head), EventKind.NODE_BODY_CHANGED)
+        event = only(diff(base, head), ChangeEventKind.NODE_BODY_CHANGED)
         assert [(h.side, h.location.line) for h in event.provenance] == [
             (Side.BASE, 3),
             (Side.HEAD, 91),
@@ -693,7 +697,7 @@ class TestProvenanceRunsBothWays:
 
     def test_a_one_sided_event_carries_only_that_side(self) -> None:
         base = model("a", node(F, location=Location(file="a.h", line=3)))
-        event = only(diff(base, model("b")), EventKind.NODE_REMOVED)
+        event = only(diff(base, model("b")), ChangeEventKind.NODE_REMOVED)
         assert [(h.side, h.location.file) for h in event.provenance] == [(Side.BASE, "a.h")]
 
     def test_every_call_site_of_an_edge_is_a_hunk(self) -> None:
@@ -707,7 +711,7 @@ class TestProvenanceRunsBothWays:
         )
         base = model("a", node(F), node(G, name="g"), edges=[edge])
         head = model("b", node(F), node(G, name="g"))
-        assert len(only(diff(base, head), EventKind.EDGE_REMOVED).provenance) == 2
+        assert len(only(diff(base, head), ChangeEventKind.EDGE_REMOVED).provenance) == 2
 
 
 class TestTheStageIsAPureFunction:
@@ -850,4 +854,4 @@ class TestTheDroppedEdgeAsymmetryIsInherited:
         head = model("b", node(F), node(G, name="g"), edges=[calls(F, G)])
         events = diff(base, head)
         assert kinds(events) == ["EdgeAdded", "NodeAdded"]
-        assert only(events, EventKind.NODE_ADDED).subject == G
+        assert only(events, ChangeEventKind.NODE_ADDED).subject == G

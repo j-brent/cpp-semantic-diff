@@ -1,6 +1,6 @@
 """The delta: what a two-point analysis is allowed to say.
 
-ARCH-001 §6. The event set is **closed**. A new signal becomes a new `EventKind`, never a
+ARCH-001 §6. The event set is **closed**. A new signal becomes a new `ChangeEventKind`, never a
 new string in a free-form field -- because every downstream stage (classify's cause rules
 §6.3, rank's novelty weights §7, render's collapse §6.3) switches on the kind, and a
 stringly-typed kind turns each of those into a place where an unknown value is silently
@@ -26,10 +26,10 @@ from cpp_semantic_diff.model.ir import (
     MatchTier,
 )
 
-EventId = NewType("EventId", str)
+ChangeEventId = NewType("ChangeEventId", str)
 
 
-class EventKind(StrEnum):
+class ChangeEventKind(StrEnum):
     """The closed set of ARCH-001 §6.1.
 
     Node and edge events are read off the two models plus the correspondence. Derived
@@ -69,28 +69,28 @@ class EventKind(StrEnum):
     SIGNATURE_INCOMPATIBLE = "SignatureIncompatible"
 
 
-NODE_KINDS: frozenset[EventKind] = frozenset(
+NODE_KINDS: frozenset[ChangeEventKind] = frozenset(
     {
-        EventKind.NODE_ADDED,
-        EventKind.NODE_REMOVED,
-        EventKind.NODE_MOVED,
-        EventKind.NODE_RENAMED,
-        EventKind.NODE_ATTR_CHANGED,
-        EventKind.NODE_BODY_CHANGED,
+        ChangeEventKind.NODE_ADDED,
+        ChangeEventKind.NODE_REMOVED,
+        ChangeEventKind.NODE_MOVED,
+        ChangeEventKind.NODE_RENAMED,
+        ChangeEventKind.NODE_ATTR_CHANGED,
+        ChangeEventKind.NODE_BODY_CHANGED,
     }
 )
 
-EDGE_KINDS: frozenset[EventKind] = frozenset(
+EDGE_KINDS: frozenset[ChangeEventKind] = frozenset(
     {
-        EventKind.EDGE_ADDED,
-        EventKind.EDGE_REMOVED,
-        EventKind.EDGE_RETARGETED,
-        EventKind.EDGE_KIND_CHANGED,
-        EventKind.EDGE_ATTR_CHANGED,
+        ChangeEventKind.EDGE_ADDED,
+        ChangeEventKind.EDGE_REMOVED,
+        ChangeEventKind.EDGE_RETARGETED,
+        ChangeEventKind.EDGE_KIND_CHANGED,
+        ChangeEventKind.EDGE_ATTR_CHANGED,
     }
 )
 
-DERIVED_KINDS: frozenset[EventKind] = frozenset(EventKind) - NODE_KINDS - EDGE_KINDS
+DERIVED_KINDS: frozenset[ChangeEventKind] = frozenset(ChangeEventKind) - NODE_KINDS - EDGE_KINDS
 
 #: What v0 actually emits: ARCH-001 §13's "node add/remove/attr/body and edge
 #: add/remove/kind/attr". `EdgeKindChanged` and `EdgeAttrChanged` are reachable on tier-1
@@ -102,26 +102,26 @@ DERIVED_KINDS: frozenset[EventKind] = frozenset(EventKind) - NODE_KINDS - EDGE_K
 #: What stays out is what v0 genuinely cannot reach: `NodeRenamed` and `NodeMoved` need a
 #: tier past 1 (the USR encodes name and scope, so a matched pair agrees on both by
 #: construction), `EdgeRetargeted` is refused outright (§6.1), and the derived kinds are
-#: deferred by §13. The rest of the set is still declared in `EventKind` because the schema
+#: deferred by §13. The rest of the set is still declared in `ChangeEventKind` because the schema
 #: is the contract the whole pipeline is written against; declaring it late would mean
 #: rewriting consumers rather than extending them.
-V0_KINDS: frozenset[EventKind] = frozenset(
+V0_KINDS: frozenset[ChangeEventKind] = frozenset(
     {
-        EventKind.NODE_ADDED,
-        EventKind.NODE_REMOVED,
-        EventKind.NODE_ATTR_CHANGED,
-        EventKind.NODE_BODY_CHANGED,
-        EventKind.EDGE_ADDED,
-        EventKind.EDGE_REMOVED,
-        EventKind.EDGE_KIND_CHANGED,
-        EventKind.EDGE_ATTR_CHANGED,
+        ChangeEventKind.NODE_ADDED,
+        ChangeEventKind.NODE_REMOVED,
+        ChangeEventKind.NODE_ATTR_CHANGED,
+        ChangeEventKind.NODE_BODY_CHANGED,
+        ChangeEventKind.EDGE_ADDED,
+        ChangeEventKind.EDGE_REMOVED,
+        ChangeEventKind.EDGE_KIND_CHANGED,
+        ChangeEventKind.EDGE_ATTR_CHANGED,
     }
 )
 
 #: The other half of what `V0_KINDS` says, stated positively so a test can assert it: kinds no
 #: amount of real v0 input can produce. A delta containing one of these means a later tier
 #: landed, or that some stage started inferring identity on its own.
-UNREACHABLE_IN_V0: frozenset[EventKind] = frozenset(EventKind) - V0_KINDS
+UNREACHABLE_IN_V0: frozenset[ChangeEventKind] = frozenset(ChangeEventKind) - V0_KINDS
 
 #: Payload keys a kind must carry, for the kinds ARCH-001 §6.1 names or directly implies.
 #: This is a floor, not a ceiling: a kind may carry more, but a consumer switching on the
@@ -129,27 +129,27 @@ UNREACHABLE_IN_V0: frozenset[EventKind] = frozenset(EventKind) - V0_KINDS
 #: their payloads are not designed yet (§13 puts them out of v0) -- an empty entry here
 #: means "undesigned", and adding a kind without adding an entry is a deliberate choice
 #: rather than an oversight, which is why every kind appears.
-REQUIRED_PAYLOAD: dict[EventKind, frozenset[str]] = {
-    EventKind.NODE_ADDED: frozenset(),
-    EventKind.NODE_REMOVED: frozenset(),
-    EventKind.NODE_MOVED: frozenset({"old_parent", "new_parent"}),
-    EventKind.NODE_RENAMED: frozenset({"old_name", "new_name"}),
-    EventKind.NODE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
-    EventKind.NODE_BODY_CHANGED: frozenset(),
-    EventKind.EDGE_ADDED: frozenset(),
-    EventKind.EDGE_REMOVED: frozenset(),
-    EventKind.EDGE_RETARGETED: frozenset({"old_dst", "new_dst"}),
-    EventKind.EDGE_KIND_CHANGED: frozenset({"old_kind", "new_kind"}),
+REQUIRED_PAYLOAD: dict[ChangeEventKind, frozenset[str]] = {
+    ChangeEventKind.NODE_ADDED: frozenset(),
+    ChangeEventKind.NODE_REMOVED: frozenset(),
+    ChangeEventKind.NODE_MOVED: frozenset({"old_parent", "new_parent"}),
+    ChangeEventKind.NODE_RENAMED: frozenset({"old_name", "new_name"}),
+    ChangeEventKind.NODE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
+    ChangeEventKind.NODE_BODY_CHANGED: frozenset(),
+    ChangeEventKind.EDGE_ADDED: frozenset(),
+    ChangeEventKind.EDGE_REMOVED: frozenset(),
+    ChangeEventKind.EDGE_RETARGETED: frozenset({"old_dst", "new_dst"}),
+    ChangeEventKind.EDGE_KIND_CHANGED: frozenset({"old_kind", "new_kind"}),
     # The same three keys as `NodeAttrChanged`, deliberately: it is the same mechanical
     # attribute diff (§4.3) over `Edge.attrs` instead of `Node.attrs`, and a consumer that
     # can read one should not have to learn a second shape to read the other.
-    EventKind.EDGE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
-    EventKind.BECAME_UNREACHABLE: frozenset(),
-    EventKind.BECAME_REACHABLE: frozenset(),
-    EventKind.CYCLE_INTRODUCED: frozenset(),
-    EventKind.FAN_IN_CHANGED: frozenset(),
-    EventKind.LAYER_VIOLATION_INTRODUCED: frozenset(),
-    EventKind.SIGNATURE_INCOMPATIBLE: frozenset(),
+    ChangeEventKind.EDGE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
+    ChangeEventKind.BECAME_UNREACHABLE: frozenset(),
+    ChangeEventKind.BECAME_REACHABLE: frozenset(),
+    ChangeEventKind.CYCLE_INTRODUCED: frozenset(),
+    ChangeEventKind.FAN_IN_CHANGED: frozenset(),
+    ChangeEventKind.LAYER_VIOLATION_INTRODUCED: frozenset(),
+    ChangeEventKind.SIGNATURE_INCOMPATIBLE: frozenset(),
 }
 
 
@@ -284,7 +284,7 @@ class Confidence(BaseModel):
         )
 
 
-def _derive_id(kind: EventKind, subject: str, payload: dict[str, AttrValue]) -> EventId:
+def _derive_id(kind: ChangeEventKind, subject: str, payload: dict[str, AttrValue]) -> ChangeEventId:
     """Content-derived, so that re-running the pipeline produces the same JSON.
 
     A counter would make ids depend on iteration order, which breaks the §3 promise that
@@ -299,10 +299,10 @@ def _derive_id(kind: EventKind, subject: str, payload: dict[str, AttrValue]) -> 
     h.update(subject.encode())
     for key in sorted(payload):
         h.update(f"\x00{key}={payload[key]!r}".encode())
-    return EventId(f"{kind.value}:{h.hexdigest()}")
+    return ChangeEventId(f"{kind.value}:{h.hexdigest()}")
 
 
-class Event(BaseModel):
+class ChangeEvent(BaseModel):
     """ARCH-001 §6.2. The fields are exactly the seven named there.
 
     **Frozen**, like `Match`, `Hunk` and `Confidence`. ARCH-001 §3 specifies every stage as
@@ -322,12 +322,12 @@ class Event(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    id: EventId = Field(
-        default=EventId(""),
+    id: ChangeEventId = Field(
+        default=ChangeEventId(""),
         description="Derived from kind + subject + payload when not supplied, so it is "
         "stable across runs and survives a JSON round trip.",
     )
-    kind: EventKind
+    kind: ChangeEventKind
     subject: AnyId
 
     payload: dict[str, AttrValue] = Field(
@@ -337,7 +337,7 @@ class Event(BaseModel):
         "would need bespoke construction and bespoke rendering per kind.",
     )
 
-    caused_by: EventId | None = Field(
+    caused_by: ChangeEventId | None = Field(
         default=None,
         description="The event this one is a consequence of (ARCH-001 §6.3). A link, never "
         "a removal: collapse happens at render, so the JSON always carries the full set. "
@@ -367,7 +367,7 @@ class Event(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _complete_the_event(self) -> Event:
+    def _complete_the_event(self) -> ChangeEvent:
         missing = REQUIRED_PAYLOAD[self.kind] - self.payload.keys()
         if missing:
             raise ValueError(
@@ -390,7 +390,7 @@ class Event(BaseModel):
         return self.kind in DERIVED_KINDS
 
 
-def events_at(events: Iterable[Event], side: Side, file: str, line: int) -> list[Event]:
+def events_at(events: Iterable[ChangeEvent], side: Side, file: str, line: int) -> list[ChangeEvent]:
     """The reverse half of ARCH-001 §6.2: from a source line to the events it caused.
 
     Without this direction the tool is a second artifact to read *alongside* the diff, which
