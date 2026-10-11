@@ -81,8 +81,10 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #:   `summary.top_level_events` -> `summary.top_level_change_events`,
 #:   `components[].events` -> `components[].change_events`, and
 #:   `scores{}.event_id` -> `scores{}.change_event_id`.
-#: - Removed: `summary.vendored_events`. Third-party code is not in the model (ADR-025), so
-#:   `compression_ratio` and `high_risk_count` are taken over every change event.
+#: - Removed: `summary.vendored_events`, and the exposure class `vendored` from
+#:   `scores{}.exposure` and the exposure factor. Third-party code is not in the model
+#:   (ADR-025), so `compression_ratio` and `high_risk_count` are taken over every change
+#:   event.
 #: - Changed meaning: `completeness.*.edges_dropped` counts every relation that leads
 #:   outside the model, third-party code included, and `edges_total` is resolved edges plus
 #:   those.
@@ -90,10 +92,12 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #:   `crossings`, from the referenced entities only; `completeness.renames`;
 #:   `completeness.uncovered` with `summary.changed_cpp_lines`, `uncovered_lines` and
 #:   `uncovered_tokens` (ADR-042); what the producer cannot see in `completeness.limits`;
-#:   `meta.timings.derive` and `coverage`.
+#:   `meta.timings.derive` and `coverage`; `Location.start_line`.
 #: - Change events: `NodeSignatureChanged` and `CallerOfChangedSignature` are new kinds and
 #:   `SignatureIncompatible` is gone; `confidence.unpaired` says why an entity is
 #:   unmatched; the match tiers `inline-namespace` and `name` are new.
+#: - Entities: the kinds `macro` and `static_assertion` are new, and enums, enumerators,
+#:   aliases and variables are now modelled, so they appear as entities (ADR-038, ADR-039).
 SCHEMA_VERSION = "2.0.dev"
 
 #: ARCH-001 §11: systematic limits "get stated in the output itself, every time". These are the
@@ -684,10 +688,9 @@ class Summary(BaseModel):
         "events, 2 high-risk'. Rendered here so every view prints the same claim."
     )
     compression_ratio: float | None = Field(
-        description="lines_changed / change_events_reported. None when there are no change "
-        "events, "
-        "because 'infinite compression' and 'no change the model can see' are different "
-        "facts, and a sentinel would let a consumer average over them."
+        description="lines_changed / change_events_reported. None when there are no "
+        "change events, because 'infinite compression' and 'no change the model can see' "
+        "are different facts, and a sentinel would let a consumer average over them."
     )
     high_risk_count: int = Field(
         description="Change events whose `impact` is at or above `rank.HIGH_RISK`. `impact` "

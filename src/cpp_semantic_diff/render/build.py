@@ -19,7 +19,7 @@ itself, and there is no filter, bucket or threshold here that could flatter it.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from cpp_semantic_diff import __version__
 from cpp_semantic_diff.acquire import RenameLimitHit, RevPair, ThirdPartySet
@@ -122,8 +122,8 @@ def build_document(
         ],
         entities=entities,
         crossings=CrossingsBlock(
-            base=_crossings_from(base, entities),
-            head=_crossings_from(head, entities),
+            base=_crossings_from(base, entities, correspondence.head_for),
+            head=_crossings_from(head, entities, correspondence.base_for),
         ),
         # The complete, uncollapsed set (§6.3). Copied into a list rather than aliased:
         # a document that shared its list with the caller's would let a later mutation
@@ -209,9 +209,23 @@ def compression_sentence(
     return f"{head}, {high_risk:,} high-risk{unexplained}"
 
 
-def _crossings_from(model: Model, entities: dict[NodeId, EntitySummary]) -> list[Crossing]:
-    """The model's crossings whose caller is a referenced entity, in a stable order."""
-    return sorted((c for c in model.crossings if c.src in entities), key=lambda c: c.id)
+def _crossings_from(
+    model: Model,
+    entities: dict[NodeId, EntitySummary],
+    partner: Callable[[NodeId], NodeId | None],
+) -> list[Crossing]:
+    """The model's crossings whose caller is a referenced entity, in a stable order.
+
+    The caller counts when its own id or its partner on the other side is referenced:
+    `entities` holds one id per matched entity, and a function the name tier paired has a
+    different id on each side (ADR-036), so its crossings on the other side would be lost.
+    """
+
+    def referenced(src: NodeId) -> bool:
+        other = partner(src)
+        return src in entities or (other is not None and other in entities)
+
+    return sorted((c for c in model.crossings if referenced(c.src)), key=lambda c: c.id)
 
 
 def _uncovered(coverage: Coverage | None) -> UncoveredReport | None:

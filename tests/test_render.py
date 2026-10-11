@@ -1380,6 +1380,25 @@ class TestANamePairedFunctionIsOnBothSides:
         assert doc.entities[NodeId(self.OLD)].sides == ["base", "head"]
         assert "- " not in draw(doc, collapse_cascades=False)
 
+    def test_its_crossings_are_listed_on_both_sides(self) -> None:
+        """`entities` holds the head id only, so a base-side crossing is found through the
+        correspondence or it is lost."""
+
+        def out(src: str) -> Crossing:
+            return Crossing(src=NodeId(src), callee="lib::g", kind=EdgeKind.CALLS, label="vendor")
+
+        base = model(
+            "a", node(self.OLD, name="f", signature="void (int)"), crossings=[out(self.OLD)]
+        )
+        head = model(
+            "b", node(self.NEW, name="f", signature="void (int, int)"), crossings=[out(self.NEW)]
+        )
+        doc = pipeline(base, head)
+
+        assert NodeId(self.OLD) not in doc.entities, "the gap this test exists for"
+        assert [c.src for c in doc.crossings.base] == [self.OLD]
+        assert [c.src for c in doc.crossings.head] == [self.NEW]
+
 
 # -- 6 · a label is not an identity, and must not pretend to be one ------------------------
 
