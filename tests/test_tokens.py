@@ -13,6 +13,7 @@ from conftest import commit, git, move
 from cpp_semantic_diff.acquire.git import RevPair
 from cpp_semantic_diff.acquire.third_party import ThirdPartyEntry, ThirdPartySet, ThirdPartySource
 from cpp_semantic_diff.acquire.tokens import (
+    ExcludedFile,
     LineHunk,
     TokenRun,
     changed_runs,
@@ -313,3 +314,21 @@ class TestAskingGit:
         git(bare_repo, "commit", "-q", "-m", "binary")
         delta = token_delta(bare_repo, self.revs(bare_repo, base))
         assert [(e.path, e.reason) for e in delta.excluded_files] == [("blob.h", "binary")]
+
+    def test_a_binary_third_party_file_is_excluded_as_third_party_not_binary(
+        self, bare_repo: Path
+    ) -> None:
+        """Being the repository's dependency is the more fundamental reason it is not
+        modelled (ADR-025): a binary file inside a third-party directory must say so, not
+        merely that it is binary -- the two reasons are not interchangeable to a reader
+        deciding whether `--third-party` is missing something."""
+        base = commit(bare_repo, "src/own.h", "int own = 1;\n", "A")
+        (bare_repo / "vendor").mkdir()
+        (bare_repo / "vendor" / "blob.h").write_bytes(b"\x00\x01\x02")
+        git(bare_repo, "add", "vendor/blob.h")
+        git(bare_repo, "commit", "-q", "-m", "binary vendor file")
+        vendor = ThirdPartySet(
+            entries=(ThirdPartyEntry("vendor", frozenset({ThirdPartySource.DECLARED})),)
+        )
+        delta = token_delta(bare_repo, self.revs(bare_repo, base), third_party=vendor)
+        assert delta.excluded_files == (ExcludedFile("vendor/blob.h", "third-party"),)
