@@ -451,6 +451,13 @@ CATALOG = [
     # of everything in it (ADR-044). Only an inline namespace, only one for one, and only
     # where something inside pairs through it.
     case(
+        "inline-namespace-bumped-and-signature-changed",
+        "namespace lib { inline namespace v1 { void f(int) {} void g() {} } }",
+        "namespace lib { inline namespace v2 { void f(long) {} void g() {} } }",
+        changed("lib::v2::f", was="void (int)", now="void (long)"),
+        not_replaced("f"),
+    ),
+    case(
         "inline-namespace-bumped-type-in-signature",
         "namespace lib { inline namespace v1 { struct S {}; void f(S) {} } }",
         "namespace lib { inline namespace v2 { struct S {}; void f(S) {} } }",
