@@ -119,6 +119,7 @@ def _completeness(document: DiffDocument, console: Console) -> None:
     if not block.degraded:
         console.print(f"[dim]{parsed} · both sides parsed clean[/]")
         _boundary(block, console)
+        _unmodelled(block, console)
         # Both sides can parse perfectly and still have been asked different questions.
         _language_mode(block, console)
         return
@@ -149,6 +150,7 @@ def _completeness(document: DiffDocument, console: Console) -> None:
             console.print(f"  [dim]{report.side.value:4} … {len(report.failures) - 5} more[/]")
     console.print(f"  [dim]{parsed}[/]")
     _boundary(block, console)
+    _unmodelled(block, console)
     _language_mode(block, console)
 
 
@@ -173,6 +175,24 @@ def _language_mode(block: CompletenessBlock, console: Console) -> None:
         f"head {now or 'unset'} — additions and removals may be the standard "
         f"moving rather than the code[/]"
     )
+
+
+def _unmodelled(block: CompletenessBlock, console: Console) -> None:
+    """What is declared in the repository and not in the model, per side, by kind (#6).
+
+    Dim, like the boundary: the scope of the model rather than a fault, stated every run.
+    """
+    for report in (block.base, block.head):
+        if not report.unmodelled:
+            continue
+        total = sum(report.unmodelled.values())
+        kinds = ", ".join(
+            f"{n:,} {escape(kind)}"
+            for kind, n in sorted(report.unmodelled.items(), key=lambda kv: (-kv[1], kv[0]))
+        )
+        console.print(
+            f"  [dim]{report.side.value:4} {total:,} declaration(s) not modelled: {kinds}[/]"
+        )
 
 
 def _boundary(block: CompletenessBlock, console: Console) -> None:

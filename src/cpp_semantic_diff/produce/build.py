@@ -146,6 +146,8 @@ def assemble(
     aliases: dict[str, str] = {}
     targets: dict[str, tuple[str, str]] = {}
     results: list[TuResult] = []
+    # Keyed by place and kind, so a declaration in a header many TUs read counts once.
+    unmodelled: set[tuple[str, int, int, str]] = set()
 
     # Edges cannot be resolved while nodes are still arriving: an endpoint declared by the
     # last TU is not dangling, it is early. So they are held and resolved in one pass once
@@ -161,6 +163,7 @@ def assemble(
             # (ARCH-001 §9: a stale cache is confidently wrong output). Only the first
             # arrival is copied; every later one merges into a node this model owns.
             merge_node(nodes, node if node.id in nodes else node.model_copy(deep=True))
+        unmodelled |= tu.unmodelled
         for instantiation, template in tu.aliases.items():
             aliases.setdefault(instantiation, template)
         for usr, target in tu.targets.items():
@@ -247,6 +250,7 @@ def assemble(
         # A property of the producer rather than of any TU, so taken from the extractor's own
         # statement of it instead of from the (cached) partials.
         not_visible=list(LIBCLANG_LIMITS),
+        unmodelled=dict(sorted(Counter(kind for *_, kind in unmodelled).items())),
     )
 
     # Sorted so that the model is a function of its content and not of the order the

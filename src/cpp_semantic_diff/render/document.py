@@ -187,6 +187,12 @@ class CompletenessReport(BaseModel):
     )
     producer_version: str
     producers: list[str] = Field(default_factory=list)
+    unmodelled: dict[str, int] = Field(
+        default_factory=dict,
+        description="Declarations in the repository's own files the model skips, by kind "
+        "(`Completeness.unmodelled`). Stated on every run, never a warning: it is the scope "
+        "of the model, like the boundary.",
+    )
     language_modes: list[str] = Field(
         default_factory=list,
         description="`-std=` values this side was parsed at, sorted. Empty means the build "
@@ -225,6 +231,7 @@ class CompletenessReport(BaseModel):
             producer_version=completeness.producer_version,
             producers=list(completeness.producers),
             language_modes=list(completeness.language_modes),
+            unmodelled=dict(completeness.unmodelled),
             tus_complete=completeness.is_complete,
             failures=[
                 TuFailure(path=t.path, detail=t.detail)

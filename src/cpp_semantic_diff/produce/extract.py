@@ -94,18 +94,16 @@ MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.VAR_DECL: NodeKind.VARIABLE,  # unless it is local; see below
 }
 
-#: What no model this extractor builds can show, stated on every run (ADR-029). The first is
-#: libclang's limit: it does not expose the copy and move operations the compiler writes, so
-#: adding a destructor -- which removes a class's implicit move operations and turns every move
-#: into a copy -- changes nothing the model holds. The second is this extractor's own scope:
-#: a macro is not a declaration it records. Neither is worked around; a run that cannot see
-#: a change says so rather than reporting that nothing changed (ARCH-001 §11).
+#: What no model this extractor builds can show, stated on every run (ADR-029). libclang
+#: does not expose the copy and move operations the compiler writes, so adding a destructor --
+#: which removes a class's implicit move operations and turns every move into a copy --
+#: changes nothing the model holds. It is not worked around; a run that cannot see a change
+#: says so rather than reporting that nothing changed (ARCH-001 §11). Declarations the
+#: extractor skips by choice are counted instead (`TuExtract.unmodelled`).
 LIBCLANG_LIMITS: tuple[str, ...] = (
     "Implicit special members are not visible. libclang does not expose the copy and move "
     "operations the compiler writes, so a change that adds or removes one implicitly -- adding "
     "a destructor removes the implicit move operations -- produces no change event.",
-    "Macros are not modelled. A change to a macro definition produces no change event of its "
-    "own; it shows only through the declarations it changes.",
 )
 
 #: Kinds whose children are worth descending into. A function body is walked separately
@@ -1933,9 +1931,8 @@ class TuExtract:
     nodes: dict[NodeId, Node] = field(default_factory=dict)
     edges: dict[str, Edge] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
-    #: Declarations this TU saw in the repository and did not model, as (file, line, column,
-    #: kind). A set, so a header seen through two include paths counts once. Reserved and not
-    #: yet filled: the cache stores it already, so filling it changes no entry format.
+    #: Declarations this TU saw in the repository's own code and did not model, as (file,
+    #: line, column, kind). A set, so a header seen through two include paths counts once.
     unmodelled: set[tuple[str, int, int, str]] = field(default_factory=set)
     crossings: dict[str, Crossing] = field(default_factory=dict)
     targets: dict[str, tuple[str, str]] = field(default_factory=dict)
@@ -1943,6 +1940,18 @@ class TuExtract:
     @property
     def ok(self) -> bool:
         return self.result.status is TuStatus.PARSED
+
+
+#: Declaration cursors that are not entities: counted as unmodelled, they would claim the
+#: model is missing something that is part of another declaration.
+_NOT_ENTITIES = frozenset(
+    {
+        ci.CursorKind.CXX_ACCESS_SPEC_DECL,
+        ci.CursorKind.TEMPLATE_TYPE_PARAMETER,
+        ci.CursorKind.TEMPLATE_NON_TYPE_PARAMETER,
+        ci.CursorKind.TEMPLATE_TEMPLATE_PARAMETER,
+    }
+)
 
 
 class _Extractor:
@@ -1974,6 +1983,7 @@ class _Extractor:
         self.nodes: dict[NodeId, Node] = {}
         self.edges: dict[str, Edge] = {}
         self.aliases: dict[str, str] = {}
+        self.unmodelled: set[tuple[str, int, int, str]] = set()
         #: A macro's clang USR -> its node id, or None for an include guard; and how many
         #: macros of each (file, name) this TU has seen, for the ordinal in `macro_id`. Keyed
         #: on the USR so that a header included twice is not counted twice.
@@ -2217,6 +2227,23 @@ class _Extractor:
             self.note_alias(parent, parent_usr)
             self.add_edge(parent_usr, node_id, EdgeKind.CONTAINS, None)
 
+    def note_unmodelled(self, cursor: ci.Cursor) -> None:
+        """Record a declaration the model skips, so the run can count it by kind (#6).
+
+        Only real declarations: an access specifier is a label inside a class and a template
+        parameter belongs to its template, and counting either would report as missing what
+        is not an entity. A skipped declaration is not descended into, so an unmodelled
+        record's members are not counted again. Located in the repository or not at all:
+        `visit` has already pruned what lies outside the model.
+        """
+        if not cursor.kind.is_declaration() or cursor.kind in _NOT_ENTITIES:
+            return
+        location = _location(cursor, self.root, self.base)
+        if location is None:
+            return
+        label = cursor.kind.name.lower().removesuffix("_decl")
+        self.unmodelled.add((location.file, location.line, location.column or 0, label))
+
     def visit_declaration(self, cursor: ci.Cursor) -> None:
         if cursor.kind is ci.CursorKind.STATIC_ASSERT:
             self.visit_static_assertion(cursor)
@@ -2225,6 +2252,8 @@ class _Extractor:
         if kind is None:
             if cursor.kind in CONTAINER_KINDS:
                 self.visit(cursor)
+            else:
+                self.note_unmodelled(cursor)
             return
 
         usr = cursor.get_usr()
@@ -2376,6 +2405,7 @@ def extract(
         nodes=extractor.nodes,
         edges=extractor.edges,
         aliases=extractor.aliases,
+        unmodelled=extractor.unmodelled,
         crossings=extractor.crossings,
         targets=extractor.targets,
     )

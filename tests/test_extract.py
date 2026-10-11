@@ -27,6 +27,7 @@ from cpp_semantic_diff.model.ir import (
     NodeKind,
     usr_file,
 )
+from cpp_semantic_diff.produce.build import assemble
 from cpp_semantic_diff.produce.extract import (
     DROPPED_FLAGS,
     Boundary,
@@ -104,6 +105,41 @@ def edge_pairs(result: TuExtract, kind: EdgeKind) -> set[tuple[str, str]]:
         for e in result.edges.values()
         if e.kind is kind
     }
+
+
+#: A header two TUs include, holding declarations the model skips and two that are not
+#: entities at all (an access specifier and template parameters).
+UNMODELLED = {
+    "lib.h": "#pragma once\nnamespace n { int v; }\nnamespace m = n;\n"
+    "template <class T, int N> struct S {\n public:\n  friend void g();\n  T t;\n};\n",
+    "a.cpp": '#include "lib.h"\nusing namespace n;\n',
+    "b.cpp": '#include "lib.h"\n',
+}
+
+
+class TestUnmodelledDeclarations:
+    """What is declared in the repository and not in the model is counted, by kind (#6)."""
+
+    def test_a_skipped_declaration_is_recorded_by_place_and_kind(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        result = run(tmp_path, toolchain, UNMODELLED)
+        assert sorted(result.unmodelled) == [
+            ("a.cpp", 2, 17, "using_directive"),
+            ("lib.h", 3, 11, "namespace_alias"),
+            ("lib.h", 6, 15, "friend"),
+        ]
+
+    def test_assembly_counts_a_header_seen_by_two_tus_once(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        partials = run_each(tmp_path, toolchain, UNMODELLED, "a.cpp", "b.cpp")
+        model = assemble("a" * 40, partials, toolchain=toolchain)
+        assert model.completeness.unmodelled == {
+            "friend": 1,
+            "namespace_alias": 1,
+            "using_directive": 1,
+        }
 
 
 class TestScope:

@@ -340,10 +340,17 @@ class Completeness(BaseModel):
         "line of diff and changes which declarations exist, and in the delta that is "
         "indistinguishable from new code (ARCH-001 §11, §12.1).",
     )
+    unmodelled: dict[str, int] = Field(
+        default_factory=dict,
+        description="Declarations in the repository's own files that the model skips, "
+        "counted by clang's cursor kind (`using_directive`, `friend`, ...), each declaration "
+        "once however many TUs saw it. What is in the code and not in the model, as a number "
+        "(ARCH-001 §4.4, §11).",
+    )
     not_visible: list[str] = Field(
         default_factory=list,
         description="What no model from this producer can show, whatever the source: "
-        "implicit special members, which libclang does not expose, and macros (ADR-029). "
+        "implicit special members, which libclang does not expose (ADR-029). "
         "The same on every run, and stated on every run, so a change the model cannot see "
         "reads as unseen rather than as absent (ARCH-001 §11).",
     )
