@@ -6,6 +6,7 @@ pin what counts as explained, what counts as moved, and that nothing changed is 
 
 from __future__ import annotations
 
+from cpp_semantic_diff.acquire.git import RenameLimitHit
 from cpp_semantic_diff.acquire.tokens import (
     ExcludedFile,
     LineHunk,
@@ -83,12 +84,47 @@ class TestExplained:
         coverage = measure_coverage(delta, [])
         assert (coverage.uncovered_lines, coverage.uncovered_tokens) == (2, 2)
 
+    def test_an_events_last_line_is_inside_its_span_and_the_line_after_is_not(self) -> None:
+        """`end_line` is inclusive: the span `3..10` reaches line 10 but not line 11."""
+        delta = TokenDelta(runs=(run(Side.HEAD, "a.cpp", 10, 11),))
+        coverage = measure_coverage(delta, [at(Side.HEAD, "a.cpp", 3, 10)])
+        assert coverage.uncovered_lines == 1
+        assert [f.lines for f in coverage.files] == [(11,)]
+
     def test_excluded_files_are_carried_through(self) -> None:
         excluded = (ExcludedFile("blob.h", "binary"),)
         assert measure_coverage(TokenDelta(excluded_files=excluded), []).excluded_files == excluded
 
+    def test_excluded_files_leave_other_files_counts_untouched(self) -> None:
+        """A third-party file git never handed to the lexer (ADR-025, ADR-042) is listed but
+        contributes no tokens; an ordinary file alongside it is still counted in full."""
+        excluded = (ExcludedFile("vendor/lib.cpp", "third-party"),)
+        delta = TokenDelta(runs=(run(Side.HEAD, "a.cpp", 5, 6),), excluded_files=excluded)
+        coverage = measure_coverage(delta, [])
+        assert coverage.excluded_files == excluded
+        assert coverage.changed_tokens == coverage.uncovered_tokens == 2
+        assert [f.path for f in coverage.files] == ["a.cpp"]
+
+    def test_renames_complete_mirrors_whether_the_text_diffs_rename_detection_was_cut_short(
+        self,
+    ) -> None:
+        """`TokenDelta.rename_limit` is git's own warning (ARCH-001 §11, rule 2); `measure_coverage`
+        only has to carry it onto `Coverage`, since nothing else repeats the check."""
+        assert measure_coverage(TokenDelta(), []).renames_complete
+        hit = TokenDelta(rename_limit=RenameLimitHit(needed=2))
+        assert not measure_coverage(hit, []).renames_complete
+
 
 class TestBreakdown:
+    def test_leaving_modelled_unset_marks_every_file_modelled(self) -> None:
+        """No `modelled` argument means the breakdown was not asked for: every uncovered file
+        reads as modelled, rather than defaulting to the opposite and misreporting coverage
+        runs that predate the breakdown."""
+        delta = TokenDelta(runs=(run(Side.HEAD, "orphan.h", 1, 2),))
+        coverage = measure_coverage(delta, [])
+        assert [f.modelled for f in coverage.files] == [True]
+        assert coverage.unmodelled_lines == 0
+
     def test_a_file_no_model_reads_is_marked_and_counted(self) -> None:
         """The first, cheap breakdown: a change in a file neither model declares anything in
         could not have been explained -- roughly, a file no translation unit includes."""
@@ -113,6 +149,28 @@ class TestBreakdown:
         base, head = Model(rev="a" * 40), Model(rev="b" * 40)
         head.add_node(node)
         assert modelled_files(base, head) == {"a.h", "a.cpp"}
+
+    def test_modelled_files_unions_every_model_given_not_just_the_last(self) -> None:
+        """A file is modelled if either side declares anything in it: a function removed on
+        head is still modelled, because base's declaration explains the deletion."""
+        base_node = Node(
+            id=NodeId("c:@F@old#"),
+            kind=NodeKind.FUNCTION,
+            name="old",
+            qualified_name="old",
+            location=Location(file="removed.cpp", line=1),
+        )
+        head_node = Node(
+            id=NodeId("c:@F@new#"),
+            kind=NodeKind.FUNCTION,
+            name="new",
+            qualified_name="new",
+            location=Location(file="added.cpp", line=1),
+        )
+        base, head = Model(rev="a" * 40), Model(rev="b" * 40)
+        base.add_node(base_node)
+        head.add_node(head_node)
+        assert modelled_files(base, head) == {"removed.cpp", "added.cpp"}
 
 
 class TestMoved:
