@@ -30,6 +30,7 @@ call edge it touched as an unexplained top-level event.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -340,6 +341,41 @@ def _above(
     return list(reversed(siblings[: siblings.index(member)]))
 
 
+#: An identifier in a type spelling.
+_IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
+
+
+def _alias_named_in_unchanged_spelling(
+    ctx: ClassifyContext, event: ChangeEvent
+) -> Iterator[NodeId]:
+    """The aliases a function's signature is written with, where only the canonical form changed.
+
+    Change an alias's target and every function declared with the alias changes its canonical
+    signature, while its written signature (`sugared_signature`) stays as it was. That pair is
+    the evidence: the function's text did not change, its meaning did, and the alias it names
+    is what changed it. Where the written signature changed too, the function was edited and
+    its change is its own.
+
+    Candidates are the head aliases whose name appears in the written signature as an
+    identifier, sorted by id; the classifier takes the first whose target changed. Matching by
+    unqualified name can propose an alias from another scope, and the cause still has to be a
+    target change, so a wrong candidate needs two aliases of one name, both changed.
+    """
+    head_id = NodeId(event.subject)
+    base_id = ctx.correspondence.base_for(head_id)
+    if base_id is None:
+        return
+    head = ctx.head.nodes.get(head_id)
+    base = ctx.base.nodes.get(base_id)
+    if head is None or base is None:
+        return
+    written = head.attrs.get("sugared_signature")
+    if not isinstance(written, str) or base.attrs.get("sugared_signature") != written:
+        return
+    for name in sorted(set(_IDENTIFIER.findall(written))):
+        yield from ctx.head_aliases.get(name, ())
+
+
 # --------------------------------------------------------------------------------------
 # The table. Ordered; the first rule that finds a cause wins, which matters only if two
 # rules ever share a consequence kind -- `edge-lost-its-endpoint` and `call-moved-to-another
@@ -429,6 +465,20 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
         "enumerator whose value is implied on both sides is explained: a written value that "
         "changed is an edit of its own. The nearest change above is the cause, and changes "
         "farther up are linked by the enumerators between, one step per fact (ADR-038).",
+    ),
+    CauseRule(
+        name="alias-target-changes-signature",
+        arch="§6.3: NodeAttrChanged(target) of an alias causes NodeSignatureChanged of a "
+        "function written with it",
+        cause=ChangeEventKind.NODE_ATTR_CHANGED,
+        cause_payload={"attr": "target"},
+        consequence=ChangeEventKind.NODE_SIGNATURE_CHANGED,
+        subjects=_alias_named_in_unchanged_spelling,
+        status=RuleStatus.ACTIVE,
+        note="Change `using T = int` to `long` and every `f(T)` changes signature without its "
+        "text changing. Only where the function's written signature is unchanged and names "
+        "the alias: a function whose written signature changed was edited, and that is its "
+        "own change (ADR-038).",
     ),
     CauseRule(
         name="rename-retargets-edges",

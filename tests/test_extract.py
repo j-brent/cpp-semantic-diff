@@ -135,13 +135,66 @@ class TestScope:
             toolchain,
             {
                 "a.cpp": """
-                using Alias = int;
                 int global_counter = 0;
                 """
             },
         )
         assert result.ok
         assert result.nodes == {}
+
+
+class TestAliases:
+    """A type alias, compared by the type it stands for (ADR-038)."""
+
+    SOURCE = """
+    using U = int;
+    typedef unsigned long Count;
+    namespace n { typedef long L; }
+    template <class T> using Ptr = T*;
+    struct K { using M = Count; };
+    typedef struct { int a; } Anon;
+    typedef struct Tagged { int b; } Tagged;
+    typedef struct Other_ { int c; } Other;
+    void f(Count c, U u) noexcept {}
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("aliases"), toolchain, {"a.cpp": self.SOURCE})
+
+    def test_an_alias_carries_its_canonical_target(self, result: TuExtract) -> None:
+        targets = {
+            name: named(result, name).attrs["target"]
+            for name in ("U", "Count", "n::L", "K::M", "Other")
+        }
+        assert targets == {
+            "U": "int",
+            "Count": "unsigned long",
+            "n::L": "long",
+            "K::M": "unsigned long",
+            "Other": "Other_",
+        }
+        assert named(result, "U").kind is NodeKind.ALIAS
+        assert named(result, "U").attrs["template"] is False
+
+    def test_an_alias_template_spells_its_parameters_by_position(self, result: TuExtract) -> None:
+        assert named(result, "Ptr").attrs == {"target": "type-parameter-0-0 *", "template": True}
+
+    def test_a_typedef_that_names_its_own_struct_is_the_struct(self, result: TuExtract) -> None:
+        """C's `typedef struct X {...} X;` declares one type under one name. A second node
+        called `X` would hold nothing the struct does not."""
+        for name in ("Anon", "Tagged"):
+            assert [n.kind for n in result.nodes.values() if n.qualified_name == name] == [
+                NodeKind.STRUCT
+            ]
+
+    def test_a_function_keeps_its_signature_as_written(self, result: TuExtract) -> None:
+        """Beside the canonical signature, the written one: what tells an alias's target
+        changing from an edit to the function. Without its exception specification, which
+        an implicit one makes differ between TUs."""
+        f = named(result, "f")
+        assert f.signature == "void (unsigned long, int)"
+        assert f.attrs["sugared_signature"] == "void (Count, U)"
 
 
 class TestEnums:

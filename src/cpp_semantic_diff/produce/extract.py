@@ -56,9 +56,9 @@ from cpp_semantic_diff.model.ir import (
 from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 
 #: The extraction scope (ARCH-001 §13): namespace, class, function, method, field, and the
-#: entities that carry values -- enum and enumerator (ADR-038). Anything not named here is not
-#: modelled. Adding a kind is additive, and each kind's compared facts need a novelty weight in
-#: `rank/weights.py`.
+#: entities that carry values -- enum, enumerator and alias (ADR-038). Anything not named here
+#: is not modelled. Adding a kind is additive, and each kind's compared facts need a novelty
+#: weight in `rank/weights.py`.
 #:
 #: Templates map onto their underlying kind with `attrs["template"]`. A template and its
 #: instantiations need separate identity (ARCH-001 §5), and this gets that for free: only
@@ -85,6 +85,9 @@ MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.FIELD_DECL: NodeKind.FIELD,
     ci.CursorKind.ENUM_DECL: NodeKind.ENUM,
     ci.CursorKind.ENUM_CONSTANT_DECL: NodeKind.ENUMERATOR,
+    ci.CursorKind.TYPEDEF_DECL: NodeKind.ALIAS,
+    ci.CursorKind.TYPE_ALIAS_DECL: NodeKind.ALIAS,
+    ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL: NodeKind.ALIAS,
 }
 
 #: What no model this extractor builds can show, stated on every run (ADR-029). The first is
@@ -441,11 +444,42 @@ def _node_kind(cursor: ci.Cursor) -> NodeKind | None:
     kind = MODELLED_KINDS.get(cursor.kind)
     if kind is None:
         return None
+    if kind is NodeKind.ALIAS and _names_its_own_tag(cursor):
+        return None
     if cursor.kind in TEMPLATED_RECORD_KINDS:
         return TAG_KINDS.get(template_tag_kind(cursor), kind)
     if cursor.kind is ci.CursorKind.FUNCTION_TEMPLATE and _is_member(cursor):
         return NodeKind.METHOD
     return kind
+
+
+#: The declarations a C-style `typedef struct X {...} X;` can name.
+_TAG_DECL_KINDS = frozenset(
+    {
+        ci.CursorKind.STRUCT_DECL,
+        ci.CursorKind.CLASS_DECL,
+        ci.CursorKind.UNION_DECL,
+        ci.CursorKind.ENUM_DECL,
+    }
+)
+
+
+def _names_its_own_tag(cursor: ci.Cursor) -> bool:
+    """Whether a typedef only gives a tag its own name again, as C does.
+
+    `typedef struct X {...} X;` and `typedef struct {...} X;` declare one type under one name,
+    and the struct is already a node called `X`. An alias node beside it would hold nothing
+    -- its target is the struct itself, and it cannot change unless the struct is renamed --
+    and two nodes with one qualified name would read as one entity seen twice.
+    """
+    if cursor.kind is not ci.CursorKind.TYPEDEF_DECL:
+        return False
+    tag = cursor.underlying_typedef_type.get_declaration()
+    return (
+        tag.kind in _TAG_DECL_KINDS
+        and tag.spelling == cursor.spelling
+        and tag.semantic_parent == cursor.semantic_parent
+    )
 
 
 #: Clang spells an unnamed entity with the source location that distinguishes it:
@@ -1099,6 +1133,7 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
 
     if kind in (NodeKind.FUNCTION, NodeKind.METHOD):
         attrs["return_type"] = _canonical_spelling(cursor.result_type)
+        attrs["sugared_signature"] = _sugared_signature(cursor)
         attrs["template"] = cursor.kind is ci.CursorKind.FUNCTION_TEMPLATE
         attrs["template_parameters"] = _template_parameters(cursor)
         attrs["deleted"] = cursor.is_deleted_method()
@@ -1145,6 +1180,9 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["final"] = _final(cursor)
         attrs["deprecated"] = _record_deprecated(cursor)
         attrs["base_order"] = _base_order(cursor)
+    if kind is NodeKind.ALIAS:
+        attrs["target"] = _alias_target(cursor)
+        attrs["template"] = cursor.kind is ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL
     if kind is NodeKind.ENUM:
         attrs["underlying_type"] = _canonical_spelling(cursor.enum_type)
         attrs["scoped"] = cursor.is_scoped_enum()
@@ -1156,6 +1194,20 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         # (the `enumerator-implicit-value-shifted` cause rule, ARCH-001 §6.3).
         attrs["explicit_value"] = next(iter(cursor.get_children()), None) is not None
     return attrs
+
+
+def _alias_target(cursor: ci.Cursor) -> str:
+    """The type an alias stands for, canonical: what every use of the alias compiles to.
+
+    An alias template's target is on the `using` declaration it templates, its only
+    non-parameter child, and spells its parameters by position (`type-parameter-0-0 *`), so
+    renaming a parameter is no change.
+    """
+    if cursor.kind is ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL:
+        cursor = next(
+            (c for c in cursor.get_children() if c.kind is ci.CursorKind.TYPE_ALIAS_DECL), cursor
+        )
+    return _canonical_spelling(cursor.underlying_typedef_type)
 
 
 #: Cursor kinds that make everything inside them a template, whose values may depend on a
@@ -1333,6 +1385,22 @@ def _signature(cursor: ci.Cursor, kind: NodeKind) -> str | None:
     if kind not in (NodeKind.FUNCTION, NodeKind.METHOD):
         return None
     return _EXCEPTION_SPEC.sub("", _canonical_spelling(cursor.type)) or None
+
+
+def _sugared_signature(cursor: ci.Cursor) -> str:
+    """The function type as written, aliases kept, exception specification stripped.
+
+    Compared state beside the canonical `signature`. When an alias's target changes, every
+    function declared with the alias gets a new canonical signature while this one stays as
+    written, and that pair -- canonical changed, written unchanged, the alias named in it -- is
+    how classify files the function's change under the alias's (the
+    `alias-target-changes-signature` rule, ARCH-001 §6.3). The canonical signature alone
+    cannot tell that change from an edit to the function.
+
+    The exception specification is stripped for the reason `_signature` gives: an implicit one
+    is computed lazily, so it differs between translation units that see the same declaration.
+    """
+    return _EXCEPTION_SPEC.sub("", _stable_spelling(cursor.type.spelling))
 
 
 def _observation_rank(node: Node) -> tuple[object, ...]:

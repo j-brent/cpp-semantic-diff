@@ -443,7 +443,6 @@ CATALOG = [
         "using T = long;\nvoid f(T) {}\nvoid g() { f(1); }",
         changed("T", was="int", now="long"),
         not_replaced("f"),
-        fails="step 5: aliases are not modelled",
     ),
     case(
         "alias-target-changed-f-is-reported",

@@ -46,8 +46,22 @@ value is written or implied by the one before. Contained by its enum.
   "Above" is source order, read from locations. Location orders siblings and nothing else; it is
   never identity (ARCH-001 §4.1).
 
+**Alias** (`alias`): `typedef`, `using` and alias templates. `target`, the canonical type it
+stands for; `template`.
+
+- **A typedef that gives a tag its own name is not an alias node.** `typedef struct X {...} X;`
+  and `typedef struct {...} X;` declare one type under one name, and the struct is already the
+  node called `X`.
+- **A function carries its signature as written,** `sugared_signature`, beside the canonical one,
+  without its exception specification for the reason the canonical one has none.
+  `NodeSignatureChanged` covers it: an event for it alone means the spelling changed and the type
+  did not.
+- **One cause rule, `alias-target-changes-signature`.** A function's `NodeSignatureChanged` is
+  caused by an alias's target change when its written signature names the alias and did not
+  change.
+
 **Weights** (`rank/weights.py`): `underlying_type` 0.95, `scoped` 0.90, `value` 0.95,
-`explicit_value` 0.30.
+`explicit_value` 0.30, `target` 0.95, `sugared_signature` 0.30.
 
 ## Consequences
 
@@ -56,12 +70,22 @@ value is written or implied by the one before. Contained by its enum.
 - An unnamed enum's USR is named after its first enumerator (`c:@Ea@Z`), so renaming or inserting
   a first enumerator reports the whole enum as removed and added. That is tier 3's case (ARCH-001
   §5), which v0 does not build.
+- `alias-target-changed` in the change catalog passes, and the function's signature change is
+  filed under the alias.
+- Clang writes the file name into a `typedef`'s USR (`c:a.h@T@Count`), though not into a
+  `using` declaration's. Moving a typedef to another file reports it removed and added, and two
+  typedefs of one name in two files of one name merge, as statics do
+  ([ADR-022](ADR-022-same-basename-statics-merge.md)). A `using` alias has no linkage either,
+  and its USR names no file, so two source files that each declare their own alias of one
+  qualified name give one node: whichever observation ranks highest.
 - A changed value is reported without the code that uses it, and an added enumerator is not
   checked against the `switch` statements over its enum: both need the uses relationship, out of
   v0 ([ADR-041](ADR-041-v0-scope-of-steps-6-and-7.md)). ARCH-001 §6.3 records both rules for when
   it lands.
 
 ## Alternatives rejected
+
+- **Compare an alias's target as written.** `using T = U` would then hide a change to `U`.
 
 - **Identify an enumerator by its enum and position.** An insertion would then read as every
   later enumerator renamed.

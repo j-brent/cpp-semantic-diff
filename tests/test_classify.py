@@ -714,6 +714,39 @@ class TestAnImpliedEnumeratorValueIsExplainedByTheChangeAboveIt:
         assert cause_of_shift(events, "B") is None
 
 
+T = NodeId("c:@T")
+
+
+def aliased(rev: str, target: str, written: str = "void (T)") -> Model:
+    """Alias `T` and a function `f` written with it."""
+    return model(
+        rev,
+        node(T, name="T", kind=NodeKind.ALIAS, attrs={"target": target}),
+        node(F, signature=f"void ({target})", attrs={"sugared_signature": written}),
+    )
+
+
+class TestAnAliasExplainsTheSignaturesItChanged:
+    """ARCH-001 §6.3's `alias-target-changes-signature`. `using T = int` becomes `long`, and
+    every function written with `T` changes signature without a character of it changing."""
+
+    def test_the_signature_change_is_filed_under_the_alias(self) -> None:
+        events = classify(aliased("a", "int"), aliased("b", "long"))
+        cause = cause_of(events, ChangeEventKind.NODE_SIGNATURE_CHANGED, F)
+        assert cause is not None and cause.subject == T
+        assert cause.payload["attr"] == "target"
+
+    def test_a_function_whose_written_signature_changed_was_edited(self) -> None:
+        events = classify(aliased("a", "int"), aliased("b", "long", written="void (T, int)"))
+        assert cause_of(events, ChangeEventKind.NODE_SIGNATURE_CHANGED, F) is None
+
+    def test_a_function_that_does_not_name_the_alias_is_not_explained_by_it(self) -> None:
+        events = classify(
+            aliased("a", "int", written="void (int)"), aliased("b", "long", written="void (int)")
+        )
+        assert cause_of(events, ChangeEventKind.NODE_SIGNATURE_CHANGED, F) is None
+
+
 class TestTheRuleTableIsExplicit:
     """ARCH-001 §6.3: cause links come from an explicit rule table, not inference.
 

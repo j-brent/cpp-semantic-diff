@@ -59,6 +59,10 @@ class ClassifyContext:
     base_enumerators: Mapping[NodeId, tuple[NodeId, ...]]
     head_enumerators: Mapping[NodeId, tuple[NodeId, ...]]
 
+    #: Unqualified name -> the aliases of that name, head side, sorted by id. How a rule gets
+    #: from a name written in a signature to the alias it may mean.
+    head_aliases: Mapping[str, tuple[NodeId, ...]]
+
     @classmethod
     def build(cls, base: Model, head: Model, correspondence: Correspondence) -> ClassifyContext:
         out: dict[NodeId, list[Edge]] = defaultdict(list)
@@ -85,6 +89,7 @@ class ClassifyContext:
             },
             base_enumerators=_enumerators(base),
             head_enumerators=_enumerators(head),
+            head_aliases=_aliases(head),
         )
 
     def removed(self, base_id: NodeId) -> bool:
@@ -137,3 +142,11 @@ def _source_order(node: Node) -> tuple[str, int, int, str]:
     if at is None:
         return ("", 0, 0, node.id)
     return (at.file, at.line, at.column or 0, node.id)
+
+
+def _aliases(model: Model) -> dict[str, tuple[NodeId, ...]]:
+    by_name: dict[str, list[NodeId]] = defaultdict(list)
+    for node in model.nodes.values():
+        if node.kind is NodeKind.ALIAS:
+            by_name[node.name].append(node.id)
+    return {name: tuple(sorted(ids)) for name, ids in by_name.items()}

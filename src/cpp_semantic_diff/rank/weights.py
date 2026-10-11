@@ -249,6 +249,14 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # Low on its own: a value that becomes written without changing is a style edit, and one
     # that changes reports the change through `value` as well.
     "explicit_value": 0.30,
+    # What every use of an alias compiles to, so the signature of every function written
+    # with it: level with `type`.
+    "target": 0.95,
+    # The written spelling of a function type whose canonical form did not change -- an
+    # alias swapped for its target, or one alias for another. Where the canonical signature
+    # changed too, `NodeSignatureChanged` reports it and this is not repeated. No caller is
+    # affected, so it sits with a body change.
+    "sugared_signature": 0.30,
 }
 
 # --------------------------------------------------------------------------------------
