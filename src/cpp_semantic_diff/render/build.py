@@ -78,7 +78,13 @@ def build_document(
     too many.
     """
     callers = _callers(events, head)
-    entities = _entities(events, base, head, extra={c for ids in callers.values() for c in ids})
+    entities = _entities(
+        events,
+        base,
+        head,
+        correspondence,
+        extra={c for ids in callers.values() for c in ids},
+    )
     completeness = CompletenessBlock(
         base=CompletenessReport.of(Side.BASE, base.rev, base.completeness),
         head=CompletenessReport.of(Side.HEAD, head.rev, head.completeness),
@@ -205,7 +211,11 @@ def _callers(events: Sequence[ChangeEvent], head: Model) -> dict[ChangeEventId, 
 
 
 def _entities(
-    events: Sequence[ChangeEvent], base: Model, head: Model, extra: set[NodeId] | None = None
+    events: Sequence[ChangeEvent],
+    base: Model,
+    head: Model,
+    correspondence: Correspondence,
+    extra: set[NodeId] | None = None,
 ) -> dict[NodeId, EntitySummary]:
     """The node summaries the events reference, and only those (ARCH-001 §10).
 
@@ -218,6 +228,11 @@ def _entities(
     is carried only through `sides`, which is what lets a view say "removed" without
     inspecting the event kind. Removals are base-only ids and are found in `base` alone,
     which is the reason both models are consulted rather than head only.
+
+    **`sides` goes through the correspondence, not through the ids.** A function the name
+    tier paired has one USR at base and another at head (ADR-036), so each id is in one
+    model only. Either id of a match is an entity both sides hold; read off the ids, the
+    view would mark a changed function as added, or the callee of a removed call as removed.
     """
     # `extra` is the callers listed beside signature changes, which a view must be able to
     # name as well.
@@ -243,11 +258,15 @@ def _entities(
             # through a subject. Omitting the summary is honest -- the view falls back to the
             # raw id, which is all that is actually known about it.
             continue
-        out[node_id] = _summary(node, in_base is not None, in_head is not None)
+        matched = node_id in correspondence.by_base or node_id in correspondence.by_head
+        out[node_id] = _summary(
+            node, matched or in_base is not None, matched or in_head is not None
+        )
     return out
 
 
 def _summary(node: Node, in_base: bool, in_head: bool) -> EntitySummary:
+    """`in_base` and `in_head` say which sides hold the entity, through the correspondence."""
     return EntitySummary(
         id=node.id,
         kind=node.kind,

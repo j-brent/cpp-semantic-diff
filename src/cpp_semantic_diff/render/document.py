@@ -397,7 +397,9 @@ class EntitySummary(BaseModel):
     )
     location: Location | None = None
     sides: list[Side] = Field(
-        description="Which model(s) contain this id. A one-sided entity is exactly what a "
+        description="Which sides hold this entity, through the correspondence: either id of "
+        "a match counts as both, since a function paired by name has a different id on each "
+        "side (ADR-036). A one-sided entity is exactly what a "
         "pipeline without rename detection produces for a rename (STATUS §6), so the view "
         "can say 'gone' or 'new' without re-deriving it from the event kind."
     )

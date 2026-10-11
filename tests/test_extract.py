@@ -799,6 +799,8 @@ class TestTemplateParametersAreComparedState:
     template <class T, class U = int> void two(T) {}
     template <class T, int N, template <class...> class X, class... Ts> void mixed(T, Ts...) {}
     template <auto... Vs> void values() {}
+    template <bool B> struct E {};
+    template <int N, class T = E<(N > 0)>, class... Ts> void guarded(Ts...) {}
     template <template <class> class... Xs> void outer() {}
     void plain(int) {}
     struct S { template <class T> void m(T) {} void n() {} };
@@ -824,6 +826,8 @@ class TestTemplateParametersAreComparedState:
     def test_each_kind_of_parameter_and_packs_are_told_apart(self, result: TuExtract) -> None:
         assert self.params(result, "mixed") == "<class, int, template <class...> class, class...>"
         assert self.params(result, "values") == "<auto...>"
+        # A `>` inside a parenthesized default argument does not end the list.
+        assert self.params(result, "guarded") == "<int, class, class...>"
         assert self.params(result, "outer") == "<template <class> class...>"
 
     def test_a_function_that_is_not_a_template_has_none(self, result: TuExtract) -> None:

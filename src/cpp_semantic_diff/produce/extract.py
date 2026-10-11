@@ -607,24 +607,35 @@ def _packs(owner: ci.Cursor) -> list[bool] | None:
     it holds `...` at its own level -- not inside a nested list, which is how
     `template <class...> class X` takes a pack without being one -- and before any default
     argument, which a pack cannot have.
+
+    Angle brackets inside parentheses are not counted, so a `>` used as an operator in a
+    default argument, such as `enable_if_t<(N > 0)>`, does not close the header. Known limit:
+    an unparenthesized `>` in a default argument still does; C++ requires those parentheses
+    in a template argument, so it should not arise in code that compiles.
     """
     header: list[bool] | None = None
     parts: list[bool] | None = None  # the header being read, if any
-    depth = 0
+    angles = parens = 0
     previous = ""
     pack = in_default = False
     for token in owner.get_tokens():
         spelling = token.spelling
-        if spelling in ("<", "(", "["):
-            if depth == 0 and spelling == "<" and previous == "template":
+        if spelling in ("(", "["):
+            parens += 1
+        elif spelling in (")", "]"):
+            parens = max(0, parens - 1)
+        elif parens:
+            pass  # inside parentheses: `<` and `>` are operators, and nothing is top level
+        elif spelling == "<":
+            if angles == 0 and previous == "template":
                 parts, pack, in_default = [], False, False
-            depth += 1
-        elif spelling in (">", ")", "]", ">>"):
-            depth = max(0, depth - (2 if spelling == ">>" else 1))
-            if depth == 0 and parts is not None:
+            angles += 1
+        elif spelling in (">", ">>"):
+            angles = max(0, angles - (2 if spelling == ">>" else 1))
+            if angles == 0 and parts is not None:
                 header = [*parts, pack] if parts or pack or previous != "<" else []
                 parts = None
-        elif depth == 1 and parts is not None:
+        elif angles == 1 and parts is not None:
             if spelling == ",":
                 parts.append(pack)
                 pack = in_default = False

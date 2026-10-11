@@ -963,6 +963,40 @@ class TestASignatureChangeShowsItsCallers:
         assert DiffDocument.from_json(doc.to_json()).callers == doc.callers
 
 
+class TestANamePairedFunctionIsOnBothSides:
+    """ADR-036: a function the name tier paired has one id at base and another at head, and
+    each id is in one model only. Both are one entity both sides hold, so neither may read as
+    added or removed -- `sides` goes through the correspondence, not the ids."""
+
+    OLD = "c:@F@f#I#"
+    NEW = "c:@F@f#I#I#"
+
+    def doc(self) -> DiffDocument:
+        g = node("c:@F@g#", name="g")
+        base = model(
+            "a",
+            node(self.OLD, name="f", signature="void (int)"),
+            g,
+            edges=[edge("c:@F@g#", self.OLD)],
+        )
+        head = model("b", node(self.NEW, name="f", signature="void (int, int)"), g)
+        return pipeline(base, head)
+
+    def test_the_signature_change_does_not_mark_its_subject_added(self) -> None:
+        doc = self.doc()
+        assert doc.entities[NodeId(self.NEW)].sides == ["base", "head"]
+        out = draw(doc, collapse_cascades=False)
+        line = next(x for x in out.splitlines() if "NodeSignatureChanged" in x)
+        assert "+ " not in line and " f" in line
+
+    def test_the_callee_of_a_removed_call_does_not_read_as_removed(self) -> None:
+        doc = self.doc()
+        (removed,) = (e for e in doc.events if e.kind is ChangeEventKind.EDGE_REMOVED)
+        assert removed.subject == f"c:@F@g#|calls|{self.OLD}"
+        assert doc.entities[NodeId(self.OLD)].sides == ["base", "head"]
+        assert "- " not in draw(doc, collapse_cascades=False)
+
+
 # -- 6 · a label is not an identity, and must not pretend to be one ------------------------
 
 #: The two fmt entities a misfiled defect was once written from (v0 tracker §5,
