@@ -383,6 +383,7 @@ Rename one function and 200 call edges "change". That is one change event with 2
 | contained-addition | `NodeAdded(C)` | `NodeAdded` for everything C contains | active |
 | edge-lost-its-endpoint | `NodeRemoved(N)` | `EdgeRemoved` for edges touching N | active |
 | call-moved-to-another-overload | `EdgeAdded(caller→G)` | `EdgeRemoved(caller→F)`, F and G overloads of one name | active |
+| signature-change-breaks-overrides | `NodeSignatureChanged(F)` | `EdgeRemoved(override→F)` | active |
 | edge-gained-its-endpoint | `NodeAdded(N)` | `EdgeAdded` for edges touching N | active |
 | rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **unreachable** |
 | signature-change-breaks-callers | `NodeSignatureChanged(F)` | `CallerOfChangedSignature` for each call into F | active |
@@ -441,6 +442,11 @@ stage creates those change events
 change events that already exist; it never synthesizes one. A stage that may create change events is
 a stage that can hide a change inside a cause. Under one signature change, views list unedited
 callers first.
+
+`signature-change-breaks-overrides` covers the other thing a changed virtual signature breaks: an
+override that kept the old signature stops overriding, and its `overrides` edge is removed while
+both functions survive. It sits below the endpoint and overload rules, which give a better account
+where they apply.
 
 Change events with no matching rule get no cause link and are shown. **Collapse happens at render, never
 at diff** — the JSON always carries the full change event set; the view hides consequences under causes by

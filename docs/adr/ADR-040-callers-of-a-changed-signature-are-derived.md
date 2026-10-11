@@ -47,6 +47,10 @@ do not state, and classify may not create a change event.
 - **Cause:** `NodeSignatureChanged(F)`, by `signature-change-breaks-callers`, now active. The
   locator is the subject edge's head destination, so each caller change event has one candidate
   cause, and a caller of two changed functions gets two change events.
+- **An override left behind.** When a virtual function's signature changes and an override keeps
+  the old one, the override stops overriding: its `overrides` edge is removed while both
+  functions survive. A new cause rule, `signature-change-breaks-overrides`, links that
+  `EdgeRemoved` to the signature change.
 - **Novelty 0.70**: below the signature change that causes it, above a body change.
 - **Reading order:** under the signature change, unedited callers first, then edited ones, each
   in ranking order. The JSON has no cap and no aggregation; the terminal shows the first ten

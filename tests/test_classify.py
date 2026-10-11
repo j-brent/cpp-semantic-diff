@@ -752,6 +752,42 @@ class TestASignatureChangeExplainsEachCaller:
         assert ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE not in kinds
 
 
+class TestAnOverrideLeftBehindIsExplainedByTheSignatureChange:
+    """§6.3's `signature-change-breaks-overrides` (ADR-040): a virtual function changes
+    signature, an override keeps the old one, and the `overrides` edge is removed while both
+    functions survive."""
+
+    OVERRIDE = NodeId("c:@S@D@F@f#I#")
+
+    def method(self, usr: str, qualified: str, signature: str) -> Node:
+        return node(
+            usr, name="f", qualified_name=qualified, kind=NodeKind.METHOD, signature=signature
+        )
+
+    def overrides(self, dst: str) -> Edge:
+        return edge(self.OVERRIDE, dst, EdgeKind.OVERRIDES)
+
+    def test_the_removed_override_is_caused_by_the_signature_change(self) -> None:
+        old_virtual = self.method("c:@S@B@F@f#I#", "B::f", "void (int)")
+        new_virtual = self.method("c:@S@B@F@f#d#", "B::f", "void (double)")
+        override = self.method(self.OVERRIDE, "D::f", "void (int)")
+        base = model("a", old_virtual, override, edges=[self.overrides(old_virtual.id)])
+        head = model("b", new_virtual, override)
+        removed = self.overrides(old_virtual.id).id
+        cause = cause_of(classify(base, head), ChangeEventKind.EDGE_REMOVED, removed)
+        assert cause is not None
+        assert cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        assert cause.subject == new_virtual.id
+
+    def test_without_a_signature_change_the_removed_override_stays_unexplained(self) -> None:
+        virtual = self.method("c:@S@B@F@f#I#", "B::f", "void (int)")
+        override = self.method(self.OVERRIDE, "D::f", "void (int)")
+        base = model("a", virtual, override, edges=[self.overrides(virtual.id)])
+        head = model("b", virtual, override)
+        removed = self.overrides(virtual.id).id
+        assert cause_of(classify(base, head), ChangeEventKind.EDGE_REMOVED, removed) is None
+
+
 class TestTheUnreachableRuleIsImplementedNotPretended:
     """The rule §6.3 names that this pipeline cannot reach.
 

@@ -35,7 +35,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from cpp_semantic_diff.classify.context import ClassifyContext
-from cpp_semantic_diff.model import AnyId, AttrValue, ChangeEvent, ChangeEventKind, EdgeId, NodeId
+from cpp_semantic_diff.model import (
+    AnyId,
+    AttrValue,
+    ChangeEvent,
+    ChangeEventKind,
+    EdgeId,
+    EdgeKind,
+    NodeId,
+)
 
 
 class RuleStatus(StrEnum):
@@ -221,6 +229,23 @@ def _overload_the_caller_moved_to(ctx: ClassifyContext, event: ChangeEvent) -> I
             yield edge.id
 
 
+def _overridden_function(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
+    """The virtual function a removed `overrides` edge pointed at, in head coordinates.
+
+    When a virtual function's signature changes and an override keeps the old one, the
+    override stops overriding: the `overrides` edge is removed while both functions survive.
+    The signature change is the cause, so the locator names the edge's destination, mapped
+    through the correspondence like every other cross-side id. Where that destination has no
+    `NodeSignatureChanged`, the classifier finds no cause and the edge stays at top level.
+    """
+    removed = ctx.base_edges.get(EdgeId(event.subject))
+    if removed is None or removed.kind is not EdgeKind.OVERRIDES:
+        return
+    overridden = ctx.correspondence.head_for(removed.dst)
+    if overridden is not None:
+        yield overridden
+
+
 # --------------------------------------------------------------------------------------
 # The table. Ordered; the first rule that finds a cause wins, which matters only if two
 # rules ever share a consequence kind -- `edge-lost-its-endpoint` and `call-moved-to-another
@@ -274,6 +299,18 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
         "`EdgeAdded` rather than the new overload's `NodeAdded` so that the chain stays "
         "one-step-per-fact -- the addition is already linked to the node by "
         "`edge-gained-its-endpoint`, and both collapse under it.",
+    ),
+    CauseRule(
+        name="signature-change-breaks-overrides",
+        arch="§6.3: NodeSignatureChanged(F) causes EdgeRemoved(override→F)",
+        cause=ChangeEventKind.NODE_SIGNATURE_CHANGED,
+        consequence=ChangeEventKind.EDGE_REMOVED,
+        subjects=_overridden_function,
+        status=RuleStatus.ACTIVE,
+        note="A virtual function's signature changed and an override kept the old one, so it "
+        "no longer overrides. Both functions survive, so no endpoint rule reaches the removed "
+        "`overrides` edge. Below the endpoint and overload rules: an override that went away "
+        "or moved is the better account (ADR-040).",
     ),
     CauseRule(
         name="edge-gained-its-endpoint",
