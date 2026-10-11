@@ -36,10 +36,13 @@ does not stop that.
   `informational`.
 - **The events stay listed and ordered as before.** Novelty, the score and the order do not
   change. Only `summary.high_risk_count` and the high-risk marker do.
-- **A `default_arguments` change is compared again** without leading qualifiers that name a
-  namespace the function is in, default by default. If the two then match, the event's payload
-  has `spelling_only: true`. This happens in the diff stage, so the model and the cache key do
-  not change.
+- **A `default_arguments` change is compared again**, default by default. Where each old
+  default is the new one with a leading qualifier added or removed, and that qualifier names a
+  namespace the function is in, the event's payload has `spelling_only: true`. Stripping
+  qualifiers from both sides is not enough: inside `ns::details`, `ns::x` and
+  `ns::details::x` both reduce to `x` and name different entities. A leading `::` counts only
+  together with such a qualifier, because `::x` and `x` can name different entities. This
+  happens in the diff stage, so the model and the cache key do not change.
 
 ## Consequences
 

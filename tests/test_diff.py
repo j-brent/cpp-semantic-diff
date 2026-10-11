@@ -372,6 +372,14 @@ class TestADefaultThatOnlyDropsItsOwnNamespaceIsSpellingOnly:
         assert self.payload("ns::details::x", "x")["spelling_only"] is True
         assert self.payload("::ns::x", "x")["spelling_only"] is True
         assert self.payload("1; ns::y", "1; y")["spelling_only"] is True
+        three = {"inside": "a::b::c"}
+        assert self.payload("a::b::c::x", "b::c::x", **three)["spelling_only"] is True
+        assert self.payload("::a::b::x", "c::x", **three) == {
+            "attr": "default_arguments",
+            "old": "::a::b::x",
+            "new": "c::x",
+        }
+        assert self.payload("a::b::c::x", "c::x", **three)["spelling_only"] is True
 
     def test_a_changed_value_is_not(self) -> None:
         assert "spelling_only" not in self.payload("1", "2")
@@ -383,6 +391,15 @@ class TestADefaultThatOnlyDropsItsOwnNamespaceIsSpellingOnly:
         assert "spelling_only" not in self.payload("details::x", "x", inside="ns")
         # Token boundary: `ns` encloses the function, `nsx` does not.
         assert "spelling_only" not in self.payload("nsx::x", "x")
+
+    def test_two_different_entities_that_reduce_alike_are_not(self) -> None:
+        """Inside `ns::details`, `ns::x` and `ns::details::x` both reduce to `x`."""
+        assert "spelling_only" not in self.payload("ns::x", "ns::details::x")
+        assert "spelling_only" not in self.payload("ns::a::y", "ns::b::y", inside="ns")
+
+    def test_a_global_qualifier_alone_is_not(self) -> None:
+        """Inside `ns`, `::x` is the global `x`, and `x` may find `ns::x`."""
+        assert "spelling_only" not in self.payload("::x", "x", inside="ns")
 
 
 class TestABodyChangeIsNotAnAttributeChange:

@@ -174,10 +174,11 @@ def defaults_differ_only_in_spelling(
     the function is itself in (ADR-046).
 
     Clang prints a default as it was written, so `spdlog::details::x` becoming `details::x`
-    inside `spdlog` is a change to the attribute and not to what the default is. Each default
-    is compared with its leading enclosing-namespace qualifier removed, in every way the
-    namespaces allow: the two match where some removal from each gives the same text. Only a
-    whole leading qualifier is removed, so `spdlog::` never matches inside `spdlogx::`, and a
+    inside `spdlog` is a change to the attribute and not to what the default is. Two defaults
+    match where one is the other with a leading enclosing-namespace qualifier added. Removing
+    a qualifier from both sides is not enough: inside `ns::details`, `ns::x` and
+    `ns::details::x` both reduce to `x`, and they name different entities. Only a whole
+    leading qualifier is removed, so `spdlog::` never matches inside `spdlogx::`, and a
     qualifier naming any other namespace still counts as a change.
     """
     if not isinstance(old, str) or not isinstance(new, str):
@@ -187,18 +188,23 @@ def defaults_differ_only_in_spelling(
     if len(before) != len(after):
         return False
     return all(
-        _unqualified(a, namespaces) & _unqualified(b, namespaces)
+        a in _unqualified(b, namespaces) or b in _unqualified(a, namespaces)
         for a, b in zip(before, after, strict=True)
     )
 
 
 def _unqualified(default: str, namespaces: frozenset[str]) -> set[str]:
-    """`default`, and `default` without each leading qualifier that is an enclosing namespace."""
-    text = default.removeprefix("::")
-    spellings = {default, text}
-    for namespace in namespaces:
-        if text.startswith(namespace + "::"):
-            spellings.add(text[len(namespace) + 2 :])
+    """`default`, and `default` without each leading qualifier that is an enclosing namespace.
+
+    A leading `::` goes only with such a qualifier: inside `ns`, `::x` names the global `x`,
+    and `x` may find `ns::x`.
+    """
+    spellings = {default}
+    for text in (default, default.removeprefix("::")):
+        for namespace in namespaces:
+            if text.startswith(namespace + "::"):
+                spellings.add(text[len(namespace) + 2 :])
+                spellings.add(text)
     return spellings
 
 
