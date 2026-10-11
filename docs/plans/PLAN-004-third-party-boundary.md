@@ -62,8 +62,9 @@ merely down-weighted."
 
 The third-party set for a comparison is the union of:
 
-- **Submodule paths** recorded in `.gitmodules` at the base or the head revision, read with
-  `git config --blob <rev>:.gitmodules`.
+- **Submodules**: every gitlink in the base or the head revision's tree, read with
+  `git ls-tree`. `.gitmodules` is not read: a gitlink it does not name still pins code the
+  repository does not contain.
 - **Declared paths**, from a new repeatable `cppsd diff --third-party PATH` option. They are
   repository-relative directories.
 
@@ -183,8 +184,9 @@ Each step is one commit, and the suite passes after each one.
    - A hint is the topmost tracked directory, at base or head, whose own name matches and that
      is neither in, under nor above a set entry. leveldb's `third_party` holds only its
      submodules, so it gets no hint.
-   - A submodule counts at a revision only where that revision has a gitlink at its path. A
-     stale `.gitmodules` entry is left out, without a note.
+   - A submodule is a gitlink at either revision, whether `.gitmodules` names it or not. A
+     stale `.gitmodules` entry with no gitlink is left out, without a note. (Amended in step 3:
+     first built as `.gitmodules` entries that have a gitlink, which missed a bare gitlink.)
    - The set and hints are in the JSON now (`third_party`, `third_party_hints`), under
      `2.0.dev`, and in the terminal view. Step 6 adds only the crossing counts and the demo.
 3. **The refusal.** The new precondition error, checked before checkout. Tests: a submodule bump
