@@ -60,8 +60,30 @@ stands for; `template`.
   caused by an alias's target change when its written signature names the alias and did not
   change.
 
+**Variable** (`variable`): at namespace scope, and static data members. A function's local
+variables, `static` or not, are part of its body.
+
+- `type`, canonical, the key a field uses.
+- `value`: what clang's constant evaluator (`clang_Cursor_Evaluate`) folds the initializer to,
+  an integer, a floating-point number or a string, so `2 * 5` and `10` are no change. An infinite
+  or NaN value is spelled as a string: NaN is unequal to itself, and JSON has no infinity.
+- `initializer_hash`: a hash of the initializer's tokens, only where clang cannot evaluate it --
+  a call, a constructor, an address. A macro in it is hashed by name, not by what it expands to.
+- Inside a template neither is evaluated, since the initializer may depend on a template
+  argument and clang's evaluator is not safe to ask; the initializer is hashed.
+- `constexpr`, read from the tokens before the name; `storage` (`none`, `static`, `extern`);
+  `linkage`; `thread_local`.
+- **The evaluator binding lives in `produce/extract.py`.** The producer's cache key hashes that
+  module and `model/ir.py` only, so code that computes a value anywhere else could change while
+  every key stayed the same.
+- **A definition outranks a declaration** when one entity is seen several ways. A variable has no
+  body to show it, so `extern` marks the declaration: `extern int x;` in a header and `int x = 5;`
+  in a source file give the definition's value, `storage` and location.
+
 **Weights** (`rank/weights.py`): `underlying_type` 0.95, `scoped` 0.90, `value` 0.95,
-`explicit_value` 0.30, `target` 0.95, `sugared_signature` 0.30.
+`explicit_value` 0.30, `target` 0.95, `sugared_signature` 0.30, `linkage` 0.85, `constexpr`
+0.80, `thread_local` 0.80, `storage` 0.75, `initializer_hash` 0.50. A variable's `type` and
+`value` share the weights of a field's type (1.00) and an enumerator's value.
 
 ## Consequences
 
@@ -78,6 +100,13 @@ stands for; `template`.
   ([ADR-022](ADR-022-same-basename-statics-merge.md)). A `using` alias has no linkage either,
   and its USR names no file, so two source files that each declare their own alias of one
   qualified name give one node: whichever observation ranks highest.
+- `constexpr-global-value` and `static-data-member-value` in the change catalog pass.
+  `global-initializer-calls-another` now reports the initializer's hash changing; it stays an
+  expected failure because it asks for the call, which is step 8, out of v0
+  ([ADR-030](ADR-030-what-v0-is.md)).
+- A variable template is not modelled: libclang exposes it only as an unexposed declaration.
+- A static data member's `storage` reads `static` where only its declaration is seen and `none`
+  where its out-of-line definition is, so it changes when the definition stops being parsed.
 - A changed value is reported without the code that uses it, and an added enumerator is not
   checked against the `switch` statements over its enum: both need the uses relationship, out of
   v0 ([ADR-041](ADR-041-v0-scope-of-steps-6-and-7.md)). ARCH-001 §6.3 records both rules for when
@@ -85,6 +114,8 @@ stands for; `template`.
 
 ## Alternatives rejected
 
+- **Always hash a variable's initializer.** `2 * 5` and `10` would differ, and a hash says that
+  something changed where the value says what.
 - **Compare an alias's target as written.** `using T = U` would then hide a change to `U`.
 
 - **Identify an enumerator by its enum and position.** An insertion would then read as every

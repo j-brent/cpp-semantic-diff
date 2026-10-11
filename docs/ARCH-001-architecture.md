@@ -217,6 +217,7 @@ The entities that carry values hold them in `attrs`, one compared fact per key
 | enum | `underlying_type` (canonical), `scoped` |
 | enumerator | `value`, `explicit_value` (written, or implied by the one before) |
 | alias | `target` (canonical), `template` |
+| variable, at namespace scope or a static data member | `type`, `value` (as clang evaluates it), `initializer_hash` (only where it cannot), `constexpr`, `storage`, `linkage`, `thread_local` |
 
 A function or method also carries `sugared_signature`: its type as written, aliases kept. When an
 alias's target changes, the canonical `signature` of every function written with it changes while
@@ -761,7 +762,7 @@ is non-reproducible on one machine, let alone across two.
 
 The smallest slice that tests the thesis end to end.
 
-**In:** namespace / class / function / method / field / enum / enumerator / alias nodes · `contains`, `calls`, `inherits`,
+**In:** namespace / class / function / method / field / enum / enumerator / alias / variable nodes · `contains`, `calls`, `inherits`,
 `overrides` edges · **tier-1 identity, plus the inline namespace tier and the name tier for functions and methods** · node
 add/remove/attr/body/signature and edge add/remove/kind/attr change events · one derived change
 event, `CallerOfChangedSignature` · JSON + terminal output · the compression metric · fixtures `fmt` and

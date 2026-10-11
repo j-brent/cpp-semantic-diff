@@ -25,6 +25,7 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import itertools
+import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -56,9 +57,9 @@ from cpp_semantic_diff.model.ir import (
 from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 
 #: The extraction scope (ARCH-001 §13): namespace, class, function, method, field, and the
-#: entities that carry values -- enum, enumerator and alias (ADR-038). Anything not named here
-#: is not modelled. Adding a kind is additive, and each kind's compared facts need a novelty
-#: weight in `rank/weights.py`.
+#: entities that carry values -- enum, enumerator, alias, and variable at namespace scope or
+#: as a static data member (ADR-038). Anything not named here is not modelled. Adding a kind
+#: is additive, and each kind's compared facts need a novelty weight in `rank/weights.py`.
 #:
 #: Templates map onto their underlying kind with `attrs["template"]`. A template and its
 #: instantiations need separate identity (ARCH-001 §5), and this gets that for free: only
@@ -88,6 +89,7 @@ MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.TYPEDEF_DECL: NodeKind.ALIAS,
     ci.CursorKind.TYPE_ALIAS_DECL: NodeKind.ALIAS,
     ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL: NodeKind.ALIAS,
+    ci.CursorKind.VAR_DECL: NodeKind.VARIABLE,  # unless it is local; see below
 }
 
 #: What no model this extractor builds can show, stated on every run (ADR-029). The first is
@@ -445,6 +447,11 @@ def _node_kind(cursor: ci.Cursor) -> NodeKind | None:
     if kind is None:
         return None
     if kind is NodeKind.ALIAS and _names_its_own_tag(cursor):
+        return None
+    # A function body is never descended into for declarations, so a local variable should
+    # not arrive here. Refused anyway: a local, `static` or not, is part of its function's
+    # body, which `body_hash` already compares.
+    if kind is NodeKind.VARIABLE and cursor.semantic_parent.kind in CALLABLE_KINDS:
         return None
     if cursor.kind in TEMPLATED_RECORD_KINDS:
         return TAG_KINDS.get(template_tag_kind(cursor), kind)
@@ -1180,6 +1187,15 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["final"] = _final(cursor)
         attrs["deprecated"] = _record_deprecated(cursor)
         attrs["base_order"] = _base_order(cursor)
+    if kind is NodeKind.VARIABLE:
+        attrs["type"] = _canonical_spelling(cursor.type)
+        value, initializer = _initial_value(cursor)
+        attrs["value"] = value
+        attrs["initializer_hash"] = initializer
+        attrs["constexpr"] = _is_constexpr(cursor)
+        attrs["storage"] = str(cursor.storage_class.name).lower()
+        attrs["linkage"] = str(cursor.linkage.name).lower()
+        attrs["thread_local"] = cursor.tls_kind is not ci.TLSKind.NONE
     if kind is NodeKind.ALIAS:
         attrs["target"] = _alias_target(cursor)
         attrs["template"] = cursor.kind is ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL
@@ -1194,6 +1210,136 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         # (the `enumerator-implicit-value-shifted` cause rule, ARCH-001 §6.3).
         attrs["explicit_value"] = next(iter(cursor.get_children()), None) is not None
     return attrs
+
+
+class _Evaluate:
+    """`clang_Cursor_Evaluate`, which the Python bindings do not wrap.
+
+    Clang's constant evaluator, asked of a variable's initializer: the value the compiler
+    would fold it to, which is what a reviewer compares. `kLimit = 2 * 5` and `kLimit = 10` are
+    the same constant, and a hash of the text could not say so.
+
+    Here rather than in a module of its own because the producer's cache key hashes this
+    module and `ir.py` and nothing else (`produce/cache.py`). A value computed by code outside
+    them could change while every key stayed the same, and a stale entry would be served
+    (ARCH-001 §9).
+    """
+
+    #: `CXEvalResultKind`. Every other kind -- Objective-C and CoreFoundation strings,
+    #: `Other`, `UnExposed` -- is a value this model has no scalar for.
+    INT, FLOAT, STR = 1, 2, 4
+
+    def __init__(self) -> None:
+        lib = ci.conf.lib
+        self._evaluate = lib.clang_Cursor_Evaluate
+        self._evaluate.argtypes = [ci.Cursor]
+        self._evaluate.restype = ctypes.c_void_p
+        self._kind = lib.clang_EvalResult_getKind
+        self._kind.argtypes = [ctypes.c_void_p]
+        self._kind.restype = ctypes.c_int
+        self._is_unsigned = lib.clang_EvalResult_isUnsignedInt
+        self._is_unsigned.argtypes = [ctypes.c_void_p]
+        self._is_unsigned.restype = ctypes.c_uint
+        self._unsigned = lib.clang_EvalResult_getAsUnsigned
+        self._unsigned.argtypes = [ctypes.c_void_p]
+        self._unsigned.restype = ctypes.c_ulonglong
+        self._signed = lib.clang_EvalResult_getAsLongLong
+        self._signed.argtypes = [ctypes.c_void_p]
+        self._signed.restype = ctypes.c_longlong
+        self._double = lib.clang_EvalResult_getAsDouble
+        self._double.argtypes = [ctypes.c_void_p]
+        self._double.restype = ctypes.c_double
+        self._str = lib.clang_EvalResult_getAsStr
+        self._str.argtypes = [ctypes.c_void_p]
+        self._str.restype = ctypes.c_char_p
+        self._dispose = lib.clang_EvalResult_dispose
+        self._dispose.argtypes = [ctypes.c_void_p]
+        self._dispose.restype = None
+
+    def __call__(self, cursor: ci.Cursor) -> int | float | str | None:
+        """The value, or None where clang cannot evaluate it to a number or a string."""
+        result = self._evaluate(cursor)
+        if not result:
+            return None
+        try:
+            kind = self._kind(result)
+            if kind == self.INT:
+                return int(
+                    self._unsigned(result) if self._is_unsigned(result) else self._signed(result)
+                )
+            if kind == self.FLOAT:
+                number = float(self._double(result))
+                # Spelled rather than stored: NaN is unequal to itself, so it would read as a
+                # change on every comparison, and JSON has no infinity to round-trip through
+                # the cache.
+                return number if math.isfinite(number) else repr(number)
+            if kind == self.STR:
+                text = self._str(result)
+                return None if text is None else text.decode("utf-8", errors="replace")
+            return None
+        finally:
+            self._dispose(result)
+
+
+_evaluator: _Evaluate | None = None
+
+
+def evaluate(cursor: ci.Cursor) -> int | float | str | None:
+    global _evaluator
+    if _evaluator is None:
+        _evaluator = _Evaluate()
+    return _evaluator(cursor)
+
+
+def _initial_value(cursor: ci.Cursor) -> tuple[int | float | str | None, str | None]:
+    """A variable's initial value, else a hash of its initializer; both None without one.
+
+    The value where clang can evaluate it, so two spellings of one constant are no change. The
+    hash only where it cannot -- a call, a constructor, an address -- so that a changed
+    initializer is still seen. Hashing the written tokens means a macro in it is hashed by
+    name: a change to the macro's definition does not change the hash.
+
+    Never evaluated inside a template. The initializer may depend on a template argument, and
+    clang's evaluator is not safe to ask about a value-dependent expression.
+    """
+    initializer = next(
+        (c for c in reversed(list(cursor.get_children())) if c.kind.is_expression()), None
+    )
+    if initializer is None:
+        return None, None
+    if not _in_template(cursor):
+        value = evaluate(cursor)
+        if value is not None:
+            return value, None
+    return None, _token_hash(initializer)
+
+
+def _token_hash(cursor: ci.Cursor) -> str | None:
+    """Hash of a cursor's tokens, comments skipped; None when it has none."""
+    digest = hashlib.blake2b(digest_size=16)
+    empty = True
+    for token in cursor.get_tokens():
+        if token.kind is ci.TokenKind.COMMENT:
+            continue
+        digest.update(token.spelling.encode())
+        digest.update(b"\x00")
+        empty = False
+    return None if empty else digest.hexdigest()
+
+
+def _is_constexpr(cursor: ci.Cursor) -> bool:
+    """Whether `constexpr` is written before the variable's name.
+
+    Read from the tokens, which the bindings leave as the only way to ask. A `constexpr`
+    spelled through a macro is missed.
+    """
+    name_at = cursor.location.offset
+    for token in cursor.get_tokens():
+        if token.extent.start.offset >= name_at:
+            return False
+        if token.spelling == "constexpr":
+            return True
+    return False
 
 
 def _alias_target(cursor: ci.Cursor) -> str:
@@ -1408,8 +1554,8 @@ def _observation_rank(node: Node) -> tuple[object, ...]:
 
     Three components, in order:
 
-    1. **A definition outranks a declaration.** It carries the body, and its location is
-       where a reviewer wants to be sent (ARCH-001 §5).
+    1. **A definition outranks a declaration** (`_is_definition`). It carries the body or the
+       value, and its location is where a reviewer wants to be sent (ARCH-001 §5).
     2. **Knowing outranks not knowing.** Whether a TU determined a given fact about an
        entity depends on what that TU needed -- clang leaves an unused special member's
        exception specification uncomputed, so one TU reports it and another reports None.
@@ -1423,7 +1569,7 @@ def _observation_rank(node: Node) -> tuple[object, ...]:
         for value in (node.signature, node.symbol, node.location, node.tu, *node.attrs.values())
     )
     return (
-        node.body_hash is not None,
+        _is_definition(node),
         known,
         node.name,
         node.qualified_name,
@@ -1454,6 +1600,20 @@ def _union_sites(have: tuple[Location, ...], more: tuple[Location, ...]) -> tupl
     if len(merged) == len(have):
         return have
     return tuple(sorted(merged, key=lambda location: location.sort_key))
+
+
+def _is_definition(node: Node) -> bool:
+    """Whether an observation is of a definition, as far as the node can tell.
+
+    A function's definition is the one with a body. A variable has none, so `extern` marks the
+    declaration: `extern int x;` in a header and `int x = 5;` in a source file are one entity,
+    and the definition holds its value and the `storage` it was defined with. A static data
+    member's declaration in its class is not `extern`, so it ties with the definition here, and
+    the definition wins on what it determined -- its value -- under `_observation_rank`.
+    """
+    if node.body_hash is not None:
+        return True
+    return node.kind is NodeKind.VARIABLE and node.attrs.get("storage") != "extern"
 
 
 def merge_node(nodes: dict[NodeId, Node], node: Node) -> None:

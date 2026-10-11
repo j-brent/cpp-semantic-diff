@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -129,18 +130,18 @@ class TestScope:
             NodeKind.FUNCTION
         }
 
-    def test_ignores_kinds_outside_the_v0_scope(self, tmp_path: Path, toolchain: Toolchain) -> None:
+    def test_ignores_variables_local_to_a_function(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """A local, `static` or not, is part of its function's body, which `body_hash`
+        compares."""
         result = run(
             tmp_path,
             toolchain,
-            {
-                "a.cpp": """
-                int global_counter = 0;
-                """
-            },
+            {"a.cpp": "void f() { static int calls = 0; int x = 1; ++calls; }\n"},
         )
         assert result.ok
-        assert result.nodes == {}
+        assert {n.qualified_name for n in result.nodes.values()} == {"f"}
 
 
 class TestAliases:
@@ -195,6 +196,106 @@ class TestAliases:
         f = named(result, "f")
         assert f.signature == "void (unsigned long, int)"
         assert f.attrs["sugared_signature"] == "void (Count, U)"
+
+
+class TestVariables:
+    """A variable at namespace scope or a static data member, compared by its type, its value
+    and how it is stored (ADR-038)."""
+
+    SOURCE = """
+    constexpr int kLimit = 2 * 5;
+    static int counter = 2;
+    thread_local int per_thread = 0;
+    const char* greeting = "hi";
+    constexpr double half = 0.5;
+    constexpr double inf = __builtin_inf();
+    int next();
+    int computed = next();
+    namespace n { inline constexpr unsigned long long all = ~0ull; }
+    struct S { static constexpr int n = 4; static int m; };
+    int S::m = 9;
+    template <class T> struct TT { static constexpr int v = sizeof(T); };
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("variables"), toolchain, {"a.cpp": self.SOURCE})
+
+    def test_a_constant_carries_the_value_clang_folds_it_to(self, result: TuExtract) -> None:
+        values = {
+            name: named(result, name).attrs["value"]
+            for name in ("kLimit", "counter", "greeting", "half", "n::all", "S::n", "S::m")
+        }
+        assert values == {
+            "kLimit": 10,
+            "counter": 2,
+            "greeting": "hi",
+            "half": 0.5,
+            "n::all": 18446744073709551615,
+            "S::n": 4,
+            "S::m": 9,
+        }
+        assert named(result, "kLimit").kind is NodeKind.VARIABLE
+        assert named(result, "kLimit").attrs["initializer_hash"] is None
+
+    def test_an_infinite_value_is_spelled(self, result: TuExtract) -> None:
+        """JSON has no infinity, and NaN is unequal to itself: either stored as a float would
+        change on a cache round trip or on every comparison."""
+        assert named(result, "inf").attrs["value"] == "inf"
+
+    def test_an_initializer_clang_cannot_evaluate_is_hashed(self, result: TuExtract) -> None:
+        computed = named(result, "computed").attrs
+        assert computed["value"] is None
+        assert isinstance(computed["initializer_hash"], str)
+
+    def test_a_value_inside_a_template_is_hashed_not_evaluated(self, result: TuExtract) -> None:
+        """It may depend on a template argument, and clang's evaluator is not safe to ask."""
+        v = named(result, "TT::v").attrs
+        assert v["value"] is None
+        assert isinstance(v["initializer_hash"], str)
+
+    def test_how_it_is_stored_is_compared(self, result: TuExtract) -> None:
+        def facts(name: str) -> tuple[AttrValue, ...]:
+            a = named(result, name).attrs
+            return (a["constexpr"], a["storage"], a["linkage"], a["thread_local"])
+
+        assert facts("kLimit") == (True, "none", "internal", False)
+        assert facts("counter") == (False, "static", "internal", False)
+        assert facts("per_thread") == (False, "none", "external", True)
+        assert facts("S::n") == (True, "static", "external", False)
+        assert named(result, "S::n").attrs["type"] == "const int"
+
+    def test_a_static_data_member_is_contained_by_its_class(self, result: TuExtract) -> None:
+        assert {("S", "S::n"), ("S", "S::m"), ("n", "n::all")} <= edge_pairs(
+            result, EdgeKind.CONTAINS
+        )
+
+
+class TestAVariableDefinitionWins:
+    """`extern int x;` in a header, `int x = 5;` in one source file: one entity, and the
+    observation that holds its value is the one kept, whichever TU arrives first."""
+
+    SOURCES: ClassVar[dict[str, str]] = {
+        "lib.h": "#pragma once\nextern int x;\nextern int y;\n",
+        "a.cpp": '#include "lib.h"\nint use() { return x + y; }\n',
+        "b.cpp": '#include "lib.h"\nint x = 5;\nint y;\n',
+    }
+
+    def test_in_either_order(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        a, b = run_each(tmp_path, toolchain, self.SOURCES, "a.cpp", "b.cpp")
+        for first, second in ((a, b), (b, a)):
+            nodes: dict[NodeId, Node] = {}
+            for partial in (first, second):
+                for node in partial.nodes.values():
+                    merge_node(nodes, node)
+            x = next(n for n in nodes.values() if n.qualified_name == "x")
+            assert x.attrs["value"] == 5
+            assert x.attrs["storage"] == "none"
+            assert x.location is not None and x.location.file == "b.cpp"
+            # No value to tell them apart: `extern` is what marks the declaration.
+            y = next(n for n in nodes.values() if n.qualified_name == "y")
+            assert y.attrs["storage"] == "none"
+            assert y.location is not None and y.location.file == "b.cpp"
 
 
 class TestEnums:

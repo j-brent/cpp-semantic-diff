@@ -226,7 +226,8 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # Changes what every call that omits the argument passes, silently: those callers still
     # compile. Below a signature change, which can break them.
     "default_arguments": 0.85,
-    # A function that stopped being constexpr breaks every use in a constant expression.
+    # A function or variable that stopped being constexpr breaks every use in a constant
+    # expression.
     "constexpr": 0.80,
     # Changes the state every constructor that does not name the field starts it in.
     "default_member_init": 0.60,
@@ -257,6 +258,15 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # changed too, `NodeSignatureChanged` reports it and this is not repeated. No caller is
     # affected, so it sits with a body change.
     "sugared_signature": 0.30,
+    # A variable's `type`, `value` and `constexpr` are the keys above: a field's type, an
+    # enumerator's value and a function's constexpr are the same facts.
+    "linkage": 0.85,  # whether other translation units can name it at all
+    "thread_local": 0.80,  # one object per thread, or one shared by all
+    "storage": 0.75,  # `static`, `extern`: mostly restates linkage, and is reported beside it
+    # An initializer clang could not evaluate changed: a call, a constructor, an address. Real,
+    # but it says only that the text changed, as a body change does, with a little more weight
+    # because it runs before `main`.
+    "initializer_hash": 0.50,
 }
 
 # --------------------------------------------------------------------------------------

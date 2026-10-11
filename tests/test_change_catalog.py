@@ -357,7 +357,6 @@ CATALOG = [
         "constexpr int kLimit = 10;\nint f() { return kLimit; }",
         "constexpr int kLimit = 20;\nint f() { return kLimit; }",
         changed("kLimit", was=10, now=20),
-        fails="step 5: variables are not modelled",
     ),
     case(
         "enumerator-value",
@@ -383,7 +382,6 @@ CATALOG = [
         "struct S { static constexpr int n = 4; };",
         "struct S { static constexpr int n = 8; };",
         changed("S::n", was=4, now=8),
-        fails="step 5: static data members are not modelled",
     ),
     case(
         "field-order",
@@ -741,7 +739,7 @@ CATALOG = [
         "int g();\nint h();\nint x = g();",
         "int g();\nint h();\nint x = h();",
         relation("x", "h"),
-        fails="steps 5 and 8: variables are not modelled, nor calls from initializers",
+        fails="step 8 (out of v0, ADR-030): calls from initializers are not relationships",
     ),
 ]
 
