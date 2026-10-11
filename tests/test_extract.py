@@ -135,7 +135,6 @@ class TestScope:
             toolchain,
             {
                 "a.cpp": """
-                enum class Color { red, green };
                 using Alias = int;
                 int global_counter = 0;
                 """
@@ -143,6 +142,56 @@ class TestScope:
         )
         assert result.ok
         assert result.nodes == {}
+
+
+class TestEnums:
+    """An enum and its enumerators, each with what a reviewer compares (ADR-038)."""
+
+    SOURCE = """
+    enum E { A = 1, B, C = 5 };
+    enum class Color : unsigned char { red, green };
+    enum Neg { m = -1 };
+    struct K { enum In { q }; };
+    template <int N> struct X { enum { v = N, w = 4 }; };
+    """
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        return run(tmp_path_factory.mktemp("enums"), toolchain, {"a.cpp": self.SOURCE})
+
+    def test_an_enum_carries_its_underlying_type_and_whether_it_is_scoped(
+        self, result: TuExtract
+    ) -> None:
+        assert named(result, "E").kind is NodeKind.ENUM
+        assert named(result, "E").attrs == {"underlying_type": "unsigned int", "scoped": False}
+        assert named(result, "Color").attrs == {"underlying_type": "unsigned char", "scoped": True}
+
+    def test_an_enumerator_carries_its_value_and_whether_it_was_written(
+        self, result: TuExtract
+    ) -> None:
+        values = {
+            name: (named(result, name).attrs["value"], named(result, name).attrs["explicit_value"])
+            for name in ("E::A", "E::B", "E::C", "Color::green", "Neg::m", "K::In::q")
+        }
+        assert values == {
+            "E::A": (1, True),
+            "E::B": (2, False),
+            "E::C": (5, True),
+            "Color::green": (1, False),
+            "Neg::m": (-1, True),
+            "K::In::q": (0, False),
+        }
+        assert named(result, "E::B").kind is NodeKind.ENUMERATOR
+
+    def test_an_enum_contains_its_enumerators(self, result: TuExtract) -> None:
+        contains = edge_pairs(result, EdgeKind.CONTAINS)
+        assert {("E", "E::A"), ("E", "E::B"), ("K", "K::In"), ("K::In", "K::In::q")} <= contains
+
+    def test_a_value_inside_a_template_is_not_recorded(self, result: TuExtract) -> None:
+        """Clang leaves every enumerator of an enum in a template at 0, even `w = 4`. A 0
+        that means "not computed" would read as a value."""
+        assert named(result, "X::(unnamed enum)::w").attrs["value"] is None
+        assert named(result, "X::(unnamed enum)::w").attrs["explicit_value"] is True
 
     def test_declarations_outside_the_repository_are_not_modelled(
         self, tmp_path: Path, toolchain: Toolchain

@@ -209,6 +209,14 @@ file. It is the one field merged as a union across observations rather than take
 observation that wins, and it is never compared or hashed. A change event points at every site,
 so an edited header declaration leads to the change event about it (§6.2).
 
+The entities that carry values hold them in `attrs`, one compared fact per key
+([ADR-038](adr/ADR-038-entities-that-carry-values.md)):
+
+| Kind | Compared |
+|---|---|
+| enum | `underlying_type` (canonical), `scoped` |
+| enumerator | `value`, `explicit_value` (written, or implied by the one before) |
+
 ### 4.2 Edges
 
 ```
@@ -407,6 +415,7 @@ Rename one function and 200 call edges "change". That is one change event with 2
 | call-moved-to-another-overload | `EdgeAdded(caller→G)` | `EdgeRemoved(caller→F)`, F and G overloads of one name | active |
 | signature-change-breaks-overrides | `NodeSignatureChanged(F)` | `EdgeRemoved(override→F)` | active |
 | edge-gained-its-endpoint | `NodeAdded(N)` | `EdgeAdded` for edges touching N | active |
+| enumerator-implicit-value-shifted | `NodeAttrChanged(value)`, `NodeAdded` or `NodeRemoved` of the nearest enumerator above | `NodeAttrChanged(value)` of an enumerator whose value is implied on both sides | active |
 | rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **unreachable** |
 | signature-change-breaks-callers | `NodeSignatureChanged(F)` | `CallerOfChangedSignature` for each call into F | active |
 
@@ -449,6 +458,22 @@ overloads differ exactly in signature (§5). The cause is the `EdgeAdded` rather
 by `edge-gained-its-endpoint`, and both collapse under it. The row sits below
 `edge-lost-its-endpoint` because both explain an `EdgeRemoved` and the order is the tie-break — an
 endpoint that actually went away is a better explanation than one the caller merely stopped using.
+
+`enumerator-implicit-value-shifted` is the cascade an enum has. An enumerator with no written value
+is the one before it plus one, so inserting one enumerator changes every implied value below it.
+The cause is the nearest change above, of whichever kind, and a change farther up is linked by the
+enumerators between, so the chain runs up the enum the way the values do. One row rather than one
+per kind of cause, because the first row to find a cause wins, and a farther insertion must not win
+over a nearer value change; `CauseRule.also_caused_by` is how a row names more than one cause kind.
+A value written on either side is an edit of its own and is not explained. "Above" is source order,
+which orders siblings and is never identity (§4.1).
+
+Two rules are recorded here and not in the table, because their consequences need the uses
+relationship ([#10](https://github.com/j-brent/cpp-semantic-diff/issues/10)), which is out of v0
+([ADR-041](adr/ADR-041-v0-scope-of-steps-6-and-7.md)): a changed constant or enumerator value
+causes a change event on each entity that uses it, and an added enumerator causes one on each
+`switch` over its enum that does not name it. Neither has a row or dormant code until the
+relationship exists.
 
 `rename-retargets-edges` is **unreachable, not dormant** — and it is not revived by tier 2. Because
 base edges are rewritten into head coordinates through the correspondence before comparison, a
@@ -725,7 +750,7 @@ is non-reproducible on one machine, let alone across two.
 
 The smallest slice that tests the thesis end to end.
 
-**In:** namespace / class / function / method / field nodes · `contains`, `calls`, `inherits`,
+**In:** namespace / class / function / method / field / enum / enumerator nodes · `contains`, `calls`, `inherits`,
 `overrides` edges · **tier-1 identity, plus the inline namespace tier and the name tier for functions and methods** · node
 add/remove/attr/body/signature and edge add/remove/kind/attr change events · one derived change
 event, `CallerOfChangedSignature` · JSON + terminal output · the compression metric · fixtures `fmt` and

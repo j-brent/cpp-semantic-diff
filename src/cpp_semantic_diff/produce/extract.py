@@ -55,10 +55,10 @@ from cpp_semantic_diff.model.ir import (
 )
 from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 
-#: The v0 extraction scope (ARCH-001 §13): namespace, class, function, method, field.
-#: Anything not named here is not modelled -- enums, aliases, and namespace-scope variables
-#: are deliberate omissions, not oversights. Adding a kind is additive; every kind added
-#: before the delta exists is a kind whose events nothing consumes.
+#: The extraction scope (ARCH-001 §13): namespace, class, function, method, field, and the
+#: entities that carry values -- enum and enumerator (ADR-038). Anything not named here is not
+#: modelled. Adding a kind is additive, and each kind's compared facts need a novelty weight in
+#: `rank/weights.py`.
 #:
 #: Templates map onto their underlying kind with `attrs["template"]`. A template and its
 #: instantiations need separate identity (ARCH-001 §5), and this gets that for free: only
@@ -83,6 +83,8 @@ MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.DESTRUCTOR: NodeKind.METHOD,
     ci.CursorKind.CONVERSION_FUNCTION: NodeKind.METHOD,
     ci.CursorKind.FIELD_DECL: NodeKind.FIELD,
+    ci.CursorKind.ENUM_DECL: NodeKind.ENUM,
+    ci.CursorKind.ENUM_CONSTANT_DECL: NodeKind.ENUMERATOR,
 }
 
 #: What no model this extractor builds can show, stated on every run (ADR-029). The first is
@@ -104,6 +106,7 @@ LIBCLANG_LIMITS: tuple[str, ...] = (
 CONTAINER_KINDS = frozenset(
     {
         ci.CursorKind.NAMESPACE,
+        ci.CursorKind.ENUM_DECL,  # its enumerators
         ci.CursorKind.CLASS_DECL,
         ci.CursorKind.CLASS_TEMPLATE,
         ci.CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
@@ -1142,7 +1145,52 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["final"] = _final(cursor)
         attrs["deprecated"] = _record_deprecated(cursor)
         attrs["base_order"] = _base_order(cursor)
+    if kind is NodeKind.ENUM:
+        attrs["underlying_type"] = _canonical_spelling(cursor.enum_type)
+        attrs["scoped"] = cursor.is_scoped_enum()
+    if kind is NodeKind.ENUMERATOR:
+        attrs["value"] = _enumerator_value(cursor)
+        # Whether the value is written or follows from the one before. Kept beside the value
+        # because the two cases mean different things when the value changes: a written value
+        # changed is an edit to this line, an implied one is a consequence of an edit above it
+        # (the `enumerator-implicit-value-shifted` cause rule, ARCH-001 §6.3).
+        attrs["explicit_value"] = next(iter(cursor.get_children()), None) is not None
     return attrs
+
+
+#: Cursor kinds that make everything inside them a template, whose values may depend on a
+#: template argument.
+_TEMPLATE_KINDS = frozenset(
+    {
+        ci.CursorKind.CLASS_TEMPLATE,
+        ci.CursorKind.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION,
+        ci.CursorKind.FUNCTION_TEMPLATE,
+        ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL,
+    }
+)
+
+
+def _in_template(cursor: ci.Cursor) -> bool:
+    """Whether any semantic ancestor is a template."""
+    parent = cursor.semantic_parent
+    while parent is not None and parent.kind is not ci.CursorKind.TRANSLATION_UNIT:
+        if parent.kind in _TEMPLATE_KINDS:
+            return True
+        parent = parent.semantic_parent
+    return False
+
+
+def _enumerator_value(cursor: ci.Cursor) -> int | None:
+    """An enumerator's value, or None inside a template.
+
+    Clang does not compute the enumerators of an enum declared inside a template: every one
+    reads 0, even `z = 4`, since the enum as a whole may depend on a template argument. A 0 that
+    means "not computed" would read as a real value and change when the enum moves into or out
+    of a template, so it is not recorded.
+    """
+    if _in_template(cursor):
+        return None
+    return int(cursor.enum_value)
 
 
 #: The cursor kinds of a template's own parameter list, in the order they are declared.

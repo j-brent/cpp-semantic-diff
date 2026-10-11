@@ -22,7 +22,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from cpp_semantic_diff.match import Correspondence, containers
-from cpp_semantic_diff.model import Edge, EdgeId, Model, NodeId
+from cpp_semantic_diff.model import Edge, EdgeId, EdgeKind, Model, Node, NodeId, NodeKind
 
 
 @dataclass(frozen=True)
@@ -53,6 +53,12 @@ class ClassifyContext:
     #: any event.
     head_out_edges: Mapping[NodeId, tuple[Edge, ...]]
 
+    #: Enum -> its enumerators in source order, on each side. An implied enumerator value
+    #: follows from the one before it, so a rule about one needs the order; the model holds
+    #: no order of its own, and location is used only to sort siblings, never to pair them.
+    base_enumerators: Mapping[NodeId, tuple[NodeId, ...]]
+    head_enumerators: Mapping[NodeId, tuple[NodeId, ...]]
+
     @classmethod
     def build(cls, base: Model, head: Model, correspondence: Correspondence) -> ClassifyContext:
         out: dict[NodeId, list[Edge]] = defaultdict(list)
@@ -77,6 +83,8 @@ class ClassifyContext:
             head_out_edges={
                 src: tuple(sorted(edges, key=lambda e: e.id)) for src, edges in out.items()
             },
+            base_enumerators=_enumerators(base),
+            head_enumerators=_enumerators(head),
         )
 
     def removed(self, base_id: NodeId) -> bool:
@@ -104,3 +112,28 @@ def _endpoints(model: Model) -> dict[EdgeId, tuple[NodeId, NodeId]]:
     the wrong parent.
     """
     return {edge.id: (edge.src, edge.dst) for edge in model.edges}
+
+
+def _enumerators(model: Model) -> dict[NodeId, tuple[NodeId, ...]]:
+    """Enum -> its enumerators, sorted by where they are written; the id breaks a tie, so the
+    order never depends on model construction (§3)."""
+    members: dict[NodeId, list[Node]] = defaultdict(list)
+    for edge in model.edges:
+        child = model.nodes.get(edge.dst)
+        if (
+            edge.kind is EdgeKind.CONTAINS
+            and child is not None
+            and child.kind is NodeKind.ENUMERATOR
+        ):
+            members[edge.src].append(child)
+    return {
+        enum: tuple(node.id for node in sorted(nodes, key=_source_order))
+        for enum, nodes in members.items()
+    }
+
+
+def _source_order(node: Node) -> tuple[str, int, int, str]:
+    at = node.location
+    if at is None:
+        return ("", 0, 0, node.id)
+    return (at.file, at.line, at.column or 0, node.id)

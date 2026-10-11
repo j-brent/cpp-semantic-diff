@@ -240,6 +240,15 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # Base order is layout and construction order: every base's offset, and which base is
     # constructed first.
     "base_order": 0.90,
+    # The entities that carry values (ADR-038).
+    "underlying_type": 0.95,  # an enum's size and signedness: layout and ABI of every use
+    "scoped": 0.90,  # every unqualified use of an enumerator, and every implicit conversion
+    # The value is what every use of an enumerator compiles to, and a changed one can break
+    # code outside the diff silently: a serialized or persisted value now means something else.
+    "value": 0.95,
+    # Low on its own: a value that becomes written without changing is a style edit, and one
+    # that changes reports the change through `value` as well.
+    "explicit_value": 0.30,
 }
 
 # --------------------------------------------------------------------------------------

@@ -364,14 +364,19 @@ CATALOG = [
         "enum E { A = 1, B = 2 };\nint f() { return B; }",
         "enum E { A = 1, B = 3 };\nint f() { return B; }",
         changed("E::B", was=2, now=3),
-        fails="step 5: enumerators are not modelled",
     ),
     case(
         "enumerator-added",
         "enum E { A, B };",
         "enum E { A, B, C };",
         added("E::C"),
-        fails="step 5: enumerators are not modelled",
+    ),
+    case(
+        "enumerator-added-unhandled-in-switch",
+        "enum E { A, B };\nint f(E e) { switch (e) { case A: return 1; case B: return 2; } }",
+        "enum E { A, B, C };\nint f(E e) { switch (e) { case A: return 1; case B: return 2; } }",
+        relation("f", "E::C"),
+        fails="step 6 (#10, post-v0 per ADR-041): a switch is not checked against its enum",
     ),
     case(
         "static-data-member-value",
