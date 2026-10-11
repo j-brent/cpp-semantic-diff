@@ -596,6 +596,27 @@ class TestStorage:
         _, cache = build(checkout, toolchain, tmp_path)
         assert cache.stats.hits == 0
 
+    @pytest.mark.parametrize("key", ["crossings", "targets", "unmodelled"])
+    def test_an_entry_missing_a_section_is_a_miss(
+        self, tmp_path: Path, toolchain: Toolchain, key: str
+    ) -> None:
+        """Format 2 was filled by two branches. An entry written by one of them alone lacks
+        the other's section, and must be a miss, not a partial with no crossings in it."""
+        sources = {"a.cpp": "#include <stdlib.h>\nint a() { return abs(1); }\n"}
+        checkout = project(tmp_path / "w", sources, ("a.cpp",))
+        build(checkout, toolchain, tmp_path)
+
+        entry = next(store(tmp_path).rglob("*.json.gz"))
+        payload = json.loads(gzip.decompress(entry.read_bytes()))
+        del payload[key]
+        entry.write_bytes(gzip.compress(json.dumps(payload).encode()))
+
+        with pytest.raises(KeyError):
+            loads(entry.read_bytes())
+        model, cache = build(checkout, toolchain, tmp_path)
+        assert cache.stats.hits == 0
+        assert model.crossings
+
     def test_entries_for_one_tu_are_bounded(self, tmp_path: Path, toolchain: Toolchain) -> None:
         """A cache that grows once per edit of one file fills a disk during a rebase.
         Bounded, but not at one: base and head are two live generations of most TUs."""
@@ -999,6 +1020,8 @@ def _partial_dump(partial: TuExtract) -> dict[str, object]:
         "edges": sorted(e.model_dump_json() for e in partial.edges.values()),
         "aliases": partial.aliases,
         "unmodelled": sorted(partial.unmodelled),
+        "crossings": sorted(c.model_dump_json() for c in partial.crossings.values()),
+        "targets": partial.targets,
     }
 
 
