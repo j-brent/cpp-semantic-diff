@@ -39,6 +39,7 @@ from cpp_semantic_diff.model import (
 )
 from cpp_semantic_diff.rank import Ranking, subject_endpoints
 from cpp_semantic_diff.render.document import (
+    SYSTEMATIC_LIMITS,
     CompletenessBlock,
     CompletenessReport,
     DiffDocument,
@@ -91,6 +92,14 @@ def build_document(
         renames=RenameDetection(
             complete=rename_limit is None,
             limit_needed=rename_limit.needed if rename_limit is not None else None,
+        ),
+        # §11's standing limits, then what either producer says it cannot see (ADR-029).
+        # Deduplicated in order: both sides normally state the same limits, and the reader
+        # needs each once.
+        limits=list(
+            dict.fromkeys(
+                [*SYSTEMATIC_LIMITS, *base.completeness.not_visible, *head.completeness.not_visible]
+            )
         ),
     )
 

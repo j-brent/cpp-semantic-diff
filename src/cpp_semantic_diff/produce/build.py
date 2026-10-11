@@ -55,6 +55,7 @@ from cpp_semantic_diff.model.ir import (
 )
 from cpp_semantic_diff.produce.cache import TuCache
 from cpp_semantic_diff.produce.extract import (
+    LIBCLANG_LIMITS,
     TuExtract,
     extract,
     language_mode,
@@ -199,6 +200,9 @@ def assemble(
         # correct for entries written yesterday.
         language_modes=sorted(set(language_modes)),
         notes=list(notes),
+        # A property of the producer rather than of any TU, so taken from the extractor's own
+        # statement of it instead of from the (cached) partials.
+        not_visible=list(LIBCLANG_LIMITS),
     )
 
     # Sorted so that the model is a function of its content and not of the order the

@@ -24,6 +24,7 @@ from cpp_semantic_diff.acquire.workspace import Checkout, CompileDatabase
 from cpp_semantic_diff.errors import PreconditionError
 from cpp_semantic_diff.model.ir import EdgeKind, Model, Node, TuStatus
 from cpp_semantic_diff.produce.build import assemble, build_model, tu_extracts
+from cpp_semantic_diff.produce.extract import LIBCLANG_LIMITS
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -111,6 +112,13 @@ class TestTheLanguageModeIsRecorded:
         """One entry per distinct standard, not per TU -- a 900-TU build states one fact."""
         model = assemble(REV, [], toolchain=toolchain, language_modes=["c++17", "c++11", "c++17"])
         assert model.completeness.language_modes == ["c++11", "c++17"]
+
+    def test_every_model_states_what_libclang_cannot_see(self, toolchain: Toolchain) -> None:
+        """ADR-029: implicit special members are invisible on every run, so every model says
+        so -- an empty one included -- rather than leaving a missing move to read as no change."""
+        model = assemble(REV, [], toolchain=toolchain)
+        assert model.completeness.not_visible == list(LIBCLANG_LIMITS)
+        assert any("move" in limit for limit in model.completeness.not_visible)
 
 
 def named(model: Model, qualified: str) -> list[Node]:

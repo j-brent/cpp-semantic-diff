@@ -34,7 +34,7 @@ The page is ordered by what §11 and §10 say must be seen first:
    under their causes (§6.3, `collapse.py`).
 4. **The tier-1 residue** (§13). v0's deliberate rename damage, stated as a measurement rather
    than left to be inferred from an inflated event count.
-5. **§11's two systematic limits**, which are true of every run and are printed on every one.
+5. **§11's systematic limits**, which are true of every run and are printed on every one.
 """
 
 from __future__ import annotations

@@ -19,7 +19,7 @@ recorded on the field:
 - **`entities`** carries only the nodes events reference. §10 says "for events to
   reference"; a real model has thousands of nodes and a review touches tens of them, and a
   document that inlined the whole node set would be a model dump with a delta attached.
-- **`completeness`** carries the two systematic limits of §11 as data rather than as prose
+- **`completeness`** carries the systematic limits of §11 as data rather than as prose
   in one view, because §11 requires them stated "in the output itself, every time" -- and
   the output is this document, not the terminal.
 - **`summary`** carries §10's four keys plus others, the tier-1 residue among them. ARCH-001
@@ -76,7 +76,9 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #: document from a moving schema from passing for a finished one.
 SCHEMA_VERSION = "2.0.dev"
 
-#: ARCH-001 §11: "Two systematic limits get stated in the output itself, every time."
+#: ARCH-001 §11: systematic limits "get stated in the output itself, every time". These are the
+#: two that hold of any static model of one configuration; the third, what this producer cannot
+#: see, comes from the models (`Completeness.not_visible`) and is appended by `build.py`.
 #: They are data on the document rather than a line in one view, because "every time"
 #: means every consumer, and a limit that lives in `terminal.py` is absent from the JSON
 #: that §10 calls the product. Phrased as claims about *this* output, not as general
@@ -304,8 +306,9 @@ class CompletenessBlock(BaseModel):
     )
     limits: list[str] = Field(
         default_factory=lambda: list(SYSTEMATIC_LIMITS),
-        description="ARCH-001 §11's two systematic limits, carried on every document so "
-        "that every consumer states them rather than each remembering to.",
+        description="ARCH-001 §11's systematic limits, then what the producer cannot see "
+        "(`Completeness.not_visible`, ADR-029), carried on every document so that every "
+        "consumer states them rather than each remembering to.",
     )
 
     @property

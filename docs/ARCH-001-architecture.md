@@ -201,7 +201,8 @@ how these systems rot.
 ### 4.4 Completeness record
 
 Every `Model` carries how it was built: TUs attempted, parsed, failed (with reasons); whether a
-build was available; which producers ran; producer version. This is not diagnostics — it is
+build was available; which producers ran; producer version; and what the producer cannot see
+whatever the source (§11). This is not diagnostics — it is
 load-bearing input to §11.
 
 ---
@@ -535,12 +536,17 @@ The output states this beside the completeness records, and every unpaired entit
 diff added or deleted counts as having a candidate, never as having none (rule 1). The limit is
 not lifted: `-l0` is potentially quadratic on the large diffs that hit it.
 
-Two systematic limits get stated in the output itself, every time:
+Three systematic limits get stated in the output itself, every time:
 
 - **One model is one preprocessor configuration.** Claims are conditional on the configuration
   analyzed. Variant coverage (RESEARCH-002 §3.10) is unsolved and must not be implied.
 - **Static call graphs are unsound.** Virtual dispatch, function pointers, and inlining mean a
   reachability delta is a lower bound, not a fact, and must be rendered as one.
+- **Some of the code is not visible to the model.** libclang does not expose implicit special
+  members, so a destructor that removes a class's implicit move operations changes nothing the
+  model holds; and macros are not modelled. Each model's completeness record lists these
+  (`not_visible`), and the output states them beside the other two
+  ([ADR-029](adr/ADR-029-libclang-limits-are-reported.md)).
 
 ---
 

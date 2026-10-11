@@ -120,15 +120,8 @@ class Outcome:
 
 
 def reported_not_visible(outcome: Outcome) -> list[str]:
-    """What the run says it could not see.
-
-    No run reports this yet, so this returns nothing and every case that expects it is an
-    expected failure. The report it stands for is decided: libclang does not expose the copy
-    and move operations the compiler writes, and a run is to state that limit as a number,
-    the way it states dropped edges (ARCH-001 §11). When that report exists, this function
-    reads it from `outcome`. Nothing else in the catalog changes.
-    """
-    return []
+    """What the run says it could not see: each side's `Completeness.not_visible` (ADR-029)."""
+    return [*outcome.base.completeness.not_visible, *outcome.head.completeness.not_visible]
 
 
 # -- The outcome vocabulary -------------------------------------------------------------------
@@ -535,8 +528,6 @@ CATALOG = [
         "struct S { int* p; };",
         "struct S { int* p; ~S(); };",
         not_visible("move"),
-        fails="section 3 (decided) and step 2: the run does not state that implicit special "
-        "members are not visible; when it does, make reported_not_visible() read it",
     ),
     case(
         "destructor-added",

@@ -814,6 +814,15 @@ class TestTheGraphBoundaryIsStatedNumerically:
         for limit in SYSTEMATIC_LIMITS:
             assert limit.split(".")[0] in out
 
+    def test_what_the_producer_cannot_see_is_stated_once_beside_the_limits(self) -> None:
+        """ADR-029: a limit of the producer is stated on every run, the way §11's two are --
+        once, though both sides state it."""
+        unseen = ["Implicit special members are not visible.", "Macros are not modelled."]
+        doc = self._doc(Completeness(not_visible=unseen), Completeness(not_visible=unseen))
+        assert doc.completeness.limits == [*SYSTEMATIC_LIMITS, *unseen]
+        out = draw(doc)
+        assert out.count("Implicit special members are not visible") == 1
+
     def test_a_clean_model_does_not_claim_to_be_incomplete(self) -> None:
         doc = self._doc(
             Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)]),

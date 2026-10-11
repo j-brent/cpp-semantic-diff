@@ -268,6 +268,13 @@ class Completeness(BaseModel):
         "line of diff and changes which declarations exist, and in the delta that is "
         "indistinguishable from new code (ARCH-001 §11, §12.1).",
     )
+    not_visible: list[str] = Field(
+        default_factory=list,
+        description="What no model from this producer can show, whatever the source: "
+        "implicit special members, which libclang does not expose, and macros (ADR-029). "
+        "The same on every run, and stated on every run, so a change the model cannot see "
+        "reads as unseen rather than as absent (ARCH-001 §11).",
+    )
     notes: list[str] = Field(
         default_factory=list,
         description="Anything the builder wants to say that has no field of its own. Not "
