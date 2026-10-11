@@ -47,10 +47,10 @@ from collections.abc import Iterator
 from cpp_semantic_diff.diff.attrs import changed_attrs
 from cpp_semantic_diff.diff.context import DiffContext, Footing, edge_hunks
 from cpp_semantic_diff.model import (
+    ChangeEvent,
+    ChangeEventKind,
     Edge,
     EdgeKind,
-    Event,
-    EventKind,
     NodeId,
     Side,
 )
@@ -60,7 +60,7 @@ from cpp_semantic_diff.model import (
 type EdgeKey = tuple[NodeId, EdgeKind, NodeId]
 
 
-def edge_events(ctx: DiffContext) -> Iterator[Event]:
+def edge_events(ctx: DiffContext) -> Iterator[ChangeEvent]:
     corr = ctx.correspondence
     base_side: dict[EdgeKey, Edge] = {}
     head_side: dict[EdgeKey, Edge] = {}
@@ -101,8 +101,8 @@ def edge_events(ctx: DiffContext) -> Iterator[Event]:
     for base_key, head_key in _unambiguous_pairs(base_residue, head_residue):
         old = base_residue.pop(base_key)
         new = head_residue.pop(head_key)
-        yield Event(
-            kind=EventKind.EDGE_KIND_CHANGED,
+        yield ChangeEvent(
+            kind=ChangeEventKind.EDGE_KIND_CHANGED,
             subject=new.id,
             payload={"old_kind": old.kind.value, "new_kind": new.kind.value},
             provenance=edge_hunks((Side.BASE, old), (Side.HEAD, new)),
@@ -115,7 +115,7 @@ def edge_events(ctx: DiffContext) -> Iterator[Event]:
         yield _added(ctx, edge)
 
 
-def _attr_changes(ctx: DiffContext, old: Edge, new: Edge) -> Iterator[Event]:
+def _attr_changes(ctx: DiffContext, old: Edge, new: Edge) -> Iterator[ChangeEvent]:
     """`EdgeAttrChanged` for an edge that is on both sides with different attributes.
 
     The one edge event that needs no identity reasoning at all: the key matched, so the
@@ -137,8 +137,8 @@ def _attr_changes(ctx: DiffContext, old: Edge, new: Edge) -> Iterator[Event]:
     well as the new one (§6.2).
     """
     for attr, old_value, new_value in changed_attrs(old.attrs, new.attrs):
-        yield Event(
-            kind=EventKind.EDGE_ATTR_CHANGED,
+        yield ChangeEvent(
+            kind=ChangeEventKind.EDGE_ATTR_CHANGED,
             subject=new.id,
             payload={"attr": attr, "old": old_value, "new": new_value},
             provenance=edge_hunks((Side.BASE, old), (Side.HEAD, new)),
@@ -170,19 +170,19 @@ def _unambiguous_pairs(
     return [(old[0], new[0]) for old, new in by_pair.values() if len(old) == 1 and len(new) == 1]
 
 
-def _removed(ctx: DiffContext, edge: Edge) -> Event:
+def _removed(ctx: DiffContext, edge: Edge) -> ChangeEvent:
     # Base coordinates: the edge does not exist at head. Same rule as `NodeRemoved`.
-    return Event(
-        kind=EventKind.EDGE_REMOVED,
+    return ChangeEvent(
+        kind=ChangeEventKind.EDGE_REMOVED,
         subject=edge.id,
         provenance=edge_hunks((Side.BASE, edge)),
         confidence=ctx.confidence(*_footing(ctx, edge, Side.BASE)),
     )
 
 
-def _added(ctx: DiffContext, edge: Edge) -> Event:
-    return Event(
-        kind=EventKind.EDGE_ADDED,
+def _added(ctx: DiffContext, edge: Edge) -> ChangeEvent:
+    return ChangeEvent(
+        kind=ChangeEventKind.EDGE_ADDED,
         subject=edge.id,
         provenance=edge_hunks((Side.HEAD, edge)),
         confidence=ctx.confidence(*_footing(ctx, edge, Side.HEAD)),

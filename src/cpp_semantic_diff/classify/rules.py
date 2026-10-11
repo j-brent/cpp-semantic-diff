@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from cpp_semantic_diff.classify.context import ClassifyContext
-from cpp_semantic_diff.model import AnyId, AttrValue, EdgeId, Event, EventKind, NodeId
+from cpp_semantic_diff.model import AnyId, AttrValue, ChangeEvent, ChangeEventKind, EdgeId, NodeId
 
 
 class RuleStatus(StrEnum):
@@ -66,7 +66,7 @@ class RuleStatus(StrEnum):
 #: **most plausible first**. Returning several is how a rule declares that an event has more
 #: than one candidate cause; the classifier takes the first that exists, so the order here is
 #: the whole of the tie-break and must be principled rather than incidental.
-type Locator = Callable[[ClassifyContext, Event], Iterable[AnyId]]
+type Locator = Callable[[ClassifyContext, ChangeEvent], Iterable[AnyId]]
 
 
 @dataclass(frozen=True)
@@ -78,8 +78,8 @@ class CauseRule:
     """
 
     name: str
-    cause: EventKind
-    consequence: EventKind
+    cause: ChangeEventKind
+    consequence: ChangeEventKind
     subjects: Locator
     status: RuleStatus
     arch: str | None
@@ -97,7 +97,7 @@ class CauseRule:
 # base coordinates).
 
 
-def _removed_container(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
+def _removed_container(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
     """The container of a removed node, if the container was itself removed.
 
     Only the *immediate* container. Depth is handled by the chain -- a method links to its
@@ -114,7 +114,7 @@ def _removed_container(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
         yield parent
 
 
-def _added_container(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
+def _added_container(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
     """The mirror of `_removed_container`, on the head side.
 
     The relation is the same one: a new class arrives with its methods, and the methods are
@@ -126,7 +126,7 @@ def _added_container(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
         yield parent
 
 
-def _removed_endpoints(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
+def _removed_endpoints(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
     """The endpoints of a removed edge that did not survive -- **source first**.
 
     An edge with both endpoints removed genuinely has two causes, and §6.3 gives one
@@ -146,14 +146,14 @@ def _removed_endpoints(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
             yield node_id
 
 
-def _added_endpoints(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
+def _added_endpoints(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
     """The mirror of `_removed_endpoints`, on the head side. Source first, same reason."""
     for node_id in ctx.head_endpoints.get(EdgeId(event.subject), ()):
         if ctx.added(node_id):
             yield node_id
 
 
-def _renamed_endpoint_of_retarget(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
+def _renamed_endpoint_of_retarget(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
     """§6.3's "whose endpoint is F", in head coordinates. Cannot fire -- see the module docstring.
 
     Written out anyway so that the rule is a rule. `NodeRenamed`'s subject is the head id of
@@ -176,7 +176,7 @@ def _renamed_endpoint_of_retarget(ctx: ClassifyContext, event: Event) -> Iterato
             yield candidate
 
 
-def _callee_of(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
+def _callee_of(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
     """The callees of the caller a `SignatureIncompatible` is about (§6.3), head side.
 
     §6.3 says the consequence lands "on callers", so the consequence's subject is the caller
@@ -190,7 +190,7 @@ def _callee_of(ctx: ClassifyContext, event: Event) -> Iterator[NodeId]:
     yield from ctx.head_callees.get(NodeId(event.subject), ())
 
 
-def _overload_the_caller_moved_to(ctx: ClassifyContext, event: Event) -> Iterator[EdgeId]:
+def _overload_the_caller_moved_to(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[EdgeId]:
     """The edge this caller gained to a *different overload of the same function*.
 
     The shape, measured on leveldb: googletest gave `AssertHelper::AssertHelper` a
@@ -236,8 +236,8 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     CauseRule(
         name="contained-removal",
         arch="§6.3: NodeRemoved(C) causes NodeRemoved for everything C contained",
-        cause=EventKind.NODE_REMOVED,
-        consequence=EventKind.NODE_REMOVED,
+        cause=ChangeEventKind.NODE_REMOVED,
+        consequence=ChangeEventKind.NODE_REMOVED,
         subjects=_removed_container,
         status=RuleStatus.ACTIVE,
         note="Containment comes from the base model's `contains` edges and the survival "
@@ -247,8 +247,8 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     CauseRule(
         name="contained-addition",
         arch="§6.3: NodeAdded(C) causes NodeAdded for everything C contains",
-        cause=EventKind.NODE_ADDED,
-        consequence=EventKind.NODE_ADDED,
+        cause=ChangeEventKind.NODE_ADDED,
+        consequence=ChangeEventKind.NODE_ADDED,
         subjects=_added_container,
         status=RuleStatus.ACTIVE,
         note="The mirror of `contained-removal`: the same relation read on the head side. "
@@ -257,8 +257,8 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     CauseRule(
         name="edge-lost-its-endpoint",
         arch="§6.3: NodeRemoved(N) causes EdgeRemoved for edges touching N",
-        cause=EventKind.NODE_REMOVED,
-        consequence=EventKind.EDGE_REMOVED,
+        cause=ChangeEventKind.NODE_REMOVED,
+        consequence=ChangeEventKind.EDGE_REMOVED,
         subjects=_removed_endpoints,
         status=RuleStatus.ACTIVE,
         note="It carries v0's real cascades: removing one class removes every containment "
@@ -269,8 +269,8 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
         name="call-moved-to-another-overload",
         arch="§6.3: EdgeAdded(caller→G) causes EdgeRemoved(caller→F), "
         "F and G overloads of one name",
-        cause=EventKind.EDGE_ADDED,
-        consequence=EventKind.EDGE_REMOVED,
+        cause=ChangeEventKind.EDGE_ADDED,
+        consequence=ChangeEventKind.EDGE_REMOVED,
         subjects=_overload_the_caller_moved_to,
         status=RuleStatus.ACTIVE,
         note="Found by running the tool: the one shape that survived every other rule on a "
@@ -283,8 +283,8 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     CauseRule(
         name="edge-gained-its-endpoint",
         arch="§6.3: NodeAdded(N) causes EdgeAdded for edges touching N",
-        cause=EventKind.NODE_ADDED,
-        consequence=EventKind.EDGE_ADDED,
+        cause=ChangeEventKind.NODE_ADDED,
+        consequence=ChangeEventKind.EDGE_ADDED,
         subjects=_added_endpoints,
         status=RuleStatus.ACTIVE,
         note="The mirror of `edge-lost-its-endpoint` on the head side.",
@@ -292,8 +292,8 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     CauseRule(
         name="rename-retargets-edges",
         arch="§6.3: NodeRenamed(F) causes EdgeRetargeted at F",
-        cause=EventKind.NODE_RENAMED,
-        consequence=EventKind.EDGE_RETARGETED,
+        cause=ChangeEventKind.NODE_RENAMED,
+        consequence=ChangeEventKind.EDGE_RETARGETED,
         subjects=_renamed_endpoint_of_retarget,
         status=RuleStatus.UNREACHABLE,
         note="`EdgeRetargeted` is refused by design (`diff/edges.py`), and edges compared "
@@ -304,9 +304,9 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     CauseRule(
         name="signature-change-breaks-callers",
         arch="§6.3: NodeAttrChanged(signature) causes SignatureIncompatible on callers",
-        cause=EventKind.NODE_ATTR_CHANGED,
+        cause=ChangeEventKind.NODE_ATTR_CHANGED,
         cause_payload={"attr": "signature"},
-        consequence=EventKind.SIGNATURE_INCOMPATIBLE,
+        consequence=ChangeEventKind.SIGNATURE_INCOMPATIBLE,
         subjects=_callee_of,
         status=RuleStatus.DORMANT,
         note="Correct, and dormant because nothing emits `SignatureIncompatible`: it is "

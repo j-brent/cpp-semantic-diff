@@ -1,4 +1,4 @@
-"""The diff stage: two `Model`s plus a `Correspondence` -> a list of `Event` (ARCH-001 §6).
+"""The diff stage: two `Model`s plus a `Correspondence` -> a list of `ChangeEvent` (ARCH-001 §6).
 
 A pure function of its three inputs and nothing else. It reads no files, consults no
 parser, and does not touch the models it is given. That is what makes the stage testable
@@ -37,10 +37,10 @@ from cpp_semantic_diff.diff.edges import edge_events
 from cpp_semantic_diff.diff.nodes import node_events
 from cpp_semantic_diff.errors import ToolchainMismatchError
 from cpp_semantic_diff.match import Correspondence
-from cpp_semantic_diff.model import Event, Model, NodeId, Side
+from cpp_semantic_diff.model import ChangeEvent, Model, NodeId, Side
 
 
-def diff_models(base: Model, head: Model, correspondence: Correspondence) -> list[Event]:
+def diff_models(base: Model, head: Model, correspondence: Correspondence) -> list[ChangeEvent]:
     """Every node and edge event the two models and their correspondence support."""
     _check_one_toolchain(base, head)
 

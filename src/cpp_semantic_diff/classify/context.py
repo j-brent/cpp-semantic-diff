@@ -1,6 +1,6 @@
 """The lookups the cause rules need, built once from the two models (ARCH-001 §6.3).
 
-ARCH-001 §3's stage table gives classify a single input -- the `Event` list -- and that
+ARCH-001 §3's stage table gives classify a single input -- the `ChangeEvent` list -- and that
 understates it. Every rule in §6.3 is a statement about the *graph*: what contained what,
 which entities an edge related, whether an entity survived. None of those questions can be
 answered from a list of events, and the ones that look answerable are traps. Containment

@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from cpp_semantic_diff import __version__
 from cpp_semantic_diff.acquire import RenameLimitHit, RevPair
 from cpp_semantic_diff.match import Correspondence
-from cpp_semantic_diff.model import Event, Model, Node, NodeId, Side
+from cpp_semantic_diff.model import ChangeEvent, Model, Node, NodeId, Side
 from cpp_semantic_diff.rank import Ranking, subject_endpoints
 from cpp_semantic_diff.render.document import (
     CompletenessBlock,
@@ -47,7 +47,7 @@ def build_document(
     base: Model,
     head: Model,
     correspondence: Correspondence,
-    events: Sequence[Event],
+    events: Sequence[ChangeEvent],
     ranking: Ranking,
     lines_changed: int,
     files_changed: int,
@@ -123,7 +123,7 @@ def build_document(
 
 
 def compression_sentence(lines_changed: int, events: int, high_risk: int, vendored: int = 0) -> str:
-    """§10's line, verbatim in shape: *2,431 lines changed -> 9 semantic events, 2 high-risk*.
+    """§10's line, verbatim in shape: *2,431 lines changed -> 9 change events, 2 high-risk*.
 
     Built here rather than in a view so that every consumer prints the same claim, and so
     that the claim is in the JSON -- §10 says it "prints on every run", and a sentence a
@@ -147,9 +147,7 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int, vendor
     `summary.events_reported` is untouched and remains the complete set. It is the one figure
     nobody can audit from outside, and it may not shrink because a dependency moved.
     """
-    head = (
-        f"{lines_changed:,} lines changed -> {events:,} semantic event{'' if events == 1 else 's'}"
-    )
+    head = f"{lines_changed:,} lines changed -> {events:,} change event{'' if events == 1 else 's'}"
     if not events:
         if vendored:
             # Distinct from "nothing changed": a dependency moved and none of it reached
@@ -162,7 +160,9 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int, vendor
     return f"{head}{tail}"
 
 
-def _entities(events: Sequence[Event], base: Model, head: Model) -> dict[NodeId, EntitySummary]:
+def _entities(
+    events: Sequence[ChangeEvent], base: Model, head: Model
+) -> dict[NodeId, EntitySummary]:
     """The node summaries the events reference, and only those (ARCH-001 §10).
 
     An event's subject is a node id or an edge id (§6.2); `subject_endpoints` resolves both,

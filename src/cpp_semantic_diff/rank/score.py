@@ -21,10 +21,10 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field
 
 from cpp_semantic_diff.model import (
+    ChangeEvent,
+    ChangeEventId,
+    ChangeEventKind,
     Confidence,
-    Event,
-    EventId,
-    EventKind,
     Model,
     NodeId,
     Unpaired,
@@ -36,7 +36,7 @@ from cpp_semantic_diff.rank.graph import BlastGraph, subject_endpoints, subject_
 
 class FactorName(StrEnum):
     """The four inputs of ARCH-001 §7, named so consumers switch on a value rather than a
-    string literal -- the same reason `EventKind` is a closed set (`events.py`)."""
+    string literal -- the same reason `ChangeEventKind` is a closed set (`events.py`)."""
 
     BLAST_RADIUS = "blast_radius"
     EXPOSURE = "exposure"
@@ -66,7 +66,7 @@ class RiskScore(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    event_id: EventId
+    event_id: ChangeEventId
     total: float = Field(
         description="Sum of the contributions, in [0, 1] -- except where `bounded_by` "
         "names a cause, in which case it is the cause's total (see `ranker.py`)."
@@ -89,7 +89,7 @@ class RiskScore(BaseModel):
         "Components are numbered by descending risk, so component 0 is the change a "
         "reviewer should read first.",
     )
-    bounded_by: EventId | None = Field(
+    bounded_by: ChangeEventId | None = Field(
         default=None,
         description="The cause (§6.3) whose score capped this one. Recorded rather than "
         "applied silently: `total` is otherwise the sum of the contributions, and a number "
@@ -157,7 +157,7 @@ class ScoringContext:
         )
 
 
-def score_event(event: Event, ctx: ScoringContext) -> RiskScore:
+def score_event(event: ChangeEvent, ctx: ScoringContext) -> RiskScore:
     """One event -> one score. No ordering, no components; `ranker.py` owns both."""
     factors = [
         _blast_radius(event, ctx),
@@ -185,7 +185,7 @@ def _factor(name: FactorName, value: float, detail: str) -> Factor:
 # -- 1 · blast radius -------------------------------------------------------------------
 
 
-def _blast_radius(event: Event, ctx: ScoringContext) -> Factor:
+def _blast_radius(event: ChangeEvent, ctx: ScoringContext) -> Factor:
     """How much depends on what changed, bounded (ARCH-001 §7).
 
     Computed on the **head** model as §7 says, with one documented exception: a subject that
@@ -233,7 +233,7 @@ def _saturate(count: int) -> float:
 # -- 2 · exposure -----------------------------------------------------------------------
 
 
-def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
+def exposure_of(event: ChangeEvent, ctx: ScoringContext) -> Exposure:
     """The subject's exposure class -- `exposure.py` owns the heuristic.
 
     **An edge takes the maximum of its two endpoints, and deliberately does not follow
@@ -289,7 +289,7 @@ def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
     return max(classes, key=EXPOSURE_ORDER.index)
 
 
-def _exposure(event: Event, ctx: ScoringContext) -> Factor:
+def _exposure(event: ChangeEvent, ctx: ScoringContext) -> Factor:
     exposure = exposure_of(event, ctx)
     known = any(n in ctx.exposure for n in subject_endpoints(event.subject))
     detail = exposure.value if known else f"{exposure.value} (subject not in either model)"
@@ -299,13 +299,13 @@ def _exposure(event: Event, ctx: ScoringContext) -> Factor:
 # -- 3 · novelty ------------------------------------------------------------------------
 
 
-def _novelty(event: Event) -> Factor:
+def _novelty(event: ChangeEvent) -> Factor:
     """What kind of change it is (ARCH-001 §7), refined by which attribute for attr events.
 
     The attribute table is a contract with the producer rather than with the doc's prose --
     see `weights.NOVELTY_BY_ATTR`, which is where the mismatch is spelled out.
     """
-    if event.kind is EventKind.NODE_ATTR_CHANGED:
+    if event.kind is ChangeEventKind.NODE_ATTR_CHANGED:
         attr = event.payload.get("attr")
         key = attr if isinstance(attr, str) else ""
         value = w.NOVELTY_BY_ATTR.get(key, w.NOVELTY_BY_KIND[event.kind])
