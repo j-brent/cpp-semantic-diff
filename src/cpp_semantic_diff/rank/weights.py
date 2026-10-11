@@ -210,6 +210,9 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     "explicit": 0.70,  # a conversion that was opt-in became implicit, or the reverse
     "mutable": 0.60,
     "template": 0.60,  # an entity that became a template: real, but it changes identity too
+    # Breaks every call site that names the template arguments, as a parameter change
+    # breaks every call site; the signature cannot show it (`extract._template_parameters`).
+    "template_parameters": 0.90,
 }
 
 # --------------------------------------------------------------------------------------
