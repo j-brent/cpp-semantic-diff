@@ -52,7 +52,7 @@ from cpp_semantic_diff.rank import (
 from cpp_semantic_diff.rank import weights as w
 
 PUBLIC = "include/fmt/format.h"
-VENDORED = "test/gtest/gtest.h"
+OWN_TEST = "test/format-test.cc"
 LIB_SOURCE = "src/format.cc"
 
 SURE = Confidence(tier=MatchTier.DECLARED, models_complete=True)
@@ -581,27 +581,25 @@ class TestTheAttributeKeysAreAContractWithTheProducer:
 # -- exposure: the factor that decides whether this works on a real repository ------------
 
 
-class TestVendoredAndTestCodeDoNotDrownTheLibrary:
+class TestTestCodeDoesNotDrownTheLibrary:
     """The measured problem, not a hypothetical one.
 
-    The model built from `fmt` was 80.6 % test code, 31.7 % of it vendored `test/gtest`,
-    measured 2026-08-02 (v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md). Extraction is
-    right to include it. A ranking that puts a change to bundled googletest above a change to
-    `fmt::format` is useless, and a reviewer shown that once will not read the second page.
+    The model built from `fmt` was 80.6 % test code, measured 2026-08-02 (v0 tracker §5,
+    reports/2026-08-01--v0-build/STATUS.md). Extraction is right to include it. A ranking that
+    puts a change to a test helper above a change to `fmt::format` is useless, and a reviewer
+    shown that once will not read the second page.
     """
 
-    def test_a_public_api_change_outranks_an_identical_change_to_vendored_test_code(
-        self,
-    ) -> None:
-        head = model("m", node("c:@F@format#", file=PUBLIC), node("c:@F@helper#", file=VENDORED))
-        public, vendored = body("c:@F@format#"), body("c:@F@helper#")
-        assert outranks(rank([public, vendored], head, head), public, vendored)
+    def test_a_public_api_change_outranks_an_identical_change_to_test_code(self) -> None:
+        head = model("m", node("c:@F@format#", file=PUBLIC), node("c:@F@helper#", file=OWN_TEST))
+        public, test = body("c:@F@format#"), body("c:@F@helper#")
+        assert outranks(rank([public, test], head, head), public, test)
 
-    def test_one_library_change_beats_a_page_of_vendored_ones(self) -> None:
-        """The realistic shape. It is not enough that public > vendored for one identical
-        pair: on fmt the vendored events *outnumber* the library ones four to one, so the
-        library change has to reach the top of a mixed list, not merely beat its twin."""
-        helpers = [node(f"c:@F@h{i}#", file=VENDORED) for i in range(10)]
+    def test_one_library_change_beats_a_page_of_test_changes(self) -> None:
+        """The realistic shape. It is not enough that public > test for one identical pair:
+        on fmt the test events *outnumber* the library ones, so the library change has to
+        reach the top of a mixed list, not merely beat its twin."""
+        helpers = [node(f"c:@F@h{i}#", file=OWN_TEST) for i in range(10)]
         callers = [node(f"c:@F@c{i}#", file=LIB_SOURCE) for i in range(12)]
         head = model(
             "m",
@@ -615,68 +613,6 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
         ranking = rank([*noise, library], head, head)
         assert ranking.order[0] == library.id
 
-    def test_test_code_ranks_above_vendored_code(self) -> None:
-        """First-party tests are worth diffing -- a deleted assertion is RESEARCH-002 §3.9's
-        most review-worthy event. Somebody else's test framework is not."""
-        head = model(
-            "m", node("c:@F@t#", file="test/format-test.cc"), node("c:@F@v#", file=VENDORED)
-        )
-        own_test, vendored = body("c:@F@t#"), body("c:@F@v#")
-        assert outranks(rank([own_test, vendored], head, head), own_test, vendored)
-
-    def test_a_heavily_depended_on_vendored_removal_still_loses_to_a_trivial_own_change(
-        self,
-    ) -> None:
-        """The case the weighted term could not win, measured on leveldb before this held.
-
-        A submodule bump removes googletest entities with hundreds of dependents. Blast
-        radius (0.35) plus novelty for a removal (0.25) is 0.60, while all of exposure is
-        0.25 -- so the vendored removal scored 0.76 and a changed public attribute scored
-        about 0.44. The top 12 events and 44 of the top 50 were bundled googletest.
-
-        The claim is not that vendored is worth less. It is that it is not what is being
-        reviewed, which is an ordering and not a quantity -- so it is a partition, and no
-        blast radius can buy a way out of it.
-        """
-        dependents = [node(f"c:@F@d{i}#", file=VENDORED) for i in range(40)]
-        head = model(
-            "m",
-            node("c:@F@assert_helper#", file=VENDORED),
-            node("c:@F@own#", file=PUBLIC),
-            *dependents,
-            edges=[edge(d.id, "c:@F@assert_helper#") for d in dependents],
-        )
-        vendored = event(ChangeEventKind.NODE_REMOVED, "c:@F@assert_helper#", RESIDUE)
-        mine = body("c:@F@own#")
-
-        ranking = rank([vendored, mine], head, head)
-        totals = {s.event_id: s.total for s in ranking.scores}
-
-        # Without this the test could pass because the scores happen to order correctly,
-        # and it would keep passing if the partition were deleted. The point is that the
-        # vendored event scores *higher* and is still ranked below.
-        assert totals[vendored.id] > totals[mine.id], (
-            "the weighted score still prefers the vendored removal -- that is the defect "
-            "the partition exists to overrule, so this test is vacuous without it"
-        )
-        assert ranking.order[0] == mine.id, "a page of googletest is not the review"
-        assert ranking.vendored_count == 1
-
-    def test_vendored_events_keep_their_order_among_themselves(self) -> None:
-        """The partition decides which block, never the order inside it. Zeroing the weight
-        would make every bundled change equally uninteresting, so a reviewer who does go
-        looking finds them shuffled."""
-        dependents = [node(f"c:@F@d{i}#", file=VENDORED) for i in range(30)]
-        head = model(
-            "m",
-            node("c:@F@big#", file=VENDORED),
-            node("c:@F@small#", file=VENDORED),
-            *dependents,
-            edges=[edge(d.id, "c:@F@big#") for d in dependents],
-        )
-        big, small = body("c:@F@big#"), body("c:@F@small#")
-        assert outranks(rank([small, big], head, head), big, small)
-
     @pytest.mark.parametrize(
         ("path", "expected"),
         [
@@ -685,8 +621,10 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
             ("src/format.cc", Exposure.INTERNAL),
             ("include/spdlog/details/os.h", Exposure.INTERNAL),
             ("test/format-test.cc", Exposure.TEST),
-            ("test/gtest/gtest.h", Exposure.VENDORED),
-            ("third_party/zlib/zlib.h", Exposure.VENDORED),
+            # Folder names exclude nothing (ADR-025): a library that is not declared
+            # third-party is ranked as the repository's own code.
+            ("test/gtest/gtest.h", Exposure.TEST),
+            ("third_party/zlib/zlib.h", Exposure.PUBLIC),
             ("examples/demo.cc", Exposure.TEST),
             ("support/tools_test.cc", Exposure.TEST),
             # leveldb: tests live *beside* the code they test, with no `test/` directory
@@ -697,7 +635,7 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
             ("util/coding_test.cc", Exposure.TEST),
             ("include/leveldb/db.h", Exposure.PUBLIC),
             ("benchmarks/db_bench.cc", Exposure.TEST),
-            ("third_party/googletest/googletest/src/gtest.cc", Exposure.VENDORED),
+            ("third_party/googletest/googletest/src/gtest.cc", Exposure.INTERNAL),
         ],
     )
     def test_the_path_convention_reads_the_layouts_it_claims_to(
@@ -719,17 +657,6 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
             edges=[edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS)],
         )
         assert exposure_map(head)[NodeId("c:@S@C@F@m#")] is Exposure.PUBLIC
-
-    def test_promotion_never_lifts_vendored_code_into_the_library(self) -> None:
-        """The demotion has to win, or bundled googletest's own class hierarchy would
-        promote its members straight back onto the first page."""
-        head = model(
-            "m",
-            node("c:@S@Test", file=VENDORED, kind=NodeKind.CLASS),
-            node("c:@S@Test@F@m#", file=VENDORED, kind=NodeKind.METHOD),
-            edges=[edge("c:@S@Test", "c:@S@Test@F@m#", EdgeKind.CONTAINS)],
-        )
-        assert exposure_map(head)[NodeId("c:@S@Test@F@m#")] is Exposure.VENDORED
 
 
 class TestAnEdgeIsAsExposedAsEitherOfItsEnds:
@@ -793,25 +720,6 @@ class TestAnEdgeIsAsExposedAsEitherOfItsEnds:
         churn = event(ChangeEventKind.NODE_REMOVED, self.OWN_TEST, RESIDUE)
         ranking = rank([churn, containment], base, head)
         assert outranks(ranking, containment, churn)
-
-    def test_a_first_party_call_into_vendored_code_stays_first_party(self) -> None:
-        """The direction max is safe in, and the one leveldb actually contains: 114 of its
-        116 boundary-crossing edge events are the repository's own tests calling googletest.
-        Taking the max cannot pull such an event into `ranker.py`'s vendored block, so the
-        partition still holds -- and the two rules agree here, because the source is already
-        the more exposed end."""
-        head = model(
-            "m",
-            node("c:@F@db_test#", file="db/db_test.cc"),
-            node("c:@F@assert_helper#", file=VENDORED),
-        )
-        call = edge_event("c:@F@db_test#", "c:@F@assert_helper#")
-        vendored = body("c:@F@assert_helper#")
-        ranking = rank([vendored, call], head, head)
-
-        assert ranking.score_for(call.id).exposure is Exposure.TEST
-        assert ranking.vendored_count == 1
-        assert outranks(ranking, call, vendored)
 
 
 # -- decomposition ----------------------------------------------------------------------
@@ -991,7 +899,7 @@ class TestThreeDisconnectedChangesAreThreeChanges:
         assert len(rank(events, head, head).components) == 2
 
     def test_components_are_numbered_by_risk_so_the_first_one_is_read_first(self) -> None:
-        head = model("m", node("c:@F@a1#", file=VENDORED), node("c:@F@c1#", file=PUBLIC))
+        head = model("m", node("c:@F@a1#", file=OWN_TEST), node("c:@F@c1#", file=PUBLIC))
         low, high = body("c:@F@a1#"), body("c:@F@c1#")
         ranking = rank([low, high], head, head)
         assert ranking.components[0].events == [high.id]
@@ -1127,7 +1035,7 @@ class TestTheStageIsPureAndDeterministic:
             "m",
             node("c:@F@f#", file=PUBLIC),
             node("c:@F@g#", file=LIB_SOURCE),
-            node("c:@F@h#", file=VENDORED),
+            node("c:@F@h#", file=OWN_TEST),
             edges=[edge("c:@F@g#", "c:@F@f#"), edge("c:@F@h#", "c:@F@g#")],
         )
         events = [

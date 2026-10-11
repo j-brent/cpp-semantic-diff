@@ -73,7 +73,10 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #: 1.2 -> 2.0.dev: 2.0 is in development on `dev` for milestone v0. Every v0 change to the
 #: output lands under it, so a consumer sees one bump for the milestone rather than one per
 #: change. It becomes "2.0" when `dev` merges to `main`; until then the `.dev` suffix keeps a
-#: document from a moving schema from passing for a finished one.
+#: document from a moving schema from passing for a finished one. So far it removes
+#: `summary.vendored_events`: third-party code is not in the model (ADR-025), so every
+#: change event is first-party and `compression_ratio` and `high_risk_count` are taken over
+#: all of them.
 SCHEMA_VERSION = "2.0.dev"
 
 #: ARCH-001 §11: systematic limits "get stated in the output itself, every time". These are the
@@ -634,25 +637,14 @@ class Summary(BaseModel):
         description="`len(events)`. The complete set. Not the visible set, not the "
         "top-level set, not a filtered set."
     )
-    vendored_events: int = Field(
-        default=0,
-        description="How many of `events_reported` are in bundled dependencies, which rank "
-        "after everything first-party as a block. Stated separately and never subtracted "
-        "from the numerator: a dependency bump can be 96 % of the delta, and a reviewer has "
-        "to be able to tell 'almost nothing changed' from 'almost everything was set aside'.",
-    )
     compression: str = Field(
         description="§10's sentence, ready to print: '2,431 lines changed -> 9 semantic "
         "events, 2 high-risk'. Rendered here so every view prints the same claim."
     )
     compression_ratio: float | None = Field(
-        description="lines_changed / first-party events (`events_reported` minus "
-        "`vendored_events`). Not over the whole event set: the denominator is lines of text "
-        "diff, and git shows a submodule bump as two lines rather than the hundred thousand "
-        "inside it, so dividing by every modelled event compares two different universes. "
-        "None when there are no first-party events, because 'infinite compression' and "
-        "'nothing of yours changed' are different facts and a sentinel would let a consumer "
-        "average over them."
+        description="lines_changed / events_reported. None when there are no change events, "
+        "because 'infinite compression' and 'no change the model can see' are different "
+        "facts, and a sentinel would let a consumer average over them."
     )
     high_risk_count: int = Field(description="Scores at or above `rank.HIGH_RISK`.")
 

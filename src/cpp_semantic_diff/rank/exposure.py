@@ -9,10 +9,13 @@ shape alone puts a modified assertion helper in bundled googletest above a modif
 `fmt::format`, and a reviewer who is shown that once will not look at the second page.
 
 So exposure is, first and foremost, a **demotion** of code that is in the model without
-being what the review is about, and only secondarily a promotion of public API. Four
+being what the review is about, and only secondarily a promotion of public API. Three
 classes, ordered:
 
-    VENDORED  < TEST < INTERNAL < PUBLIC
+    TEST < INTERNAL < PUBLIC
+
+Third-party code is not a class here, because it is not in the model (ADR-025):
+`acquire/third_party.py` recognizes it, and extraction leaves it out.
 
 **The heuristic is path convention plus containment, and nothing else.** That is a real
 limitation and it is stated rather than hidden. The model carries `Node.location.file`
@@ -39,8 +42,9 @@ extraction scope (§13). Directory convention is what is left.
   has its entire library demoted. The rule cannot distinguish "test code" from "code about
   tests" from a path, and analysing a test framework with this heuristic will rank
   everything flat. Catch2 survives by accident because its library lives in `src/catch2`.
-- *A dependency vendored without a conventional directory name* -- a copy of a library
-  dropped in at the top level -- is not detected at all and is scored as first-party.
+- *A copied library that is not declared third-party* is scored as the repository's own
+  code. Its directory name produces a hint at most (`acquire/third_party.py`); it is never
+  read here.
 - *An entity declared in a public header and defined only in a `.cpp`* is INTERNAL unless a
   `contains` edge lifts it, because the model has no `declares`/`defines` edges to join the
   two (§4.2, out of scope in §13). Header-only and template-heavy libraries are unaffected;
@@ -67,49 +71,17 @@ from cpp_semantic_diff.rank.graph import containers
 class Exposure(StrEnum):
     """Ordered least- to most-exposed. `EXPOSURE_ORDER` is the comparison, not the name."""
 
-    VENDORED = "vendored"
     TEST = "test"
     INTERNAL = "internal"
     PUBLIC = "public"
 
 
 #: Least to most exposed. Containment promotion takes the maximum along this order, so a
-#: method of a public class is public wherever its definition was written, and a helper in
-#: bundled googletest stays vendored no matter what contains it.
+#: method of a public class is public wherever its definition was written.
 EXPOSURE_ORDER: tuple[Exposure, ...] = (
-    Exposure.VENDORED,
     Exposure.TEST,
     Exposure.INTERNAL,
     Exposure.PUBLIC,
-)
-
-#: Path components that mean "not this project's code". Checked first and unconditionally:
-#: bundled googletest lives under `test/gtest`, and its headers are headers, so any rule that
-#: asked about the file extension before asking about the directory would classify all of fmt's
-#: bundled googletest as public API.
-VENDOR_SEGMENTS: frozenset[str] = frozenset(
-    {
-        "3rdparty",
-        "_deps",
-        "contrib",
-        "deps",
-        "extern",
-        "external",
-        "third-party",
-        "third_party",
-        "thirdparty",
-        "vendor",
-        "vendored",
-        # Named bundled dependencies. A vendored copy is frequently dropped straight into
-        # `test/` with no `third_party` above it, which is exactly what fmt does.
-        "catch",
-        "catch2",
-        "doctest",
-        "gmock",
-        "googlemock",
-        "googletest",
-        "gtest",
-    }
 )
 
 #: Path components that mean "this project's code, but not its product". Tests, examples
@@ -173,11 +145,7 @@ def classify_path(path: str) -> Exposure:
     stem = p.stem.lower()
     name = p.name.lower()
 
-    # Directories only. A file *named* `benchmark.cpp` is this project's benchmark; a
-    # directory named `benchmark/` at the top of a tree is somebody else's library far more
-    # often than not, and the difference is exactly the one a filename cannot carry.
-    if segments & VENDOR_SEGMENTS:
-        return Exposure.VENDORED
+    # The directory first: everything under `test/` is test code, whatever it is named.
     if segments & NON_PRODUCT_SEGMENTS:
         return Exposure.TEST
     if stem.startswith(NON_PRODUCT_STEM_PREFIXES) or stem.endswith(NON_PRODUCT_STEM_SUFFIXES):

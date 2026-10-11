@@ -35,7 +35,7 @@ from cpp_semantic_diff.errors import (
     ThirdPartyChangedError,
     ThirdPartyPathError,
 )
-from cpp_semantic_diff.rank.exposure import VENDOR_SEGMENTS
+from cpp_semantic_diff.rank import Exposure, classify_path
 
 SUBMODULE = frozenset({ThirdPartySource.SUBMODULE})
 DECLARED = frozenset({ThirdPartySource.DECLARED})
@@ -333,11 +333,15 @@ class TestFolderHints:
     ) -> None:
         assert folder_hints(directories, third_party) == tuple(expected)
 
-    def test_bundled_is_a_hint_but_not_yet_a_ranking_rule(self) -> None:
-        """Ranking reads `VENDOR_SEGMENTS` until vendored ranking goes; `bundled` is a hint."""
+    def test_bundled_is_a_hint(self) -> None:
+        """spdlog vendors fmt under `include/spdlog/fmt/bundled`."""
         assert "bundled" in HINT_SEGMENTS
-        assert "bundled" not in VENDOR_SEGMENTS
-        assert VENDOR_SEGMENTS <= HINT_SEGMENTS
+
+    @pytest.mark.parametrize("segment", sorted(HINT_SEGMENTS))
+    def test_a_hint_name_does_not_change_how_code_is_ranked(self, segment: str) -> None:
+        """Folder names exclude nothing (ADR-025): code under one ranks as if it were not."""
+        assert classify_path(f"{segment}/x.h") is Exposure.PUBLIC
+        assert classify_path(f"src/{segment}/x.cc") is Exposure.INTERNAL
 
     def test_the_message_names_the_option_to_pass(self) -> None:
         assert hint_message("test/gtest") == (

@@ -97,9 +97,7 @@ class RiskScore(BaseModel):
     )
     exposure: Exposure = Field(
         default=Exposure.INTERNAL,
-        description="The subject's exposure class, carried as a field and not only inside "
-        "`factors` because the order partitions on it: no vendored event outranks any "
-        "first-party one, whatever the scores say (`ranker.py`).",
+        description="The subject's exposure class, also carried inside `factors`.",
     )
 
     def factor(self, name: FactorName) -> Factor:
@@ -249,10 +247,7 @@ def exposure_of(event: ChangeEvent, ctx: ScoringContext) -> Exposure:
     reports/2026-08-01--v0-build/STATUS.md):
 
     - **spdlog `HEAD~30` (9 edge events) and leveldb `HEAD~10` (2,351) are identical.** Not
-      one event changes class, score, rank, component or high-risk status. On leveldb every
-      edge that crosses the vendored boundary crosses *into* it -- 114 `test -> vendored` and
-      2 `public -> vendored`, the repository's own tests calling googletest -- where the
-      source is already the more exposed end and the two rules agree by construction.
+      one event changes class, score, rank, component or high-risk status.
     - **fmt `HEAD~12` holds the only two divergences, and they are the argument for max.**
       Both are the `contains` edges that put this commit's two new partial specializations
       into `namespace fmt::v12::detail`; the specializations are declared in
@@ -269,18 +264,8 @@ def exposure_of(event: ChangeEvent, ctx: ScoringContext) -> Exposure:
     question, and max is the reading that cannot hide: it only ever moves an event toward the
     reviewer, never out of sight.
 
-    **The one direction max can err in, named rather than guarded.** It never pulls a
-    first-party event into `ranker.py`'s vendored block, but the reverse is open: an
-    `EdgeAdded(gtest_helper -> leveldb::Status)` would score PUBLIC and escape the partition
-    on the strength of an endpoint its source did not write. There are **zero** such events
-    across the three fixtures -- no `vendored -> {test, internal, public}` edge event on
-    leveldb, the only one with a moving vendored dependency -- so flooring the partition on
-    the source class while the weighted factor kept the max would be a second mechanism
-    defending a hazard nothing has produced. The trigger to revisit is an observed instance,
-    and it is cheap to watch for: it is a divergence whose source is VENDORED.
-
-    A subject in neither model is INTERNAL rather than VENDORED: the partition in `ranker.py`
-    hides vendored events, and an unclassifiable subject must not be hidden by accident.
+    A subject in neither model is INTERNAL: no evidence demotes it to TEST or promotes it to
+    PUBLIC.
     """
     endpoints = subject_endpoints(event.subject)
     classes = [ctx.exposure[n] for n in endpoints if n in ctx.exposure]
