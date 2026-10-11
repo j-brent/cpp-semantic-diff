@@ -400,6 +400,30 @@ class TestRefusal:
 
         assert changed(bare_repo) == ("lib",)
 
+    @pytest.mark.parametrize("where", ["diff.ignoreSubmodules", ".gitmodules"])
+    def test_a_bump_git_config_would_hide_is_refused(
+        self, bare_repo: Path, inner: Path, monkeypatch: pytest.MonkeyPatch, where: str
+    ) -> None:
+        """`ignore = all` drops a moved gitlink from `git diff`, wherever it is set; the
+        refusal may not depend on whose config it ran under (ARCH-001 §12)."""
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        add_submodule(bare_repo, inner, "dep")
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        if where == ".gitmodules":
+            git(bare_repo, "config", "-f", ".gitmodules", "submodule.dep.ignore", "all")
+            git(bare_repo, "commit", "-q", "-am", "ignore dep")
+            git(bare_repo, "checkout", "-q", "main")
+            git(bare_repo, "merge", "-q", "--ff-only", "feature")
+            git(bare_repo, "checkout", "-q", "-b", "bump")
+        else:
+            # The `git -c` form, through the environment, so the tool's own git calls see it.
+            monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+            monkeypatch.setenv("GIT_CONFIG_KEY_0", "diff.ignoreSubmodules")
+            monkeypatch.setenv("GIT_CONFIG_VALUE_0", "all")
+        bump_submodule(bare_repo, inner, "dep")
+
+        assert changed(bare_repo) == ("dep",)
+
     def test_a_submodule_added_on_the_branch_is_refused(self, bare_repo: Path, inner: Path) -> None:
         commit(bare_repo, "a.cpp", "int a();\n", "A")
         git(bare_repo, "checkout", "-q", "-b", "feature")
@@ -452,7 +476,7 @@ class TestRefusal:
         assert changed(copied_repo, ["test/gtest"]) == ("test/gtest",)
 
     def test_every_changed_entry_is_named_once(self, copied_repo: Path, inner: Path) -> None:
-        """leveldb `HEAD~10` bumps two dependencies at once; one run names both."""
+        """A declared folder and a submodule change on one branch; one refusal names both."""
         git(copied_repo, "checkout", "-q", "main")
         add_submodule(copied_repo, inner, "third_party/lib")
         git(copied_repo, "checkout", "-q", "-b", "both")

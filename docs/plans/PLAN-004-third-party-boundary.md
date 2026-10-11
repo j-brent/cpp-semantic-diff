@@ -1,7 +1,7 @@
 <!-- metadata
 id: PLAN-004
 type: plan
-status: not started
+status: in progress
 author: Brent Runyan
 created: 2026-10-10
 dependencies: [ARCH-001]
