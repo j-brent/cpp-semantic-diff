@@ -92,7 +92,8 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #:   `crossings`, from the referenced entities only; `completeness.renames`;
 #:   `completeness.uncovered` with `summary.changed_cpp_lines`, `uncovered_lines` and
 #:   `uncovered_tokens` (ADR-042); what the producer cannot see in `completeness.limits`;
-#:   `meta.timings.derive` and `coverage`; `Location.start_line`.
+#:   `meta.timings.derive` and `coverage`; `Location.start_line`; `scores{}.informational`,
+#:   and `spelling_only` in a `NodeAttrChanged` payload (ADR-046).
 #: - Change events: `NodeSignatureChanged` and `CallerOfChangedSignature` are new kinds and
 #:   `SignatureIncompatible` is gone; `confidence.unpaired` says why an entity is
 #:   unmatched; the match tiers `inline-namespace` and `name` are new.

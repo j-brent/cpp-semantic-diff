@@ -991,6 +991,63 @@ class TestHighRiskCountsConsequencesNotNovelty:
             assert 0.0 <= score.impact <= 1.0
 
 
+class TestASpellingOnlyChangeIsListedButNeverHighRisk:
+    """ADR-046: a change of spelling alone clears the line on blast radius and exposure, and
+    nothing outside the diff can break. It stays listed and ordered; it is not counted."""
+
+    def widely_called(self) -> Model:
+        callers = [node(f"c:@F@c{i}#", file=LIB_SOURCE) for i in range(40)]
+        return model(
+            "m",
+            node("c:@F@f#", file=PUBLIC),
+            *callers,
+            edges=[edge(c.id, "c:@F@f#") for c in callers],
+        )
+
+    def score(self, changed: ChangeEvent) -> tuple[Ranking, bool, float]:
+        head = self.widely_called()
+        ranking = rank([changed], head, head)
+        score = ranking.score_for(changed.id)
+        return ranking, score.is_high_risk, score.impact
+
+    def attr(self, attr: str, old: AttrValue, new: AttrValue, **extra: AttrValue) -> ChangeEvent:
+        return event(
+            ChangeEventKind.NODE_ATTR_CHANGED, "c:@F@f#", SURE, attr=attr, old=old, new=new, **extra
+        )
+
+    def test_a_lone_sugared_signature_change_is_listed_but_not_high_risk(self) -> None:
+        changed = self.attr("sugared_signature", "void (size_type)", "void (unsigned long)")
+        ranking, high_risk, impact = self.score(changed)
+        assert changed.id in ranking.order
+        assert impact >= w.HIGH_RISK, "the gate, not the score, keeps it out of the count"
+        assert not high_risk
+
+    def test_every_informational_attribute_is_gated(self) -> None:
+        for attr in w.INFORMATIONAL_ATTRS:
+            assert not self.score(self.attr(attr, "a", "b"))[1], attr
+
+    def test_a_default_marked_spelling_only_is_not_high_risk(self) -> None:
+        changed = self.attr("default_arguments", "ns::details::x", "details::x", spelling_only=True)
+        ranking, high_risk, impact = self.score(changed)
+        assert changed.id in ranking.order
+        assert impact >= w.HIGH_RISK
+        assert not high_risk
+
+    def test_a_real_default_change_is_high_risk_as_before(self) -> None:
+        assert self.score(self.attr("default_arguments", "1", "2"))[1]
+
+    def test_the_gate_does_not_move_the_order(self) -> None:
+        """Only the count changes: the score that orders the page is the same."""
+        informational = self.attr("sugared_signature", "a", "b")
+        plain = self.attr("initializer_hash", "a", "b")
+        head = self.widely_called()
+        one = rank([informational], head, head).score_for(informational.id)
+        two = rank([plain], head, head).score_for(plain.id)
+        assert one.informational and not two.informational
+        assert w.NOVELTY_BY_ATTR["sugared_signature"] < w.NOVELTY_BY_ATTR["initializer_hash"]
+        assert one.total < two.total
+
+
 class TestTheScoreIsInspectableNotAMagicNumber:
     """A ranking nobody can interrogate will not be trusted and cannot be tuned. §10 makes
     JSON the product, so the reason has to be *in* the document -- not recomputable by a

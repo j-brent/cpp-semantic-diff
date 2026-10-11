@@ -584,6 +584,13 @@ Risk score per change event, from:
 - **Confidence** — a low-confidence change event ranks *up*, not down. Uncertainty is a reason for a human
   to look, not a reason to hide.
 
+**High risk** (`summary.high_risk_count`, §10) is counted on blast radius, exposure and novelty,
+without confidence. A change of spelling only is never counted: an informational attribute
+(`sugared_signature`, `explicit_value`, `message`), or a change event marked `spelling_only`,
+such as a default argument that only dropped its own namespace's qualifier. Such events are
+still listed and ordered as usual
+([ADR-046](adr/ADR-046-spelling-only-changes-are-never-high-risk.md)).
+
 **Decomposition** falls out of the same data: partition the change event graph into connected components.
 A change whose delta has three mutually disconnected components is three changes, and saying so is
 the founding document's §3.11 intent-conformance signal at nearly zero cost.
