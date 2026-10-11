@@ -267,6 +267,10 @@ NOVELTY_BY_ATTR: dict[str, float] = {
     # but it says only that the text changed, as a body change does, with a little more weight
     # because it runs before `main`.
     "initializer_hash": 0.50,
+    # A macro's replacement changed: every use of it now compiles to something else, and no
+    # declaration in the model shows it (ADR-039).
+    "replacement_hash": 0.80,
+    "function_like": 0.70,  # every use must now be written with, or without, an argument list
 }
 
 # --------------------------------------------------------------------------------------

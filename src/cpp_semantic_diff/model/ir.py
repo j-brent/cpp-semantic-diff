@@ -65,6 +65,7 @@ class NodeKind(StrEnum):
     ENUMERATOR = "enumerator"
     ALIAS = "alias"
     VARIABLE = "variable"
+    MACRO = "macro"
     TEMPLATE = "template"
     FILE = "file"
     TARGET = "target"

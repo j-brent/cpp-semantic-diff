@@ -160,7 +160,7 @@ locate a change in source, it does not go in the model.
 Node
   id            stable identity key (§5)
   kind          namespace | class | struct | union | function | method | field
-                | enum | enumerator | alias | variable | template | file | target
+                | enum | enumerator | alias | variable | macro | template | file | target
   name          unqualified
   qualified_name
   signature     normalized: typedefs resolved, cv/ref qualifiers explicit; defaults are an attribute
@@ -210,13 +210,15 @@ observation that wins, and it is never compared or hashed. A change event points
 so an edited header declaration leads to the change event about it (§6.2).
 
 The entities that carry values hold them in `attrs`, one compared fact per key
-([ADR-038](adr/ADR-038-entities-that-carry-values.md)):
+([ADR-038](adr/ADR-038-entities-that-carry-values.md); macros,
+[ADR-039](adr/ADR-039-synthesized-identities.md)):
 
 | Kind | Compared |
 |---|---|
 | enum | `underlying_type` (canonical), `scoped` |
 | enumerator | `value`, `explicit_value` (written, or implied by the one before) |
 | alias | `target` (canonical), `template` |
+| macro | `replacement_hash` (its tokens after the name), `function_like` |
 | variable, at namespace scope or a static data member | `type`, `value` (as clang evaluates it), `initializer_hash` (only where it cannot), `constexpr`, `storage`, `linkage`, `thread_local` |
 
 A function or method also carries `sugared_signature`: its type as written, aliases kept. When an
@@ -308,7 +310,9 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
   breaks tier 1 for everything in them. Identity must include the TU, and file renames must be
   resolved from git before matching — not discovered by the matcher.
 - **Macros.** An entity's very existence may depend on a macro that itself changed. The model is
-  one preprocessor configuration; see §11.
+  one preprocessor configuration; see §11. A macro's own USR holds the byte offset of its
+  definition, so a macro is identified by its file and name instead, numbered where one file
+  defines a name again ([ADR-039](adr/ADR-039-synthesized-identities.md)).
 - **ODR.** The same declared identity can appear in multiple TUs with different definitions. Dedup
   by USR is a correctness requirement, not an optimization — the CodeAtlas measurements found
   15,656 method cursors collapsing to 161 classes in FTXUI, because every header is reparsed per TU.
@@ -762,7 +766,7 @@ is non-reproducible on one machine, let alone across two.
 
 The smallest slice that tests the thesis end to end.
 
-**In:** namespace / class / function / method / field / enum / enumerator / alias / variable nodes · `contains`, `calls`, `inherits`,
+**In:** namespace / class / function / method / field / enum / enumerator / alias / variable / macro nodes · `contains`, `calls`, `inherits`,
 `overrides` edges · **tier-1 identity, plus the inline namespace tier and the name tier for functions and methods** · node
 add/remove/attr/body/signature and edge add/remove/kind/attr change events · one derived change
 event, `CallerOfChangedSignature` · JSON + terminal output · the compression metric · fixtures `fmt` and

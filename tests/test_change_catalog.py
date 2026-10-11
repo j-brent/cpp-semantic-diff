@@ -350,7 +350,6 @@ CATALOG = [
         "#define LIMIT 10\nint f() { return LIMIT; }",
         "#define LIMIT 20\nint f() { return LIMIT; }",
         changed("LIMIT"),
-        fails="step 5: macros are not modelled",
     ),
     case(
         "constexpr-global-value",
@@ -717,7 +716,6 @@ CATALOG = [
         "// the limit\n#define LIMIT 20\nint f() { return LIMIT; }",
         changed("LIMIT"),
         not_replaced("LIMIT"),
-        fails="step 5: macros are not modelled, and their identifier moves with the text",
     ),
     case(
         "static-assert-shifted",

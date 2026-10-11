@@ -25,6 +25,7 @@ from cpp_semantic_diff.model.ir import (
     Node,
     NodeId,
     NodeKind,
+    usr_file,
 )
 from cpp_semantic_diff.produce.extract import (
     DROPPED_FLAGS,
@@ -296,6 +297,70 @@ class TestAVariableDefinitionWins:
             y = next(n for n in nodes.values() if n.qualified_name == "y")
             assert y.attrs["storage"] == "none"
             assert y.location is not None and y.location.file == "b.cpp"
+
+
+class TestMacros:
+    """A macro the repository defines, identified by file and name rather than by where in
+    the file it is, and compared by its replacement (ADR-039)."""
+
+    HEADER = "#ifndef LIB_H\n#define LIB_H\n#define SHARED 1\n#endif\n"
+    SOURCE = """#include "lib.h"
+    #define LIMIT 10
+    #define TWICE(x) ((x) * 2)
+    #define EMPTY
+    #undef LIMIT
+    #define LIMIT 20
+    int f() { return LIMIT + TWICE(SHARED) + FROM_FLAGS; }
+    """
+
+    def macros(self, result: TuExtract) -> dict[str, Node]:
+        return {n.id: n for n in result.nodes.values() if n.kind is NodeKind.MACRO}
+
+    @pytest.fixture(scope="class")
+    def result(self, tmp_path_factory: pytest.TempPathFactory, toolchain: Toolchain) -> TuExtract:
+        root = tmp_path_factory.mktemp("macros")
+        (root / "lib.h").write_text(self.HEADER, encoding="utf-8")
+        (root / "a.cpp").write_text(self.SOURCE, encoding="utf-8")
+        entry = CompileEntry(
+            file=root / "a.cpp",
+            directory=root,
+            arguments=["clang++", "-std=c++17", "-DFROM_FLAGS=3", "-c", "a.cpp"],
+        )
+        return extract(entry, root=root, toolchain=toolchain)
+
+    def test_only_macros_the_repository_writes_are_modelled(self, result: TuExtract) -> None:
+        """Not `FROM_FLAGS`, given on the command line, nor clang's own; not the include
+        guard, which is how a header is written rather than a value."""
+        assert sorted(self.macros(result)) == [
+            "c:a.cpp@macro@EMPTY",
+            "c:a.cpp@macro@LIMIT",
+            "c:a.cpp@macro@LIMIT#2",
+            "c:a.cpp@macro@TWICE",
+            "c:lib.h@macro@SHARED",
+        ]
+
+    def test_a_macro_is_identified_by_its_file_and_name(self, result: TuExtract) -> None:
+        """Clang's identifier carries the byte offset of the definition; the node id does not,
+        so a line added above leaves it the same macro. The file stays, as for a `static`."""
+        for node_id in self.macros(result):
+            assert usr_file(node_id) in ("a.cpp", "lib.h")
+        assert self.macros(result)["c:a.cpp@macro@LIMIT"].tu == "a.cpp"
+        assert self.macros(result)["c:lib.h@macro@SHARED"].tu is None
+
+    def test_a_macro_carries_a_hash_of_its_replacement(self, result: TuExtract) -> None:
+        macros = self.macros(result)
+        first, second = macros["c:a.cpp@macro@LIMIT"], macros["c:a.cpp@macro@LIMIT#2"]
+        assert isinstance(first.attrs["replacement_hash"], str)
+        assert first.attrs["replacement_hash"] != second.attrs["replacement_hash"]
+        assert macros["c:a.cpp@macro@EMPTY"].attrs["replacement_hash"] is None
+        assert macros["c:a.cpp@macro@TWICE"].attrs["function_like"] is True
+        assert first.attrs["function_like"] is False
+
+    def test_moving_a_macro_down_a_line_keeps_its_id(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        moved = run(tmp_path, toolchain, {"a.cpp": "// note\n\n#define LIMIT 10\n"})
+        assert [n.id for n in moved.nodes.values()] == ["c:a.cpp@macro@LIMIT"]
 
 
 class TestEnums:

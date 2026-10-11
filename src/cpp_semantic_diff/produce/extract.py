@@ -58,7 +58,8 @@ from cpp_semantic_diff.produce.toolchain import Toolchain, fatal_diagnostics
 
 #: The extraction scope (ARCH-001 §13): namespace, class, function, method, field, and the
 #: entities that carry values -- enum, enumerator, alias, and variable at namespace scope or
-#: as a static data member (ADR-038). Anything not named here is not modelled. Adding a kind
+#: as a static data member (ADR-038). Macros are modelled too, on a path of their own
+#: (`_Extractor.visit_macro`, ADR-039). Anything not named here is not modelled. Adding a kind
 #: is additive, and each kind's compared facts need a novelty weight in `rank/weights.py`.
 #:
 #: Templates map onto their underlying kind with `attrs["template"]`. A template and its
@@ -1196,6 +1197,11 @@ def _attributes(cursor: ci.Cursor, kind: NodeKind) -> dict[str, AttrValue]:
         attrs["storage"] = str(cursor.storage_class.name).lower()
         attrs["linkage"] = str(cursor.linkage.name).lower()
         attrs["thread_local"] = cursor.tls_kind is not ci.TLSKind.NONE
+    if kind is NodeKind.MACRO:
+        # Everything after the name: the parameter list, if any, and the replacement.
+        replacement = [t.spelling for t in cursor.get_tokens()][1:]
+        attrs["replacement_hash"] = _hash_spellings(replacement)
+        attrs["function_like"] = macro_queries().function_like(cursor)
     if kind is NodeKind.ALIAS:
         attrs["target"] = _alias_target(cursor)
         attrs["template"] = cursor.kind is ci.CursorKind.TYPE_ALIAS_TEMPLATE_DECL
@@ -1316,15 +1322,50 @@ def _initial_value(cursor: ci.Cursor) -> tuple[int | float | str | None, str | N
 
 def _token_hash(cursor: ci.Cursor) -> str | None:
     """Hash of a cursor's tokens, comments skipped; None when it has none."""
+    return _hash_spellings(
+        t.spelling for t in cursor.get_tokens() if t.kind is not ci.TokenKind.COMMENT
+    )
+
+
+def _hash_spellings(spellings: Iterable[str]) -> str | None:
     digest = hashlib.blake2b(digest_size=16)
     empty = True
-    for token in cursor.get_tokens():
-        if token.kind is ci.TokenKind.COMMENT:
-            continue
-        digest.update(token.spelling.encode())
+    for spelling in spellings:
+        digest.update(spelling.encode())
         digest.update(b"\x00")
         empty = False
     return None if empty else digest.hexdigest()
+
+
+#: Preprocessor cursors that record a use rather than declare anything.
+_PREPROCESSOR_USES = frozenset(
+    {ci.CursorKind.MACRO_INSTANTIATION, ci.CursorKind.INCLUSION_DIRECTIVE}
+)
+
+
+def _is_include_guard(cursor: ci.Cursor) -> bool:
+    """Whether a macro is its header's include guard.
+
+    Three conditions: it is object-like with nothing after its name; clang reports its file
+    as guarded against a second inclusion; and the file tested the name with `#ifndef` or
+    `defined` before defining it. The last is read from the file's tokens up to the macro,
+    which is cheap because a guard comes first.
+    """
+    if len(list(cursor.get_tokens())) != 1 or macro_queries().function_like(cursor):
+        return False
+    if not macro_queries().guarded(cursor):
+        return False
+    tu = cursor.translation_unit
+    start = ci.SourceLocation.from_offset(tu, cursor.location.file, 0)
+    before = [
+        t.spelling
+        for t in tu.get_tokens(extent=ci.SourceRange.from_locations(start, cursor.extent.start))
+    ]
+    return any(
+        spelling == cursor.spelling and before[i - 1] in ("ifndef", "defined", "(")
+        for i, spelling in enumerate(before)
+        if i > 0
+    )
 
 
 def _is_constexpr(cursor: ci.Cursor) -> bool:
@@ -1340,6 +1381,56 @@ def _is_constexpr(cursor: ci.Cursor) -> bool:
         if token.spelling == "constexpr":
             return True
     return False
+
+
+class _MacroQueries:
+    """`clang_Cursor_isMacroFunctionLike` and `clang_isFileMultipleIncludeGuarded`, which the
+    Python bindings do not wrap."""
+
+    def __init__(self) -> None:
+        lib = ci.conf.lib
+        self._function_like = lib.clang_Cursor_isMacroFunctionLike
+        self._function_like.argtypes = [ci.Cursor]
+        self._function_like.restype = ctypes.c_uint
+        self._guarded = lib.clang_isFileMultipleIncludeGuarded
+        self._guarded.argtypes = [ci.TranslationUnit, ci.File]
+        self._guarded.restype = ctypes.c_uint
+
+    def function_like(self, cursor: ci.Cursor) -> bool:
+        return bool(self._function_like(cursor))
+
+    def guarded(self, cursor: ci.Cursor) -> bool:
+        """Whether the file the macro is defined in is guarded against a second inclusion."""
+        return bool(self._guarded(cursor.translation_unit, cursor.location.file))
+
+
+_macro_queries: _MacroQueries | None = None
+
+
+def macro_queries() -> _MacroQueries:
+    global _macro_queries
+    if _macro_queries is None:
+        _macro_queries = _MacroQueries()
+    return _macro_queries
+
+
+#: The byte offset clang writes into a macro's USR: `c:a.cpp@8@macro@LIMIT`.
+_MACRO_OFFSET = re.compile(r"^(c:[^@]*)@\d+@macro@")
+
+
+def macro_id(usr: str, ordinal: int) -> str:
+    """A macro's identity: its USR without the byte offset, and an ordinal from the second
+    definition of one name in one file on.
+
+    Clang writes the offset of the definition into a macro's USR, so a line added above it
+    would make it a different macro (ADR-039). The file name stays, so a macro is identified
+    by file and name, as a `static` is, and `usr_file` reads it as file-scoped. A name
+    defined again in the same file, after an `#undef`, is a second macro: `#2`, `#3`, in the
+    order the file defines them. A USR not in the expected form is kept whole, which costs
+    only the stability this function exists for.
+    """
+    stripped = _MACRO_OFFSET.sub(r"\1@macro@", usr, count=1)
+    return stripped if ordinal == 1 else f"{stripped}#{ordinal}"
 
 
 def _alias_target(cursor: ci.Cursor) -> str:
@@ -1835,6 +1926,11 @@ class _Extractor:
         self.nodes: dict[NodeId, Node] = {}
         self.edges: dict[str, Edge] = {}
         self.aliases: dict[str, str] = {}
+        #: A macro's clang USR -> its node id, or None for an include guard; and how many
+        #: macros of each (file, name) this TU has seen, for the ordinal in `macro_id`. Keyed
+        #: on the USR so that a header included twice is not counted twice.
+        self.macros: dict[str, str | None] = {}
+        self.macro_counts: dict[tuple[str, str], int] = {}
 
     def _defining_tu(self, usr: str, location: Location | None) -> str | None:
         """The defining translation unit, set only where it is a *fact* (ARCH-001 §5).
@@ -1975,10 +2071,53 @@ class _Extractor:
         across headers: each reopening is a separate cursor with its own location.
         """
         for child in cursor.get_children():
+            # Checked before the location, which costs a call into libclang: a translation
+            # unit holds one of these per macro use and per `#include`, in every header.
+            if child.kind in _PREPROCESSOR_USES:
+                continue
             file = child.location.file
             if file is not None and self.outside(file.name) is not None:
                 continue
-            self.visit_declaration(child)
+            if child.kind is ci.CursorKind.MACRO_DEFINITION:
+                self.visit_macro(child)
+            else:
+                self.visit_declaration(child)
+
+    def visit_macro(self, cursor: ci.Cursor) -> None:
+        """A macro defined in the repository, as a node with its replacement hashed (ADR-039).
+
+        A macro with no file is built in or given on the command line, and is not a
+        declaration the repository wrote. An include guard is skipped: it is how a header is
+        written, not a value, and it would be renamed with its header.
+        """
+        location = _location(cursor, self.root, self.base)
+        usr = cursor.get_usr()
+        if location is None or not usr:
+            return
+        if usr not in self.macros:
+            self.macros[usr] = self._macro_node_id(cursor, usr, location)
+        node_id = self.macros[usr]
+        if node_id is None:
+            return
+        self.add_node(
+            Node(
+                id=NodeId(node_id),
+                kind=NodeKind.MACRO,
+                name=cursor.spelling,
+                qualified_name=cursor.spelling,
+                attrs=_attributes(cursor, NodeKind.MACRO),
+                location=location,
+                sites=(location,),
+                tu=self._defining_tu(node_id, location),
+            )
+        )
+
+    def _macro_node_id(self, cursor: ci.Cursor, usr: str, location: Location) -> str | None:
+        if _is_include_guard(cursor):
+            return None
+        key = (location.file, cursor.spelling)
+        self.macro_counts[key] = self.macro_counts.get(key, 0) + 1
+        return macro_id(usr, self.macro_counts[key])
 
     def visit_declaration(self, cursor: ci.Cursor) -> None:
         kind = _node_kind(cursor)
@@ -2096,7 +2235,12 @@ def extract(
     parser: ci.Index = index if index is not None else ci.Index.create()
 
     try:
-        tu = parser.parse(str(entry.file), args=parse_arguments(entry, toolchain))
+        # The detailed processing record is what puts macro definitions in the AST.
+        tu = parser.parse(
+            str(entry.file),
+            args=parse_arguments(entry, toolchain),
+            options=ci.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD,
+        )
     except ci.TranslationUnitLoadError as error:
         return TuExtract(
             path=relative,
