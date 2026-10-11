@@ -228,6 +228,47 @@ class TestDocumentCarriesEverything:
         assert len(flat.roots) > len(nested.roots), "expanded must show more at top level"
         assert flat.hidden == 0
 
+    def test_hidden_count_is_the_whole_subtree_not_just_direct_children(self) -> None:
+        """`CollapseNode.hidden`'s own claim: "the whole subtree below it, at every depth."
+
+        A one-level cascade cannot tell a correct recursive sum from a wrong direct-child
+        count -- both equal 1. A removed namespace containing a removed class containing a
+        removed method (plus the two contains edges the endpoint rule folds in beside them)
+        can: the namespace's two *direct* children are not its whole subtree, and `hidden`
+        must count the subtree, not the children, or `_why`'s "N consequence(s) nested
+        below" undercounts what the view actually hid.
+        """
+        ns = node("c:@N@n", kind=NodeKind.NAMESPACE, name="n")
+        cls = node("c:@N@n@S@C", kind=NodeKind.CLASS, name="C", qualified_name="n::C")
+        member = node("c:@N@n@S@C@F@m#", name="m", qualified_name="n::C::m")
+        base = model(
+            "a",
+            ns,
+            cls,
+            member,
+            edges=[
+                edge("c:@N@n", "c:@N@n@S@C", EdgeKind.CONTAINS),
+                edge("c:@N@n@S@C", "c:@N@n@S@C@F@m#", EdgeKind.CONTAINS),
+            ],
+        )
+        doc = pipeline(base, model("b"))
+        tree = collapse(doc)
+
+        by_subject = {
+            doc.by_id[n.event_id].subject: n for root in tree.roots for n, _ in root.walk()
+        }
+        ns_node = by_subject[NodeId("c:@N@n")]
+
+        # Independent of `hidden`'s own arithmetic: every node `walk()` reaches below the
+        # namespace, counted the same way `test_nesting_follows_the_chain_one_level_at_a_time`
+        # trusts `walk()` to recurse correctly.
+        descendants = sum(1 for _, depth in ns_node.walk() if depth > 0)
+        assert ns_node.hidden == descendants
+        assert ns_node.hidden > len(ns_node.children), (
+            "the fixture must nest more than one level deep, or this cannot tell a "
+            "recursive sum from a direct-child count"
+        )
+
     def test_every_event_appears_exactly_once_in_the_collapse_tree(self) -> None:
         cls = node("c:@S@C", kind=NodeKind.CLASS, name="C")
         member = node("c:@S@C@F@m#", name="m", qualified_name="C::m")
@@ -299,6 +340,56 @@ class TestNothingIsHiddenWithoutACause:
         assert sorted(collapse(doc).flatten()) == sorted([a.id, b.id])
         assert {r.event_id for r in tree.roots} == {a.id, b.id}
         assert set(tree.promoted) == {a.id, b.id}
+
+    def test_a_cycle_reached_through_an_acyclic_lead_in_promotes_only_the_cycle(self) -> None:
+        """`_on_a_cycle`'s own claim: a node reached while still on the current path closes
+        a cycle, and *the tail of the path from that node* is the cycle -- not the whole
+        path. A chain that merely walks into a cycle without being part of it has an
+        answer to "which of these is the cause" (its own link, unbroken); only the cycle's
+        members do not. The two-node fixture above cannot tell "promote the cycle" apart
+        from "promote everything reachable from it", because there is nothing upstream to
+        wrongly sweep in -- this fixture adds that upstream link.
+
+        **Why `doc.ranking` is forced rather than left as `rank_events` produced it.**
+        `_on_a_cycle` walks `parent` in the order `collapse()` built it from, which is
+        ranking order. `rank/ranker.py` caps a consequence's score at its cause's
+        (`_bound_by_cause`) and breaks ties on cascade depth, so a lead-in whose
+        `caused_by` points *into* a cycle always ranks after both cycle members -- its
+        score is capped by theirs and its depth is strictly greater. That means the walk
+        that first discovers the cycle always starts *on* the cycle itself in practice,
+        where the path and its cycle-tail are the same slice and the trim this test is
+        about never has anything to cut. A mutant that swept the whole walked path instead
+        of just the tail (`on_cycle.update(path)` for
+        `on_cycle.update(path[path.index(current):])`) passed this fixture unmodified,
+        which is exactly that: a real document built through ranking cannot exercise the
+        line ARCH-001 §6.3 and this module's docstring both rest on. `collapse.py`'s own
+        docstring says a document "can arrive from a file, from a test, or from a future
+        stage" -- not only from today's ranker -- so the walk order has to be forced to
+        the one shape ranking will not produce, and the claim has to hold there too.
+        `DiffDocument` is not frozen (`by_id`'s own comment), so reassigning `ranking` is
+        the same kind of by-hand construction the rest of this module already uses.
+        """
+        f = node("c:@F@f#", name="f")
+        g = node("c:@F@g#", name="g")
+        h = node("c:@F@h#", name="h")
+
+        lead_in = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE)
+        a = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE)
+        b = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@h#", SURE)
+        # lead_in -> a <-> b: a cycle between a and b, fed by a lead-in that is not on it.
+        lead_in = lead_in.model_copy(update={"caused_by": a.id})
+        a = a.model_copy(update={"caused_by": b.id})
+        b = b.model_copy(update={"caused_by": a.id})
+        doc = document(model("x", f, g, h), model("y", f, g, h), [lead_in, a, b])
+        # Force the walk that discovers the cycle to start from the lead-in, not from a
+        # cycle member -- see the docstring above for why ranking alone never does this.
+        doc.ranking = [lead_in.id, a.id, b.id]
+
+        tree = collapse(doc)
+        assert set(tree.promoted) == {a.id, b.id}, "only the cycle has no usable cause"
+        assert lead_in.id not in tree.promoted, "the lead-in's own link is still usable"
+        assert lead_in.id in hidden_ids(tree), "and it must still be nested under the cycle"
+        assert sorted(tree.flatten()) == sorted([lead_in.id, a.id, b.id])
 
     def test_nesting_follows_the_chain_one_level_at_a_time(self) -> None:
         """Classify links to the *immediate* container so that render can nest (§6.3).
@@ -586,6 +677,31 @@ class TestIncompletenessIsVisible:
         assert out.index("diff.renameLimit") < out.index("NodeRemoved")
         again = DiffDocument.from_json(doc.to_json())
         assert again.completeness.renames == doc.completeness.renames
+
+    def test_a_truncated_rename_map_with_no_known_limit_still_warns_and_does_not_say_none(
+        self,
+    ) -> None:
+        """`RenameLimitHit.needed` is `None` whenever git's stderr hit the limit without
+        naming the number that would have sufficed (`acquire/git.py`'s own regex can miss) --
+        a real, reachable shape this stage must not mishandle. `RenameDetection.warning`
+        branches on it to drop the advice clause entirely; the untested path is exactly
+        where a `None` formatted with `:,` would raise, or where an unconditional sentence
+        would print the word "None" where a number was supposed to be.
+        """
+        f = node("c:@F@f#", name="f")
+        base = model("a", f, completeness=self._parsed())
+        head = model("b", completeness=self._parsed())
+        corr = match_models(base, head)
+        events = classify_events(diff_models(base, head, corr), base, head, corr)
+        doc = document(
+            base, head, events, correspondence=corr, rename_limit=RenameLimitHit(needed=None)
+        )
+        assert doc.completeness.renames == RenameDetection(complete=False, limit_needed=None)
+        assert doc.completeness.degraded
+        out = draw(doc)
+        assert "diff.renameLimit" in out
+        assert "None" not in out
+        assert "would find them" not in out, "no number to advise setting the limit to"
 
     @staticmethod
     def _parsed() -> Completeness:
@@ -910,6 +1026,39 @@ class TestTheDocumentIsTheContract:
         for e in doc.events:
             for endpoint in subject_endpoints(e.subject):
                 assert endpoint in doc.entities, f"{e.kind.value} names an entity nobody can"
+
+    def test_a_moved_nodes_old_and_new_parent_are_both_nameable(self) -> None:
+        """`build.py`'s own claim about `NodeMoved`: "a parent may have no event of its
+        own. A view that cannot name the new container is reporting a move to nowhere."
+
+        `NodeMoved` is unreachable through tier-1 identity today (`diff/nodes.py`: a node
+        whose parent differs from its match's would not have matched at all), but it is a
+        declared member of §6.1's closed event set, and render has to handle every member
+        of that set correctly regardless of how often diff currently produces one -- the
+        same reasoning `EdgeAttrChanged`'s tests apply to a kind that is merely *rare*.
+        Built by hand, in the idiom this module's docstring names for exactly this reason.
+        """
+        old_parent = node("c:@N@a", kind=NodeKind.NAMESPACE, name="a", qualified_name="a")
+        new_parent = node("c:@N@b", kind=NodeKind.NAMESPACE, name="b", qualified_name="b")
+        moved_node = node("c:@F@m#", name="m", qualified_name="m")
+        moved = event(
+            ChangeEventKind.NODE_MOVED,
+            "c:@F@m#",
+            SURE,
+            old_parent="c:@N@a",
+            new_parent="c:@N@b",
+        )
+        base = model("a", old_parent, new_parent, moved_node)
+        head = model("b", old_parent, new_parent, moved_node)
+        doc = document(base, head, [moved])
+
+        assert NodeId("c:@N@a") in doc.entities, "the old container has no event of its own"
+        assert NodeId("c:@N@b") in doc.entities, "neither does the new one"
+        # Not just present in `entities`: nameable through the same path the view uses,
+        # and rendering must not raise reaching for a parent with no event of its own.
+        draw(doc)
+        assert doc.entity_name(NodeId("c:@N@a")) == "a"
+        assert doc.entity_name(NodeId("c:@N@b")) == "b"
 
     def test_an_entity_says_which_side_it_is_on(self) -> None:
         f = node("c:@F@f#", name="f")
