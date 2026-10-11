@@ -72,7 +72,17 @@ class ChangeEventKind(StrEnum):
     CYCLE_INTRODUCED = "CycleIntroduced"
     FAN_IN_CHANGED = "FanInChanged"
     LAYER_VIOLATION_INTRODUCED = "LayerViolationIntroduced"
-    SIGNATURE_INCOMPATIBLE = "SignatureIncompatible"
+    #: A call from G to F, present on both sides, where F's signature changed (ADR-040). The
+    #: subject is the head call edge, so its home is the caller. It states an observation --
+    #: this call site was written against the old signature -- and claims nothing about
+    #: whether it still compiles or behaves the same. It replaces ARCH-001's never-emitted
+    #: `SignatureIncompatible`, a name that claimed a verdict no stage makes.
+    #:
+    #: A **lower bound**: only calls the model sees. Calls that depend on a template
+    #: parameter, calls from initializers and default arguments (issue #13), and
+    #: calls through a function pointer are not call edges into F, so their callers get no
+    #: event.
+    CALLER_OF_CHANGED_SIGNATURE = "CallerOfChangedSignature"
 
 
 NODE_KINDS: frozenset[ChangeEventKind] = frozenset(
@@ -100,7 +110,8 @@ EDGE_KINDS: frozenset[ChangeEventKind] = frozenset(
 DERIVED_KINDS: frozenset[ChangeEventKind] = frozenset(ChangeEventKind) - NODE_KINDS - EDGE_KINDS
 
 #: What v0 actually emits: ARCH-001 §13's "node add/remove/attr/body/signature and edge
-#: add/remove/kind/attr". `EdgeKindChanged` and `EdgeAttrChanged` are reachable on tier-1
+#: add/remove/kind/attr", plus `CallerOfChangedSignature`, the one derived kind in v0, which the
+#: derive stage emits (ADR-040). `EdgeKindChanged` and `EdgeAttrChanged` are reachable on tier-1
 #: input for one argument applied twice (§6.1, `diff/edges.py`) -- an edge's endpoints are
 #: identity and belong to the matcher, while its kind and its attrs are diffable state, so
 #: between two entities tier 1 has already paired, a relation that changed kind or changed
@@ -109,7 +120,7 @@ DERIVED_KINDS: frozenset[ChangeEventKind] = frozenset(ChangeEventKind) - NODE_KI
 #: What stays out is what v0 genuinely cannot reach: `NodeRenamed` and `NodeMoved` need
 #: rename detection (both v0 tiers pair only entities that agree on name and scope: the USR
 #: encodes both, and the name tier keys on the qualified name under a paired parent),
-#: `EdgeRetargeted` is refused outright (§6.1), and the derived kinds are deferred by §13.
+#: `EdgeRetargeted` is refused outright (§6.1), and the other derived kinds are deferred by §13.
 #: The rest of the set is still declared in `ChangeEventKind` because the schema is the
 #: contract the whole pipeline is written against; declaring it late would mean rewriting
 #: consumers rather than extending them.
@@ -124,6 +135,7 @@ V0_KINDS: frozenset[ChangeEventKind] = frozenset(
         ChangeEventKind.EDGE_REMOVED,
         ChangeEventKind.EDGE_KIND_CHANGED,
         ChangeEventKind.EDGE_ATTR_CHANGED,
+        ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
     }
 )
 
@@ -145,10 +157,11 @@ APPLIES_TO: dict[ChangeEventKind, frozenset[NodeKind]] = {
 
 #: Payload keys a kind must carry, for the kinds ARCH-001 §6.1 names or directly implies.
 #: This is a floor, not a ceiling: a kind may carry more, but a consumer switching on the
-#: kind can rely on these being present. The derived kinds carry no requirement because
-#: their payloads are not designed yet (§13 puts them out of v0) -- an empty entry here
-#: means "undesigned", and adding a kind without adding an entry is a deliberate choice
-#: rather than an oversight, which is why every kind appears.
+#: kind can rely on these being present. The derived kinds other than
+#: `CallerOfChangedSignature` carry no requirement because their payloads are not designed yet
+#: (§13 puts them out of v0) -- an empty entry here means "undesigned", and adding a kind
+#: without adding an entry is a deliberate choice rather than an oversight, which is why every
+#: kind appears.
 REQUIRED_PAYLOAD: dict[ChangeEventKind, frozenset[str]] = {
     ChangeEventKind.NODE_ADDED: frozenset(),
     ChangeEventKind.NODE_REMOVED: frozenset(),
@@ -170,7 +183,14 @@ REQUIRED_PAYLOAD: dict[ChangeEventKind, frozenset[str]] = {
     ChangeEventKind.CYCLE_INTRODUCED: frozenset(),
     ChangeEventKind.FAN_IN_CHANGED: frozenset(),
     ChangeEventKind.LAYER_VIOLATION_INTRODUCED: frozenset(),
-    ChangeEventKind.SIGNATURE_INCOMPATIBLE: frozenset(),
+    # Both ends by id, though the subject edge names them, so a consumer never parses an
+    # edge id. Both signatures, so the call can be read against the change without looking
+    # the cause up. `caller_edited`: the caller has its own `NodeBodyChanged` or
+    # `NodeSignatureChanged` in this diff. An unedited caller is the one a text diff never
+    # shows the reviewer (ADR-040).
+    ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE: frozenset(
+        {"caller", "callee", "old_signature", "new_signature", "caller_edited"}
+    ),
 }
 
 

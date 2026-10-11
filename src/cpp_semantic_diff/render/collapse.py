@@ -40,7 +40,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from cpp_semantic_diff.model import ChangeEventId
+from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, ChangeEventKind
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only at type-check time
     from cpp_semantic_diff.render.document import DiffDocument
@@ -92,6 +92,9 @@ class Collapsed:
 def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     """Nest consequences under causes, in the document's ranking order (ARCH-001 §7).
 
+    One exception to ranking order among siblings: unedited callers of a changed signature
+    come first, after broken overrides (`_sibling_rank`).
+
     `enabled=False` returns the same events as a flat forest rather than a different set.
     That is the point of the flag: "show me everything" and "show me the tree" must differ
     in shape only, so a reviewer who distrusts the collapse can turn it off and be certain
@@ -126,6 +129,12 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     for event_id in order:  # ranking order in, ranking order out, at every depth
         if (cause := parent.get(event_id)) is not None:
             children[cause].append(event_id)
+    for cause, siblings in children.items():
+        # Stable, so this only lifts broken overrides, then unedited callers, ahead of
+        # their siblings.
+        cause_event = index[cause]
+        ranks = {i: _sibling_rank(index[i], cause_event) for i in siblings}
+        siblings.sort(key=ranks.__getitem__)
 
     def build(event_id: ChangeEventId) -> CollapseNode:
         return CollapseNode(
@@ -135,6 +144,32 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
 
     roots = tuple(build(i) for i in order if i not in parent)
     return Collapsed(roots=roots, promoted=tuple(promoted))
+
+
+def _sibling_rank(event: ChangeEvent, cause: ChangeEvent) -> int:
+    """Where an event goes among its siblings; equal ranks keep ranking order (ADR-040).
+
+    0. A removed `overrides` edge: under a signature change, an override that stopped
+       overriding. Calls through the base now skip it, which is worse than a call that may
+       convert its argument.
+    1. A caller of a changed signature that this diff did not touch. The text diff never
+       shows it, so only this view can send the reviewer there.
+    2. Everything else, edited callers included.
+    """
+    # Only `signature-change-breaks-overrides` files an `EdgeRemoved` under a signature
+    # change, so the pair of kinds says it is a broken override. Read off the kinds rather
+    # than out of the edge id: a USR may contain anything, `|` included.
+    if (
+        event.kind is ChangeEventKind.EDGE_REMOVED
+        and cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+    ):
+        return 0
+    if (
+        event.kind is ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
+        and event.payload.get("caller_edited") is False
+    ):
+        return 1
+    return 2
 
 
 def _on_a_cycle(parent: dict[ChangeEventId, ChangeEventId]) -> set[ChangeEventId]:

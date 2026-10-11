@@ -399,6 +399,7 @@ def diff(
     """
     from cpp_semantic_diff.acquire.tokens import token_delta
     from cpp_semantic_diff.classify import classify_events
+    from cpp_semantic_diff.derive import derive_events
     from cpp_semantic_diff.diff import diff_models
     from cpp_semantic_diff.diff.coverage import measure_coverage
     from cpp_semantic_diff.match import match_models
@@ -465,7 +466,7 @@ def diff(
             setattr(timings, slot, time.perf_counter() - t)
         base_model, head_model = models["base"], models["head"]
 
-    # From here the pipeline is pure (ARCH-001 §3): four functions over what is already in
+    # From here the pipeline is pure (ARCH-001 §3): five functions over what is already in
     # memory, each the input of the next, none of them touching the disk.
     t = time.perf_counter()
     # ARCH-001 §5: renames are resolved from git *before* matching, because USRs for
@@ -487,6 +488,10 @@ def diff(
     # `toolchain` resolved above -- but it is reported the same way whichever stage raises it.
     events = diff_models(base_model, head_model, correspondence)
     timings.diff = time.perf_counter() - t
+
+    t = time.perf_counter()
+    events = derive_events(events, base_model, head_model, correspondence)
+    timings.derive = time.perf_counter() - t
 
     t = time.perf_counter()
     events = classify_events(events, base_model, head_model, correspondence)

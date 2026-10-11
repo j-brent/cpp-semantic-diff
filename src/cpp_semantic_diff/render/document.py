@@ -7,8 +7,8 @@ and nothing else. That is what keeps delivery surfaces out of the analysis core,
 `terminal.py` and worth repeating here: **if a view needs a number this document does not
 carry, the fix is to put it here**, never to hand the view a `Model`.
 
-§10 gives seven top-level keys and this module gives those seven, plus `scores`,
-`components` and `callers`. Where §10 is a sketch rather than a spec, the choice made is
+§10 gives seven top-level keys and this module gives those seven, plus `scores` and
+`components`. Where §10 is a sketch rather than a spec, the choice made is
 recorded on the field:
 
 - **`ranking`** is `[event id]` verbatim, so a consumer that only wants reading order gets
@@ -497,6 +497,7 @@ class Timings(BaseModel):
     produce_head: float = 0.0
     match: float = 0.0
     diff: float = 0.0
+    derive: float = 0.0
     classify: float = 0.0
     coverage: float = Field(
         default=0.0,
@@ -813,14 +814,6 @@ class DiffDocument(BaseModel):
         default_factory=list,
         description="The §7 partition, numbered by descending risk. Component 0 is what to "
         "read first.",
-    )
-    callers: dict[ChangeEventId, list[NodeId]] = Field(
-        default_factory=dict,
-        description="For each `NodeSignatureChanged` event, the head-side callers of its "
-        "subject: the sources of its incoming `calls` edges at head. Evidence, not change "
-        "events -- the edges map through the correspondence, so a paired function's calls "
-        "produce no edge events, and this is where its call sites are filed (ARCH-001 §6.2, "
-        "ADR-035). A stopgap: derived change events for the callers replace it (ADR-036).",
     )
     summary: Summary
 

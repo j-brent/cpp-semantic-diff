@@ -138,9 +138,10 @@ EXPOSURE_WEIGHT: dict[Exposure, float] = {
 #: weighting them like node events would let one edited function fill the page with its own
 #: call churn.
 #:
-#: The derived kinds (§6.1) are mostly weighted high and none of them can fire in v0 (§13). They
-#: are computed conclusions rather than observations: an event that says "this became
-#: unreachable" has already done the reasoning a reviewer would otherwise have to do.
+#: The derived kinds (§6.1) are mostly weighted high, and only `CallerOfChangedSignature` can
+#: fire in v0 (§13, ADR-040). The others are computed conclusions rather than observations: an
+#: event that says "this became unreachable" has already done the reasoning a reviewer would
+#: otherwise have to do.
 NOVELTY_BY_KIND: dict[ChangeEventKind, float] = {
     ChangeEventKind.NODE_REMOVED: 1.00,
     ChangeEventKind.NODE_ADDED: 0.85,
@@ -170,7 +171,12 @@ NOVELTY_BY_KIND: dict[ChangeEventKind, float] = {
     ChangeEventKind.CYCLE_INTRODUCED: 0.90,
     ChangeEventKind.FAN_IN_CHANGED: 0.40,
     ChangeEventKind.LAYER_VIOLATION_INTRODUCED: 0.90,
-    ChangeEventKind.SIGNATURE_INCOMPATIBLE: 1.00,
+    # Below the signature change that causes it, and above a body change. It is an observation,
+    # not a verdict: the call site was written against the old signature, and it may still
+    # compile and behave the same. Each caller is a place the reviewer has to look, more so
+    # than one edited body, but the cause is the change; `_bound_by_cause` caps it there
+    # anyway (ADR-040).
+    ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE: 0.70,
 }
 
 #: ARCH-001 §7: "attribute changes to `virtual`, `const`, access, and signature outrank body

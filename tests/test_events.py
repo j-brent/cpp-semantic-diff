@@ -95,18 +95,30 @@ class TestTheSetIsClosed:
             "CycleIntroduced",
             "FanInChanged",
             "LayerViolationIntroduced",
-            "SignatureIncompatible",
+            "CallerOfChangedSignature",
         }
 
     def test_the_three_groups_partition_the_set(self) -> None:
         assert set(ChangeEventKind) == NODE_KINDS | EDGE_KINDS | DERIVED_KINDS
         assert not NODE_KINDS & EDGE_KINDS & DERIVED_KINDS
 
-    def test_v0_emits_a_subset_and_nothing_derived(self) -> None:
-        """ARCH-001 §13 -- derived events are out of v0, but their kinds exist so consumers
-        are extended rather than rewritten when they land."""
+    def test_v0_emits_a_subset_and_one_derived_kind(self) -> None:
+        """ARCH-001 §13 -- derived events are out of v0 but for one exception, the callers of a
+        changed signature (ADR-040). The other kinds exist so consumers are extended rather
+        than rewritten when they land."""
         assert set(ChangeEventKind) > V0_KINDS
-        assert not V0_KINDS & DERIVED_KINDS
+        assert {ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE} == V0_KINDS & DERIVED_KINDS
+
+    def test_a_caller_of_a_changed_signature_names_both_ends_and_whether_it_was_edited(
+        self,
+    ) -> None:
+        """ADR-040: the payload is designed, so the floor is stated, and an event without it
+        is refused."""
+        assert REQUIRED_PAYLOAD[ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE] == frozenset(
+            {"caller", "callee", "old_signature", "new_signature", "caller_edited"}
+        )
+        with pytest.raises(ValidationError, match="requires payload keys"):
+            event(ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE, payload={"caller": "g"})
 
     def test_v0_excludes_exactly_what_v0_cannot_reach(self) -> None:
         """`V0_KINDS` is read as a description of the stage, so it has to be one.
@@ -120,13 +132,13 @@ class TestTheSetIsClosed:
         What remains outside is what v0 genuinely cannot produce, and each exclusion has a
         different reason: renames and moves need rename detection (both v0 tiers pair only
         entities that agree on name and scope), `EdgeRetargeted` is refused outright, and
-        the derived kinds are deferred.
+        the derived kinds but one are deferred (ADR-040).
         """
         assert {
             ChangeEventKind.NODE_RENAMED,
             ChangeEventKind.NODE_MOVED,
             ChangeEventKind.EDGE_RETARGETED,
-            *DERIVED_KINDS,
+            *(DERIVED_KINDS - {ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE}),
         } == UNREACHABLE_IN_V0
         assert not V0_KINDS & UNREACHABLE_IN_V0
         assert set(ChangeEventKind) == V0_KINDS | UNREACHABLE_IN_V0

@@ -6,28 +6,20 @@ the kind that explains it, and a small locator saying which subject to look for.
 to be read side by side with §6.3 and agreed or disagreed with. Nothing outside this module
 decides what causes what.
 
-**Two rows that do not fire in v0, for different reasons.**
+**One row does not fire in v0.** `rename-retargets-edges` is unreachable: "NodeRenamed(F)
+causes every EdgeRetargeted whose endpoint is F" describes something this pipeline cannot
+produce, twice over. `EdgeRetargeted` is refused by design (`diff/edges.py`): an edge has no
+identity of its own, so claiming one "was retargeted" re-makes a node-identity claim the
+one-to-one matcher declined. And because base edges are rewritten into head coordinates
+*through the correspondence* before comparison, a rename produces no edge events at all --
+the 200 consequences §6.3 wants collapsed never exist. That is a better answer to the same
+problem, but it leaves the rule with nothing to fire on, and no later tier changes that: tier
+2 makes `NodeRenamed` reachable without making a single edge event appear beside it. The rule
+is kept, marked `RuleStatus.UNREACHABLE`, because deleting it would lose the argument.
 
-1. `rename-retargets-edges` is unreachable: "NodeRenamed(F) causes every EdgeRetargeted
-   whose endpoint is F" describes something this pipeline cannot produce, twice over.
-   `EdgeRetargeted` is refused by design (`diff/edges.py`): an edge has no identity of its
-   own, so claiming one "was retargeted" re-makes a node-identity claim the one-to-one
-   matcher declined. And because base edges are rewritten into head coordinates *through the
-   correspondence* before comparison, a rename produces no edge events at all -- the 200
-   consequences §6.3 wants collapsed never exist. That is a better answer to the same
-   problem, but it leaves the rule with nothing to fire on, and no later tier changes that:
-   tier 2 makes `NodeRenamed` reachable without making a single edge event appear beside it.
-   The rule is kept, marked `RuleStatus.UNREACHABLE`, because deleting it would lose the
-   argument.
-
-2. `signature-change-breaks-callers` is dormant: "NodeSignatureChanged causes
-   SignatureIncompatible on callers" is a correct rule about an event this pipeline does not
-   yet emit. `SignatureIncompatible` is derived, §13 puts derived events out of v0, and
-   `events.py` records their payloads as undesigned. **Classify links causes among events
-   that already exist; it never synthesizes one.** Synthesizing here would move the
-   derived-event machinery (which needs both models plus graph algorithms) into the stage
-   whose whole contract is relabeling, and would put an event in the JSON that no stage
-   claims to own.
+`signature-change-breaks-callers` links each `CallerOfChangedSignature` to the
+`NodeSignatureChanged` of its callee. The derive stage creates those events (ADR-040), not
+this one. **Classify links causes among events that already exist; it never synthesizes one.**
 
 The two edge-endpoint rules are the ones that carry v0's actual cascades: an edge event on an
 endpoint that was added or removed. `diff/edges.py` emits those "rather than folding
@@ -43,7 +35,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from cpp_semantic_diff.classify.context import ClassifyContext
-from cpp_semantic_diff.model import AnyId, AttrValue, ChangeEvent, ChangeEventKind, EdgeId, NodeId
+from cpp_semantic_diff.model import (
+    AnyId,
+    AttrValue,
+    ChangeEvent,
+    ChangeEventKind,
+    EdgeId,
+    EdgeKind,
+    NodeId,
+)
 
 
 class RuleStatus(StrEnum):
@@ -177,18 +177,17 @@ def _renamed_endpoint_of_retarget(ctx: ClassifyContext, event: ChangeEvent) -> I
             yield candidate
 
 
-def _callee_of(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
-    """The callees of the caller a `SignatureIncompatible` is about (§6.3), head side.
+def _callee_of_call(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
+    """The callee of the call a `CallerOfChangedSignature` is about: its subject edge's head
+    destination (ADR-040).
 
-    §6.3 says the consequence lands "on callers", so the consequence's subject is the caller
-    and the cause is on the callee whose signature moved. Sorted, so that a caller of two
-    changed callees gets a stable answer rather than one that depends on edge order -- but
-    that stability is a floor, not an answer. When the payload of `SignatureIncompatible` is
-    designed (`events.py` records it as undesigned, §13), it should name the callee, and
-    this locator should read it from there; the ambiguity is an artifact of the payload
-    being empty, not a property of the relation.
+    The subject is one call edge, so the answer is one node, and a caller of two changed
+    functions gets two events, each with its own cause. Read off the head model, like every
+    other endpoint here, rather than off the payload's `callee`: the model holds the fact.
     """
-    yield from ctx.head_callees.get(NodeId(event.subject), ())
+    endpoints = ctx.head_endpoints.get(EdgeId(event.subject))
+    if endpoints is not None:
+        yield endpoints[1]
 
 
 def _overload_the_caller_moved_to(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[EdgeId]:
@@ -228,6 +227,53 @@ def _overload_the_caller_moved_to(ctx: ClassifyContext, event: ChangeEvent) -> I
         gained = ctx.head.nodes.get(edge.dst)
         if gained is not None and gained.qualified_name == old.qualified_name:
             yield edge.id
+
+
+def _overridden_function(ctx: ClassifyContext, event: ChangeEvent) -> Iterator[NodeId]:
+    """The virtual function a removed `overrides` edge pointed at, in head coordinates.
+
+    When a virtual function's signature changes and an override keeps the old one, the
+    override stops overriding: the `overrides` edge is removed while both functions survive.
+    The signature change is the cause, so the locator names the edge's destination, mapped
+    through the correspondence like every other cross-side id. Where that destination has no
+    `NodeSignatureChanged`, the classifier finds no cause and the edge stays at top level.
+
+    Only while the override's class still derives from the overridden function's class at
+    head, directly or not. A class that stopped inheriting lost the override for that reason,
+    and filing it under the signature change would hide the real cause.
+    """
+    removed = ctx.base_edges.get(EdgeId(event.subject))
+    if removed is None or removed.kind is not EdgeKind.OVERRIDES:
+        return
+    overridden = ctx.correspondence.head_for(removed.dst)
+    if overridden is None or not _still_derives(ctx, removed.src, removed.dst):
+        return
+    yield overridden
+
+
+def _still_derives(ctx: ClassifyContext, override: NodeId, overridden: NodeId) -> bool:
+    """Whether the class holding `override` derives from the class holding `overridden` at
+    head, through `inherits` edges. Both arguments are base ids; the classes are mapped
+    through the correspondence."""
+    derived_class = ctx.base_parents.get(override)
+    base_class = ctx.base_parents.get(overridden)
+    if derived_class is None or base_class is None:
+        return False
+    start = ctx.correspondence.head_for(derived_class)
+    goal = ctx.correspondence.head_for(base_class)
+    if start is None or goal is None:
+        return False
+    seen = {start}
+    frontier = [start]
+    while frontier:
+        current = frontier.pop()
+        if current == goal:
+            return True
+        for edge in ctx.head_out_edges.get(current, ()):
+            if edge.kind is EdgeKind.INHERITS and edge.dst not in seen:
+                seen.add(edge.dst)
+                frontier.append(edge.dst)
+    return False
 
 
 # --------------------------------------------------------------------------------------
@@ -285,6 +331,18 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
         "`edge-gained-its-endpoint`, and both collapse under it.",
     ),
     CauseRule(
+        name="signature-change-breaks-overrides",
+        arch="§6.3: NodeSignatureChanged(F) causes EdgeRemoved(override→F)",
+        cause=ChangeEventKind.NODE_SIGNATURE_CHANGED,
+        consequence=ChangeEventKind.EDGE_REMOVED,
+        subjects=_overridden_function,
+        status=RuleStatus.ACTIVE,
+        note="A virtual function's signature changed and an override kept the old one, so it "
+        "no longer overrides. Both functions survive, so no endpoint rule reaches the removed "
+        "`overrides` edge. Below the endpoint and overload rules: an override that went away "
+        "or moved is the better account (ADR-040).",
+    ),
+    CauseRule(
         name="edge-gained-its-endpoint",
         arch="§6.3: NodeAdded(N) causes EdgeAdded for edges touching N",
         cause=ChangeEventKind.NODE_ADDED,
@@ -307,14 +365,13 @@ CAUSE_RULES: tuple[CauseRule, ...] = (
     ),
     CauseRule(
         name="signature-change-breaks-callers",
-        arch="§6.3: NodeSignatureChanged(F) causes SignatureIncompatible on callers",
+        arch="§6.3: NodeSignatureChanged(F) causes CallerOfChangedSignature for each call into F",
         cause=ChangeEventKind.NODE_SIGNATURE_CHANGED,
-        consequence=ChangeEventKind.SIGNATURE_INCOMPATIBLE,
-        subjects=_callee_of,
-        status=RuleStatus.DORMANT,
-        note="Correct, and dormant because nothing emits `SignatureIncompatible`: it is "
-        "derived, §13 puts derived events out of v0, and its payload is undesigned. This "
-        "stage links events that exist and never synthesizes one -- doing so here would "
-        "put an event in the JSON that no stage owns.",
+        consequence=ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
+        subjects=_callee_of_call,
+        status=RuleStatus.ACTIVE,
+        note="The derive stage emits one `CallerOfChangedSignature` per call into a function "
+        "whose signature changed (ADR-040); this links each to that change. The callee is the "
+        "subject edge's head destination, so every caller event has exactly one candidate.",
     ),
 )
