@@ -183,6 +183,8 @@ Each step is one commit, and the suite passes after each one.
    - A hint is the topmost tracked directory, at base or head, whose own name matches and that
      is neither in, under nor above a set entry. leveldb's `third_party` holds only its
      submodules, so it gets no hint.
+   - A submodule counts at a revision only where that revision has a gitlink at its path. A
+     stale `.gitmodules` entry is left out, without a note.
    - The set and hints are in the JSON now (`third_party`, `third_party_hints`), under
      `2.0.dev`, and in the terminal view. Step 6 adds only the crossing counts and the demo.
 3. **The refusal.** The new precondition error, checked before checkout. Tests: a submodule bump

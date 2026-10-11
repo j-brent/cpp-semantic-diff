@@ -156,17 +156,21 @@ def test_a_malformed_environment_setting_is_a_usage_error_with_exit_2(
 
 
 def test_a_third_party_path_neither_revision_has_is_a_usage_error_with_exit_2(
-    diverged_repo: Path, tmp_path: Path
+    diverged_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A typo would leave the library in the model, so it is refused -- before any worktree,
     so the refusal costs no checkout (ADR-025). Every missing path is named."""
     require_libclang()
+
+    def no_checkout(*args: object, **kwargs: object) -> None:
+        raise AssertionError("a worktree was requested before the refusal")
+
+    monkeypatch.setattr(cli, "checkout", no_checkout)
     result = runner.invoke(
         cli.app,
         ["diff", str(diverged_repo), "--third-party", "vendr", "--third-party", "libs/x/"],
     )
     assert_reported(result, ExitCode.USAGE, "cannot analyze", "neither revision", "vendr, libs/x")
-    assert not (tmp_path / "cppsd-cache" / "worktrees").exists()
 
 
 # -- 3: the repository or revisions cannot be compared ----------------------------------------

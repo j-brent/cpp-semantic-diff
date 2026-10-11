@@ -70,8 +70,8 @@ class ThirdPartySet:
     def label_for(self, file: str) -> str | None:
         """The entry `file` lies in, or None if it is not third-party.
 
-        `file` is repository-relative. Where entries nest -- a path declared inside a
-        submodule -- the innermost wins, because it is the more specific name.
+        `file` is repository-relative. Where entries nest -- a submodule inside a declared
+        vendored folder -- the innermost wins, because it is the more specific name.
         """
         best: str | None = None
         for path in self.paths:
@@ -87,6 +87,19 @@ def hint_message(path: str) -> str:
 
 def _within(path: str, directory: str) -> bool:
     return path == directory or path.startswith(directory + "/")
+
+
+def _spelling(raw: str) -> str:
+    """`raw` as a repository-relative directory, or "" if it cannot be one.
+
+    Drops the spelling that carries no meaning -- surrounding whitespace, a trailing slash,
+    `./`, repeated separators -- and rejects an absolute path or one with `..`.
+    """
+    text = raw.strip().replace("\\", "/")
+    parts = [p for p in PurePosixPath(text).parts if p != "."]
+    if text.startswith("/") or ".." in parts:
+        return ""
+    return "/".join(parts)
 
 
 def normalize_declared(raw: str) -> str:
@@ -115,10 +128,13 @@ def normalize_declared(raw: str) -> str:
 
 
 def submodule_paths(repo: Path, rev: str) -> set[str]:
-    """Paths `.gitmodules` records at `rev`. Empty when `rev` has no `.gitmodules`.
+    """Paths `.gitmodules` records at `rev`, spelled as declared paths are. Empty when `rev`
+    has no `.gitmodules`.
 
     Read from the blob with `git config --blob`, so no checkout is needed and the working
     tree's own `.gitmodules` -- which may belong to neither revision -- is never consulted.
+    This is what the file says, not what the revision pins: `third_party_set` keeps only the
+    paths that also have a gitlink.
     """
     if not run_git(repo, "ls-tree", "--full-tree", "--name-only", rev, "--", ".gitmodules"):
         return set()
@@ -128,8 +144,8 @@ def submodule_paths(repo: Path, rev: str) -> set[str]:
     paths: set[str] = set()
     for record in fields:
         key, _, value = record.partition("\n")
-        if key.startswith("submodule.") and key.endswith(".path") and value.strip():
-            paths.add(value.strip().strip("/"))
+        if key.startswith("submodule.") and key.endswith(".path") and (path := _spelling(value)):
+            paths.add(path)
     return paths
 
 
@@ -154,6 +170,11 @@ def _tracked_tree(repo: Path, rev: str) -> _Tree:
         elif kind == "commit":
             gitlinks.add(path)
     return _Tree(frozenset(directories), frozenset(gitlinks))
+
+
+def _owner(path: str, directories: Iterable[str]) -> str | None:
+    """The directory among `directories` that strictly contains `path`, if any."""
+    return next((d for d in sorted(directories) if path.startswith(d + "/")), None)
 
 
 def _is_file(repo: Path, rev: str, path: str) -> bool:
@@ -185,15 +206,21 @@ def folder_hints(directories: Iterable[str], third_party: Sequence[str]) -> tupl
 def third_party_set(repo: Path, revs: RevPair, declared: Sequence[str] = ()) -> ThirdPartySet:
     """The third-party set for comparing `revs`, refusing a declared path neither side has.
 
-    The union of both revisions' submodules and the declared paths. A declared path exists if
-    it is a tracked directory or a gitlink at either revision; a file is refused as not a
-    directory, and anything else as absent.
+    The union of both revisions' submodules and the declared paths. A submodule counts at a
+    revision only where `.gitmodules` names it *and* the revision has a gitlink there: a stale
+    `.gitmodules` entry pins no code, so it leaves no code to exclude.
+
+    A declared path exists if it is a tracked directory or a gitlink at either revision; a
+    file is refused as not a directory, and anything else as absent.
     """
     repo = repo.resolve()
     revisions = dict.fromkeys((revs.base_sha, revs.head_sha))
     trees = {rev: _tracked_tree(repo, rev) for rev in revisions}
     existing = set().union(*(t.directories | t.gitlinks for t in trees.values()))
 
+    submodules = set().union(
+        *(submodule_paths(repo, rev) & trees[rev].gitlinks for rev in revisions)
+    )
     wanted = dict.fromkeys(normalize_declared(raw) for raw in declared)
     missing = [path for path in wanted if path not in existing]
     if missing:
@@ -206,14 +233,20 @@ def third_party_set(repo: Path, revs: RevPair, declared: Sequence[str] = ()) -> 
                 + ", ".join(absent)
                 + ". It is probably a typo, and a typo would leave the library in the model."
             )
+            # The superproject tracks nothing inside a submodule, so a path there is absent
+            # to it -- and already excluded, which is the more useful thing to say.
+            lines.extend(
+                f"{path} is inside submodule `{owner}`, which is already third-party."
+                for path in absent
+                if (owner := _owner(path, submodules)) is not None
+            )
         if files:
             lines.append("--third-party names a file, not a directory: " + ", ".join(files) + ".")
         raise ThirdPartyPathError("\n".join(lines))
 
     sources: dict[str, set[ThirdPartySource]] = {}
-    for rev in revisions:
-        for path in submodule_paths(repo, rev):
-            sources.setdefault(path, set()).add(ThirdPartySource.SUBMODULE)
+    for path in submodules:
+        sources.setdefault(path, set()).add(ThirdPartySource.SUBMODULE)
     for path in wanted:
         sources.setdefault(path, set()).add(ThirdPartySource.DECLARED)
 

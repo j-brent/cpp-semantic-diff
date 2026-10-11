@@ -118,6 +118,46 @@ class TestSubmodules:
 
         assert third_party_set(submodule_repo, revs).paths == ("dep",)
 
+    def test_a_submodule_path_is_spelled_like_a_declared_one(
+        self, bare_repo: Path, inner: Path
+    ) -> None:
+        """`path = ./v/` in `.gitmodules` names the same directory as `--third-party v`."""
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        add_submodule(bare_repo, inner, "v")
+        gitmodules = bare_repo / ".gitmodules"
+        gitmodules.write_text(
+            gitmodules.read_text(encoding="utf-8").replace("path = v", "path = ./v/"),
+            encoding="utf-8",
+        )
+        git(bare_repo, "add", ".gitmodules")
+        git(bare_repo, "commit", "-q", "-m", "respell")
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        commit(bare_repo, "a.cpp", "int a(int);\n", "B")
+        revs = resolve_revs(bare_repo)
+
+        assert submodule_paths(bare_repo, revs.head_sha) == {"v"}
+        found = third_party_set(bare_repo, revs, ["v"])
+        assert found.entries == (ThirdPartyEntry(path="v", sources=SUBMODULE | DECLARED),)
+
+    def test_a_gitmodules_entry_with_no_gitlink_is_not_in_the_set(
+        self, submodule_repo: Path
+    ) -> None:
+        """A stale `.gitmodules` entry pins no code, so there is nothing to exclude."""
+        gitmodules = submodule_repo / ".gitmodules"
+        gitmodules.write_text(
+            gitmodules.read_text(encoding="utf-8")
+            + '[submodule "ghost"]\n\tpath = ghost\n\turl = ../ghost\n',
+            encoding="utf-8",
+        )
+        git(submodule_repo, "add", ".gitmodules")
+        git(submodule_repo, "commit", "-q", "-m", "stale entry")
+        git(submodule_repo, "checkout", "-q", "-b", "feature")
+        commit(submodule_repo, "main.cpp", "int m() { return 0; }\n", "edit")
+        revs = resolve_revs(submodule_repo)
+
+        assert submodule_paths(submodule_repo, revs.head_sha) == {"dep", "ghost"}
+        assert third_party_set(submodule_repo, revs).paths == ("dep",)
+
     def test_no_gitmodules_is_an_empty_set(self, copied_repo: Path) -> None:
         assert third_party_set(copied_repo, resolve_revs(copied_repo)).entries == ()
 
@@ -174,8 +214,35 @@ class TestDeclaredPaths:
     def test_a_path_neither_revision_has_is_refused_by_name(self, copied_repo: Path) -> None:
         with pytest.raises(ThirdPartyPathError, match="test/gtset") as raised:
             third_party_set(copied_repo, resolve_revs(copied_repo), ["test/gtest", "test/gtset"])
-        assert "neither revision" in str(raised.value)
-        assert "test/gtest," not in str(raised.value), "only the missing path is named"
+        assert str(raised.value).splitlines()[0] == (
+            "--third-party names a path that exists at neither revision: test/gtset. It is "
+            "probably a typo, and a typo would leave the library in the model."
+        )
+
+    def test_a_path_inside_a_submodule_says_it_is_already_third_party(
+        self, submodule_repo: Path
+    ) -> None:
+        """The superproject tracks nothing inside a submodule, so the path is absent to it."""
+        git(submodule_repo, "checkout", "-q", "-b", "feature")
+        commit(submodule_repo, "main.cpp", "int m() { return 0; }\n", "edit")
+
+        with pytest.raises(ThirdPartyPathError, match="neither revision: dep/include") as raised:
+            third_party_set(submodule_repo, resolve_revs(submodule_repo), ["dep/include"])
+
+        assert "dep/include is inside submodule `dep`, which is already third-party." in str(
+            raised.value
+        )
+
+    def test_an_absent_path_outside_any_submodule_does_not_mention_one(
+        self, submodule_repo: Path
+    ) -> None:
+        git(submodule_repo, "checkout", "-q", "-b", "feature")
+        commit(submodule_repo, "main.cpp", "int m() { return 0; }\n", "edit")
+
+        with pytest.raises(ThirdPartyPathError) as raised:
+            third_party_set(submodule_repo, resolve_revs(submodule_repo), ["depx/include"])
+
+        assert "submodule" not in str(raised.value)
 
     def test_a_file_is_refused_as_not_a_directory(self, copied_repo: Path) -> None:
         with pytest.raises(ThirdPartyPathError, match="not a directory"):
@@ -252,15 +319,16 @@ class TestFolderHints:
 
 
 class TestLabelFor:
-    def test_files_are_labelled_with_the_entry_they_lie_in(self) -> None:
+    def test_files_are_labelled_with_the_innermost_entry_they_lie_in(self) -> None:
+        """A submodule inside a declared vendored folder: the submodule is the closer name."""
         tp = ThirdPartySet(
             entries=(
-                ThirdPartyEntry(path="third_party/lib", sources=SUBMODULE),
-                ThirdPartyEntry(path="third_party/lib/vendored", sources=DECLARED),
+                ThirdPartyEntry(path="vendor", sources=DECLARED),
+                ThirdPartyEntry(path="vendor/zlib", sources=SUBMODULE),
             )
         )
-        assert tp.label_for("third_party/lib/a.h") == "third_party/lib"
-        assert tp.label_for("third_party/lib") == "third_party/lib"
-        assert tp.label_for("third_party/lib/vendored/b.h") == "third_party/lib/vendored"
-        assert tp.label_for("third_party/library/a.h") is None
+        assert tp.label_for("vendor/a.h") == "vendor"
+        assert tp.label_for("vendor") == "vendor"
+        assert tp.label_for("vendor/zlib/zlib.h") == "vendor/zlib"
+        assert tp.label_for("vendors/a.h") is None
         assert tp.label_for("src/a.cpp") is None

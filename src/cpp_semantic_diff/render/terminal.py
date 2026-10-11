@@ -197,7 +197,7 @@ def _third_party(document: DiffDocument, console: Console) -> None:
         console.print(f"  [yellow]note[/] {escape(hint.message)}")
 
 
-# -- 2 · the metric the project is pointed at--------------------------------------------
+# -- 2 · the metric the project is pointed at --------------------------------------------
 
 
 def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> None:
