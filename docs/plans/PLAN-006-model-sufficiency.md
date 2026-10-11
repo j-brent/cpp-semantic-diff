@@ -69,7 +69,8 @@ Today a blind spot reads as "nothing changed". Make it a number on every run, th
   essential.
   - **Compared as tokens, not lines**, so a whitespace or comment edit is not reported as
     uncovered.
-  - **Third-party code is excluded**, as PLAN-004 defines it.
+  - **Third-party code is excluded**, as
+    [ARCH-001 §4.5](../ARCH-001-architecture.md#45-the-boundary-of-the-model) defines it.
   - **Headers count even when no translation unit includes them.** This is how the-model.md §4.6's
     limit, a header nothing includes, becomes visible.
 - **Unmodelled declarations.** Count the declarations in repository files that the extractor

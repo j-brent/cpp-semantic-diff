@@ -1,12 +1,14 @@
 """Is the subject reachable from a public header, or internal? ARCH-001 §7's second factor.
 
 This is the factor that decides whether the ranking works on a real repository or only on the
-fixtures, and the reason is a measurement rather than a theory. The model built from `fmt` was
-**80.6 % test code**, 31.7 % of it vendored `test/gtest`, measured 2026-08-02 (v0 tracker §5,
-reports/2026-08-01--v0-build/STATUS.md). Extraction is right to include all of it: those TUs
-are in the compile database and their entities are real. But a ranking that scores by change
-shape alone puts a modified assertion helper in bundled googletest above a modified
-`fmt::format`, and a reviewer who is shown that once will not look at the second page.
+fixtures, and the reason is a measurement rather than a theory. With its bundled googletest
+left out, the model built from `fmt` is **69 % test code**: 5,918 of 8,618 nodes at
+`HEAD~12`, measured 2026-10-11
+(reports/2026-10-11--third-party-boundary/measurements.md). Extraction is right to include
+all of it: those TUs are in the compile database, they are the project's own, and their
+entities are real. But a ranking that scores by change shape alone puts a
+modified test helper above a modified `fmt::format`, and a reviewer who is shown that once
+will not look at the second page.
 
 So exposure is, first and foremost, a **demotion** of code that is in the model without
 being what the review is about, and only secondarily a promotion of public API. Three
@@ -14,8 +16,10 @@ classes, ordered:
 
     TEST < INTERNAL < PUBLIC
 
-Third-party code is not a class here, because it is not in the model (ADR-025):
-`acquire/third_party.py` recognizes it, and extraction leaves it out.
+Third-party code is not a class here, because it is not in the model (ADR-025). Recognizing
+it is not a ranking question: `acquire/third_party.py` builds the set from submodules and
+`--third-party`, and extraction leaves everything in it out. What reaches this module is the
+repository's own code, all of it scored.
 
 **The heuristic is path convention plus containment, and nothing else.** That is a real
 limitation and it is stated rather than hidden. The model carries `Node.location.file`

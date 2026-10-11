@@ -1,0 +1,889 @@
+{
+  "meta": {
+    "tool": "cpp-semantic-diff",
+    "tool_version": "0.0.1",
+    "schema_version": "2.0.dev",
+    "repo": "leveldb",
+    "base_ref": "HEAD~9",
+    "head_ref": "HEAD~1",
+    "base_rev": "23e35d792b9154f922b8b575b12596a4d8664c65",
+    "head_rev": "9e273a6aef69ceb8717c083e46002641f6f51c8f",
+    "timings": {
+      "acquire": 0.04339522900409065,
+      "produce_base": 12.335857343001408,
+      "produce_head": 11.19123534100072,
+      "match": 0.035092213001917116,
+      "diff": 0.03850308700930327,
+      "derive": 9.701005183160305e-6,
+      "classify": 0.03170631699322257,
+      "coverage": 0.1669773289904697,
+      "rank": 0.04640223900787532,
+      "total": 24.81882988299185
+    }
+  },
+  "completeness": {
+    "base": {
+      "side": "base",
+      "rev": "23e35d792b9154f922b8b575b12596a4d8664c65",
+      "tus_total": 69,
+      "tus_parsed": 69,
+      "tus_failed": 0,
+      "tus_cached": 0,
+      "edges_total": 12832,
+      "edges_dropped": 3762,
+      "crossings_by_label": {
+        "C library": 361,
+        "C++ standard library": 1275,
+        "compiler builtins": 1,
+        "function-local": 6,
+        "implicit": 115,
+        "template instantiation": 3,
+        "third_party/googletest": 1999,
+        "unresolved": 2
+      },
+      "build_available": false,
+      "producer_version": "libclang 18.1.3 x86_64-pc-linux-gnu",
+      "producers": [
+        "libclang 18.1.3 x86_64-pc-linux-gnu"
+      ],
+      "unmodelled": {
+        "friend": 15,
+        "linkage_spec": 2,
+        "using_declaration": 24
+      },
+      "language_modes": [
+        "c++11"
+      ],
+      "tus_complete": true,
+      "failures": [],
+      "notes": [
+        "25 of 94 compile-database entries are not C++ and were not modelled",
+        "24 of 93 C++ compile-database entries are third-party and were not parsed"
+      ]
+    },
+    "head": {
+      "side": "head",
+      "rev": "9e273a6aef69ceb8717c083e46002641f6f51c8f",
+      "tus_total": 69,
+      "tus_parsed": 69,
+      "tus_failed": 0,
+      "tus_cached": 0,
+      "edges_total": 12832,
+      "edges_dropped": 3762,
+      "crossings_by_label": {
+        "C library": 361,
+        "C++ standard library": 1276,
+        "compiler builtins": 1,
+        "function-local": 6,
+        "implicit": 114,
+        "template instantiation": 3,
+        "third_party/googletest": 1999,
+        "unresolved": 2
+      },
+      "build_available": false,
+      "producer_version": "libclang 18.1.3 x86_64-pc-linux-gnu",
+      "producers": [
+        "libclang 18.1.3 x86_64-pc-linux-gnu"
+      ],
+      "unmodelled": {
+        "friend": 15,
+        "linkage_spec": 2,
+        "using_declaration": 24
+      },
+      "language_modes": [
+        "c++17"
+      ],
+      "tus_complete": true,
+      "failures": [],
+      "notes": [
+        "25 of 94 compile-database entries are not C++ and were not modelled",
+        "24 of 93 C++ compile-database entries are third-party and were not parsed"
+      ]
+    },
+    "renames": {
+      "complete": true,
+      "limit_needed": null
+    },
+    "limits": [
+      "One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not implied.",
+      "Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.",
+      "Implicit special members are not visible. libclang does not expose the copy and move operations the compiler writes, so a change that adds or removes one implicitly -- adding a destructor removes the implicit move operations -- produces no change event."
+    ],
+    "uncovered": {
+      "files": [
+        {
+          "side": "base",
+          "path": "util/env_windows.cc",
+          "lines": [
+            772,
+            774,
+            790,
+            791
+          ],
+          "tokens": 20,
+          "modelled": false
+        },
+        {
+          "side": "head",
+          "path": "util/env_windows.cc",
+          "lines": [
+            772,
+            773,
+            774,
+            775,
+            776,
+            794
+          ],
+          "tokens": 50,
+          "modelled": false
+        },
+        {
+          "side": "head",
+          "path": "util/no_destructor.h",
+          "lines": [
+            8
+          ],
+          "tokens": 5,
+          "modelled": true
+        }
+      ],
+      "moved_tokens": 0,
+      "excluded_files": [],
+      "lines_in_unmodelled_files": 10,
+      "renames_complete": true
+    }
+  },
+  "third_party": [
+    {
+      "path": "third_party/benchmark",
+      "sources": [
+        "submodule"
+      ]
+    },
+    {
+      "path": "third_party/googletest",
+      "sources": [
+        "submodule"
+      ]
+    }
+  ],
+  "third_party_hints": [],
+  "entities": {
+    "c:@N@leveldb@F@Hash#*1C#l#i#": {
+      "id": "c:@N@leveldb@F@Hash#*1C#l#i#",
+      "kind": "function",
+      "name": "Hash",
+      "qualified_name": "leveldb::Hash",
+      "signature": "unsigned int (const char *, unsigned long, unsigned int)",
+      "symbol": "_ZN7leveldb4HashEPKcmj",
+      "location": {
+        "file": "util/hash.cc",
+        "line": 22,
+        "end_line": 53,
+        "column": 10,
+        "start_line": 22
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@leveldb@S@DBImpl@F@TEST_CompactMemTable#": {
+      "id": "c:@N@leveldb@S@DBImpl@F@TEST_CompactMemTable#",
+      "kind": "method",
+      "name": "TEST_CompactMemTable",
+      "qualified_name": "leveldb::DBImpl::TEST_CompactMemTable",
+      "signature": "leveldb::Status ()",
+      "symbol": "_ZN7leveldb6DBImpl20TEST_CompactMemTableEv",
+      "location": {
+        "file": "db/db_impl.cc",
+        "line": 643,
+        "end_line": 658,
+        "column": 16,
+        "start_line": 643
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@leveldb@ST>1#T@NoDestructor@FI@instance_storage_": {
+      "id": "c:@N@leveldb@ST>1#T@NoDestructor@FI@instance_storage_",
+      "kind": "field",
+      "name": "instance_storage_",
+      "qualified_name": "leveldb::NoDestructor::instance_storage_",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "util/no_destructor.h",
+        "line": 45,
+        "end_line": 45,
+        "column": 30,
+        "start_line": 45
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@leveldb@ST>1#T@NoDestructor@FT@>1#pTNoDestructor#P&&t1.0#v#": {
+      "id": "c:@N@leveldb@ST>1#T@NoDestructor@FT@>1#pTNoDestructor#P&&t1.0#v#",
+      "kind": "method",
+      "name": "NoDestructor<InstanceType>",
+      "qualified_name": "leveldb::NoDestructor::NoDestructor<InstanceType>",
+      "signature": "void (type-parameter-1-0 &&...)",
+      "symbol": null,
+      "location": {
+        "file": "util/no_destructor.h",
+        "line": 21,
+        "end_line": 33,
+        "column": 12,
+        "start_line": 20
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:env_posix.cc@N@leveldb@aN@ST>1#T@SingletonEnv@F@SingletonEnv#": {
+      "id": "c:env_posix.cc@N@leveldb@aN@ST>1#T@SingletonEnv@F@SingletonEnv#",
+      "kind": "method",
+      "name": "SingletonEnv<EnvType>",
+      "qualified_name": "leveldb::SingletonEnv::SingletonEnv<EnvType>",
+      "signature": "void ()",
+      "symbol": null,
+      "location": {
+        "file": "util/env_posix.cc",
+        "line": 871,
+        "end_line": 884,
+        "column": 3,
+        "start_line": 871
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:env_posix.cc@N@leveldb@aN@ST>1#T@SingletonEnv@FI@env_storage_": {
+      "id": "c:env_posix.cc@N@leveldb@aN@ST>1#T@SingletonEnv@FI@env_storage_",
+      "kind": "field",
+      "name": "env_storage_",
+      "qualified_name": "leveldb::SingletonEnv::env_storage_",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "util/env_posix.cc",
+        "line": 899,
+        "end_line": 899,
+        "column": 25,
+        "start_line": 899
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    }
+  },
+  "crossings": {
+    "base": [
+      {
+        "src": "c:env_posix.cc@N@leveldb@aN@ST>1#T@SingletonEnv@F@SingletonEnv#",
+        "callee": "std::atomic::store",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "util/env_posix.cc",
+            "line": 873,
+            "end_line": 873,
+            "column": 5,
+            "start_line": 873
+          }
+        ]
+      }
+    ],
+    "head": [
+      {
+        "src": "c:@N@leveldb@S@DBImpl@F@TEST_CompactMemTable#",
+        "callee": "std::atomic::load",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "db/db_impl.cc",
+            "line": 650,
+            "end_line": 650,
+            "column": 13,
+            "start_line": 650
+          }
+        ]
+      },
+      {
+        "src": "c:env_posix.cc@N@leveldb@aN@ST>1#T@SingletonEnv@F@SingletonEnv#",
+        "callee": "std::atomic::store",
+        "kind": "calls",
+        "label": "C++ standard library",
+        "locations": [
+          {
+            "file": "util/env_posix.cc",
+            "line": 873,
+            "end_line": 873,
+            "column": 5,
+            "start_line": 873
+          }
+        ]
+      }
+    ]
+  },
+  "change_events": [
+    {
+      "id": "NodeAttrChanged:19472838c1cdc0af",
+      "kind": "NodeAttrChanged",
+      "subject": "c:@N@leveldb@ST>1#T@NoDestructor@FI@instance_storage_",
+      "payload": {
+        "attr": "type",
+        "old": "typename aligned_storage<sizeof(InstanceType), alignof(InstanceType)>::type",
+        "new": "char[sizeof(InstanceType)]"
+      },
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "util/no_destructor.h",
+            "line": 41,
+            "end_line": 41,
+            "column": 62,
+            "start_line": 40
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "util/no_destructor.h",
+            "line": 45,
+            "end_line": 45,
+            "column": 30,
+            "start_line": 45
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "unpaired": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeAttrChanged:a9575d349ffb1d79",
+      "kind": "NodeAttrChanged",
+      "subject": "c:env_posix.cc@N@leveldb@aN@ST>1#T@SingletonEnv@FI@env_storage_",
+      "payload": {
+        "attr": "type",
+        "old": "typename aligned_storage<sizeof(EnvType), alignof(EnvType)>::type",
+        "new": "char[sizeof(EnvType)]"
+      },
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "util/env_posix.cc",
+            "line": 896,
+            "end_line": 896,
+            "column": 7,
+            "start_line": 895
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "util/env_posix.cc",
+            "line": 899,
+            "end_line": 899,
+            "column": 25,
+            "start_line": 899
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "unpaired": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:6a059d497aa5c534",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@leveldb@F@Hash#*1C#l#i#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "util/hash.cc",
+            "line": 22,
+            "end_line": 53,
+            "column": 10,
+            "start_line": 22
+          }
+        },
+        {
+          "side": "base",
+          "location": {
+            "file": "util/hash.h",
+            "line": 15,
+            "end_line": 15,
+            "column": 10,
+            "start_line": 15
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "util/hash.cc",
+            "line": 22,
+            "end_line": 53,
+            "column": 10,
+            "start_line": 22
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "util/hash.h",
+            "line": 15,
+            "end_line": 15,
+            "column": 10,
+            "start_line": 15
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "unpaired": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:5d865a800288d014",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@leveldb@S@DBImpl@F@TEST_CompactMemTable#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "db/db_impl.cc",
+            "line": 643,
+            "end_line": 657,
+            "column": 16,
+            "start_line": 643
+          }
+        },
+        {
+          "side": "base",
+          "location": {
+            "file": "db/db_impl.h",
+            "line": 58,
+            "end_line": 58,
+            "column": 10,
+            "start_line": 58
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "db/db_impl.cc",
+            "line": 643,
+            "end_line": 658,
+            "column": 16,
+            "start_line": 643
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "db/db_impl.h",
+            "line": 58,
+            "end_line": 58,
+            "column": 10,
+            "start_line": 58
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "unpaired": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:147544079d77f200",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@leveldb@ST>1#T@NoDestructor@FT@>1#pTNoDestructor#P&&t1.0#v#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "util/no_destructor.h",
+            "line": 20,
+            "end_line": 28,
+            "column": 12,
+            "start_line": 19
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "util/no_destructor.h",
+            "line": 21,
+            "end_line": 33,
+            "column": 12,
+            "start_line": 20
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "unpaired": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:2d999f97b5dafa7d",
+      "kind": "NodeBodyChanged",
+      "subject": "c:env_posix.cc@N@leveldb@aN@ST>1#T@SingletonEnv@F@SingletonEnv#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "util/env_posix.cc",
+            "line": 871,
+            "end_line": 880,
+            "column": 3,
+            "start_line": 871
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "util/env_posix.cc",
+            "line": 871,
+            "end_line": 884,
+            "column": 3,
+            "start_line": 871
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "unpaired": null,
+        "models_complete": true
+      }
+    }
+  ],
+  "findings": [],
+  "ranking": [
+    "NodeBodyChanged:5d865a800288d014",
+    "NodeAttrChanged:19472838c1cdc0af",
+    "NodeBodyChanged:2d999f97b5dafa7d",
+    "NodeAttrChanged:a9575d349ffb1d79",
+    "NodeBodyChanged:6a059d497aa5c534",
+    "NodeBodyChanged:147544079d77f200"
+  ],
+  "scores": {
+    "NodeBodyChanged:5d865a800288d014": {
+      "change_event_id": "NodeBodyChanged:5d865a800288d014",
+      "total": 0.6749999999999999,
+      "impact": 0.7941176470588235,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 1.0,
+          "weight": 0.35,
+          "contribution": 0.35,
+          "detail": "115 dependent(s), 31 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeAttrChanged:19472838c1cdc0af": {
+      "change_event_id": "NodeAttrChanged:19472838c1cdc0af",
+      "total": 0.5833161993561573,
+      "impact": 0.6862543521837144,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeAttrChanged(type)"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:2d999f97b5dafa7d": {
+      "change_event_id": "NodeBodyChanged:2d999f97b5dafa7d",
+      "total": 0.5392056960257954,
+      "impact": 0.6343596423832887,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.897730560073701,
+          "weight": 0.35,
+          "contribution": 0.31420569602579534,
+          "detail": "62 dependent(s), 2 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeAttrChanged:a9575d349ffb1d79": {
+      "change_event_id": "NodeAttrChanged:a9575d349ffb1d79",
+      "total": 0.5051333382565816,
+      "impact": 0.5942745155959783,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeAttrChanged(type)"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:6a059d497aa5c534": {
+      "change_event_id": "NodeBodyChanged:6a059d497aa5c534",
+      "total": 0.4660162067410297,
+      "impact": 0.5482543608717997,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.6886177335457992,
+          "weight": 0.35,
+          "contribution": 0.24101620674102972,
+          "detail": "23 dependent(s), 7 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 3,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:147544079d77f200": {
+      "change_event_id": "NodeBodyChanged:147544079d77f200",
+      "total": 0.40831619935615737,
+      "impact": 0.4803719992425381,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "public"
+    }
+  },
+  "components": [
+    {
+      "index": 0,
+      "change_events": [
+        "NodeBodyChanged:5d865a800288d014"
+      ],
+      "top_score": 0.6749999999999999
+    },
+    {
+      "index": 1,
+      "change_events": [
+        "NodeAttrChanged:19472838c1cdc0af",
+        "NodeBodyChanged:147544079d77f200"
+      ],
+      "top_score": 0.5833161993561573
+    },
+    {
+      "index": 2,
+      "change_events": [
+        "NodeBodyChanged:2d999f97b5dafa7d",
+        "NodeAttrChanged:a9575d349ffb1d79"
+      ],
+      "top_score": 0.5392056960257954
+    },
+    {
+      "index": 3,
+      "change_events": [
+        "NodeBodyChanged:6a059d497aa5c534"
+      ],
+      "top_score": 0.4660162067410297
+    }
+  ],
+  "summary": {
+    "lines_changed": 45,
+    "files_changed": 6,
+    "cpp_files_changed": 5,
+    "files_renamed": 0,
+    "changed_cpp_lines": 35,
+    "uncovered_lines": 11,
+    "uncovered_tokens": 75,
+    "change_events_reported": 6,
+    "compression": "45 lines changed -> 6 change events, 3 high-risk · 11 of 35 changed C++ lines explained by no change event",
+    "compression_ratio": 7.5,
+    "high_risk_count": 3,
+    "top_level_change_events": 6,
+    "components": 4,
+    "residue": {
+      "matched": 4179,
+      "unmatched_base": 0,
+      "unmatched_head": 0,
+      "internal_linkage_residue": 0,
+      "tiers_run": [
+        "declared",
+        "inline-namespace",
+        "name"
+      ]
+    }
+  }
+}

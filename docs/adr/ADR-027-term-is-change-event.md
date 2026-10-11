@@ -23,7 +23,7 @@ author: Brent Runyan
 
 The term is "change event". Renaming the JSON fields changes the output format, so the rename waits
 for the next output-format change, and shares one schema version with
-[PLAN-004](../plans/PLAN-004-third-party-boundary.md#2--decisions)
+[PLAN-004](https://github.com/j-brent/cpp-semantic-diff/blob/62dc064/docs/plans/PLAN-004-third-party-boundary.md#2--decisions)
 ([ADR-025](ADR-025-third-party-code-must-not-change.md)).
 
 ## Consequences

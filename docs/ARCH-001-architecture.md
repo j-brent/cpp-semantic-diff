@@ -103,7 +103,7 @@ and inspect at any boundary — which matters because most debugging here is "wh
 
 | Stage | Input | Output |
 |---|---|---|
-| **acquire** | two revs | two worktrees + compile databases + completeness record |
+| **acquire** | two revs + declared third-party paths | the third-party set (§4.5), checked unchanged + two worktrees + compile databases + completeness record |
 | **produce** | worktree + compile db | `Model` (§4) |
 | **match** | two `Model`s | `Correspondence` — bipartite matching with per-pair tier |
 | **diff** | two `Model`s + `Correspondence` | `ChangeEvent` list, deterministically ordered |
@@ -255,8 +255,53 @@ how these systems rot.
 Every `Model` carries how it was built: TUs attempted, parsed, failed (with reasons); whether a
 build was available; which producers ran; producer version; what the producer cannot see
 whatever the source (§11); and how many declarations in the repository's own files the model
-skips, counted by kind, each declaration once however many TUs saw it. This is not diagnostics — it is
-load-bearing input to §11.
+skips, counted by kind, each declaration once however many TUs saw it; and how many
+relationships lead outside the model, counted per boundary label (§4.5). This is not
+diagnostics — it is load-bearing input to §11.
+
+### 4.5 The boundary of the model
+
+The model holds the code the repository owns and contains: files git tracks at that revision,
+outside the third-party set. Everything else is outside it, the way the standard library is:
+parsed where the repository's code includes it, because that code depends on it, but never a
+node ([ADR-025](adr/ADR-025-third-party-code-must-not-change.md)).
+
+- **The third-party set** of a comparison is every git submodule (a gitlink in either revision's
+  tree) plus every directory passed as `--third-party`. A declared path that exists at neither
+  revision is refused as a probable typo. A tracked directory whose name looks like third-party
+  code (`third_party`, `vendor`, `bundled`, …) and is not in the set gets a note suggesting the
+  option. The name alone never leaves anything out.
+- **A hint names the topmost such directory**, at either revision, that is neither in, under nor
+  above a set entry. A `third_party` folder that holds only submodules gets no hint.
+- **Where entries nest**, such as a submodule inside a declared folder, a file belongs to the
+  innermost entry, the more specific name.
+- **Third-party code must not change.** Before any worktree is built, the changed files are
+  checked against the set, and a comparison where any third-party path changed is refused,
+  naming each one. A rename is checked at both ends. Analyzing third-party changes is deferred,
+  not rejected.
+- **Third-party translation units are not parsed.** Their compile-database entries are dropped,
+  and the count is stated.
+- **Untracked files are outside the model too**, such as generated headers and downloaded
+  dependencies under the build directory inside the worktree
+  ([ADR-037](adr/ADR-037-only-tracked-files-are-modelled.md)).
+- **A relationship that leads outside the model is a boundary crossing:** caller, callee
+  qualified name, kind, every site, and a label saying where it leads. The label is the
+  third-party path for third-party code; the library's name for code outside the repository,
+  read from the header's path under its include directory (`C++ standard library`,
+  `C library`, `compiler builtins`, `boost`); `untracked`; and, for a target inside the
+  repository that no node holds, what the extractor saw (`implicit` for special members clang
+  generated, `function-local`, `template instantiation`, else `unresolved`).
+- **The include directories that name a library** are the TU's `-I`, `-isystem`, `-iquote` and
+  `-idirafter` directories, the toolchain's builtin header directory, `/usr/local/include` and
+  `/usr/include`, with the multiarch subdirectory (`x86_64-linux-gnu`) skipped. None are
+  discovered from the compiler.
+- **A crossing whose caller is no node is dropped**, and still counted under its label. The
+  completeness record's `edges_total` is resolved edges plus crossings, dropped ones included.
+- **Crossings are for visualization only.** Match, diff, classify and rank never read them, and
+  a test holds that adding or removing crossings leaves the change events and the ranking
+  identical. A wrong label costs nothing beyond the picture it appears in.
+- **The per-TU cache key covers the boundary** (§9): the third-party set, and whether git
+  tracks each repository header the TU reads.
 
 ---
 
@@ -609,7 +654,10 @@ CodeAtlas TypeScript.
   meta:        { tool version, schema version, revs, timings }
   completeness:{ per-side completeness records (§4.4), standing limits (§11),
                  where the uncovered changes are }
+  third_party: [ { path, sources: submodule | declared } ]  -- §4.5
+  third_party_hints: [ directory that looks third-party ]
   entities:    { node id → node summary, for change events to reference }
+  crossings:   { base: [ Crossing ], head: [ Crossing ] }  -- out of those entities only
   change_events: [ ChangeEvent ]      -- complete, uncollapsed
   findings:    [ Finding ]            -- evidence, attached by node id
   ranking:     [ change event id ]    -- ordered
@@ -788,8 +836,8 @@ and contains. Third-party code, whether a git submodule or a library copied into
 identical at both points. A comparison where it differs is refused, not analyzed. Its headers are
 still parsed where the repository's code includes them, but its own translation units are not, and
 none of it is in the model, exactly like the standard library. Analyzing third-party changes is
-deferred, not rejected. Decided in [ADR-025](adr/ADR-025-third-party-code-must-not-change.md); not
-yet implemented ([PLAN-004](plans/PLAN-004-third-party-boundary.md)).
+deferred, not rejected. Decided in [ADR-025](adr/ADR-025-third-party-code-must-not-change.md);
+how the tool enforces it is §4.5.
 
 **v0 was redefined on 2026-10-10** as a tool whose output can be trusted on changes the repository
 controls ([ADR-030](adr/ADR-030-what-v0-is.md)). The slice above is what was built first; ADR-030

@@ -23,9 +23,10 @@ number the project publishes was taken on that one class of repository.
 
 Delete this file when the measurements are in a frozen report and #23 is closed.
 
-**Since written (2026-10-10).** [PLAN-004](PLAN-004-third-party-boundary.md) replaces the VENDORED exposure
-class with declared third-party paths and refuses a comparison where third-party code changed.
-§2's second point and §6.3 measure the class it removes; reconcile them with PLAN-004 before
+**Since written (2026-10-10).** The VENDORED exposure class is gone: third-party code is
+submodules plus paths passed as `--third-party`, is left out of the model, and a comparison where
+it changed is refused ([ARCH-001 §4.5](../ARCH-001-architecture.md#45-the-boundary-of-the-model)).
+§2's second point and §6.3 measure the class that was removed; reconcile them with §4.5 before
 running. This plan was written against `STATUS.md`, which is now the frozen v0 tracker: where it
 says to record a result there, record it in a new frozen report instead. `cppsd` still has no option to pass CMake arguments (§5).
 

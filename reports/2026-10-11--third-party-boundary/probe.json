@@ -1,0 +1,164 @@
+{
+ "fmt": {
+  "revs": "HEAD~12...HEAD  (bcaa44d05579 -> e2243a6a7f4a)",
+  "third_party": [
+   "test/gtest"
+  ],
+  "base": {
+   "nodes": 8618,
+   "nodes_under_third_party": {
+    "test/gtest": 0
+   },
+   "crossings_by_label": {
+    "C library": 180,
+    "C++ standard library": 1153,
+    "compiler builtins": 2,
+    "function-local": 119,
+    "implicit": 305,
+    "template instantiation": 443,
+    "test/gtest": 5371,
+    "unresolved": 50
+   },
+   "exposure": {
+    "test": 5918,
+    "public": 2694,
+    "internal": 6
+   },
+   "unmatched": 3,
+   "unmatched_by_dir": {
+    "test/compile-test.cc": 3
+   }
+  },
+  "head": {
+   "nodes": 8618,
+   "nodes_under_third_party": {
+    "test/gtest": 0
+   },
+   "crossings_by_label": {
+    "C library": 180,
+    "C++ standard library": 1153,
+    "compiler builtins": 2,
+    "function-local": 119,
+    "implicit": 305,
+    "template instantiation": 443,
+    "test/gtest": 5371,
+    "unresolved": 50
+   },
+   "exposure": {
+    "test": 5916,
+    "public": 2696,
+    "internal": 6
+   },
+   "unmatched": 3,
+   "unmatched_by_dir": {
+    "include/fmt": 2,
+    "test/compile-test.cc": 1
+   }
+  }
+ },
+ "spdlog": {
+  "revs": "HEAD~30...HEAD  (566b2d14043a -> 989d28dd768a)",
+  "third_party": [
+   "include/spdlog/fmt/bundled"
+  ],
+  "base": {
+   "nodes": 1034,
+   "nodes_under_third_party": {
+    "include/spdlog/fmt/bundled": 0
+   },
+   "crossings_by_label": {
+    "C library": 64,
+    "C++ standard library": 666,
+    "function-local": 19,
+    "implicit": 23,
+    "include/spdlog/fmt/bundled": 170
+   },
+   "exposure": {
+    "test": 29,
+    "internal": 289,
+    "public": 716
+   },
+   "unmatched": 2,
+   "unmatched_by_dir": {
+    "include/spdlog": 2
+   }
+  },
+  "head": {
+   "nodes": 1036,
+   "nodes_under_third_party": {
+    "include/spdlog/fmt/bundled": 0
+   },
+   "crossings_by_label": {
+    "C library": 68,
+    "C++ standard library": 666,
+    "function-local": 19,
+    "implicit": 23,
+    "include/spdlog/fmt/bundled": 167
+   },
+   "exposure": {
+    "test": 29,
+    "internal": 290,
+    "public": 717
+   },
+   "unmatched": 4,
+   "unmatched_by_dir": {
+    "include/spdlog": 4
+   }
+  }
+ },
+ "leveldb": {
+  "revs": "HEAD~9...HEAD~1  (23e35d792b91 -> 9e273a6aef69)",
+  "third_party": [
+   "third_party/benchmark",
+   "third_party/googletest"
+  ],
+  "base": {
+   "nodes": 4179,
+   "nodes_under_third_party": {
+    "third_party/benchmark": 0,
+    "third_party/googletest": 0
+   },
+   "crossings_by_label": {
+    "C library": 361,
+    "C++ standard library": 1275,
+    "compiler builtins": 1,
+    "function-local": 6,
+    "implicit": 115,
+    "template instantiation": 3,
+    "third_party/googletest": 1999,
+    "unresolved": 2
+   },
+   "exposure": {
+    "test": 2556,
+    "public": 1082,
+    "internal": 541
+   },
+   "unmatched": 0,
+   "unmatched_by_dir": {}
+  },
+  "head": {
+   "nodes": 4179,
+   "nodes_under_third_party": {
+    "third_party/benchmark": 0,
+    "third_party/googletest": 0
+   },
+   "crossings_by_label": {
+    "C library": 361,
+    "C++ standard library": 1276,
+    "compiler builtins": 1,
+    "function-local": 6,
+    "implicit": 114,
+    "template instantiation": 3,
+    "third_party/googletest": 1999,
+    "unresolved": 2
+   },
+   "exposure": {
+    "test": 2556,
+    "public": 1082,
+    "internal": 541
+   },
+   "unmatched": 0,
+   "unmatched_by_dir": {}
+  }
+ }
+}

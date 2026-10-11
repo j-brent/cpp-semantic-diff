@@ -15,9 +15,9 @@ change. Not maintained.*
 
 Two things are recorded here:
 
-- **The baseline** that [PLAN-004 §5](../../docs/plans/PLAN-004-third-party-boundary.md#5--what-done-looks-like) compares against: "first-party change events identical to a
+- **The baseline** that [PLAN-004 §5](https://github.com/j-brent/cpp-semantic-diff/blob/62dc064/docs/plans/PLAN-004-third-party-boundary.md#5--what-done-looks-like) compares against: "first-party change events identical to a
   run before this work".
-- **Step 1** of [PLAN-004 §4](../../docs/plans/PLAN-004-third-party-boundary.md#4--steps): how many nodes each label would get, and what the unresolved
+- **Step 1** of [PLAN-004 §4](https://github.com/j-brent/cpp-semantic-diff/blob/62dc064/docs/plans/PLAN-004-third-party-boundary.md#4--steps): how many nodes each label would get, and what the unresolved
   in-repository callees are.
 
 Fixture clones are the v0 tracker's, unfetched since 2026-08-01: `HEAD` is fmt `e2243a6a`,

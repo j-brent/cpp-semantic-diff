@@ -24,7 +24,7 @@ googletest and benchmark bump produced 3,660 change events in that code, 96 % of
 re-measured 2026-10-10). Recognition by folder name misses a library copied under another name.
 Recorded in `b934fc1` (known issue 7) and `4f083c1`
 ([ARCH-001 §13](../ARCH-001-architecture.md#13--v0),
-[PLAN-004 §2](../plans/PLAN-004-third-party-boundary.md#2--decisions)).
+[PLAN-004 §2](https://github.com/j-brent/cpp-semantic-diff/blob/62dc064/docs/plans/PLAN-004-third-party-boundary.md#2--decisions)).
 
 ## Decision
 
@@ -43,7 +43,7 @@ declares. Folder names are only a hint: they produce a note and never exclude an
 - A dependency bump, such as leveldb `HEAD~10`, is refused.
 - No vendored class remains in ranking or output. The output-format change is shared with
   [ADR-027](ADR-027-term-is-change-event.md).
-- Until [PLAN-004](../plans/PLAN-004-third-party-boundary.md) is built, the code still does what
+- Until [PLAN-004](https://github.com/j-brent/cpp-semantic-diff/blob/62dc064/docs/plans/PLAN-004-third-party-boundary.md) is built, the code still does what
   ADR-019 decided.
 - Analyzing third-party changes is deferred, not rejected.
 
