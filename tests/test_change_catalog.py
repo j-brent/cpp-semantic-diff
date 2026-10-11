@@ -18,11 +18,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from cpp_semantic_diff.acquire.tokens import LineHunk, TokenDelta, changed_runs
 from cpp_semantic_diff.acquire.workspace import CompileEntry
 from cpp_semantic_diff.diff import diff_models
+from cpp_semantic_diff.diff.coverage import measure_coverage
 from cpp_semantic_diff.errors import PreconditionError
 from cpp_semantic_diff.match import match_models
 from cpp_semantic_diff.model import (
@@ -120,15 +123,8 @@ class Outcome:
 
 
 def reported_not_visible(outcome: Outcome) -> list[str]:
-    """What the run says it could not see.
-
-    No run reports this yet, so this returns nothing and every case that expects it is an
-    expected failure. The report it stands for is decided: libclang does not expose the copy
-    and move operations the compiler writes, and a run is to state that limit as a number,
-    the way it states dropped edges (ARCH-001 §11). When that report exists, this function
-    reads it from `outcome`. Nothing else in the catalog changes.
-    """
-    return []
+    """What the run says it could not see: each side's `Completeness.not_visible` (ADR-029)."""
+    return [*outcome.base.completeness.not_visible, *outcome.head.completeness.not_visible]
 
 
 # -- The outcome vocabulary -------------------------------------------------------------------
@@ -655,8 +651,6 @@ CATALOG = [
         "struct S { int* p; };",
         "struct S { int* p; ~S(); };",
         not_visible("move"),
-        fails="section 3 (decided) and step 2: the run does not state that implicit special "
-        "members are not visible; when it does, make reported_not_visible() read it",
     ),
     case(
         "destructor-added",
@@ -722,6 +716,42 @@ def test_change_catalog(
     outcome = Outcome(base, head, diff_models(base, head, corr))
     unmet = [e.says for e in expect if not e.holds(outcome)]
     assert not unmet, f"expected {'; '.join(unmet)}. Got:\n{outcome.describe()}"
+
+
+def unmarked(row: Any) -> object:
+    """A catalog row without its expected-failure mark."""
+    return pytest.param(*row.values, id=row.id)
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "expect", "head_file"), [unmarked(row) for row in CATALOG]
+)
+def test_no_change_in_the_catalog_is_silent(
+    toolchain: Toolchain,
+    tmp_path: Path,
+    before: str,
+    after: str,
+    expect: tuple[Expect, ...],
+    head_file: str,
+) -> None:
+    """Whatever the model makes of a change, a change the tokens show is never reported as
+    nothing: it produces change events, or it is counted as uncovered or moved (ADR-042).
+    Every case, the expected failures included -- this is what holds while they are fixed."""
+    base = build_model(toolchain, tmp_path / "base", before, "a" * 40)
+    head = build_model(toolchain, tmp_path / "head", after, "b" * 40, file=head_file)
+    renames = {"a.cpp": head_file} if head_file != "a.cpp" else None
+    events = diff_models(base, head, match_models(base, head, renames=renames))
+    hunk = LineHunk(1, before.count("\n") + 1, 1, after.count("\n") + 1)
+    delta = TokenDelta(runs=tuple(changed_runs("a.cpp", before, head_file, after, [hunk])))
+    coverage = measure_coverage(delta, events)
+    if delta.runs:
+        assert events or coverage.uncovered_tokens or coverage.moved_tokens
+    # Every changed token is accounted for exactly once.
+    assert coverage.changed_tokens == sum(len(run.tokens) for run in delta.runs)
+    assert (
+        coverage.explained_tokens + coverage.uncovered_tokens + coverage.moved_tokens
+        == coverage.changed_tokens
+    )
 
 
 # -- The vocabulary discriminates -------------------------------------------------------------

@@ -77,6 +77,20 @@ MODELLED_KINDS: dict[ci.CursorKind, NodeKind] = {
     ci.CursorKind.FIELD_DECL: NodeKind.FIELD,
 }
 
+#: What no model this extractor builds can show, stated on every run (ADR-029). The first is
+#: libclang's limit: it does not expose the copy and move operations the compiler writes, so
+#: adding a destructor -- which removes a class's implicit move operations and turns every move
+#: into a copy -- changes nothing the model holds. The second is this extractor's own scope:
+#: a macro is not a declaration it records. Neither is worked around; a run that cannot see
+#: a change says so rather than reporting that nothing changed (ARCH-001 §11).
+LIBCLANG_LIMITS: tuple[str, ...] = (
+    "Implicit special members are not visible. libclang does not expose the copy and move "
+    "operations the compiler writes, so a change that adds or removes one implicitly -- adding "
+    "a destructor removes the implicit move operations -- produces no change event.",
+    "Macros are not modelled. A change to a macro definition produces no change event of its "
+    "own; it shows only through the declarations it changes.",
+)
+
 #: Kinds whose children are worth descending into. A function body is walked separately
 #: for calls; nothing else nests declarations that v0 models.
 CONTAINER_KINDS = frozenset(
@@ -460,11 +474,19 @@ def _location(cursor: ci.Cursor, root: Path, base: Path) -> Location | None:
     relative = _relative(cursor.location.file.name, root, base)
     if relative is None:
         return None
+    extent = cursor.extent
+    start = extent.start
+    # Only an extent that starts in the same file as the name says where the declaration's
+    # text starts. One that begins in another file -- a declaration whose first tokens come
+    # from a macro defined elsewhere -- carries that file's line number, and applied here it
+    # would widen the span over unrelated lines and count their changes as explained.
+    same_file = start.file is not None and start.file.name == cursor.location.file.name
     return Location(
         file=relative,
         line=cursor.location.line,
-        end_line=cursor.extent.end.line,
+        end_line=extent.end.line,
         column=cursor.location.column,
+        start_line=start.line if same_file else None,
     )
 
 
@@ -745,6 +767,26 @@ def _observation_rank(node: Node) -> tuple[object, ...]:
     )
 
 
+#: The fields one observation of an entity is compared on: all of them but `sites`, which is
+#: merged rather than chosen (see `merge_node`).
+_OBSERVED_FIELDS: tuple[str, ...] = tuple(name for name in Node.model_fields if name != "sites")
+
+
+def _same_observation(a: Node, b: Node) -> bool:
+    return all(getattr(a, name) == getattr(b, name) for name in _OBSERVED_FIELDS)
+
+
+def _union_sites(have: tuple[Location, ...], more: tuple[Location, ...]) -> tuple[Location, ...]:
+    """Sorted, deduplicated union; `have` itself, unchanged, when `more` adds nothing."""
+    if not more or more == have:
+        return have
+    merged = set(have)
+    merged.update(more)
+    if len(merged) == len(have):
+        return have
+    return tuple(sorted(merged, key=lambda location: location.sort_key))
+
+
 def merge_node(nodes: dict[NodeId, Node], node: Node) -> None:
     """Merge by USR. A declaration and its definition are one entity.
 
@@ -767,6 +809,14 @@ def merge_node(nodes: dict[NodeId, Node], node: Node) -> None:
     has happened -- a partial model may come from the cache, and a cache entry silently
     rewritten by the build that read it is the confidently-wrong output ARCH-001 §9 names as
     the worst failure available here.
+
+    **`sites` is the one deliberate exception to "one observation, whole".** It is the union
+    of every observation's sites, because each observation sees only the declarations its TU
+    reads -- the header's, or the source file's -- and the entity is declared in all of them.
+    It is provenance and describes no state, so a union cannot assemble a contradiction. It is
+    left out of the ranking, out of the fast path's comparison below, and out of
+    `Model.fingerprint`, so the winner and the model's content are what they would be without
+    it. A union is also order-independent, which keeps the merge commutative.
     """
     existing = nodes.get(node.id)
     if existing is None:
@@ -774,11 +824,21 @@ def merge_node(nodes: dict[NodeId, Node], node: Node) -> None:
         return
     # The overwhelmingly common case, and the reason ranking is affordable: the same header
     # declaration seen again through another include path or another TU. Many entities are seen
-    # by more than one TU, and very few of them are seen differently.
+    # by more than one TU, and very few of them are seen differently. Identical nodes have
+    # identical sites, so this one comparison settles it before any site is looked at; it runs
+    # millions of times on a real repository, and the field-by-field test below costs several
+    # times more.
     if existing == node:
         return
+    sites = _union_sites(existing.sites, node.sites)
+    if _same_observation(existing, node):
+        if sites is not existing.sites:
+            nodes[node.id] = existing.model_copy(update={"sites": sites})
+        return
     if _observation_rank(node) > _observation_rank(existing):
-        nodes[node.id] = node.model_copy(deep=True)
+        nodes[node.id] = node.model_copy(deep=True, update={"sites": sites})
+    elif sites is not existing.sites:
+        nodes[node.id] = existing.model_copy(update={"sites": sites})
 
 
 def merge_edge(
@@ -874,6 +934,10 @@ class TuExtract:
     nodes: dict[NodeId, Node] = field(default_factory=dict)
     edges: dict[str, Edge] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
+    #: Declarations this TU saw in the repository and did not model, as (file, line, column,
+    #: kind). A set, so a header seen through two include paths counts once. Reserved and not
+    #: yet filled: the cache stores it already, so filling it changes no entry format.
+    unmodelled: set[tuple[str, int, int, str]] = field(default_factory=set)
 
     @property
     def ok(self) -> bool:
@@ -992,6 +1056,7 @@ class _Extractor:
                 attrs=_attributes(cursor, kind),
                 body_hash=body_hash(cursor) if cursor.is_definition() else None,
                 location=location,
+                sites=() if location is None else (location,),
                 tu=self._defining_tu(usr, location),
             )
         )

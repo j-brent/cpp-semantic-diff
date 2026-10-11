@@ -164,6 +164,7 @@ Node
   attrs         flat, comparable key→scalar map (§4.3)
   body_hash     normalized subtree hash — formatting- and comment-insensitive
   location      file, line span   ── provenance only, never identity
+  sites         every declaration's location ── provenance
   tu            defining translation unit (identity-relevant for internal linkage)
 ```
 
@@ -174,6 +175,13 @@ later means reprocessing every cached model.
 `body_hash` is deliberately separate from `attrs`. An attribute change (`virtual` added, `const`
 dropped, access widened) is a *specific* change event with a known meaning. A body change is
 "something inside changed, look closer". Different change events, different weights, different rendering.
+
+A line span starts where the declaration's text starts, not at its name: a `template <...>`
+header or a return type on the line above is part of the declaration. `sites` holds every place
+the entity is declared or defined, such as a header declaration and the definition in a source
+file. It is the one field merged as a union across observations rather than taken from the
+observation that wins, and it is never compared or hashed. A change event points at every site,
+so an edited header declaration leads to the change event about it (§6.2).
 
 ### 4.2 Edges
 
@@ -201,7 +209,8 @@ how these systems rot.
 ### 4.4 Completeness record
 
 Every `Model` carries how it was built: TUs attempted, parsed, failed (with reasons); whether a
-build was available; which producers ran; producer version. This is not diagnostics — it is
+build was available; which producers ran; producer version; and what the producer cannot see
+whatever the source (§11). This is not diagnostics — it is
 load-bearing input to §11.
 
 ---
@@ -507,12 +516,14 @@ CodeAtlas TypeScript.
 ```
 {
   meta:        { tool version, schema version, revs, timings }
-  completeness:{ per-side completeness records (§4.4) }
+  completeness:{ per-side completeness records (§4.4), standing limits (§11),
+                 where the uncovered changes are }
   entities:    { node id → node summary, for change events to reference }
   events:      [ ChangeEvent ]        -- complete, uncollapsed
   findings:    [ Finding ]            -- evidence, attached by node id
   ranking:     [ change event id ]    -- ordered
-  summary:     { lines_changed, events_reported, compression, high_risk_count }
+  summary:     { lines_changed, events_reported, compression, high_risk_count,
+                 changed_cpp_lines, uncovered_lines }
 }
 ```
 
@@ -520,6 +531,13 @@ CodeAtlas TypeScript.
 changed → 9 change events, 2 high-risk*. If that ratio is not dramatic on real commits, the
 thesis in RESEARCH-002 is wrong, and the design should surface that in week one rather than month
 six.
+
+On its own the ratio improves when the model sees less. So the sentence also states how many of
+the changed C++ lines no change event explains: *580 lines changed → 181 change events, 2
+high-risk · 37 of 412 changed C++ lines explained by no change event*. A changed line is one
+carrying a changed token, so whitespace and comment edits do not count; it is explained when a
+change event's provenance contains it, which makes the uncovered count a lower bound
+([ADR-042](adr/ADR-042-uncovered-changes-are-tokens-on-no-event-line.md)).
 
 ---
 
@@ -542,12 +560,21 @@ The output states this beside the completeness records, and every unpaired entit
 diff added or deleted counts as having a candidate, never as having none (rule 1). The limit is
 not lifted: `-l0` is potentially quadratic on the large diffs that hit it.
 
-Two systematic limits get stated in the output itself, every time:
+Rule 2 also covers what a complete model still misses. Every run counts the changes in C++ files,
+headers included, that no change event explains (§10), so a change the model cannot see reads as
+unexplained rather than as no change.
+
+Three systematic limits get stated in the output itself, every time:
 
 - **One model is one preprocessor configuration.** Claims are conditional on the configuration
   analyzed. Variant coverage (RESEARCH-002 §3.10) is unsolved and must not be implied.
 - **Static call graphs are unsound.** Virtual dispatch, function pointers, and inlining mean a
   reachability delta is a lower bound, not a fact, and must be rendered as one.
+- **Some of the code is not visible to the model.** libclang does not expose implicit special
+  members, so a destructor that removes a class's implicit move operations changes nothing the
+  model holds; and macros are not modelled. Each model's completeness record lists these
+  (`not_visible`), and the output states them beside the other two
+  ([ADR-029](adr/ADR-029-libclang-limits-are-reported.md)).
 
 ---
 
@@ -722,10 +749,10 @@ Present tense is what exists; the rest is planned.
 ```
 cpp_semantic_diff/
   model/       IR types ✓ · JSON schema (not generated)
-  acquire/     git revisions · worktrees · compile db  ✓
+  acquire/     git revisions · worktrees · compile db · changed tokens  ✓
   produce/     toolchain ✓ · extraction ✓ · assembly ✓ · per-TU cache ✓
   match/       tiered matching (tier 1, name tier)      ✓
-  diff/        model × model → change events            ✓
+  diff/        model × model → change events · uncovered changes  ✓
   classify/    cause and cascade rules                  ✓
   evidence/    tool adapters                (post-v0)
   rank/        blast radius, scoring                     ✓

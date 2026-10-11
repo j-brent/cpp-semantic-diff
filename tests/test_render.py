@@ -38,8 +38,10 @@ from cpp_semantic_diff.acquire import (
     ThirdPartySet,
     ThirdPartySource,
 )
+from cpp_semantic_diff.acquire.tokens import ExcludedFile
 from cpp_semantic_diff.classify import classify_events
 from cpp_semantic_diff.diff import diff_models
+from cpp_semantic_diff.diff.coverage import Coverage, UncoveredFile
 from cpp_semantic_diff.match import Correspondence, match_models
 from cpp_semantic_diff.model import (
     AttrValue,
@@ -56,6 +58,7 @@ from cpp_semantic_diff.model import (
     Node,
     NodeId,
     NodeKind,
+    Side,
     TuResult,
     TuStatus,
     Unpaired,
@@ -529,6 +532,18 @@ class TestCompressionCountsWhatItClaims:
             == "2,431 lines changed -> 9 change events, 2 high-risk"
         )
 
+    def test_the_sentence_carries_the_changes_no_event_explains(self) -> None:
+        """Alone, the ratio improves when the model sees less; beside the uncovered count it
+        cannot (ADR-042)."""
+        assert compression_sentence(580, 181, 2, uncovered=(37, 412)) == (
+            "580 lines changed -> 181 change events, 2 high-risk · 37 of 412 changed C++ lines "
+            "explained by no change event"
+        )
+        assert compression_sentence(10, 0, 0, uncovered=(4, 4)).endswith(
+            "(no semantic change the model can see) · 4 of 4 changed C++ lines explained by no "
+            "change event"
+        )
+
     def test_the_ratio_does_not_straddle_two_universes(self) -> None:
         """Measured on leveldb: 52 lines changed, 3,794 events, 0.0 lines per event (commits
         `2651354` and `8046af5`, 2026-08-04).
@@ -813,6 +828,61 @@ class TestTheGraphBoundaryIsStatedNumerically:
         out = draw(doc)
         for limit in SYSTEMATIC_LIMITS:
             assert limit.split(".")[0] in out
+
+    def test_what_the_producer_cannot_see_is_stated_once_beside_the_limits(self) -> None:
+        """ADR-029: a limit of the producer is stated on every run, the way §11's two are --
+        once, though both sides state it."""
+        unseen = ["Implicit special members are not visible.", "Macros are not modelled."]
+        doc = self._doc(Completeness(not_visible=unseen), Completeness(not_visible=unseen))
+        assert doc.completeness.limits == [*SYSTEMATIC_LIMITS, *unseen]
+        out = draw(doc)
+        assert out.count("Implicit special members are not visible") == 1
+
+    def test_uncovered_changes_are_stated_and_survive_the_json_round_trip(self) -> None:
+        f = node("c:@F@f#", name="f")
+        parsed = Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)])
+        base, head = model("a", f, completeness=parsed), model("b", f, completeness=parsed)
+        coverage = Coverage(
+            changed_lines=6,
+            uncovered_lines=2,
+            uncovered_tokens=9,
+            moved_tokens=16,
+            files=(UncoveredFile(Side.HEAD, "orphan.h", (3, 4), 9),),
+            excluded_files=(ExcludedFile("blob.h", "binary"),),
+            renames_complete=False,
+        )
+        doc = build_document(
+            repo="fixture",
+            revs=REVS,
+            base=base,
+            head=head,
+            correspondence=match_models(base, head),
+            events=[],
+            ranking=rank_events([], base, head),
+            lines_changed=10,
+            files_changed=2,
+            cpp_files_changed=2,
+            coverage=coverage,
+        )
+        again = DiffDocument.from_json(doc.to_json())
+        assert (again.summary.uncovered_lines, again.summary.changed_cpp_lines) == (2, 6)
+        assert again.completeness.uncovered is not None
+        assert again.completeness.uncovered.files[0].lines == [3, 4]
+        assert not again.completeness.degraded, "a standing measure, not a failure"
+        out = draw(again)
+        assert "2 of 6 changed C++ lines explained by no change event" in out
+        assert "orphan.h: 9 token(s) on 2 line(s)" in out
+        assert "16 token(s) moved unchanged" in out
+        assert "not compared: blob.h (binary)" in out
+        assert "skipped inexact rename detection for this count" in out
+        assert not again.completeness.uncovered.renames_complete
+
+    def test_unmeasured_coverage_is_none_not_zero(self) -> None:
+        """Zero would claim every change was explained."""
+        doc = self._doc(Completeness(), Completeness())
+        assert doc.summary.uncovered_lines is None
+        assert doc.completeness.uncovered is None
+        assert "explained by no change event" not in draw(doc)
 
     def test_a_clean_model_does_not_claim_to_be_incomplete(self) -> None:
         doc = self._doc(

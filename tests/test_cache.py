@@ -515,6 +515,26 @@ class TestStorage:
         _, cache = build(checkout, toolchain, tmp_path)
         assert cache.stats.hits == 0
 
+    def test_an_entry_missing_a_field_is_a_miss_not_a_partial(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Another build can write the same format number with less in it. A field with a
+        default must not be filled in on read: an entry without `sites` would load as a
+        partial claiming none, a stale hit."""
+        checkout = project(tmp_path / "w", SHARED, ("a.cpp",))
+        build(checkout, toolchain, tmp_path)
+
+        entry = next(store(tmp_path).rglob("*.json.gz"))
+        payload = json.loads(gzip.decompress(entry.read_bytes()))
+        for raw in payload["nodes"]:
+            del raw["sites"]
+        entry.write_bytes(gzip.compress(json.dumps(payload).encode()))
+
+        with pytest.raises(ValueError, match="sites"):
+            loads(entry.read_bytes())
+        _, cache = build(checkout, toolchain, tmp_path)
+        assert cache.stats.hits == 0
+
     def test_entries_for_one_tu_are_bounded(self, tmp_path: Path, toolchain: Toolchain) -> None:
         """A cache that grows once per edit of one file fills a disk during a rebase.
         Bounded, but not at one: base and head are two live generations of most TUs."""
@@ -539,6 +559,8 @@ class TestStorage:
     ) -> None:
         checkout = project(tmp_path / "w", SHARED, ("b.cpp",))
         parsed = extract(checkout.cpp_entries[0], root=checkout.path, toolchain=toolchain)
+        assert any(n.sites for n in parsed.nodes.values())
+        parsed.unmodelled.add(("lib.h", 3, 1, "enum"))
         assert _partial_dump(loads(dumps(parsed))) == _partial_dump(parsed)
 
 
@@ -915,6 +937,7 @@ def _partial_dump(partial: TuExtract) -> dict[str, object]:
         "nodes": sorted(n.model_dump_json() for n in partial.nodes.values()),
         "edges": sorted(e.model_dump_json() for e in partial.edges.values()),
         "aliases": partial.aliases,
+        "unmodelled": sorted(partial.unmodelled),
     }
 
 

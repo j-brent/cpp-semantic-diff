@@ -761,6 +761,14 @@ class TestProvenanceRunsBothWays:
         event = only(diff(base, model("b")), ChangeEventKind.NODE_REMOVED)
         assert [(h.side, h.location.file) for h in event.provenance] == [(Side.BASE, "a.h")]
 
+    def test_every_declaration_site_of_a_node_is_a_hunk(self) -> None:
+        """A function declared in a header and defined in a source file was editable in
+        both; the header line must point back at the event too, location first."""
+        decl, defn = Location(file="a.h", line=3), Location(file="a.cpp", line=10)
+        base = model("a", node(F, location=defn, sites=(defn, decl)))
+        event = only(diff(base, model("b")), ChangeEventKind.NODE_REMOVED)
+        assert [h.location for h in event.provenance] == [defn, decl]
+
     def test_every_call_site_of_an_edge_is_a_hunk(self) -> None:
         """A function calling another twice is one edge with two locations (§4.2). Both
         lines must point back at the event, or the reverse index has a hole."""

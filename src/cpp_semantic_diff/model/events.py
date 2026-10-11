@@ -222,7 +222,7 @@ class Hunk(BaseModel):
 
     def contains(self, line: int) -> bool:
         end = self.location.end_line or self.location.line
-        return self.location.line <= line <= end
+        return self.location.first_line <= line <= end
 
 
 class Confidence(BaseModel):

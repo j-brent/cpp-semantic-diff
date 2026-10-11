@@ -36,6 +36,7 @@ from cpp_semantic_diff.acquire import (
     resolve_revs,
     third_party_set,
 )
+from cpp_semantic_diff.acquire.tokens import is_cpp
 from cpp_semantic_diff.acquire.workspace import checkout
 from cpp_semantic_diff.errors import (
     EmptyComparisonError,
@@ -44,10 +45,6 @@ from cpp_semantic_diff.errors import (
     SemanticDiffError,
 )
 from cpp_semantic_diff.render import DEFAULT_LIMIT
-
-#: Suffixes counted as C++ for the summary's `cpp_files_changed`. A reporting figure only --
-#: what is actually modelled is whatever the compile database lists (`Checkout.cpp_entries`).
-CPP_SUFFIXES = frozenset({".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp", ".hh", ".hxx", ".inl"})
 
 app = typer.Typer(
     name="cppsd",
@@ -291,7 +288,7 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     changes = file_changes(repo, revs)
     files = changes.paths
     lines = diff_line_count(repo, revs)
-    cpp = [f for f in files if Path(f).suffix.lower() in CPP_SUFFIXES]
+    cpp = [f for f in files if is_cpp(f)]
 
     table = Table(show_header=False, box=None, pad_edge=False)
     table.add_column(style="dim")
@@ -400,8 +397,10 @@ def diff(
     of it. The two are the same document: `--json` changes which consumer runs, never what
     was analyzed.
     """
+    from cpp_semantic_diff.acquire.tokens import token_delta
     from cpp_semantic_diff.classify import classify_events
     from cpp_semantic_diff.diff import diff_models
+    from cpp_semantic_diff.diff.coverage import measure_coverage
     from cpp_semantic_diff.match import match_models
     from cpp_semantic_diff.produce import build_model, load
     from cpp_semantic_diff.rank import rank_events
@@ -494,6 +493,13 @@ def diff(
     timings.classify = time.perf_counter() - t
 
     t = time.perf_counter()
+    # Over the final change events, so it measures what the reviewer is given (ADR-042).
+    # The text diff is read here rather than with `file_changes` so that its cost is timed
+    # with the measurement it serves.
+    coverage = measure_coverage(token_delta(repo, revs), events)
+    timings.coverage = time.perf_counter() - t
+
+    t = time.perf_counter()
     ranking = rank_events(events, base_model, head_model)
     timings.rank = time.perf_counter() - t
     timings.total = time.perf_counter() - started
@@ -508,11 +514,12 @@ def diff(
         ranking=ranking,
         lines_changed=lines,
         files_changed=len(files),
-        cpp_files_changed=sum(1 for f in files if Path(f).suffix.lower() in CPP_SUFFIXES),
+        cpp_files_changed=sum(1 for f in files if is_cpp(f)),
         files_renamed=len(changes.renames),
         rename_limit=changes.rename_limit,
         third_party=third_party_paths,
         timings=timings,
+        coverage=coverage,
     )
 
     if out is not None:

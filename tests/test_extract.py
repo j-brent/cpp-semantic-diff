@@ -321,9 +321,35 @@ class TestMergingObservationsOfOneEntity:
         merged = self.merged(partials)
         for node_id, node in merged.items():
             seen = [p.nodes[node_id] for p in partials if node_id in p.nodes]
-            assert any(node == observation for observation in seen), (
-                f"{node.qualified_name} matches no translation unit's view of it"
-            )
+            # `sites` is excluded: it is the one field merged as a union (`merge_node`).
+            assert any(
+                node.model_dump(exclude={"sites"}) == observation.model_dump(exclude={"sites"})
+                for observation in seen
+            ), f"{node.qualified_name} matches no translation unit's view of it"
+
+    def test_every_declaration_site_survives_the_merge(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """The header declaration and the source definition are both places a reviewer may
+        have edited, so the merged entity points at both -- whichever TU saw which."""
+        merged = self.merged(self.observations(tmp_path, toolchain))
+        size = next(n for n in merged.values() if n.qualified_name == "app::S::size")
+        assert [(s.file, s.line) for s in size.sites] == [("b.cpp", 2), ("lib.h", 2)]
+
+    def test_sites_do_not_decide_which_observation_wins(self) -> None:
+        """Provenance is not state: a node seen at more places is not a better-informed one,
+        and the merge must not depend on the order the sites arrived in."""
+        here, there = Location(file="a.h", line=1), Location(file="b.cpp", line=9)
+        plain = Node(id=NodeId("c:@F@f#"), kind=NodeKind.FUNCTION, name="f", qualified_name="f")
+        defined = plain.model_copy(update={"body_hash": "h", "location": there, "sites": (there,)})
+        declared = plain.model_copy(update={"location": here, "sites": (here,)})
+        for order in ((declared, defined), (defined, declared)):
+            nodes: dict[NodeId, Node] = {}
+            for observation in order:
+                merge_node(nodes, observation)
+            assert nodes[plain.id].body_hash == "h"
+            assert nodes[plain.id].location == there
+            assert nodes[plain.id].sites == (here, there)
 
     def test_the_definition_still_wins(self, tmp_path: Path, toolchain: Toolchain) -> None:
         """The rule that was already there, restated because the merge changed underneath
@@ -332,6 +358,33 @@ class TestMergingObservationsOfOneEntity:
         size = next(n for n in merged.values() if n.qualified_name == "app::S::size")
         assert size.body_hash is not None
         assert size.location is not None and size.location.file == "b.cpp"
+
+
+class TestDeclarationSpans:
+    def test_a_span_starts_at_the_template_header(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """A changed template parameter list is on the line above the name; the span must
+        reach it, or that edit points at no event."""
+        result = run(
+            tmp_path, toolchain, {"a.cpp": "template <class T>\nT twice(T t) { return t + t; }\n"}
+        )
+        location = named(result, "twice").location
+        assert location is not None
+        assert (location.start_line, location.line, location.end_line) == (1, 2, 2)
+
+    def test_an_extent_starting_in_another_file_is_not_used(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """Its line number belongs to that other file; taken here it would widen the span
+        over unrelated lines and count their changes as explained."""
+        sources = {
+            "ret.h": "\n\n\n\n\n\n\n\nint\n",
+            "a.cpp": '#include "ret.h"\nf();\n',
+        }
+        location = named(run(tmp_path, toolchain, sources), "f").location
+        assert location is not None
+        assert (location.file, location.line, location.start_line) == ("a.cpp", 2, None)
 
 
 class TestMergingObservationsOfOneEdge:
