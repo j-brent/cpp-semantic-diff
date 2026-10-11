@@ -1,4 +1,4 @@
-"""The third-party set -- ADR-025.
+"""The third-party set, and the refusal when it changed -- ADR-025.
 
 Every test builds a real repository: the set is read from git's own answers (`.gitmodules`
 blobs, `ls-tree`), and a hand-built tree would test the parser against itself.
@@ -6,15 +6,19 @@ blobs, `ls-tree`), and a hand-built tree would test the parser against itself.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
-from conftest import commit, git
+from conftest import commit, git, move
 from cpp_semantic_diff.acquire import (
     ThirdPartyEntry,
     ThirdPartySet,
     ThirdPartySource,
+    changed_third_party,
+    file_changes,
+    refuse_changed_third_party,
     resolve_revs,
     third_party_set,
 )
@@ -25,7 +29,13 @@ from cpp_semantic_diff.acquire.third_party import (
     normalize_declared,
     submodule_paths,
 )
-from cpp_semantic_diff.errors import ExitCode, InvalidSettingError, ThirdPartyPathError
+from cpp_semantic_diff.errors import (
+    ExitCode,
+    InvalidSettingError,
+    PreconditionError,
+    ThirdPartyChangedError,
+    ThirdPartyPathError,
+)
 from cpp_semantic_diff.rank.exposure import VENDOR_SEGMENTS
 
 SUBMODULE = frozenset({ThirdPartySource.SUBMODULE})
@@ -332,3 +342,114 @@ class TestLabelFor:
         assert tp.label_for("vendor/zlib/zlib.h") == "vendor/zlib"
         assert tp.label_for("vendors/a.h") is None
         assert tp.label_for("src/a.cpp") is None
+
+
+def bump_submodule(repo: Path, inner: Path, path: str) -> str:
+    """Move the gitlink at `path` to a new commit of `inner`, as a dependency bump does.
+
+    Written to the index directly: the bump is the gitlink's new SHA, and fetching it into
+    the submodule's checkout would add a transport the test does not need.
+    """
+    sha = commit(inner, "lib.h", "int lib(int);\n", "lib moves")
+    git(repo, "update-index", "--cacheinfo", f"160000,{sha},{path}")
+    git(repo, "commit", "-q", "-m", f"bump {path}")
+    return sha
+
+
+def changed(repo: Path, declared: Sequence[str] = ()) -> tuple[str, ...]:
+    """What the refusal would name for the branch checked out in `repo`."""
+    revs = resolve_revs(repo)
+    return changed_third_party(third_party_set(repo, revs, declared), file_changes(repo, revs))
+
+
+class TestRefusal:
+    """Third-party code must be identical at both points (ADR-025)."""
+
+    def test_a_submodule_bump_is_refused(self, bare_repo: Path, inner: Path) -> None:
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        add_submodule(bare_repo, inner, "third_party/lib")
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        bump_submodule(bare_repo, inner, "third_party/lib")
+
+        assert changed(bare_repo) == ("third_party/lib",)
+
+    def test_a_submodule_added_on_the_branch_is_refused(self, bare_repo: Path, inner: Path) -> None:
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        add_submodule(bare_repo, inner, "dep")
+
+        assert changed(bare_repo) == ("dep",)
+
+    def test_a_submodule_removed_on_the_branch_is_refused(
+        self, bare_repo: Path, inner: Path
+    ) -> None:
+        """The set holds the base's submodules too, so a removal is a change to one."""
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        add_submodule(bare_repo, inner, "dep")
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        git(bare_repo, "rm", "-q", "dep")
+        git(bare_repo, "commit", "-q", "-m", "drop dep")
+
+        assert changed(bare_repo) == ("dep",)
+
+    def test_a_change_inside_a_declared_path_is_refused(self, copied_repo: Path) -> None:
+        commit(copied_repo, "test/gtest/gmock/gmock.h", "// gmock 2\n", "gmock moves")
+        assert changed(copied_repo, ["test/gtest"]) == ("test/gtest",)
+
+    def test_a_change_next_to_a_declared_path_is_not_refused(self, copied_repo: Path) -> None:
+        """A sibling whose name shares the prefix is the repository's own code."""
+        commit(copied_repo, "test/gtest_main.cc", "int main() {}\n", "beside gtest")
+        commit(copied_repo, "test/a_test.cc", "// test\n", "a test")
+        assert changed(copied_repo, ["test/gtest"]) == ()
+
+    def test_a_change_inside_an_undeclared_lookalike_is_not_refused(
+        self, copied_repo: Path
+    ) -> None:
+        """A folder name is a hint, never a rule, so it refuses nothing either."""
+        commit(copied_repo, "test/gtest/gtest.h", "// gtest 2\n", "gtest moves")
+        assert changed(copied_repo) == ()
+
+    @pytest.mark.parametrize(
+        ("source", "target"),
+        [("test/gtest/gtest.h", "src/gtest.h"), ("extern/zlib/zlib.h", "test/gtest/zlib.h")],
+        ids=["out-of", "into"],
+    )
+    def test_a_rename_across_the_boundary_is_refused(
+        self, copied_repo: Path, source: str, target: str
+    ) -> None:
+        """Checked at both ends: either way, the third-party directory's contents changed."""
+        move(copied_repo, source, target, "move")
+        changes = file_changes(copied_repo, resolve_revs(copied_repo))
+        assert changes.renames, "the fixture must produce a rename"
+
+        assert changed(copied_repo, ["test/gtest"]) == ("test/gtest",)
+
+    def test_every_changed_entry_is_named_once(self, copied_repo: Path, inner: Path) -> None:
+        """leveldb `HEAD~10` bumps two dependencies at once; one run names both."""
+        git(copied_repo, "checkout", "-q", "main")
+        add_submodule(copied_repo, inner, "third_party/lib")
+        git(copied_repo, "checkout", "-q", "-b", "both")
+        commit(copied_repo, "extern/zlib/zlib.h", "// zlib 2\n", "zlib moves")
+        commit(copied_repo, "extern/zlib/zconf.h", "// zconf\n", "zlib grows")
+        bump_submodule(copied_repo, inner, "third_party/lib")
+
+        revs = resolve_revs(copied_repo)
+        tp = third_party_set(copied_repo, revs, ["extern/zlib", "test/gtest"])
+        with pytest.raises(ThirdPartyChangedError) as caught:
+            refuse_changed_third_party(tp, file_changes(copied_repo, revs))
+
+        assert caught.value.paths == ("extern/zlib", "third_party/lib")
+        message = str(caught.value)
+        assert "extern/zlib, third_party/lib." in message
+        assert "does not analyze changes to third-party code" in message
+
+    def test_an_unchanged_set_passes(self, copied_repo: Path) -> None:
+        revs = resolve_revs(copied_repo)
+        tp = third_party_set(copied_repo, revs, ["test/gtest", "extern/zlib"])
+        refuse_changed_third_party(tp, file_changes(copied_repo, revs))
+
+    def test_the_refusal_is_a_repository_precondition(self) -> None:
+        """Nothing on the command line fixes it: these revisions cannot be compared, exit 3."""
+        assert issubclass(ThirdPartyChangedError, PreconditionError)
+        assert not issubclass(ThirdPartyChangedError, InvalidSettingError)
+        assert ThirdPartyChangedError.exit_code is ExitCode.REPOSITORY

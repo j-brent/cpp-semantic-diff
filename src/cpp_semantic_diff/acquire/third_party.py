@@ -15,7 +15,8 @@ a typo would silently leave a library in the model.
 copied under any other name (ADR-025, "Alternatives rejected").
 
 The set is computed once per comparison, after the revisions are resolved and before any
-worktree exists, so a refusal costs no checkout.
+worktree exists, so a refusal costs no checkout. So is the check that none of it changed
+between the two points: v0 refuses a comparison across a dependency change.
 """
 
 from __future__ import annotations
@@ -25,8 +26,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
-from cpp_semantic_diff.acquire.git import RevPair, run_git, run_git_z
-from cpp_semantic_diff.errors import ThirdPartyPathError
+from cpp_semantic_diff.acquire.git import FileChanges, RevPair, run_git, run_git_z
+from cpp_semantic_diff.errors import ThirdPartyChangedError, ThirdPartyPathError
 from cpp_semantic_diff.rank.exposure import VENDOR_SEGMENTS
 
 #: Directory names that suggest a dependency. `VENDOR_SEGMENTS` is still what ranking reads
@@ -259,3 +260,29 @@ def third_party_set(repo: Path, revs: RevPair, declared: Sequence[str] = ()) -> 
         entries=entries,
         hints=folder_hints(directories, [e.path for e in entries]),
     )
+
+
+def changed_third_party(third_party: ThirdPartySet, changes: FileChanges) -> tuple[str, ...]:
+    """The set entries that `changes` touches, sorted.
+
+    A copied library shows its own changed files. A submodule bump is a modified gitlink at
+    the submodule's path, which `label_for` matches like a file inside it; adding or removing
+    a submodule is the same, as the set holds submodules from both revisions. A rename is
+    checked at both ends, so a file moved into or out of a third-party directory counts.
+    """
+    hit: set[str] = set()
+    for change in changes.changes:
+        for path in (change.path, change.old_path):
+            if path is not None and (label := third_party.label_for(path)) is not None:
+                hit.add(label)
+    return tuple(sorted(hit))
+
+
+def refuse_changed_third_party(third_party: ThirdPartySet, changes: FileChanges) -> None:
+    """Refuse the comparison if any third-party code changed between the two points.
+
+    ADR-025: third-party code must be identical at both points. Every changed entry is
+    named, so one run tells the user the whole of what blocks it.
+    """
+    if changed := changed_third_party(third_party, changes):
+        raise ThirdPartyChangedError(changed)

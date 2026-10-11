@@ -190,6 +190,9 @@ Each step is one commit, and the suite passes after each one.
 3. **The refusal.** The new precondition error, checked before checkout. Tests: a submodule bump
    is refused; a change inside a declared path is refused; a change next to a declared path is
    not.
+   **Built** as `ThirdPartyChangedError` (exit 3), checked in `cppsd diff` right after
+   `file_changes`. A rename is checked at both ends. leveldb `HEAD~10` is refused, naming both
+   submodules.
 4. **Extraction boundary and crossings.** Prune, skip third-party TUs, record crossings, assign
    `implicit`, add the set to the cache key. Tests: a fixture with a declared library yields no
    nodes from it and labeled crossings into it; changing the set invalidates the cache.
