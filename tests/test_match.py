@@ -396,6 +396,48 @@ class TestTheNameTierPairsOnlyWhatItCanTell:
         head = model("b", node("c:@FT@>1#Tf#t0.0#v#", attrs={"template_parameters": "<class>"}))
         assert len(match_models(base, head).matches) == 1
 
+    def test_a_same_named_method_does_not_pair_across_two_different_paired_parents(
+        self,
+    ) -> None:
+        """ADR-036: "this tier never reports a `NodeMoved`." Classes `C` and `D` are each
+        paired with themselves at tier 1. `C` loses a method named `m`; `D`, a wholly
+        unrelated class, gains an unrelated method also named `m`. The qualified name
+        alone cannot tell them apart -- it is identical on both sides on purpose, as it
+        would be for two same-named methods of two differently-named-but-printed-alike
+        scopes -- so the parent is what has to keep this from reading as `m` moving from
+        `C` to `D` with a changed signature. Removing `parent` from the key, reasoning
+        that the qualified name already carries scope, would pass every other test in
+        this class while silently reporting a move no tier is supposed to make."""
+        cls_c = node("c:@S@C", name="C", kind=NodeKind.STRUCT)
+        cls_d = node("c:@S@D", name="D", kind=NodeKind.STRUCT)
+        removed = node("c:@S@C@F@m#", name="m", kind=NodeKind.METHOD)
+        added = node("c:@S@D@F@m#I#", name="m", kind=NodeKind.METHOD)
+        base = self.contained("a", cls_c, removed)
+        base.add_node(cls_d)
+        head = self.contained("b", cls_d, added)
+        head.add_node(cls_c)
+        c = match_models(base, head)
+        # `C` and `D` pair with themselves at tier 1, same id both sides; `m` does not
+        # pair with anything.
+        assert pairs(c) == {(cls_c.id, cls_c.id), (cls_d.id, cls_d.id)}
+        # Not even counted as a candidate move: the two sit under different paired
+        # parents, which the slot test in `unpaired.unpaired_reasons` also keys on.
+        assert c.unpaired_base[removed.id] is Unpaired.NONE
+        assert c.unpaired_head[added.id] is Unpaired.NONE
+
+    def test_an_asymmetric_three_to_two_group_leaves_every_member_ambiguous(self) -> None:
+        """ADR-036: "there is no tie-break" -- for any mismatched shape, not only the
+        simplest 2-old/2-new case the rest of this file pins. A shortcut that tie-breaks
+        whenever the two sides are merely unequal, instead of refusing outright, would
+        still pass a 2:1 or 1:2 check; this needs a genuine N:M with N, M both over 1."""
+        base = model("a", node("c:@F@f#I#"), node("c:@F@f#d#"), node("c:@F@f#l#"))
+        head = model("b", node("c:@F@f#c#"), node("c:@F@f#f#"))
+        c = match_models(base, head)
+        assert not c.matches
+        assert (
+            set(c.unpaired_base.values()) == set(c.unpaired_head.values()) == {Unpaired.AMBIGUOUS}
+        )
+
 
 class TestInternalLinkage:
     """ARCH-001 §5's sharpest hazard for tier 1.
