@@ -60,6 +60,13 @@ to skip anything without one.
   reports nothing.
 - `static-assert-removed` and `static-assert-one-of-two-removed` pass; `static-assert-shifted`
   still reports nothing.
+- **It costs parse time.** Measured 2026-10-11 on fmt `HEAD~12..HEAD`, cold, 8 workers, on a
+  shared host: the whole of issue #9 took a model's produce time from 32 s to 48 s on average
+  (+49 %, 6 alternating runs each against `dev`). Earlier runs put about 19 % on enums, aliases
+  and variables and about 25 % on macros. leveldb `HEAD~9..HEAD~1` showed no clear rise. fmt gains
+  1,407 macros and 583 static assertions.
+- A `static_assert` written by a macro, such as googletest's `TEST`, is a node located at the
+  macro's use. leveldb has 216 static assertion nodes, nearly all in its test files.
 - A changed macro is reported without the code that uses it; that is the uses relationship, out of
   v0 ([ADR-041](ADR-041-v0-scope-of-steps-6-and-7.md)).
 - One model is one preprocessor configuration (ARCH-001 §11). A macro defined differently on two
