@@ -164,6 +164,7 @@ Node
   attrs         flat, comparable key→scalar map (§4.3)
   body_hash     normalized subtree hash — formatting- and comment-insensitive
   location      file, line span   ── provenance only, never identity
+  sites         every declaration's location ── provenance
   tu            defining translation unit (identity-relevant for internal linkage)
 ```
 
@@ -174,6 +175,13 @@ later means reprocessing every cached model.
 `body_hash` is deliberately separate from `attrs`. An attribute change (`virtual` added, `const`
 dropped, access widened) is a *specific* change event with a known meaning. A body change is
 "something inside changed, look closer". Different change events, different weights, different rendering.
+
+A line span starts where the declaration's text starts, not at its name: a `template <...>`
+header or a return type on the line above is part of the declaration. `sites` holds every place
+the entity is declared or defined, such as a header declaration and the definition in a source
+file. It is the one field merged as a union across observations rather than taken from the
+observation that wins, and it is never compared or hashed. A change event points at every site,
+so an edited header declaration leads to the change event about it (§6.2).
 
 ### 4.2 Edges
 

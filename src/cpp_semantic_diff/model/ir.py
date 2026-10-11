@@ -110,9 +110,26 @@ class Location(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     file: str = Field(description="Repository-relative, forward slashes.")
-    line: int
+    line: int = Field(description="Where the entity's name is, or the site itself for an edge.")
     end_line: int | None = None
     column: int | None = None
+    start_line: int | None = Field(
+        default=None,
+        description="Where the declaration's text begins, when that is before `line`: a "
+        "`template <...>` header, an attribute, a return type on the line above the name. "
+        "A change on those lines is a change to this declaration, and a span that started "
+        "at the name would point nowhere for it.",
+    )
+
+    @property
+    def first_line(self) -> int:
+        """The first line of the span: `start_line` where it is known and earlier."""
+        return min(self.line, self.start_line) if self.start_line is not None else self.line
+
+    @property
+    def sort_key(self) -> tuple[str, int, int, int, int]:
+        """A total order over locations, so a set of them can be stored in one order."""
+        return (self.file, self.first_line, self.line, self.end_line or 0, self.column or 0)
 
     @field_validator("file")
     @classmethod
@@ -152,6 +169,16 @@ class Node(BaseModel):
     )
 
     location: Location | None = None
+    sites: tuple[Location, ...] = Field(
+        default=(),
+        description="Every place this entity is declared or defined -- a header declaration "
+        "and the definition in a source file, each redeclaration -- sorted and deduplicated. "
+        "Provenance only, like `location`, which is one of them. **The one field merged as a "
+        "union** rather than taken from the observation that wins (`extract.merge_node`): a "
+        "change event about the entity has to point at every line that declares it, or a "
+        "reviewer cannot get from an edited declaration in a header to the event it caused "
+        "(ARCH-001 §6.2). Never compared, ranked or hashed.",
+    )
     tu: str | None = Field(
         default=None,
         description="Defining translation unit. Identity-relevant for internal linkage, "

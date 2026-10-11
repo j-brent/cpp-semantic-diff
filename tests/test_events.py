@@ -414,6 +414,14 @@ class TestProvenanceRunsBothWays:
         assert events_at([e], Side.BASE, "a.cpp", 4) == [e]
         assert events_at([e], Side.BASE, "a.cpp", 5) == []
 
+    def test_a_span_begins_where_the_declaration_text_does(self) -> None:
+        """A `template <...>` header or a return type above the name is part of the
+        declaration: an edit there must find the event about it."""
+        at = Location(file="a.h", line=5, end_line=7, start_line=4)
+        e = event(provenance=[Hunk(side=Side.HEAD, location=at)])
+        assert events_at([e], Side.HEAD, "a.h", 4) == [e]
+        assert events_at([e], Side.HEAD, "a.h", 3) == []
+
     def test_the_two_sides_are_not_confused(self) -> None:
         """A removal's lines exist only in base; asking head must not find them."""
         removed = self._spanning(10, 20, side=Side.BASE)

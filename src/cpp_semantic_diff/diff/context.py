@@ -97,9 +97,21 @@ def node_hunks(*sides: tuple[Side, Node]) -> list[Hunk]:
 
     `Location` is provenance and never identity (§4.1) -- a node that only moved file
     produces no event at all -- but it is precisely what a reviewer needs to get from an
-    event to the lines, so an event about two sides carries a hunk for each.
+    event to the lines, so an event about two sides carries hunks for each.
+
+    One hunk per site, not only the winning location. A function declared in a header and
+    defined in a source file is one entity with two places a reviewer may have edited; with the
+    location alone, a changed declaration in the header points at no event, and the reverse
+    direction of §6.2 is broken exactly where interfaces change. The location comes first, so
+    the hunk a view reads first is the one it always was.
     """
-    return [Hunk(side=side, location=n.location) for side, n in sides if n.location is not None]
+    return [
+        Hunk(side=side, location=location)
+        for side, n in sides
+        for location in dict.fromkeys(
+            (*((n.location,) if n.location is not None else ()), *n.sites)
+        )
+    ]
 
 
 def edge_hunks(*sides: tuple[Side, Edge]) -> list[Hunk]:

@@ -101,7 +101,9 @@ from cpp_semantic_diff.produce.toolchain import (
 #: existing entry unreachable, which is the only safe response to a change in what is
 #: stored or in what the key covers: an entry written under the old recipe cannot be known
 #: to be valid under the new one.
-ENTRY_FORMAT = 1
+#:
+#: 2: `Location.start_line`, `Node.sites` and `TuExtract.unmodelled` are stored.
+ENTRY_FORMAT = 2
 
 
 @functools.cache
@@ -392,6 +394,7 @@ def dumps(partial: TuExtract) -> bytes:
         "nodes": [n.model_dump(mode="json") for n in partial.nodes.values()],
         "edges": [e.model_dump(mode="json") for e in partial.edges.values()],
         "aliases": partial.aliases,
+        "unmodelled": sorted(partial.unmodelled),
     }
     return gzip.compress(json.dumps(payload).encode(), compresslevel=1)
 
@@ -421,6 +424,10 @@ def loads(blob: bytes) -> TuExtract:
         nodes=nodes,
         edges=edges,
         aliases=dict(payload["aliases"]),
+        unmodelled={
+            (str(file), int(line), int(column), str(kind))
+            for file, line, column, kind in payload["unmodelled"]
+        },
     )
 
 

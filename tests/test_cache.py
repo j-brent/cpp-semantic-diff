@@ -539,6 +539,8 @@ class TestStorage:
     ) -> None:
         checkout = project(tmp_path / "w", SHARED, ("b.cpp",))
         parsed = extract(checkout.cpp_entries[0], root=checkout.path, toolchain=toolchain)
+        assert any(n.sites for n in parsed.nodes.values())
+        parsed.unmodelled.add(("lib.h", 3, 1, "enum"))
         assert _partial_dump(loads(dumps(parsed))) == _partial_dump(parsed)
 
 
@@ -915,6 +917,7 @@ def _partial_dump(partial: TuExtract) -> dict[str, object]:
         "nodes": sorted(n.model_dump_json() for n in partial.nodes.values()),
         "edges": sorted(e.model_dump_json() for e in partial.edges.values()),
         "aliases": partial.aliases,
+        "unmodelled": sorted(partial.unmodelled),
     }
 
 
