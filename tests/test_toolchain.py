@@ -183,6 +183,17 @@ def unloaded(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.usefixtures("unloaded")
+def test_no_candidates_found_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ARCH-001 §11: a host with no usable libclang is a precondition failure, not a tool
+    that quietly does nothing. Raises before `Config.set_library_file`, like the override
+    failures below, so it is safe to run alongside the real-toolchain tests in this file."""
+    monkeypatch.delenv("CPPSD_LIBCLANG", raising=False)
+    monkeypatch.setattr(tc, "candidate_libraries", lambda: [])
+    with pytest.raises(ClangToolchainError, match="No system libclang found"):
+        tc.load()
+
+
+@pytest.mark.usefixtures("unloaded")
 @pytest.mark.parametrize("kind", ["missing", "directory"])
 def test_an_unusable_override_is_refused_not_replaced(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kind: str
