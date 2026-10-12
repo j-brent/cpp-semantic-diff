@@ -17,7 +17,11 @@ import pytest
 from cpp_semantic_diff.acquire.workspace import CompileEntry
 from cpp_semantic_diff.errors import PreconditionError
 from cpp_semantic_diff.model.ir import (
+    COMPILER_BUILTINS,
+    FUNCTION_LOCAL,
+    IMPLICIT,
     AttrValue,
+    Crossing,
     Edge,
     EdgeKind,
     Location,
@@ -35,6 +39,7 @@ from cpp_semantic_diff.produce.extract import (
     body_hash,
     extract,
     library_label,
+    merge_crossing,
     merge_edge,
     merge_node,
     multiarch,
@@ -585,6 +590,31 @@ class TestValueEntitiesOutsideTheModelAreNotModelled:
         } <= kinds
 
 
+class TestAThirdPartyMemberInsideAClassBody:
+    """A member can arrive from another file through an `#include` inside the class body --
+    not just at namespace scope -- and it is pruned exactly as `visit` prunes a top-level
+    declaration (ADR-025)."""
+
+    def test_the_included_member_does_not_enter_the_model(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        (tmp_path / "vendor").mkdir()
+        (tmp_path / "vendor" / "member.h").write_text("int from_vendor;\n", encoding="utf-8")
+        (tmp_path / "a.cpp").write_text(
+            'struct S {\n#include "vendor/member.h"\n  int own;\n};\n', encoding="utf-8"
+        )
+        entry = CompileEntry(
+            file=tmp_path / "a.cpp",
+            directory=tmp_path,
+            arguments=["clang++", "-std=c++17", "-c", "a.cpp"],
+        )
+        result = extract(
+            entry, root=tmp_path, toolchain=toolchain, boundary=Boundary(third_party=("vendor",))
+        )
+        assert result.ok, result.result.detail
+        assert {n.qualified_name for n in result.nodes.values()} == {"S", "S::own"}
+
+
 class TestTwoAliasesOfOneNameInTwoFiles:
     """`using Foo = int;` in one source file and `using Foo = long;` in another share a USR,
     which names no file, so they are one node (ADR-038, a known limit). Nothing reports the
@@ -946,6 +976,20 @@ class TestMergingObservationsOfOneEdge:
     def test_an_attribute_only_one_tu_saw_is_still_recorded(self) -> None:
         assert self.merged({}, {"virtual": True}) == {"virtual": True}
 
+    def test_a_self_edge_is_dropped(self) -> None:
+        """Not a relation worth an event -- the builder creates one by resolving two
+        instantiations of the same template onto each other."""
+        edges: dict[str, Edge] = {}
+        merge_edge(edges, self.SRC, self.SRC, EdgeKind.CALLS, (), {})
+        assert edges == {}
+
+    def test_an_edge_with_no_source_or_destination_is_dropped(self) -> None:
+        """An empty USR is not an identity."""
+        edges: dict[str, Edge] = {}
+        merge_edge(edges, "", self.DST, EdgeKind.CALLS, (), {})
+        merge_edge(edges, self.SRC, "", EdgeKind.CALLS, (), {})
+        assert edges == {}
+
     def test_call_sites_still_accumulate_across_observations(self) -> None:
         """The merge is per attribute; locations are a union and must not have changed."""
         edges: dict[str, Edge] = {}
@@ -959,6 +1003,47 @@ class TestMergingObservationsOfOneEdge:
                 {"virtual": False},
             )
         assert [loc.line for loc in edges[f"{self.SRC}|calls|{self.DST}"].locations] == [10, 20]
+
+
+class TestMergingObservationsOfOneCrossing:
+    """The same commutativity rule as `merge_node` and `merge_edge`, for a crossing out of
+    the model: two overloads of one name reaching two different libraries are one crossing
+    (ADR-025), and the label kept -- the least one -- must not depend on which translation
+    unit's observation arrived first."""
+
+    SRC = "c:@F@caller#"
+    CALLEE = "lib::f"
+
+    def merged(self, *labels: str) -> str:
+        crossings: dict[str, Crossing] = {}
+        for label in labels:
+            merge_crossing(crossings, self.SRC, self.CALLEE, EdgeKind.CALLS, label)
+        return crossings[f"{self.SRC}|calls|{self.CALLEE}"].label
+
+    def test_the_least_label_wins_either_order(self) -> None:
+        assert self.merged("zlib", "boost") == "boost"
+        assert self.merged("boost", "zlib") == "boost"
+
+    def test_call_sites_still_accumulate_across_observations(self) -> None:
+        crossings: dict[str, Crossing] = {}
+        for line in (10, 20, 10):
+            merge_crossing(
+                crossings,
+                self.SRC,
+                self.CALLEE,
+                EdgeKind.CALLS,
+                "zlib",
+                (Location(file="a.cpp", line=line),),
+            )
+        assert [loc.line for loc in crossings[f"{self.SRC}|calls|{self.CALLEE}"].locations] == [
+            10,
+            20,
+        ]
+
+    def test_a_crossing_with_no_source_is_dropped(self) -> None:
+        crossings: dict[str, Crossing] = {}
+        merge_crossing(crossings, "", self.CALLEE, EdgeKind.CALLS, "zlib")
+        assert crossings == {}
 
 
 #: A destructor declared in a header and defined in one of the two TUs that include it.
@@ -1205,6 +1290,45 @@ class TestEdges:
         calls = [e for e in result.edges.values() if e.kind is EdgeKind.CALLS]
         assert len(calls) == 1
         assert len(calls[0].locations) == 2
+
+
+class TestFallbackLabel:
+    """What an in-model edge is labelled when its target never becomes a node (step 1
+    report §3). The label is read only by the builder, which turns it into a crossing a
+    reviewer sees -- a wrong one would misreport *why* the edge did not resolve, not just
+    that it did not."""
+
+    def labels(self, result: TuExtract) -> dict[str, str]:
+        """Qualified name -> label, for every target this TU named but never modelled."""
+        return {
+            qualified: label
+            for usr, (qualified, label) in result.targets.items()
+            if usr not in result.nodes
+        }
+
+    def test_a_call_to_a_compiler_builtin(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        result = run(tmp_path, toolchain, {"a.cpp": 'int f() { return __builtin_strlen("hi"); }\n'})
+        assert self.labels(result)["__builtin_strlen"] == COMPILER_BUILTINS
+
+    def test_an_implicit_special_member(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        """Clang generates the copy-assignment operator nobody wrote; `a = b` calls it, and
+        it was never a declared cursor the extractor could visit (ADR-029)."""
+        result = run(
+            tmp_path, toolchain, {"a.cpp": "struct S { int x; };\nvoid f(S& a, S& b) { a = b; }\n"}
+        )
+        assert self.labels(result)["S::operator="] == IMPLICIT
+
+    def test_a_member_of_a_class_declared_inside_a_function(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """v0 does not model a function-local class (ARCH-001 §13); a call to one of its
+        members is still an edge, and it is labelled rather than silently dropped."""
+        result = run(
+            tmp_path,
+            toolchain,
+            {"a.cpp": "void outer() { struct Local { void m() {} }; Local l; l.m(); }\n"},
+        )
+        assert self.labels(result)["outer::Local::m"] == FUNCTION_LOCAL
 
 
 class TestTemplates:
@@ -1755,6 +1879,17 @@ class TestInheritanceOrderAndVirtualBases:
         assert virtual[("Two", "B")] is False
 
 
+class TestBitfields:
+    """A field's bit-width, set only where the field is one -- the key must not appear at
+    all for an ordinary field (ARCH-001 §4.3: never omitted when false, but this is not a
+    boolean, so an ordinary field has no question to answer)."""
+
+    def test_a_bitfield_carries_its_width(self, tmp_path: Path, toolchain: Toolchain) -> None:
+        result = run(tmp_path, toolchain, {"a.cpp": "struct S { unsigned a : 3; unsigned b; };\n"})
+        assert named(result, "S::a").attrs["bitfield_width"] == 3
+        assert "bitfield_width" not in named(result, "S::b").attrs
+
+
 class TestFailureIsRecordedNotRaised:
     def test_a_broken_tu_is_reported_as_incompleteness(
         self, tmp_path: Path, toolchain: Toolchain
@@ -1780,6 +1915,23 @@ class TestFailureIsRecordedNotRaised:
         )
         assert not result.ok
         assert not any(n.name == "survivor" for n in result.nodes.values())
+
+    def test_a_main_file_that_does_not_exist_is_recorded_not_raised(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        """`index.parse` raises `TranslationUnitLoadError` rather than returning a TU when it
+        cannot even start -- a different failure from the fatal-diagnostics case above, and
+        the one path through `extract` that catches an exception instead of reading
+        `tu.diagnostics`."""
+        entry = CompileEntry(
+            file=tmp_path / "missing.cpp",
+            directory=tmp_path,
+            arguments=["clang++", "-std=c++17", "-c", "missing.cpp"],
+        )
+        result = extract(entry, root=tmp_path, toolchain=toolchain)
+        assert not result.ok
+        assert result.result.detail is not None
+        assert result.nodes == {}
 
 
 class TestCompileArguments:
