@@ -44,6 +44,7 @@ from cpp_semantic_diff.produce.cache import (
     dumps,
     find_scanner,
     loads,
+    parse_make_output,
 )
 from cpp_semantic_diff.produce.extract import Boundary, TuExtract, extract
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
@@ -152,6 +153,87 @@ def hits(model: Model) -> set[str]:
 
 def edit(checkout: Checkout, name: str, text: str) -> None:
     (checkout.path / name).write_text(text, encoding="utf-8")
+
+
+class TestMakeOutputParsing:
+    """`clang-scan-deps -format=make` output -> source file -> its closure. Pure parsing,
+    tested apart from the scanner that produces it, because `_make_tokens`' escaping is the
+    thing most likely to be wrong and a wrong split drops a header out of the key as
+    silently as a key computed without a closure at all (ARCH-001 §9)."""
+
+    def test_a_simple_rule_maps_the_tu_to_every_prerequisite(self) -> None:
+        closures = parse_make_output("a.o: a.cpp shared.h other.h\n")
+        [(key, deps)] = closures.items()
+        assert key == Path("a.cpp").resolve()
+        assert deps == [Path("a.cpp"), Path("shared.h"), Path("other.h")]
+
+    def test_an_escaped_space_keeps_one_path_whole(self) -> None:
+        """A space in a path arrives as `\\ `. Splitting on whitespace would cut the path
+        in two, and neither half exists."""
+        closures = parse_make_output("a.o: a.cpp my\\ header.h\n")
+        [(_, deps)] = closures.items()
+        assert deps == [Path("a.cpp"), Path("my header.h")]
+
+    def test_a_literal_dollar_is_unescaped(self) -> None:
+        closures = parse_make_output("a.o: a.cpp foo$$bar.h\n")
+        [(_, deps)] = closures.items()
+        assert deps[1] == Path("foo$bar.h")
+
+    def test_a_continued_line_is_one_rule(self) -> None:
+        closures = parse_make_output("a.o: a.cpp \\\n  shared.h \\\n  other.h\n")
+        [(_, deps)] = closures.items()
+        assert deps == [Path("a.cpp"), Path("shared.h"), Path("other.h")]
+
+    def test_several_rules_are_several_tus(self) -> None:
+        closures = parse_make_output("a.o: a.cpp shared.h\nb.o: b.cpp shared.h\n")
+        assert {k.name for k in closures} == {"a.cpp", "b.cpp"}
+
+    def test_a_rule_with_no_prerequisites_is_dropped(self) -> None:
+        """No first prerequisite means no TU to key this rule by."""
+        assert parse_make_output("a.o:\n") == {}
+
+    def test_a_line_with_no_colon_is_ignored(self) -> None:
+        assert parse_make_output("not a rule\n") == {}
+
+
+class TestAnUnreadableClosureMember:
+    """`key()`'s other refusal, distinct from a missing closure: the scanner named a file
+    the filesystem no longer has, between the scan and the key being computed. Inside the
+    repository that file's content is part of the model and cannot be hashed, so the TU is
+    not cacheable; outside it, the file is recorded and keyed weaker, by path -- the
+    `unreadable_deps` note (ARCH-001 §9: declining beats a weaker key, except where
+    content is genuinely out of reach)."""
+
+    def test_a_missing_repository_header_makes_the_tu_uncacheable(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        checkout = project(tmp_path / "w", SHARED, ("a.cpp",))
+        entry = checkout.cpp_entries[0]
+        cache = TuCache.open(checkout, toolchain=toolchain, store=store(tmp_path))
+
+        (checkout.path / "shared.h").unlink()
+
+        assert cache.key(entry) is None, (
+            "a repo header named by the scanner must not be keyed by path"
+        )
+
+    def test_a_missing_file_outside_the_repository_is_recorded_and_keyed_by_path(
+        self, tmp_path: Path, toolchain: Toolchain
+    ) -> None:
+        checkout = project(tmp_path / "w", {"a.cpp": "int a();\n"}, ("a.cpp",))
+        entry = checkout.cpp_entries[0]
+        outside = tmp_path / "outside-missing.h"
+        cache = TuCache(
+            root=checkout.path,
+            toolchain=toolchain,
+            store=store(tmp_path),
+            closures={entry.file.resolve(): [entry.file, outside]},
+        )
+
+        key = cache.key(entry)
+
+        assert key is not None, "a file outside the repository is keyed weaker, not refused"
+        assert len(cache.stats.unreadable_deps) == 1
 
 
 class TestAHitIsIndistinguishableFromAParse:
