@@ -30,10 +30,21 @@ from cpp_semantic_diff.classify import classify_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.errors import PreconditionError, SemanticDiffError
 from cpp_semantic_diff.match import match_models
-from cpp_semantic_diff.model.ir import Crossing, EdgeKind, Model, Node, TuStatus
-from cpp_semantic_diff.produce.build import assemble, build_model, tu_extracts
+from cpp_semantic_diff.model.ir import (
+    UNRESOLVED,
+    Crossing,
+    Edge,
+    EdgeKind,
+    Model,
+    Node,
+    NodeId,
+    NodeKind,
+    TuResult,
+    TuStatus,
+)
+from cpp_semantic_diff.produce.build import assemble, build_model, resolve, tu_extracts
 from cpp_semantic_diff.produce.cache import TuCache
-from cpp_semantic_diff.produce.extract import LIBCLANG_LIMITS
+from cpp_semantic_diff.produce.extract import LIBCLANG_LIMITS, TuExtract
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
 from cpp_semantic_diff.rank import rank_events
 
@@ -129,6 +140,38 @@ class TestTheLanguageModeIsRecorded:
         model = assemble(REV, [], toolchain=toolchain)
         assert model.completeness.not_visible == list(LIBCLANG_LIMITS)
         assert any("move" in limit for limit in model.completeness.not_visible)
+
+
+class TestResolve:
+    """`resolve`'s own contract, exercised directly rather than through a build: an
+    instantiation's USR is chased through `aliases` until it lands on a node, a USR that is
+    itself a node is returned without consulting `aliases` at all, and a cycle -- which "no
+    compiler should produce and no run has shown" -- terminates instead of hanging. The last
+    of those can only be checked this way: a regression that drops the `seen` set would turn
+    this test into a hang indistinguishable from a slow parse, never into a failure a build
+    integration test could catch."""
+
+    def test_a_chain_of_instantiations_resolves_to_the_template(self) -> None:
+        template = Node(id=NodeId("tmpl"), kind=NodeKind.FUNCTION, name="f", qualified_name="f")
+        nodes = {template.id: template}
+        aliases = {"inst2": "inst1", "inst1": "tmpl"}
+        assert resolve("inst2", nodes, aliases) == NodeId("tmpl")
+
+    def test_a_usr_that_is_itself_a_node_is_never_sent_through_its_alias(self) -> None:
+        """An explicit specialization is a node *and* may still appear in `aliases` from a
+        call seen through the primary template elsewhere; ARCH-001 §5 requires the node to
+        win. The loop's own `while current not in nodes` ordering is the whole rule."""
+        special = Node(id=NodeId("special"), kind=NodeKind.FUNCTION, name="f", qualified_name="f")
+        nodes = {special.id: special}
+        aliases = {"special": "primary"}
+        assert resolve("special", nodes, aliases) == NodeId("special")
+
+    def test_a_cycle_terminates_and_resolves_to_nothing(self) -> None:
+        aliases = {"a": "b", "b": "a"}
+        assert resolve("a", {}, aliases) is None
+
+    def test_a_usr_with_no_node_and_no_alias_resolves_to_nothing(self) -> None:
+        assert resolve("nowhere", {}, {}) is None
 
 
 def named(model: Model, qualified: str) -> list[Node]:
@@ -375,6 +418,75 @@ class TestUnresolvableEndpoints:
         assert model.completeness.edges_closed
         assert model.completeness.edges_dropped == 0
         assert model.completeness.edge_residue == 0.0
+
+
+class TestOrphanedSourceEdges:
+    """`assemble`'s other dangling-edge case: a target that *is* a node and a source that is
+    not -- e.g. the parent of a member defined out of line for a class the model leaves out.
+    There is nothing to draw (the model has no node to hang a crossing off), but the relation
+    still leaves the model and ARCH-001 §11 requires it counted rather than silently dropped.
+
+    Exercised directly against `assemble`, hand-built partials and no libclang: the claim is
+    about the merge, not about any particular C++ construct that can trigger it."""
+
+    def method_only(self) -> TuExtract:
+        method = Node(
+            id=NodeId("method"), kind=NodeKind.METHOD, name="method", qualified_name="W::method"
+        )
+        return TuExtract(
+            path="a.cpp",
+            result=TuResult(path="a.cpp", status=TuStatus.PARSED),
+            nodes={method.id: method},
+            edges={"e": Edge(src=NodeId("widget"), dst=method.id, kind=EdgeKind.CONTAINS)},
+        )
+
+    def test_the_edge_is_counted_but_drawn_nowhere(self, toolchain: Toolchain) -> None:
+        model = assemble(REV, [self.method_only()], toolchain=toolchain)
+
+        assert model.edges == []
+        assert model.crossings == []
+        assert model.completeness.edges_dropped == 1
+        assert model.completeness.edges_total == 1
+        assert model.completeness.crossings_by_label == {UNRESOLVED: 1}
+
+    def test_the_node_the_edge_did_resolve_is_still_in_the_model(
+        self, toolchain: Toolchain
+    ) -> None:
+        """Dropping the relation must not take the entity it pointed at down with it."""
+        model = assemble(REV, [self.method_only()], toolchain=toolchain)
+        assert [n.qualified_name for n in model.nodes.values()] == ["W::method"]
+
+
+class TestUnresolvedTargetTieBreak:
+    """`assemble` picks the lexicographically least `(name, label)` two TUs offer for one
+    unresolved USR, "so that two TUs that disagree give the same answer in any order." Two
+    real translation units essentially never disagree about one USR's name, which is exactly
+    why this needs a hand-built case: nothing in `test_build.py`'s libclang-backed fixtures
+    can reach it, and a comparison dropped from the merge would be silently order-dependent."""
+
+    def partial(self, path: str, target: tuple[str, str]) -> TuExtract:
+        caller = Node(
+            id=NodeId("caller"), kind=NodeKind.FUNCTION, name="caller", qualified_name="caller"
+        )
+        return TuExtract(
+            path=path,
+            result=TuResult(path=path, status=TuStatus.PARSED),
+            nodes={caller.id: caller},
+            edges={"e": Edge(src=caller.id, dst=NodeId("outside"), kind=EdgeKind.CALLS)},
+            targets={"outside": target},
+        )
+
+    def test_the_chosen_target_does_not_depend_on_which_tu_arrives_first(
+        self, toolchain: Toolchain
+    ) -> None:
+        zebra = self.partial("z.cpp", ("zebra", "z-label"))
+        apple = self.partial("a.cpp", ("apple", "a-label"))
+
+        forward = assemble(REV, [zebra, apple], toolchain=toolchain)
+        reverse = assemble(REV, [apple, zebra], toolchain=toolchain)
+
+        for model in (forward, reverse):
+            assert [(c.callee, c.label) for c in model.crossings] == [("apple", "a-label")]
 
 
 class TestCompleteness:
