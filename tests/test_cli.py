@@ -312,6 +312,31 @@ def test_a_changed_third_party_dependency_is_refused_with_exit_3(
     )
 
 
+def test_a_changed_third_party_dependency_wins_over_a_base_that_does_not_build(
+    bare_repo: Path,
+) -> None:
+    """Ordering, not just precondition: `cli.diff` computes the third-party refusal (ADR-025)
+    before either revision is checked out, so it is reported even when the base would have
+    failed to build anyway (ADR-010).
+
+    This repository carries no `CMakeLists.txt` at all -- exactly
+    `test_a_repository_with_no_build_description_is_refused_with_exit_4`'s shape, which exits
+    4. The checkout here is real, not mocked away: if the ordering ever flipped, the base
+    would actually be configured and this would surface as exit 4 instead of 3. The bump to
+    the declared path is the only change, so nothing else could be refusing it first.
+    """
+    require_libclang()
+    commit(bare_repo, "a.cpp", "int a() { return 1; }\n", "A")
+    commit(bare_repo, "libs/z/z.h", "// z\n", "copy z")
+    git(bare_repo, "checkout", "-q", "-b", "feature")
+    commit(bare_repo, "libs/z/z.h", "// z changed\n", "bump z")
+
+    result = runner.invoke(cli.app, ["diff", str(bare_repo), "--third-party", "libs/z"])
+    assert_reported(
+        result, ExitCode.REPOSITORY, "cannot analyze", "Third-party code changed", "libs/z."
+    )
+
+
 def test_a_missing_git_is_named_with_exit_3(
     diverged_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
