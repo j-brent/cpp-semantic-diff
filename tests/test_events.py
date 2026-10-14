@@ -8,31 +8,36 @@ provenance chain that only runs one way all produce plausible-looking JSON.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
 from cpp_semantic_diff.model import (
+    APPLIES_TO,
     DERIVED_KINDS,
     EDGE_KINDS,
     NODE_KINDS,
     REQUIRED_PAYLOAD,
     UNREACHABLE_IN_V0,
     V0_KINDS,
+    ChangeEvent,
+    ChangeEventId,
+    ChangeEventKind,
     Completeness,
     Confidence,
     EdgeId,
-    Event,
-    EventId,
-    EventKind,
     Hunk,
     Location,
     MatchTier,
     NodeId,
+    NodeKind,
     Side,
     TuResult,
     TuStatus,
+    Unpaired,
     events_at,
 )
 
@@ -40,15 +45,17 @@ CERTAIN = Confidence(tier=MatchTier.DECLARED, models_complete=True)
 
 
 def event(
-    kind: EventKind = EventKind.NODE_BODY_CHANGED, subject: str = "c:@F@f#", **kw: Any
-) -> Event:
-    return Event(kind=kind, subject=NodeId(subject), confidence=CERTAIN, **kw)
+    kind: ChangeEventKind = ChangeEventKind.NODE_BODY_CHANGED, subject: str = "c:@F@f#", **kw: Any
+) -> ChangeEvent:
+    return ChangeEvent(kind=kind, subject=NodeId(subject), confidence=CERTAIN, **kw)
 
 
 def attr_changed(
     attr: str = "virtual", old: object = False, new: object = True, **kw: Any
-) -> Event:
-    return event(EventKind.NODE_ATTR_CHANGED, payload={"attr": attr, "old": old, "new": new}, **kw)
+) -> ChangeEvent:
+    return event(
+        ChangeEventKind.NODE_ATTR_CHANGED, payload={"attr": attr, "old": old, "new": new}, **kw
+    )
 
 
 class TestTheSetIsClosed:
@@ -70,13 +77,14 @@ class TestTheSetIsClosed:
 
         §6.1's prose still names four edge kinds and needs the fifth written into it.
         """
-        assert {k.value for k in EventKind} == {
+        assert {k.value for k in ChangeEventKind} == {
             "NodeAdded",
             "NodeRemoved",
             "NodeMoved",
             "NodeRenamed",
             "NodeAttrChanged",
             "NodeBodyChanged",
+            "NodeSignatureChanged",
             "EdgeAdded",
             "EdgeRemoved",
             "EdgeRetargeted",
@@ -87,18 +95,30 @@ class TestTheSetIsClosed:
             "CycleIntroduced",
             "FanInChanged",
             "LayerViolationIntroduced",
-            "SignatureIncompatible",
+            "CallerOfChangedSignature",
         }
 
     def test_the_three_groups_partition_the_set(self) -> None:
-        assert set(EventKind) == NODE_KINDS | EDGE_KINDS | DERIVED_KINDS
+        assert set(ChangeEventKind) == NODE_KINDS | EDGE_KINDS | DERIVED_KINDS
         assert not NODE_KINDS & EDGE_KINDS & DERIVED_KINDS
 
-    def test_v0_emits_a_subset_and_nothing_derived(self) -> None:
-        """ARCH-001 §13 -- derived events are out of v0, but their kinds exist so consumers
-        are extended rather than rewritten when they land."""
-        assert set(EventKind) > V0_KINDS
-        assert not V0_KINDS & DERIVED_KINDS
+    def test_v0_emits_a_subset_and_one_derived_kind(self) -> None:
+        """ARCH-001 §13 -- derived events are out of v0 but for one exception, the callers of a
+        changed signature (ADR-040). The other kinds exist so consumers are extended rather
+        than rewritten when they land."""
+        assert set(ChangeEventKind) > V0_KINDS
+        assert {ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE} == V0_KINDS & DERIVED_KINDS
+
+    def test_a_caller_of_a_changed_signature_names_both_ends_and_whether_it_was_edited(
+        self,
+    ) -> None:
+        """ADR-040: the payload is designed, so the floor is stated, and an event without it
+        is refused."""
+        assert REQUIRED_PAYLOAD[ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE] == frozenset(
+            {"caller", "callee", "old_signature", "new_signature", "caller_edited"}
+        )
+        with pytest.raises(ValidationError, match="requires payload keys"):
+            event(ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE, payload={"caller": "g"})
 
     def test_v0_excludes_exactly_what_v0_cannot_reach(self) -> None:
         """`V0_KINDS` is read as a description of the stage, so it has to be one.
@@ -110,18 +130,18 @@ class TestTheSetIsClosed:
         for the wrong reason: they were checking against a set with room to spare.
 
         What remains outside is what v0 genuinely cannot produce, and each exclusion has a
-        different reason: renames and moves need a tier past 1 (the USR encodes name and
-        scope, so a matched pair agrees on both), `EdgeRetargeted` is refused outright, and
-        the derived kinds are deferred.
+        different reason: renames and moves need rename detection (both v0 tiers pair only
+        entities that agree on name and scope), `EdgeRetargeted` is refused outright, and
+        the derived kinds but one are deferred (ADR-040).
         """
         assert {
-            EventKind.NODE_RENAMED,
-            EventKind.NODE_MOVED,
-            EventKind.EDGE_RETARGETED,
-            *DERIVED_KINDS,
+            ChangeEventKind.NODE_RENAMED,
+            ChangeEventKind.NODE_MOVED,
+            ChangeEventKind.EDGE_RETARGETED,
+            *(DERIVED_KINDS - {ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE}),
         } == UNREACHABLE_IN_V0
         assert not V0_KINDS & UNREACHABLE_IN_V0
-        assert set(EventKind) == V0_KINDS | UNREACHABLE_IN_V0
+        assert set(ChangeEventKind) == V0_KINDS | UNREACHABLE_IN_V0
 
     def test_an_edge_attribute_change_has_a_kind_of_its_own(self) -> None:
         """ARCH-001 §6.1: new signals become new event kinds, never free text.
@@ -130,27 +150,66 @@ class TestTheSetIsClosed:
         and is *only* expressible this way: both classes are unchanged and the edge is on
         both sides, so no add, remove or kind change can carry it.
         """
-        assert EventKind.EDGE_ATTR_CHANGED in EDGE_KINDS
-        assert EventKind.EDGE_ATTR_CHANGED in V0_KINDS
+        assert ChangeEventKind.EDGE_ATTR_CHANGED in EDGE_KINDS
+        assert ChangeEventKind.EDGE_ATTR_CHANGED in V0_KINDS
 
     def test_an_edge_attribute_change_carries_the_same_payload_as_a_node_one(self) -> None:
         """It is the same mechanical attribute diff (§4.3) over a different `attrs` dict. A
         consumer that can read one must not have to learn a second shape for the other."""
         assert (
-            REQUIRED_PAYLOAD[EventKind.EDGE_ATTR_CHANGED]
-            == REQUIRED_PAYLOAD[EventKind.NODE_ATTR_CHANGED]
+            REQUIRED_PAYLOAD[ChangeEventKind.EDGE_ATTR_CHANGED]
+            == REQUIRED_PAYLOAD[ChangeEventKind.NODE_ATTR_CHANGED]
             == frozenset({"attr", "old", "new"})
         )
         with pytest.raises(ValidationError, match="requires payload keys"):
-            event(EventKind.EDGE_ATTR_CHANGED, payload={"attr": "access", "old": "public"})
+            event(ChangeEventKind.EDGE_ATTR_CHANGED, payload={"attr": "access", "old": "public"})
+
+    def test_a_signature_change_has_a_kind_of_its_own_and_carries_both_spellings(self) -> None:
+        """ADR-035. The signature is a field of the node (§4.1), not an attribute, so it is
+        not `NodeAttrChanged(signature)`."""
+        assert ChangeEventKind.NODE_SIGNATURE_CHANGED in NODE_KINDS & V0_KINDS
+        assert REQUIRED_PAYLOAD[ChangeEventKind.NODE_SIGNATURE_CHANGED] == frozenset(
+            {"old_signature", "new_signature"}
+        )
+
+    def test_a_signature_change_requires_both_spellings_to_construct(self) -> None:
+        """The two tests above check the declared requirement; this is the requirement
+        actually enforced. `_complete_the_event` reads `REQUIRED_PAYLOAD` for every kind
+        generically, but no test had ever constructed a `NodeSignatureChanged` -- the
+        kind ADR-035 just added -- so a typo in its `REQUIRED_PAYLOAD` entry, or a change
+        that dropped it from the dict, would pass every other test in this file."""
+        e = event(
+            ChangeEventKind.NODE_SIGNATURE_CHANGED,
+            payload={"old_signature": "void f()", "new_signature": "void f(int)"},
+        )
+        assert e.payload == {"old_signature": "void f()", "new_signature": "void f(int)"}
+        with pytest.raises(ValidationError, match="requires payload keys"):
+            event(ChangeEventKind.NODE_SIGNATURE_CHANGED, payload={"old_signature": "void f()"})
+        with pytest.raises(ValidationError, match="requires payload keys"):
+            event(ChangeEventKind.NODE_SIGNATURE_CHANGED, payload={})
+
+    def test_the_applicability_table_is_the_one_arch_states(self) -> None:
+        """ARCH-001 §6.1's table and `APPLIES_TO` say the same thing (ADR-035): two node
+        change events apply only to functions and methods, and every other node change event
+        applies to every node kind."""
+        arch = (Path(__file__).parents[1] / "docs" / "ARCH-001-architecture.md").read_text(
+            encoding="utf-8"
+        )
+        rows = dict(re.findall(r"^\| `(Node\w+)` \| ([a-z, ]+) \|$", arch, re.MULTILINE))
+        stated = {
+            ChangeEventKind(kind): frozenset(NodeKind(k.strip()) for k in kinds.split(","))
+            for kind, kinds in rows.items()
+        }
+        assert stated == APPLIES_TO
+        assert set(APPLIES_TO) <= NODE_KINDS
 
     def test_there_is_no_catch_all_kind(self) -> None:
-        assert not {k for k in EventKind if k.name in {"OTHER", "CUSTOM", "UNKNOWN"}}
+        assert not {k for k in ChangeEventKind if k.name in {"OTHER", "CUSTOM", "UNKNOWN"}}
 
     def test_an_invented_kind_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
             # The invented kind is the point: validation, not the checker, must reject it.
-            Event(
+            ChangeEvent(
                 kind="SomethingChanged",  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
                 subject=NodeId("c:@F@f#"),
                 confidence=CERTAIN,
@@ -164,7 +223,7 @@ class TestTheSetIsClosed:
 
 class TestTheShapeIsArch62:
     def test_fields_are_exactly_the_seven(self) -> None:
-        assert set(Event.model_fields) == {
+        assert set(ChangeEvent.model_fields) == {
             "id",
             "kind",
             "subject",
@@ -180,7 +239,7 @@ class TestTheShapeIsArch62:
         A `suppressed`/`collapsed` flag here would let the diff stage decide what a reviewer
         never sees. The JSON carries the full set; the view hides consequences under causes.
         """
-        assert not {"suppressed", "collapsed", "hidden", "visible"} & set(Event.model_fields)
+        assert not {"suppressed", "collapsed", "hidden", "visible"} & set(ChangeEvent.model_fields)
 
 
 class TestPayloadStaysMechanical:
@@ -199,7 +258,7 @@ class TestPayloadStaysMechanical:
         """NodeAttrChanged(attr, old, new) is named in §6.1. A consumer switching on the
         kind must be able to rely on it rather than probing for keys."""
         with pytest.raises(ValidationError, match="requires payload keys"):
-            event(EventKind.NODE_ATTR_CHANGED, payload={"attr": "virtual", "old": False})
+            event(ChangeEventKind.NODE_ATTR_CHANGED, payload={"attr": "virtual", "old": False})
 
 
 class TestIdentityOfAnEvent:
@@ -225,13 +284,13 @@ class TestIdentityOfAnEvent:
     def test_linking_a_cause_does_not_renumber_an_event(self) -> None:
         """classify adds `caused_by` after diff has run (ARCH-001 §3). If that changed the
         id, every event already pointing at this one would dangle."""
-        cause = event(EventKind.NODE_REMOVED, subject="c:@F@gone#")
+        cause = event(ChangeEventKind.NODE_REMOVED, subject="c:@F@gone#")
         assert attr_changed(caused_by=cause.id).id == attr_changed().id
 
     def test_the_id_survives_the_json_round_trip(self) -> None:
         """JSON is the product (ARCH-001 §10); ids in it have to still resolve."""
         e = attr_changed()
-        assert Event.model_validate_json(e.model_dump_json()).id == e.id
+        assert ChangeEvent.model_validate_json(e.model_dump_json()).id == e.id
 
 
 class TestAnEventIsImmutable:
@@ -247,13 +306,13 @@ class TestAnEventIsImmutable:
     def test_a_field_cannot_be_written_after_construction(self) -> None:
         with pytest.raises(ValidationError, match="frozen"):
             # Writing the frozen field is the point of the test.
-            attr_changed().caused_by = EventId("NodeRemoved:deadbeef")  # type: ignore[misc]
+            attr_changed().caused_by = ChangeEventId("NodeRemoved:deadbeef")  # type: ignore[misc]
 
     def test_a_cause_is_added_by_copying_and_the_original_is_untouched(self) -> None:
         """What `classify` does (ARCH-001 §6.3), and the reason freezing costs nothing:
         `model_copy(update=...)` is the supported way to produce the changed event."""
         original = attr_changed()
-        cause = event(EventKind.NODE_REMOVED, subject="c:@F@gone#")
+        cause = event(ChangeEventKind.NODE_REMOVED, subject="c:@F@gone#")
         linked = original.model_copy(update={"caused_by": cause.id})
 
         assert linked.caused_by == cause.id
@@ -284,7 +343,7 @@ class TestConfidenceIsAlwaysStated:
     def test_an_event_cannot_omit_its_confidence(self) -> None:
         with pytest.raises(ValidationError):
             # The missing confidence is the point: validation must reject it.
-            Event(kind=EventKind.NODE_BODY_CHANGED, subject=NodeId("c:@F@f#"))  # type: ignore[call-arg]  # pyright: ignore[reportCallIssue]
+            ChangeEvent(kind=ChangeEventKind.NODE_BODY_CHANGED, subject=NodeId("c:@F@f#"))  # type: ignore[call-arg]  # pyright: ignore[reportCallIssue]
 
     def test_completeness_cannot_be_assumed(self) -> None:
         """No default: omitting it would be a silent claim that nothing was missing."""
@@ -299,10 +358,10 @@ class TestConfidenceIsAlwaysStated:
     def test_an_unmatched_subject_has_no_tier(self) -> None:
         """Add and remove events have no pair. In v0 that also covers every rename
         (§13) -- stating None is how the damage stays visible."""
-        e = Event(
-            kind=EventKind.NODE_ADDED,
+        e = ChangeEvent(
+            kind=ChangeEventKind.NODE_ADDED,
             subject=NodeId("c:@F@new#"),
-            confidence=Confidence(tier=None, models_complete=True),
+            confidence=Confidence(tier=None, unpaired=Unpaired.NONE, models_complete=True),
         )
         assert e.confidence.tier is None
 
@@ -319,15 +378,31 @@ class TestConfidenceIsAlwaysStated:
         assert not Confidence.derive(MatchTier.DECLARED, whole, partial).models_complete
         assert not Confidence.derive(MatchTier.DECLARED, partial, whole).models_complete
 
+    def test_an_unmatched_subject_must_say_why(self) -> None:
+        """ADR-034. Without an unpaired reason rank would have to guess how doubtful an add or a
+        remove is, and a default would be a guess presented as a measurement."""
+        with pytest.raises(ValidationError, match="unpaired is required"):
+            Confidence(tier=None, models_complete=True)
+
+    def test_a_matched_subject_has_no_unpaired_reason(self) -> None:
+        with pytest.raises(ValidationError, match="has no unpaired reason"):
+            Confidence(tier=MatchTier.DECLARED, unpaired=Unpaired.NONE, models_complete=True)
+
+    def test_the_unpaired_reason_survives_a_json_round_trip(self) -> None:
+        c = Confidence(tier=None, unpaired=Unpaired.CANDIDATE, models_complete=True)
+        assert Confidence.model_validate_json(c.model_dump_json()) == c
+
 
 class TestProvenanceRunsBothWays:
     """ARCH-001 §6.2. Without the reverse direction the tool is a second artifact to read
     alongside the diff -- more work for the reviewer, not less."""
 
     @staticmethod
-    def _spanning(first: int, last: int, side: Side = Side.HEAD, file: str = "src/a.cpp") -> Event:
+    def _spanning(
+        first: int, last: int, side: Side = Side.HEAD, file: str = "src/a.cpp"
+    ) -> ChangeEvent:
         return event(
-            EventKind.NODE_BODY_CHANGED,
+            ChangeEventKind.NODE_BODY_CHANGED,
             subject=f"c:@F@f{first}#",
             provenance=[Hunk(side=side, location=Location(file=file, line=first, end_line=last))],
         )
@@ -351,6 +426,14 @@ class TestProvenanceRunsBothWays:
         assert events_at([e], Side.BASE, "a.cpp", 4) == [e]
         assert events_at([e], Side.BASE, "a.cpp", 5) == []
 
+    def test_a_span_begins_where_the_declaration_text_does(self) -> None:
+        """A `template <...>` header or a return type above the name is part of the
+        declaration: an edit there must find the event about it."""
+        at = Location(file="a.h", line=5, end_line=7, start_line=4)
+        e = event(provenance=[Hunk(side=Side.HEAD, location=at)])
+        assert events_at([e], Side.HEAD, "a.h", 4) == [e]
+        assert events_at([e], Side.HEAD, "a.h", 3) == []
+
     def test_the_two_sides_are_not_confused(self) -> None:
         """A removal's lines exist only in base; asking head must not find them."""
         removed = self._spanning(10, 20, side=Side.BASE)
@@ -362,10 +445,10 @@ class TestCauseIsALinkNotARemoval:
     """ARCH-001 §6.3: one rename with 200 consequences is one event with 200 links."""
 
     def test_consequences_stay_in_the_set_and_keep_their_own_evidence(self) -> None:
-        cause = event(EventKind.NODE_RENAMED, payload={"old_name": "f", "new_name": "g"})
+        cause = event(ChangeEventKind.NODE_RENAMED, payload={"old_name": "f", "new_name": "g"})
         consequences = [
-            Event(
-                kind=EventKind.EDGE_RETARGETED,
+            ChangeEvent(
+                kind=ChangeEventKind.EDGE_RETARGETED,
                 subject=EdgeId(f"c:@F@caller{i}#|calls|c:@F@f#"),
                 payload={"old_dst": "c:@F@f#", "new_dst": "c:@F@g#"},
                 caused_by=cause.id,

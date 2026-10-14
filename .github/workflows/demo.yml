@@ -5,7 +5,7 @@ name: demo
 #
 # The page shows both halves of the compression metric (ARCH-001 §10): the *denominator*
 # from `cppsd plan` -- what a reviewer has to read today -- and the *numerator* from
-# `cppsd diff`, which runs the whole pipeline end to end. Seven of the eight stages exist;
+# `cppsd diff`, which runs the whole pipeline end to end. Eight of the nine stages exist;
 # `enrich` is deferred post-v0 by design (ARCH-001 §13) and the summary says so.
 #
 # Wherever it can, this file pastes tool output rather than asserting facts in YAML. An
@@ -58,6 +58,9 @@ jobs:
         # prints. leveldb is measured there too but is not here. (The reason first given,
         # that a plain clone does not fetch submodules, does not hold: `acquire` checks out
         # the submodules each revision pins, with network.)
+        #
+        # `third_party` lists the libraries each fixture copies into its tree, passed as
+        # `--third-party` (ADR-025). Submodules need no entry.
         env:
           IN_REPO: ${{ inputs.repo }}
           IN_BASE: ${{ inputs.base }}
@@ -65,11 +68,14 @@ jobs:
           set -euo pipefail
           if [ -n "$IN_REPO" ]; then
             matrix=$(jq -cn --arg url "$IN_REPO" --arg base "${IN_BASE:-HEAD~12}" \
-              '[{name: ($url | split("/") | last | sub("\\.git$";"")), url: $url, base: $base}]')
+              '[{name: ($url | split("/") | last | sub("\\.git$";"")), url: $url, base: $base,
+                 third_party: []}]')
           else
             matrix=$(jq -cn '[
-              {name: "fmt",    url: "https://github.com/fmtlib/fmt.git",    base: "HEAD~12"},
-              {name: "spdlog", url: "https://github.com/gabime/spdlog.git", base: "HEAD~30"}
+              {name: "fmt",    url: "https://github.com/fmtlib/fmt.git",    base: "HEAD~12",
+               third_party: ["test/gtest"]},
+              {name: "spdlog", url: "https://github.com/gabime/spdlog.git", base: "HEAD~30",
+               third_party: ["include/spdlog/fmt/bundled"]}
             ]')
           fi
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
@@ -116,11 +122,19 @@ jobs:
         env:
           BASE: ${{ matrix.target.base }}
           NAME: ${{ matrix.target.name }}
+          THIRD_PARTY: ${{ toJSON(matrix.target.third_party) }}
         run: |
           set -uo pipefail
           SUBJECT="$RUNNER_TEMP/subject"
           OUT="$RUNNER_TEMP/out"
           mkdir -p "$OUT"
+
+          # One `--third-party PATH` per entry. Both runs below pass the same set: it is
+          # part of the cache key, so a warm run without it would not be warm.
+          third_party=()
+          while IFS= read -r path; do
+            third_party+=(--third-party "$path")
+          done < <(jq -r '.[]' <<< "$THIRD_PARTY")
 
           # A fresh cache root per run, so "cold" is honestly cold. Reusing the default
           # would measure a warm run and call it a cold one.
@@ -153,7 +167,7 @@ jobs:
           # `--limit` is passed explicitly so a change to the CLI default cannot quietly
           # change what this page shows. The JSON artifact carries every event either way.
           cold_start=$(date +%s%N)
-          uv run cppsd diff "$SUBJECT" --base "$BASE" --limit 25 \
+          uv run cppsd diff "$SUBJECT" --base "$BASE" --limit 25 "${third_party[@]}" \
             --out "$OUT/diff.json" > "$OUT/diff.txt" 2>&1
           diff_rc=$?
           cold_ms=$(( ($(date +%s%N) - cold_start) / 1000000 ))
@@ -169,7 +183,7 @@ jobs:
           warm_ms=0
           if [ "$diff_rc" -eq 0 ]; then
             warm_start=$(date +%s%N)
-            uv run cppsd diff "$SUBJECT" --base "$BASE" --limit 25 \
+            uv run cppsd diff "$SUBJECT" --base "$BASE" --limit 25 "${third_party[@]}" \
               > "$OUT/diff-warm.txt" 2>&1
             warm_rc=$?
             warm_ms=$(( ($(date +%s%N) - warm_start) / 1000000 ))
@@ -224,21 +238,25 @@ jobs:
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # Two rounding forms below: lines-per-event to 2 dp, seconds to 1 dp. jq has no
-          # printf for this, hence the multiply/round/divide.
+          # Two rounding forms below: lines per change event to 2 dp, seconds to 1 dp. jq has
+          # no printf for this, hence the multiply/round/divide. jq prints a missing field as
+          # `null` and carries on, so a renamed field shows up as `null` in a cell.
           jq -r '
-            .summary as $s | .meta as $m |
+            def crossings: if length == 0 then "none"
+              else to_entries | map("\(.key) \(.value)") | join(" · ") end;
+            .summary as $s | .meta as $m | .completeness as $c |
             "**\($s.compression)**",
             "",
             "| | |",
             "|---|---|",
             "| lines changed (denominator) | \($s.lines_changed) across \($s.files_changed) files, \($s.cpp_files_changed) C++ |",
-            "| semantic events (numerator) | \($s.events_reported) |",
+            "| change events (numerator) | \($s.change_events_reported) |",
             "| of which high-risk | \($s.high_risk_count) |",
-            "| lines per event | \((($s.compression_ratio * 100) | round) / 100) |",
-            "| top-level after cascade collapse | \($s.top_level_events) |",
+            "| lines per change event | \(if $s.compression_ratio == null then "none" else (($s.compression_ratio * 100) | round) / 100 end) |",
+            "| top-level after cascade collapse | \($s.top_level_change_events) |",
             "| components | \($s.components) |",
-            "| vendored events, sorted after first-party | \($s.vendored_events) |",
+            "| boundary crossings, base | \($c.base.crossings_by_label | crossings) |",
+            "| boundary crossings, head | \($c.head.crossings_by_label | crossings) |",
             "| identity residue | \($s.residue.matched) matched · \($s.residue.unmatched_base) base / \($s.residue.unmatched_head) head unmatched · \($s.residue.internal_linkage_residue) internal-linkage |",
             "| identity tiers run | \($s.residue.tiers_run | join(", ")) |",
             "| pipeline time, cold (in-process) | \((($m.timings.total * 10) | round) / 10) s |",
@@ -258,16 +276,17 @@ jobs:
             echo
             echo "The warm row is the floor: rerunning the same comparison invalidates nothing."
             echo "ARCH-001 §9's budget — a review touching ≤ 20 TUs in under 30 s warm — needs a"
-            echo "run that touches something, and is measured in STATUS §4 rather than here."
+            echo "run that touches something, and is measured in the [v0 tracker §4](https://github.com/j-brent/cpp-semantic-diff/blob/main/reports/2026-08-01--v0-build/STATUS.md#4--measured-performance) rather than here."
             echo
             echo "## Still deferred, on purpose"
             echo
-            echo "\`enrich\` is the one stage of eight not built. The evidence adapters (ARCH-001 §8)"
+            echo "\`enrich\` is the one stage of nine not built. The evidence adapters (ARCH-001 §8)"
             echo "are post-v0 by design (§13), so \`findings\` is empty in the JSON above; blast"
             echo "radius, which §3 lists under \`enrich\`, shipped inside \`rank\` instead."
             echo
-            echo "Identity is tier-1 only (§13): a rename git did not detect reads as a removal plus"
-            echo "an addition. What that cost on *this* comparison, and what the model's standing"
+            echo "Identity runs only the tiers in the table above (\`identity tiers run\`): an entity"
+            echo "none of them pairs, such as one renamed where git saw no rename, reads as a removal"
+            echo "plus an addition. What that cost on *this* comparison, and what the model's standing"
             echo "limits are, is printed by the tool in the \`identity:\` and \`true of every run:\`"
             echo "blocks above — by the tool, so that this page cannot go stale the way it once did."
             echo

@@ -8,9 +8,10 @@ other people merged while the branch was open to the branch under review.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,7 +39,12 @@ DEFAULT_RENAME_SIMILARITY = 50
 RENAME_SIMILARITY_ENV = "CPPSD_RENAME_SIMILARITY"
 
 
-def _run(argv: Sequence[str], *, errors: str = "replace") -> subprocess.CompletedProcess[str]:
+def _run(
+    argv: Sequence[str],
+    *,
+    errors: str = "replace",
+    env: Mapping[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     """Run a git command, and report a missing git as exactly that.
 
     Without the translation a missing git surfaces as `FileNotFoundError`, and the caller
@@ -53,6 +59,7 @@ def _run(argv: Sequence[str], *, errors: str = "replace") -> subprocess.Complete
             text=True,
             encoding="utf-8",
             errors=errors,
+            env=None if env is None else dict(env),
         )
     except FileNotFoundError as exc:
         raise GitNotFoundError() from exc
@@ -69,8 +76,48 @@ def run_git(repo: Path, *args: str, check: bool = True) -> str:
     return _git(repo, args, check=check, errors="replace").strip()
 
 
-def run_git_z(repo: Path, *args: str) -> list[str]:
-    """NUL-separated fields from a `-z` git command, decoded the way `os` decodes paths.
+#: What git prints when `diff.renameLimit` is exceeded and it skips inexact rename detection.
+#: Git offers no exit status, flag or plumbing output for this -- stderr is the only channel
+#: -- so the match is deliberately loose. The wording has changed before ("inexact" became
+#: "exhaustive"); both lines name either the skip or the variable, and the advice line is the
+#: only one that carries the limit that would have sufficed. The call runs under `LC_ALL=C`
+#: so a translated git cannot hide it.
+_RENAME_SKIPPED = re.compile(r"rename detection was skipped|renamelimit", re.IGNORECASE)
+_RENAME_LIMIT_NEEDED = re.compile(r"renamelimit\b.*?\bat least (\d+)", re.IGNORECASE)
+
+
+def _c_locale_env() -> dict[str, str]:
+    """The environment for a git call whose stderr is parsed: git's untranslated messages.
+
+    `LC_ALL=C` outranks `LANG`, and gettext ignores `LANGUAGE` under the C locale; it is
+    removed anyway, so the guarantee does not rest on that rule.
+    """
+    env = {k: v for k, v in os.environ.items() if k != "LANGUAGE"}
+    env["LC_ALL"] = "C"
+    return env
+
+
+@dataclass(frozen=True)
+class RenameLimitHit:
+    """Git skipped inexact rename detection because `diff.renameLimit` was exceeded.
+
+    `needed` is the limit git said would have sufficed, or None if it did not say.
+    """
+
+    needed: int | None = None
+
+
+def rename_limit_hit(stderr: str) -> RenameLimitHit | None:
+    """Whether a `git diff --find-renames` run reported truncated rename detection."""
+    if not _RENAME_SKIPPED.search(stderr):
+        return None
+    needed = _RENAME_LIMIT_NEEDED.search(stderr)
+    return RenameLimitHit(needed=int(needed.group(1)) if needed else None)
+
+
+def run_git_z(repo: Path, *args: str) -> tuple[list[str], str]:
+    """NUL-separated fields from a `-z` git command, decoded the way `os` decodes paths, and
+    the stderr of the successful run.
 
     `run_git` cannot serve this, and the reason is not the `.strip()` -- NUL is not
     whitespace, so records survive it. It is `errors="replace"`, which maps two *different*
@@ -78,9 +125,45 @@ def run_git_z(repo: Path, *args: str) -> list[str]:
     rename map it is a **fabricated identity**, which is the one thing ARCH-001 §5 refuses.
     `surrogateescape` is what `os` uses for filenames, so a path that round-trips through the
     filesystem round-trips through here.
+
+    Stderr is returned because `run_git` discards it on success, and for `file_changes` a
+    successful run can still carry the warning that the rename map is incomplete. The C
+    locale keeps that warning in the words `rename_limit_hit` reads.
     """
-    out = _git(repo, args, check=True, errors="surrogateescape")
-    return [field for field in out.split("\0") if field]
+    proc = _run(
+        ["git", "-C", str(repo), *args],
+        errors="surrogateescape",
+        env=_c_locale_env(),
+    )
+    if proc.returncode != 0:
+        raise GitError(list(args), proc.returncode, proc.stderr)
+    return [field for field in proc.stdout.split("\0") if field], proc.stderr
+
+
+def run_git_raw(repo: Path, *args: str) -> tuple[str, str]:
+    """A git command's whole stdout, decoded the way `os` decodes paths, and its stderr, under
+    the C locale.
+
+    For output that carries file names and file content together -- a patch -- where
+    `run_git`'s `errors="replace"` would mangle a non-UTF-8 name and its `.strip()` would cut
+    a line that is part of the content. Stderr is kept for the reason `run_git_z` keeps it: a
+    successful diff can still warn that its rename detection was cut short.
+    """
+    proc = _run(["git", "-C", str(repo), *args], errors="surrogateescape", env=_c_locale_env())
+    if proc.returncode != 0:
+        raise GitError(list(args), proc.returncode, proc.stderr)
+    return proc.stdout, proc.stderr
+
+
+def tracked_files(repo: Path, rev: str) -> frozenset[str]:
+    """Every path git tracks at `rev`, repository-relative (ADR-037).
+
+    Read from the commit's tree, not from a worktree's index, so the answer is a function of
+    the revision alone. A submodule is one entry, its gitlink: the superproject tracks
+    nothing inside it, and extraction labels those files with the submodule's path first.
+    """
+    fields, _ = run_git_z(repo, "ls-tree", "-r", "-z", "--name-only", "--full-tree", rev)
+    return frozenset(fields)
 
 
 def is_git_repository(repo: Path) -> bool:
@@ -235,6 +318,22 @@ class FileChanges:
     """
 
     changes: tuple[FileChange, ...]
+    rename_limit: RenameLimitHit | None = None
+    """Set when git skipped inexact rename detection, so `renames` holds only exact renames
+    and some renamed files appear as a delete plus an add. Not lifted with `-l0`: that
+    makes detection potentially quadratic on exactly the large diffs that hit the limit.
+    It is reported instead (ARCH-001 §11, rule 2)."""
+
+    @property
+    def missed_rename_files(self) -> frozenset[str]:
+        """Files a truncated rename map may have failed to pair: every add and delete.
+
+        Empty when the map is complete. The matcher marks entities located in these files
+        as possibly renamed rather than plainly added or removed.
+        """
+        if self.rename_limit is None:
+            return frozenset()
+        return frozenset(c.path for c in self.changes if c.status in ("A", "D"))
 
     @property
     def paths(self) -> list[str]:
@@ -259,7 +358,7 @@ def file_changes(
     writes the source file name into the USR of every internal-linkage entity: a renamed file
     breaks tier 1 for all of them at once.
 
-    Three flags, each load-bearing:
+    Four flags, each load-bearing:
 
     `--find-renames` is passed **explicitly even though detection is on by default**. A
     repository or reviewer with `diff.renames=false` in config would otherwise yield an empty
@@ -270,17 +369,26 @@ def file_changes(
     C-escapes any non-ASCII path, so the parser would need an unquoter to recover a name it
     is about to use as identity.
 
+    `--ignore-submodules=none` is passed because `ignore = all` in `.gitmodules`,
+    `diff.ignoreSubmodules` or `submodule.<name>.ignore` would otherwise drop a moved gitlink
+    from the list, and a dependency bump the refusal must see would vanish depending on the
+    repository's or the reviewer's config (ADR-025, ARCH-001 §12).
+
     `--find-copies` is deliberately **not** passed. A copy leaves the base file in place, so
     rewriting the base-side USR to the copy's name would claim the original moved -- a
     node-identity judgement from a file-level heuristic, which is the inversion ARCH-001 §5
     exists to prevent.
     """
     similarity = resolve_rename_similarity(rename_similarity)
-    fields = run_git_z(
+    # Stderr is kept for one reason: when `diff.renameLimit` is exceeded git skips inexact
+    # rename detection, exits 0, and says so only there. Discarding it would hand the matcher
+    # a rename map that is silently short (ARCH-001 §11).
+    fields, stderr = run_git_z(
         repo,
         "diff",
         "--name-status",
         f"--find-renames={similarity}%",
+        "--ignore-submodules=none",
         "-z",
         f"{revs.base_sha}..{revs.head_sha}",
     )
@@ -321,7 +429,7 @@ def file_changes(
             changes.append(FileChange(status=status, path=fields[i + 1]))
         i += needed
 
-    return FileChanges(changes=tuple(changes))
+    return FileChanges(changes=tuple(changes), rename_limit=rename_limit_hit(stderr))
 
 
 def changed_files(repo: Path, revs: RevPair) -> list[str]:

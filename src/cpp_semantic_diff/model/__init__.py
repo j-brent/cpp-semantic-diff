@@ -1,16 +1,18 @@
 from cpp_semantic_diff.model.events import (
+    APPLIES_TO,
     DERIVED_KINDS,
     EDGE_KINDS,
     NODE_KINDS,
     REQUIRED_PAYLOAD,
     UNREACHABLE_IN_V0,
     V0_KINDS,
+    ChangeEvent,
+    ChangeEventId,
+    ChangeEventKind,
     Confidence,
-    Event,
-    EventId,
-    EventKind,
     Hunk,
     Side,
+    Unpaired,
     events_at,
 )
 from cpp_semantic_diff.model.ir import (
@@ -31,6 +33,7 @@ from cpp_semantic_diff.model.ir import (
 )
 
 __all__ = [
+    "APPLIES_TO",
     "DERIVED_KINDS",
     "EDGE_KINDS",
     "NODE_KINDS",
@@ -39,14 +42,14 @@ __all__ = [
     "V0_KINDS",
     "AnyId",
     "AttrValue",
+    "ChangeEvent",
+    "ChangeEventId",
+    "ChangeEventKind",
     "Completeness",
     "Confidence",
     "Edge",
     "EdgeId",
     "EdgeKind",
-    "Event",
-    "EventId",
-    "EventKind",
     "Hunk",
     "Location",
     "MatchTier",
@@ -57,5 +60,6 @@ __all__ = [
     "Side",
     "TuResult",
     "TuStatus",
+    "Unpaired",
     "events_at",
 ]

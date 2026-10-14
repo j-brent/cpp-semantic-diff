@@ -58,7 +58,7 @@ from cpp_semantic_diff.acquire.workspace import CompileEntry
 from cpp_semantic_diff.errors import ClangToolchainError, SemanticDiffError
 from cpp_semantic_diff.model.ir import TuResult, TuStatus
 from cpp_semantic_diff.produce.cache import TuCache
-from cpp_semantic_diff.produce.extract import TuExtract, extract
+from cpp_semantic_diff.produce.extract import NO_BOUNDARY, Boundary, TuExtract, extract
 from cpp_semantic_diff.produce.toolchain import Toolchain, load
 
 #: Overrides the worker count from the environment, for a machine this cannot see: a CI
@@ -119,9 +119,17 @@ def worker_count(requested: int | None = None, *, tasks: int | None = None) -> i
 #: and the toolchain is the thing being guaranteed.
 _toolchain: Toolchain | None = None
 _index: ci.Index | None = None
+#: What the model leaves out (`extract.Boundary`). The same for every TU of a build, and the
+#: tracked-file list in it is large, so it is sent once per process too.
+_boundary: Boundary = NO_BOUNDARY
 
 
-def _configure_worker(library: str, resource_dir: str, expected_id: str) -> None:
+def _configure_worker(
+    library: str,
+    resource_dir: str,
+    expected_id: str,
+    boundary: Boundary = NO_BOUNDARY,
+) -> None:
     """Give this process the parent's verified parser, or make it unable to parse.
 
     The parent has already paid for discovery and the builtin-header probe (ARCH-001 §13).
@@ -143,7 +151,7 @@ def _configure_worker(library: str, resource_dir: str, expected_id: str) -> None
     names no file is refused rather than replaced, so a library deleted between the parent's
     load and a worker's start fails the build instead of quietly swapping parsers.
     """
-    global _toolchain, _index
+    global _toolchain, _index, _boundary
 
     os.environ["CPPSD_LIBCLANG"] = library
     if resource_dir:
@@ -162,6 +170,7 @@ def _configure_worker(library: str, resource_dir: str, expected_id: str) -> None
         )
     _toolchain = toolchain
     _index = ci.Index.create()
+    _boundary = boundary
 
 
 def _parse_in_worker(entry: CompileEntry, root: Path) -> TuExtract:
@@ -174,7 +183,7 @@ def _parse_in_worker(entry: CompileEntry, root: Path) -> TuExtract:
     """
     if _toolchain is None or _index is None:  # pragma: no cover - initializer failed
         raise SemanticDiffError("worker was never configured with a verified toolchain")
-    return extract(entry, root=root, toolchain=_toolchain, index=_index)
+    return extract(entry, root=root, toolchain=_toolchain, index=_index, boundary=_boundary)
 
 
 # -- the parent side -----------------------------------------------------------------
@@ -215,9 +224,12 @@ class _Pool:
     therefore costs exactly one recorded failure and makes progress.
     """
 
-    def __init__(self, workers: int, toolchain: Toolchain) -> None:
+    def __init__(
+        self, workers: int, toolchain: Toolchain, boundary: Boundary = NO_BOUNDARY
+    ) -> None:
         self.workers = workers
         self.toolchain = toolchain
+        self.boundary = boundary
         self.restarts = 0
         #: Which pool a future belongs to. Two futures can both be broken by the same death
         #: and be noticed at different times, and without a generation the second notice
@@ -225,11 +237,12 @@ class _Pool:
         self.generation = 0
         self._executor: ProcessPoolExecutor | None = None
 
-    def _initargs(self) -> tuple[str, str, str]:
+    def _initargs(self) -> tuple[str, str, str, Boundary]:
         return (
             str(self.toolchain.library),
             str(self.toolchain.resource_dir or ""),
             self.toolchain.id,
+            self.boundary,
         )
 
     def _start(self) -> ProcessPoolExecutor:
@@ -321,10 +334,11 @@ class _Producer:
         toolchain: Toolchain,
         cache: TuCache | None,
         workers: int,
+        boundary: Boundary = NO_BOUNDARY,
     ) -> None:
         self.root = root
         self.cache = cache
-        self.pool = _Pool(workers, toolchain)
+        self.pool = _Pool(workers, toolchain, boundary)
         # How far ahead of the consumer keys are computed and work dispatched. Enough to keep
         # every worker fed while one slow TU sits at the head of the queue, and small enough
         # that the partials waiting behind it are bounded -- fmt's partials pickled to 2.6-4.3
@@ -511,6 +525,7 @@ def parallel_extracts(
     toolchain: Toolchain,
     cache: TuCache | None = None,
     workers: int,
+    boundary: Boundary = NO_BOUNDARY,
 ) -> Iterator[TuExtract]:
     """Partial models for these TUs, parsed by `workers` processes, in the order given.
 
@@ -519,5 +534,7 @@ def parallel_extracts(
     never reach a worker: the parallelism that matters is over the invalidated set, which
     is what the budget is written in terms of.
     """
-    producer = _Producer(root=root, toolchain=toolchain, cache=cache, workers=workers)
+    producer = _Producer(
+        root=root, toolchain=toolchain, cache=cache, workers=workers, boundary=boundary
+    )
     yield from producer.extracts(entries)

@@ -1,0 +1,106 @@
+"""Why each leftover is a leftover (ADR-034).
+
+The residue is every entity no tier paired, and in v0 that is every addition, every removal
+and every rename (ARCH-001 §13). Rank wants to know which of those the tool may have got
+wrong, and "no partner" does not say: a genuine addition has no partner by definition. So
+the match stage, which is the only stage that knows what was left on both sides, records for
+each leftover how much evidence there is that a partner was missed. That is a measurement of
+doubt, not an identity decision -- nothing here pairs anything.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Collection, Mapping
+
+from cpp_semantic_diff.model import EdgeKind, Model, NodeId, NodeKind, Unpaired
+
+
+def containers(model: Model) -> dict[NodeId, NodeId]:
+    """Child -> containing node, read off the `contains` edges (ARCH-001 §4.2).
+
+    The producer follows the *semantic* parent, so an out-of-line definition is contained
+    by its class rather than by the namespace it was written in, and a node has at most one
+    container. The IR does not forbid a second one; if one ever appears the move check in
+    `diff/nodes.py` is comparing *a* parent rather than *the* parent, which is why this is a
+    named function and not an inline comprehension.
+
+    It lives here rather than in the diff stage because the match stage now needs it too,
+    and diff already depends on match; one definition is what keeps the stages agreeing on
+    what "parent" means.
+    """
+    parents: dict[NodeId, NodeId] = {}
+    for edge in model.edges:
+        if edge.kind is EdgeKind.CONTAINS:
+            parents.setdefault(edge.dst, edge.src)
+    return parents
+
+
+#: Stands for "the parent is itself unmatched", so it can never equal a real parent on the
+#: other side. Two leftovers under two unmatched parents may well be the same entity, but
+#: saying so is a claim about the parents first, and nothing here makes identity claims.
+_UNPAIRED_PARENT = NodeId("\x00unpaired-parent")
+
+type _Slot = tuple[NodeKind, NodeId | None]
+
+
+def unpaired_reasons(
+    base: Model,
+    head: Model,
+    base_left: Collection[NodeId],
+    head_left: Collection[NodeId],
+    head_for: Mapping[NodeId, NodeId],
+    ambiguous_base: Collection[NodeId],
+    ambiguous_head: Collection[NodeId],
+    missed_rename_files: Collection[str] = (),
+) -> tuple[dict[NodeId, Unpaired], dict[NodeId, Unpaired]]:
+    """An `Unpaired` reason for every leftover on each side.
+
+    `AMBIGUOUS` comes from the tiers, which are the only ones who know they declined a
+    choice. Otherwise a leftover is a `CANDIDATE` when the other side's leftovers hold an
+    entity of the same kind under the same parent -- ARCH-001 §5's tier-4 candidate set,
+    counted and not scored -- and `NONE` when they hold none. "Same parent" is asked in head
+    coordinates through the matches made so far: a base parent means its head partner, and
+    top level means top level.
+
+    `missed_rename_files` are files git may have failed to pair as renames: every file the
+    diff added or deleted, when git skipped inexact rename detection at `diff.renameLimit`.
+    A leftover located in one is at least a `CANDIDATE` whatever the slot test says. The
+    slot test cannot see this case: members of a class in an anonymous namespace sit under
+    a parent that is itself unpaired, so they would read as plain additions and removals --
+    a confident claim resting on a rename map known to be short (ARCH-001 §11).
+    """
+    base_parents = containers(base)
+    head_parents = containers(head)
+
+    def base_slot(node_id: NodeId) -> _Slot:
+        parent = base_parents.get(node_id)
+        mapped = None if parent is None else head_for.get(parent, _UNPAIRED_PARENT)
+        return (base.nodes[node_id].kind, mapped)
+
+    def head_slot(node_id: NodeId) -> _Slot:
+        return (head.nodes[node_id].kind, head_parents.get(node_id))
+
+    base_slots = {base_slot(n) for n in base_left}
+    head_slots = {head_slot(n) for n in head_left}
+
+    def reason(slot: _Slot, ambiguous: bool, other: set[_Slot]) -> Unpaired:
+        if ambiguous:
+            return Unpaired.AMBIGUOUS
+        # An unpaired parent never matches, so it is never a candidate -- see above.
+        return (
+            Unpaired.CANDIDATE if slot[1] != _UNPAIRED_PARENT and slot in other else Unpaired.NONE
+        )
+
+    suspect = frozenset(missed_rename_files)
+
+    def floored(model: Model, node_id: NodeId, found: Unpaired) -> Unpaired:
+        location = model.nodes[node_id].location
+        if found is Unpaired.NONE and location is not None and location.file in suspect:
+            return Unpaired.CANDIDATE
+        return found
+
+    amb_b, amb_h = set(ambiguous_base), set(ambiguous_head)
+    return (
+        {n: floored(base, n, reason(base_slot(n), n in amb_b, head_slots)) for n in base_left},
+        {n: floored(head, n, reason(head_slot(n), n in amb_h, base_slots)) for n in head_left},
+    )

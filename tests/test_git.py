@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import os
+import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -11,6 +14,7 @@ from conftest import commit, git, require_fixture
 from cpp_semantic_diff.acquire import git as git_module
 from cpp_semantic_diff.acquire.git import (
     RENAME_SIMILARITY_ENV,
+    RenameLimitHit,
     RevPair,
     changed_files,
     detect_default_branch,
@@ -18,8 +22,10 @@ from cpp_semantic_diff.acquire.git import (
     file_changes,
     is_git_repository,
     is_shallow,
+    rename_limit_hit,
     resolve_rename_similarity,
     resolve_revs,
+    tracked_files,
 )
 from cpp_semantic_diff.acquire.workspace import materialize_submodules
 from cpp_semantic_diff.errors import (
@@ -27,6 +33,7 @@ from cpp_semantic_diff.errors import (
     GitError,
     GitNotFoundError,
     InvalidSettingError,
+    NoMergeBaseError,
     NotAGitRepositoryError,
     ShallowRepositoryError,
     UnknownRefError,
@@ -92,6 +99,21 @@ class TestPreconditions:
         with pytest.raises(GitNotFoundError):
             is_git_repository(diverged_repo)
 
+    def test_unrelated_histories_have_no_merge_base(self, bare_repo: Path) -> None:
+        """ADR-008's base is `merge-base(main, HEAD)`, which does not exist for two root
+        commits with no shared ancestor -- an orphan branch, or a base ref picked by
+        mistake. `git merge-base` exits 1 with empty stdout for this, and nothing downstream
+        can turn that into a sensible answer, so it must surface as a precondition failure
+        rather than, say, an empty sha silently treated as valid.
+        """
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        git(bare_repo, "checkout", "-q", "--orphan", "feature")
+        git(bare_repo, "rm", "-q", "-f", "a.cpp")
+        commit(bare_repo, "c.cpp", "int c();\n", "C")
+
+        with pytest.raises(NoMergeBaseError, match="share no history"):
+            resolve_revs(bare_repo, base_ref="main")
+
 
 class TestDefaultBranchDetection:
     def test_prefers_main(self, diverged_repo: Path) -> None:
@@ -101,6 +123,49 @@ class TestDefaultBranchDetection:
         commit(bare_repo, "a.cpp", "int a();\n", "A")
         git(bare_repo, "branch", "-m", "main", "master")
         assert detect_default_branch(bare_repo) == "master"
+
+    def test_origin_head_outranks_the_local_candidate_list(self, bare_repo: Path) -> None:
+        """The docstring's order is "origin/HEAD if the remote published one, else the first
+        candidate" -- origin/HEAD is checked *first*. A clone's remote can disagree about
+        which branch is the default with whatever `main`/`master` happens to exist locally --
+        a stale local branch left over from a rename, say -- and the remote's own answer must
+        win. `symbolic-ref` and `update-ref` reproduce exactly what `git clone` leaves behind,
+        without a real remote.
+        """
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        git(bare_repo, "checkout", "-q", "-b", "trunk")
+        commit(bare_repo, "b.cpp", "int b();\n", "B")
+        git(bare_repo, "checkout", "-q", "main")
+
+        git(
+            bare_repo, "update-ref", "refs/remotes/origin/main", git(bare_repo, "rev-parse", "main")
+        )
+        git(
+            bare_repo,
+            "update-ref",
+            "refs/remotes/origin/trunk",
+            git(bare_repo, "rev-parse", "trunk"),
+        )
+        git(bare_repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
+
+        assert detect_default_branch(bare_repo) == "origin/trunk"
+
+    def test_falls_back_to_a_remote_branch_with_no_local_counterpart(self, bare_repo: Path) -> None:
+        """A fresh clone with no `origin/HEAD` recorded (some hosts and shallow fetches omit
+        it) and no local `main`/`master` -- only the remote-tracking ref exists. Reached by
+        the `for ref in (candidate, f"origin/{candidate}")` fallback, which the other tests
+        in this class never exercise because they always have a local candidate branch.
+        """
+        commit(bare_repo, "a.cpp", "int a();\n", "A")
+        git(bare_repo, "branch", "-m", "main", "trunk-local")
+        git(
+            bare_repo,
+            "update-ref",
+            "refs/remotes/origin/main",
+            git(bare_repo, "rev-parse", "trunk-local"),
+        )
+
+        assert detect_default_branch(bare_repo) == "origin/main"
 
 
 class TestCompressionDenominator:
@@ -113,6 +178,20 @@ class TestCompressionDenominator:
         revs = resolve_revs(diverged_repo, base_ref="HEAD")
         assert revs.is_empty
         assert diff_line_count(diverged_repo, revs) == 0
+
+    def test_a_binary_file_does_not_count_as_lines(self, bare_repo: Path) -> None:
+        """`git diff --numstat` prints `-` for both columns on a binary file, which the
+        `added == "-" or deleted == "-"` guard skips. Getting this wrong inflates the
+        compression denominator (§10) by however large the binary is, silently -- the
+        number just looks a little different, never a crash or an empty result.
+        """
+        commit(bare_repo, "img.bin", "hello\x00world", "A")
+        git(bare_repo, "checkout", "-q", "-b", "feature")
+        commit(bare_repo, "img.bin", "hello\x00WORLD!!", "edit the binary")
+        commit(bare_repo, "real.cpp", "int real();\n", "add a real line")
+
+        revs = resolve_revs(bare_repo)
+        assert diff_line_count(bare_repo, revs) == 1, "only real.cpp's one added line should count"
 
 
 class TestAWorktreeCarriesWhatTheRevisionPins:
@@ -291,9 +370,29 @@ class TestRenamesAreResolvedFromGit:
     ) -> None:
         """A rename record missing its destination would understate what changed."""
         revs = resolve_revs(diverged_repo)
-        monkeypatch.setattr(git_module, "run_git_z", lambda repo, *args: ["M", "a.cpp", "R100"])
+        monkeypatch.setattr(
+            git_module, "run_git_z", lambda repo, *args: (["M", "a.cpp", "R100"], "")
+        )
         with pytest.raises(GitError, match="mid-record"):
             file_changes(diverged_repo, revs)
+
+    def test_an_unrecognised_status_letter_is_one_path_not_a_refusal(
+        self, diverged_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`X` and friends -- git's own symbol for "I could not figure out what this is" --
+        are explicitly not R or C, so the parser takes the one-path branch rather than
+        raising. The comment in `file_changes` states the reasoning: a git that grows a new
+        status letter should not stop a review it does not otherwise affect. Without this
+        test a future change that narrows the one-path branch to a fixed set of letters
+        would silently turn "unknown status" into "crashes every run against a newer git".
+        """
+        revs = resolve_revs(diverged_repo)
+        monkeypatch.setattr(
+            git_module, "run_git_z", lambda repo, *args: (["X", "puzzling.cpp"], "")
+        )
+        changes = file_changes(diverged_repo, revs)
+        assert changes.paths == ["puzzling.cpp"]
+        assert changes.renames == {}
 
     def test_two_undecodable_paths_do_not_collapse_into_one(self, bare_repo: Path) -> None:
         """Why the rename query needs its own runner rather than `run_git`.
@@ -383,3 +482,160 @@ class TestRenamesAreResolvedFromGit:
 
         assert changes.renames == {"test/core-test.cc": "test/base-test.cc"}
         assert changes.paths == ["test/CMakeLists.txt", "test/base-test.cc"]
+
+
+class TestATruncatedRenameMapIsReported:
+    """ARCH-001 §11 rule 2. Past `diff.renameLimit`, git skips inexact rename
+    detection, exits 0 and says so only on stderr. A rename map that is silently short turns
+    every file-scoped entity in a renamed-and-edited file into a removal plus an addition, and
+    nothing in the output would say why. The cap is not lifted (`-l0` is potentially quadratic
+    on the diffs that hit it); the truncation is reported."""
+
+    @staticmethod
+    def _two_inexact_renames(repo: Path) -> RevPair:
+        for name in ("a", "b"):
+            body = "".join(f"int {name}{i}() {{ return {i}; }}\n" for i in range(30))
+            commit(repo, f"src/{name}.cpp", body, f"add {name}")
+        git(repo, "checkout", "-q", "-b", "feature")
+        for name in ("a", "b"):
+            git(repo, "mv", f"src/{name}.cpp", f"src/{name}2.cpp")
+            with (repo / f"src/{name}2.cpp").open("a", encoding="utf-8") as fh:
+                fh.write("int extra();\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "rename and edit both")
+        return resolve_revs(repo)
+
+    def test_within_the_limit_nothing_is_reported(self, bare_repo: Path) -> None:
+        revs = self._two_inexact_renames(bare_repo)
+        changes = file_changes(bare_repo, revs)
+        assert changes.renames == {"src/a.cpp": "src/a2.cpp", "src/b.cpp": "src/b2.cpp"}
+        assert changes.rename_limit is None
+        assert changes.missed_rename_files == frozenset()
+
+    def test_past_the_limit_the_truncation_is_reported(self, bare_repo: Path) -> None:
+        revs = self._two_inexact_renames(bare_repo)
+        git(bare_repo, "config", "diff.renameLimit", "1")
+        changes = file_changes(bare_repo, revs)
+        assert changes.renames == {}, "the gap being reported must actually exist"
+        assert changes.rename_limit == RenameLimitHit(needed=2)
+        assert changes.missed_rename_files == {
+            "src/a.cpp",
+            "src/a2.cpp",
+            "src/b.cpp",
+            "src/b2.cpp",
+        }
+
+    def test_an_exact_rename_survives_the_limit_that_truncates_an_inexact_one(
+        self, bare_repo: Path
+    ) -> None:
+        """The realistic case: one branch hits the cap and loses *some* of its renames, not
+        all of them. Git finds an exact (byte-identical, R100) rename through its cheap
+        content-hash pass regardless of `diff.renameLimit` -- only the expensive
+        similarity-scoring pass that catches a renamed-and-edited file is what gets skipped.
+        A map that reports zero renames whenever the limit is hit (as both tests above do,
+        for simplicity) would hide that the two failure modes coexist in one diff: some
+        renames still resolve correctly, and only the genuinely-lost ones should end up in
+        `missed_rename_files`.
+        """
+        commit(bare_repo, "src/exact.cpp", "int exact() { return 0; }\n", "add exact")
+        self._two_inexact_renames(bare_repo)  # branches to "feature" and leaves it checked out
+        git(bare_repo, "mv", "src/exact.cpp", "src/exact2.cpp")
+        git(bare_repo, "commit", "-q", "-m", "rename exact unchanged")
+        revs = resolve_revs(bare_repo)
+
+        git(bare_repo, "config", "diff.renameLimit", "1")
+        changes = file_changes(bare_repo, revs)
+
+        assert changes.rename_limit is not None, "the inexact pass must actually be skipped"
+        assert changes.renames == {"src/exact.cpp": "src/exact2.cpp"}, (
+            "the exact rename is not inexact detection, so the cap does not touch it"
+        )
+        assert changes.missed_rename_files == {"src/a.cpp", "src/a2.cpp", "src/b.cpp", "src/b2.cpp"}
+        assert "src/exact.cpp" not in changes.missed_rename_files
+        assert "src/exact2.cpp" not in changes.missed_rename_files
+
+    def test_the_query_runs_in_the_c_locale(
+        self, bare_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The warning is read from stderr, so a translated git would hide it. The call is
+        made in the C locale whatever the reviewer's is, with `LANGUAGE` removed."""
+        seen: list[Mapping[str, str] | None] = []
+        real = git_module._run
+
+        def spy(argv: Sequence[str], **kw: Any) -> subprocess.CompletedProcess[str]:
+            seen.append(kw.get("env"))
+            return real(argv, **kw)
+
+        monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+        monkeypatch.setenv("LANGUAGE", "de")
+        monkeypatch.setattr(git_module, "_run", spy)
+        git_module.run_git_z(bare_repo, "status", "-z")
+
+        (env,) = seen
+        assert env is not None
+        assert env["LC_ALL"] == "C"
+        assert "LANGUAGE" not in env
+
+    def test_the_message_git_prints_is_the_one_read(self, bare_repo: Path) -> None:
+        """Pins git's own wording, in the C locale, so a git that rewords it fails here
+        rather than going quiet in production."""
+        revs = self._two_inexact_renames(bare_repo)
+        proc = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(bare_repo),
+                "-c",
+                "diff.renameLimit=1",
+                "diff",
+                "--name-status",
+                "--find-renames=50%",
+                "-z",
+                f"{revs.base_sha}..{revs.head_sha}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+        assert "rename detection was skipped" in proc.stderr
+        assert "diff.renameLimit" in proc.stderr
+        assert rename_limit_hit(proc.stderr) == RenameLimitHit(needed=2)
+
+    @pytest.mark.parametrize(
+        ("stderr", "expected"),
+        [
+            ("", None),
+            ("warning: something unrelated\n", None),
+            # git 2.43's wording
+            (
+                "warning: exhaustive rename detection was skipped due to too many files.\n"
+                "warning: you may want to set your diff.renameLimit variable to at least 1234 "
+                "and retry the command.\n",
+                RenameLimitHit(needed=1234),
+            ),
+            # older git's wording
+            (
+                "warning: inexact rename detection was skipped due to too many files.\n"
+                "warning: you may want to set your diff.renamelimit variable to at least 9 "
+                "and retry the command.\n",
+                RenameLimitHit(needed=9),
+            ),
+            # the skip without the advice line still counts
+            ("warning: inexact rename detection was skipped\n", RenameLimitHit(needed=None)),
+        ],
+    )
+    def test_the_match_is_tolerant(self, stderr: str, expected: RenameLimitHit | None) -> None:
+        assert rename_limit_hit(stderr) == expected
+
+
+class TestTrackedFiles:
+    """ADR-037: the files a revision models are the files git tracks at it."""
+
+    def test_lists_what_the_revision_tracks_and_nothing_untracked(self, bare_repo: Path) -> None:
+        first = commit(bare_repo, "src/a.h", "int a();\n", "a")
+        second = commit(bare_repo, "src/b.h", "int b();\n", "b")
+        (bare_repo / "build").mkdir()
+        (bare_repo / "build" / "gen.h").write_text("int gen();\n", encoding="utf-8")
+        assert tracked_files(bare_repo, first) == {"src/a.h"}
+        assert tracked_files(bare_repo, second) == {"src/a.h", "src/b.h"}

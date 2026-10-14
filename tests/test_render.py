@@ -26,49 +26,63 @@ idiom of `test_diff.py` and `test_rank.py`.
 from __future__ import annotations
 
 import io
+import json
 from typing import Any
 
 import pytest
 from rich.console import Console
 
-from cpp_semantic_diff.acquire import RevPair
+from cpp_semantic_diff.acquire import (
+    RenameLimitHit,
+    RevPair,
+    ThirdPartyEntry,
+    ThirdPartySet,
+    ThirdPartySource,
+)
+from cpp_semantic_diff.acquire.tokens import ExcludedFile
 from cpp_semantic_diff.classify import classify_events
+from cpp_semantic_diff.derive import derive_events
 from cpp_semantic_diff.diff import diff_models
+from cpp_semantic_diff.diff.coverage import Coverage, UncoveredFile
 from cpp_semantic_diff.match import Correspondence, match_models
 from cpp_semantic_diff.model import (
     AttrValue,
+    ChangeEvent,
+    ChangeEventId,
+    ChangeEventKind,
     Completeness,
     Confidence,
     Edge,
     EdgeKind,
-    Event,
-    EventId,
-    EventKind,
     Location,
     MatchTier,
     Model,
     Node,
     NodeId,
     NodeKind,
+    Side,
     TuResult,
     TuStatus,
+    Unpaired,
 )
+from cpp_semantic_diff.model.ir import Crossing
 from cpp_semantic_diff.rank import rank_events
 from cpp_semantic_diff.render import (
     SCHEMA_VERSION,
     SYSTEMATIC_LIMITS,
     DiffDocument,
+    RenameDetection,
     build_document,
     collapse,
     compression_sentence,
     render,
 )
-from cpp_semantic_diff.render.terminal import hidden_ids
+from cpp_semantic_diff.render.terminal import CALLERS_SHOWN, hidden_ids
 
 PUBLIC = "include/lib/thing.h"
 
 SURE = Confidence(tier=MatchTier.DECLARED, models_complete=True)
-RESIDUE = Confidence(tier=None, models_complete=True)
+RESIDUE = Confidence(tier=None, unpaired=Unpaired.NONE, models_complete=True)
 
 
 # -- builders ---------------------------------------------------------------------------
@@ -98,9 +112,9 @@ def edge(src: str, dst: str, kind: EdgeKind = EdgeKind.CALLS) -> Edge:
 
 
 def event(
-    kind: EventKind, subject: str, confidence: Confidence = RESIDUE, **payload: AttrValue
-) -> Event:
-    return Event(kind=kind, subject=NodeId(subject), payload=payload, confidence=confidence)
+    kind: ChangeEventKind, subject: str, confidence: Confidence = RESIDUE, **payload: AttrValue
+) -> ChangeEvent:
+    return ChangeEvent(kind=kind, subject=NodeId(subject), payload=payload, confidence=confidence)
 
 
 REVS = RevPair(base_ref="main", head_ref="HEAD", base_sha="a" * 40, head_sha="b" * 40)
@@ -109,11 +123,13 @@ REVS = RevPair(base_ref="main", head_ref="HEAD", base_sha="a" * 40, head_sha="b"
 def document(
     base: Model,
     head: Model,
-    events: list[Event],
+    events: list[ChangeEvent],
     *,
     correspondence: Correspondence | None = None,
     lines_changed: int = 100,
     files_renamed: int = 0,
+    rename_limit: RenameLimitHit | None = None,
+    third_party: ThirdPartySet | None = None,
 ) -> DiffDocument:
     corr = correspondence if correspondence is not None else match_models(base, head)
     return build_document(
@@ -128,13 +144,16 @@ def document(
         files_changed=3,
         cpp_files_changed=2,
         files_renamed=files_renamed,
+        rename_limit=rename_limit,
+        third_party=third_party,
     )
 
 
 def pipeline(base: Model, head: Model, *, lines_changed: int = 100) -> DiffDocument:
     """The real stages, end to end, with no libclang -- models are the only input they need."""
     corr = match_models(base, head)
-    events = classify_events(diff_models(base, head, corr), base, head, corr)
+    derived = derive_events(diff_models(base, head, corr), base, head, corr)
+    events = classify_events(derived, base, head, corr)
     return document(base, head, events, correspondence=corr, lines_changed=lines_changed)
 
 
@@ -187,7 +206,7 @@ class TestDocumentCarriesEverything:
         base = model("a", cls, member, edges=[edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS)])
         doc = pipeline(base, model("b"))
 
-        caused = [e for e in doc.events if e.caused_by is not None]
+        caused = [e for e in doc.change_events if e.caused_by is not None]
         assert caused, "the fixture must produce a cascade or it is testing nothing"
 
         tree = collapse(doc, enabled=True)
@@ -195,8 +214,8 @@ class TestDocumentCarriesEverything:
         assert hidden, "the view must actually be nesting something"
 
         # The claim: nested in the view, present in the document.
-        assert hidden <= {e.id for e in doc.events}
-        assert doc.summary.events_reported == len(doc.events)
+        assert hidden <= {e.id for e in doc.change_events}
+        assert doc.summary.change_events_reported == len(doc.change_events)
 
     def test_collapsing_changes_shape_but_never_the_set(self) -> None:
         """`--expand` and the default must differ in nesting only, never in content.
@@ -216,6 +235,47 @@ class TestDocumentCarriesEverything:
         assert len(flat.roots) > len(nested.roots), "expanded must show more at top level"
         assert flat.hidden == 0
 
+    def test_hidden_count_is_the_whole_subtree_not_just_direct_children(self) -> None:
+        """`CollapseNode.hidden`'s own claim: "the whole subtree below it, at every depth."
+
+        A one-level cascade cannot tell a correct recursive sum from a wrong direct-child
+        count -- both equal 1. A removed namespace containing a removed class containing a
+        removed method (plus the two contains edges the endpoint rule folds in beside them)
+        can: the namespace's two *direct* children are not its whole subtree, and `hidden`
+        must count the subtree, not the children, or `_why`'s "N consequence(s) nested
+        below" undercounts what the view actually hid.
+        """
+        ns = node("c:@N@n", kind=NodeKind.NAMESPACE, name="n")
+        cls = node("c:@N@n@S@C", kind=NodeKind.CLASS, name="C", qualified_name="n::C")
+        member = node("c:@N@n@S@C@F@m#", name="m", qualified_name="n::C::m")
+        base = model(
+            "a",
+            ns,
+            cls,
+            member,
+            edges=[
+                edge("c:@N@n", "c:@N@n@S@C", EdgeKind.CONTAINS),
+                edge("c:@N@n@S@C", "c:@N@n@S@C@F@m#", EdgeKind.CONTAINS),
+            ],
+        )
+        doc = pipeline(base, model("b"))
+        tree = collapse(doc)
+
+        by_subject = {
+            doc.by_id[n.event_id].subject: n for root in tree.roots for n, _ in root.walk()
+        }
+        ns_node = by_subject[NodeId("c:@N@n")]
+
+        # Independent of `hidden`'s own arithmetic: every node `walk()` reaches below the
+        # namespace, counted the same way `test_nesting_follows_the_chain_one_level_at_a_time`
+        # trusts `walk()` to recurse correctly.
+        descendants = sum(1 for _, depth in ns_node.walk() if depth > 0)
+        assert ns_node.hidden == descendants
+        assert ns_node.hidden > len(ns_node.children), (
+            "the fixture must nest more than one level deep, or this cannot tell a "
+            "recursive sum from a direct-child count"
+        )
+
     def test_every_event_appears_exactly_once_in_the_collapse_tree(self) -> None:
         cls = node("c:@S@C", kind=NodeKind.CLASS, name="C")
         member = node("c:@S@C@F@m#", name="m", qualified_name="C::m")
@@ -223,7 +283,7 @@ class TestDocumentCarriesEverything:
         doc = pipeline(base, model("b"))
 
         flattened = collapse(doc).flatten()
-        assert sorted(flattened) == sorted(e.id for e in doc.events)
+        assert sorted(flattened) == sorted(e.id for e in doc.change_events)
         assert len(flattened) == len(set(flattened))
 
 
@@ -234,7 +294,7 @@ class TestNothingIsHiddenWithoutACause:
     top level rather than losing it.
     """
 
-    def _doc(self, events: list[Event]) -> DiffDocument:
+    def _doc(self, events: list[ChangeEvent]) -> DiffDocument:
         f = node("c:@F@f#", name="f")
         g = node("c:@F@g#", name="g")
         return document(model("a", f, g), model("b", f, g), events)
@@ -242,12 +302,12 @@ class TestNothingIsHiddenWithoutACause:
     def test_an_event_with_no_cause_is_top_level(self) -> None:
         doc = self._doc(
             [
-                event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE),
-                event(EventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE),
+                event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE),
+                event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE),
             ]
         )
         tree = collapse(doc)
-        assert {r.event_id for r in tree.roots} == {e.id for e in doc.events}
+        assert {r.event_id for r in tree.roots} == {e.id for e in doc.change_events}
         assert tree.hidden == 0
 
     def test_a_dangling_cause_promotes_rather_than_hides(self) -> None:
@@ -257,10 +317,10 @@ class TestNothingIsHiddenWithoutACause:
         which is exactly why it must not be trusted. Burying the event under a cause that
         is not there would make it invisible in every view at once.
         """
-        # `model_copy`, because `Event` is frozen (ARCH-001 §3): the way to get a modified
+        # `model_copy`, because `ChangeEvent` is frozen (ARCH-001 §3): the way to get a modified
         # event is to make one, which is also what classify does to set this same field.
-        orphan = event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE).model_copy(
-            update={"caused_by": EventId("NodeRemoved:deadbeef")}
+        orphan = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE).model_copy(
+            update={"caused_by": ChangeEventId("NodeRemoved:deadbeef")}
         )
         doc = self._doc([orphan])
 
@@ -274,8 +334,8 @@ class TestNothingIsHiddenWithoutACause:
         A cycle is precisely the case where "which of these is the cause" has no answer, so
         §6.3 says show -- and showing both is the only reading that loses nothing.
         """
-        first = event(EventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE)
-        second = event(EventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE)
+        first = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE)
+        second = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE)
         # Frozen events, so the cycle is built by copying rather than by assignment. The
         # ids are unchanged by the copy -- they exclude `caused_by` on purpose -- which is
         # what makes each of these still point at the other.
@@ -287,6 +347,56 @@ class TestNothingIsHiddenWithoutACause:
         assert sorted(collapse(doc).flatten()) == sorted([a.id, b.id])
         assert {r.event_id for r in tree.roots} == {a.id, b.id}
         assert set(tree.promoted) == {a.id, b.id}
+
+    def test_a_cycle_reached_through_an_acyclic_lead_in_promotes_only_the_cycle(self) -> None:
+        """`_on_a_cycle`'s own claim: a node reached while still on the current path closes
+        a cycle, and *the tail of the path from that node* is the cycle -- not the whole
+        path. A chain that merely walks into a cycle without being part of it has an
+        answer to "which of these is the cause" (its own link, unbroken); only the cycle's
+        members do not. The two-node fixture above cannot tell "promote the cycle" apart
+        from "promote everything reachable from it", because there is nothing upstream to
+        wrongly sweep in -- this fixture adds that upstream link.
+
+        **Why `doc.ranking` is forced rather than left as `rank_events` produced it.**
+        `_on_a_cycle` walks `parent` in the order `collapse()` built it from, which is
+        ranking order. `rank/ranker.py` caps a consequence's score at its cause's
+        (`_bound_by_cause`) and breaks ties on cascade depth, so a lead-in whose
+        `caused_by` points *into* a cycle always ranks after both cycle members -- its
+        score is capped by theirs and its depth is strictly greater. That means the walk
+        that first discovers the cycle always starts *on* the cycle itself in practice,
+        where the path and its cycle-tail are the same slice and the trim this test is
+        about never has anything to cut. A mutant that swept the whole walked path instead
+        of just the tail (`on_cycle.update(path)` for
+        `on_cycle.update(path[path.index(current):])`) passed this fixture unmodified,
+        which is exactly that: a real document built through ranking cannot exercise the
+        line ARCH-001 §6.3 and this module's docstring both rest on. `collapse.py`'s own
+        docstring says a document "can arrive from a file, from a test, or from a future
+        stage" -- not only from today's ranker -- so the walk order has to be forced to
+        the one shape ranking will not produce, and the claim has to hold there too.
+        `DiffDocument` is not frozen (`by_id`'s own comment), so reassigning `ranking` is
+        the same kind of by-hand construction the rest of this module already uses.
+        """
+        f = node("c:@F@f#", name="f")
+        g = node("c:@F@g#", name="g")
+        h = node("c:@F@h#", name="h")
+
+        lead_in = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@f#", SURE)
+        a = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@g#", SURE)
+        b = event(ChangeEventKind.NODE_BODY_CHANGED, "c:@F@h#", SURE)
+        # lead_in -> a <-> b: a cycle between a and b, fed by a lead-in that is not on it.
+        lead_in = lead_in.model_copy(update={"caused_by": a.id})
+        a = a.model_copy(update={"caused_by": b.id})
+        b = b.model_copy(update={"caused_by": a.id})
+        doc = document(model("x", f, g, h), model("y", f, g, h), [lead_in, a, b])
+        # Force the walk that discovers the cycle to start from the lead-in, not from a
+        # cycle member -- see the docstring above for why ranking alone never does this.
+        doc.ranking = [lead_in.id, a.id, b.id]
+
+        tree = collapse(doc)
+        assert set(tree.promoted) == {a.id, b.id}, "only the cycle has no usable cause"
+        assert lead_in.id not in tree.promoted, "the lead-in's own link is still usable"
+        assert lead_in.id in hidden_ids(tree), "and it must still be nested under the cycle"
+        assert sorted(tree.flatten()) == sorted([lead_in.id, a.id, b.id])
 
     def test_nesting_follows_the_chain_one_level_at_a_time(self) -> None:
         """Classify links to the *immediate* container so that render can nest (§6.3).
@@ -315,7 +425,7 @@ class TestNothingIsHiddenWithoutACause:
             doc.by_id[n.event_id].subject: d
             for root in tree.roots
             for n, d in root.walk()
-            if doc.by_id[n.event_id].kind is EventKind.NODE_REMOVED
+            if doc.by_id[n.event_id].kind is ChangeEventKind.NODE_REMOVED
         }
         assert (
             depths[NodeId("c:@N@n")]
@@ -382,12 +492,12 @@ class TestCompressionCountsWhatItClaims:
         base = model("a", cls, member, edges=[edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS)])
         doc = pipeline(base, model("b"), lines_changed=200)
 
-        assert doc.summary.events_reported == len(doc.events)
-        assert doc.summary.top_level_events < doc.summary.events_reported, (
+        assert doc.summary.change_events_reported == len(doc.change_events)
+        assert doc.summary.top_level_change_events < doc.summary.change_events_reported, (
             "the fixture must collapse something, or the distinction is untested"
         )
-        assert doc.summary.compression_ratio == 200 / len(doc.events)
-        assert str(len(doc.events)) in doc.summary.compression
+        assert doc.summary.compression_ratio == 200 / len(doc.change_events)
+        assert str(len(doc.change_events)) in doc.summary.compression
 
     def test_the_denominator_is_the_text_diff_as_measured(self) -> None:
         """`lines_changed` is `acquire.diff_line_count` -- the number `cppsd plan` reports
@@ -416,74 +526,42 @@ class TestCompressionCountsWhatItClaims:
         this tool can produce, and a sentinel ratio would let a consumer average over it."""
         f = node("c:@F@f#", name="f")
         doc = pipeline(model("a", f), model("b", f), lines_changed=900)
-        assert doc.summary.events_reported == 0
+        assert doc.summary.change_events_reported == 0
         assert doc.summary.compression_ratio is None
         assert "no semantic change" in doc.summary.compression
 
     def test_the_sentence_has_the_shape_arch_10_prints(self) -> None:
         assert (
             compression_sentence(2431, 9, 2)
-            == "2,431 lines changed -> 9 semantic events, 2 high-risk"
+            == "2,431 lines changed -> 9 change events, 2 high-risk"
         )
 
-    def test_the_ratio_does_not_straddle_two_universes(self) -> None:
-        """Measured on leveldb: 52 lines changed, 3,794 events, 0.0 lines per event (commits
-        `2651354` and `8046af5`, 2026-08-04).
-
-        The denominator is lines of *text diff*, and git renders a submodule bump as two
-        lines rather than the hundred thousand inside it. Dividing that by every modelled
-        event compares a first-party denominator against a whole-world numerator, so the two
-        sides have to be taken over the same universe or the number means nothing.
-        """
-        own = node("c:@F@own#", name="own", file="src/lib.cc")
-        deps = [
-            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(9)
-        ]
-        doc = pipeline(model("a", own, *deps), model("b", *deps), lines_changed=10)
-
-        assert doc.summary.events_reported == 1, "one first-party removal"
-        assert doc.summary.vendored_events == 0, "the dependency itself did not change here"
-        assert doc.summary.compression_ratio == 10 / 1
-
-    def test_a_dependency_bump_does_not_flatten_the_ratio(self) -> None:
-        own = node("c:@F@own#", name="own", file="src/lib.cc")
-        deps = [
-            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(20)
-        ]
-        doc = pipeline(model("a", own, *deps), model("b"), lines_changed=10)
-
-        assert doc.summary.vendored_events == 20
-        assert doc.summary.events_reported == 21, "the complete set is still reported"
-        assert doc.summary.compression_ratio == 10 / 1, (
-            "10 lines over the one first-party event, not over all 21"
+    def test_the_sentence_carries_the_changes_no_event_explains(self) -> None:
+        """Alone, the ratio improves when the model sees less; beside the uncovered count it
+        cannot (ADR-042)."""
+        assert compression_sentence(580, 181, 2, uncovered=(37, 412)) == (
+            "580 lines changed -> 181 change events, 2 high-risk · 37 of 412 changed C++ lines "
+            "explained by no change event"
+        )
+        assert compression_sentence(10, 0, 0, uncovered=(4, 4)).endswith(
+            "(no semantic change the model can see) · 4 of 4 changed C++ lines explained by no "
+            "change event"
         )
 
-    def test_a_bump_that_touches_nothing_of_yours_says_so(self) -> None:
-        """Distinct from 'no semantic change': something did change, none of it yours."""
+    def test_code_in_a_folder_named_like_a_dependency_is_not_set_aside(self) -> None:
+        """Third-party code is left out of the model, not ranked apart inside it (ADR-025).
+        What is in the model is the repository's own, whatever its folder is called, so every
+        change event is in the numerator and none is reported as bundled."""
+        own = node("c:@F@own#", name="own", file="src/lib.cc")
         deps = [
             node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(4)
         ]
-        doc = pipeline(model("a", *deps), model("b"), lines_changed=10)
+        doc = pipeline(model("a", own, *deps), model("b"), lines_changed=10)
 
-        assert doc.summary.compression_ratio is None
-        assert "bundled dependencies" in doc.summary.compression
-        assert "no semantic change" not in doc.summary.compression
-
-    def test_high_risk_does_not_count_what_the_reviewer_is_not_shown(self) -> None:
-        """On leveldb 16 of 21 high-risk events were vendored (commit `562921c`, 2026-08-04). A
-        headline promising sixteen dangerous changes the view never shows is worse than no
-        headline."""
-        dependents = [node(f"c:@F@x{i}#", file="third_party/gtest/gtest.cc") for i in range(40)]
-        base = model(
-            "a",
-            node("c:@F@assert_helper#", file="third_party/gtest/gtest.cc"),
-            *dependents,
-            edges=[edge(d.id, "c:@F@assert_helper#") for d in dependents],
-        )
-        doc = pipeline(base, model("b", *dependents), lines_changed=10)
-
-        assert doc.summary.vendored_events >= 1
-        assert doc.summary.high_risk_count == 0
+        assert doc.summary.change_events_reported == 5
+        assert doc.summary.compression_ratio == 10 / 5
+        assert "bundled" not in doc.summary.compression
+        assert "vendored_events" not in doc.summary.model_dump()
 
     def test_the_view_prints_the_sentence_the_document_carries(self) -> None:
         """One claim, one place. A view that composed its own could quietly disagree with
@@ -553,6 +631,66 @@ class TestIncompletenessIsVisible:
         assert doc.completeness.base.tus_complete
         assert doc.completeness.degraded, "tus_complete alone must not decide the banner"
         assert "invalidated and reparsed" in draw(doc)
+
+    def test_a_truncated_rename_map_is_warned_about(self) -> None:
+        """Both models can parse clean while git cut the rename map short at
+        `diff.renameLimit`; the removals and additions that follow look ordinary unless the
+        page says why. Carried in the JSON, so every consumer can state it."""
+        f = node("c:@F@f#", name="f")
+        base = model("a", f, completeness=self._parsed())
+        head = model("b", completeness=self._parsed())
+        corr = match_models(base, head)
+        events = classify_events(diff_models(base, head, corr), base, head, corr)
+        doc = document(
+            base, head, events, correspondence=corr, rename_limit=RenameLimitHit(needed=1234)
+        )
+        assert doc.completeness.renames == RenameDetection(complete=False, limit_needed=1234)
+        assert doc.completeness.warnings == [], "both sides parsed clean"
+        assert doc.completeness.degraded
+        out = draw(doc)
+        assert "diff.renameLimit" in out and "1,234" in out
+        assert out.index("diff.renameLimit") < out.index("NodeRemoved")
+        again = DiffDocument.from_json(doc.to_json())
+        assert again.completeness.renames == doc.completeness.renames
+
+    def test_a_truncated_rename_map_with_no_known_limit_still_warns_and_does_not_say_none(
+        self,
+    ) -> None:
+        """`RenameLimitHit.needed` is `None` whenever git's stderr hit the limit without
+        naming the number that would have sufficed (`acquire/git.py`'s own regex can miss) --
+        a real, reachable shape this stage must not mishandle. `RenameDetection.warning`
+        branches on it to drop the advice clause entirely; the untested path is exactly
+        where a `None` formatted with `:,` would raise, or where an unconditional sentence
+        would print the word "None" where a number was supposed to be.
+        """
+        f = node("c:@F@f#", name="f")
+        base = model("a", f, completeness=self._parsed())
+        head = model("b", completeness=self._parsed())
+        corr = match_models(base, head)
+        events = classify_events(diff_models(base, head, corr), base, head, corr)
+        doc = document(
+            base, head, events, correspondence=corr, rename_limit=RenameLimitHit(needed=None)
+        )
+        assert doc.completeness.renames == RenameDetection(complete=False, limit_needed=None)
+        assert doc.completeness.degraded
+        out = draw(doc)
+        assert "diff.renameLimit" in out
+        assert "None" not in out
+        assert "would find them" not in out, "no number to advise setting the limit to"
+
+    @staticmethod
+    def _parsed() -> Completeness:
+        return Completeness(
+            tus_total=1,
+            tus=[TuResult(path="src/a.cpp", status=TuStatus.PARSED)],
+            producer_version=PRODUCER,
+        )
+
+    def test_a_complete_rename_map_says_nothing(self) -> None:
+        doc = self._doc(self._parsed(), self._parsed())
+        assert doc.completeness.renames.complete
+        assert not doc.completeness.degraded
+        assert "renameLimit" not in draw(doc)
 
 
 class TestTheGraphBoundaryIsStatedNumerically:
@@ -651,12 +789,209 @@ class TestTheGraphBoundaryIsStatedNumerically:
         for limit in SYSTEMATIC_LIMITS:
             assert limit.split(".")[0] in out
 
+    def test_what_the_producer_cannot_see_is_stated_once_beside_the_limits(self) -> None:
+        """ADR-029: a limit of the producer is stated on every run, the way §11's two are --
+        once, though both sides state it."""
+        unseen = ["Implicit special members are not visible.", "Something else is not visible."]
+        doc = self._doc(Completeness(not_visible=unseen), Completeness(not_visible=unseen))
+        assert doc.completeness.limits == [*SYSTEMATIC_LIMITS, *unseen]
+        out = draw(doc)
+        assert out.count("Implicit special members are not visible") == 1
+
+    def test_uncovered_changes_are_stated_and_survive_the_json_round_trip(self) -> None:
+        f = node("c:@F@f#", name="f")
+        parsed = Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)])
+        base, head = model("a", f, completeness=parsed), model("b", f, completeness=parsed)
+        coverage = Coverage(
+            changed_lines=6,
+            uncovered_lines=2,
+            uncovered_tokens=9,
+            moved_tokens=16,
+            files=(UncoveredFile(Side.HEAD, "orphan.h", (3, 4), 9, modelled=False),),
+            excluded_files=(ExcludedFile("blob.h", "binary"),),
+            renames_complete=False,
+        )
+        doc = build_document(
+            repo="fixture",
+            revs=REVS,
+            base=base,
+            head=head,
+            correspondence=match_models(base, head),
+            events=[],
+            ranking=rank_events([], base, head),
+            lines_changed=10,
+            files_changed=2,
+            cpp_files_changed=2,
+            coverage=coverage,
+        )
+        again = DiffDocument.from_json(doc.to_json())
+        assert (again.summary.uncovered_lines, again.summary.changed_cpp_lines) == (2, 6)
+        assert again.completeness.uncovered is not None
+        assert again.completeness.uncovered.files[0].lines == [3, 4]
+        assert not again.completeness.degraded, "a standing measure, not a failure"
+        out = draw(again)
+        assert "2 of 6 changed C++ lines explained by no change event" in out
+        assert "orphan.h: 9 token(s) on 2 line(s), no model declares anything in it" in out
+        assert again.completeness.uncovered.lines_in_unmodelled_files == 2
+        assert "about 2 of those line(s) are in files no model declares anything in" in out
+        assert "16 token(s) moved unchanged" in out
+        assert "not compared: blob.h (binary)" in out
+        assert "skipped inexact rename detection for this count" in out
+        assert not again.completeness.uncovered.renames_complete
+
+    def test_unmeasured_coverage_is_none_not_zero(self) -> None:
+        """Zero would claim every change was explained."""
+        doc = self._doc(Completeness(), Completeness())
+        assert doc.summary.uncovered_lines is None
+        assert doc.completeness.uncovered is None
+        assert "explained by no change event" not in draw(doc)
+
+    def _coverage_doc(self, coverage: Coverage, *, lines_changed: int = 10) -> DiffDocument:
+        f = node("c:@F@f#", name="f")
+        parsed = Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)])
+        base, head = model("a", f, completeness=parsed), model("b", f, completeness=parsed)
+        return build_document(
+            repo="fixture",
+            revs=REVS,
+            base=base,
+            head=head,
+            correspondence=match_models(base, head),
+            events=[],
+            ranking=rank_events([], base, head),
+            lines_changed=lines_changed,
+            files_changed=3,
+            cpp_files_changed=3,
+            coverage=coverage,
+        )
+
+    def test_more_than_five_uncovered_files_are_announced_not_silently_dropped(self) -> None:
+        """Mirrors `TestTheViewIsHonestAboutItself`'s top-level truncation: a cap on this
+        list that did not say it capped would read as "every file that matters", exactly
+        the §11 failure the top-level truncation message already guards against. The
+        document still carries every file (ADR-042); only the view's top five do not."""
+        tokens = [50, 40, 30, 20, 10, 5, 1]
+        files = tuple(UncoveredFile(Side.HEAD, f"h{i}.h", (1,), t) for i, t in enumerate(tokens))
+        coverage = Coverage(
+            changed_lines=200,
+            uncovered_lines=7,
+            uncovered_tokens=sum(tokens),
+            files=files,
+        )
+        doc = self._coverage_doc(coverage)
+        out = draw(doc)
+        for i in range(5):
+            assert f"h{i}.h" in out, "the five largest files must be shown, most tokens first"
+        assert "h5.h" not in out and "h6.h" not in out
+        assert "2 more file(s) in the JSON" in out
+        again = DiffDocument.from_json(doc.to_json())
+        assert again.completeness.uncovered is not None
+        assert len(again.completeness.uncovered.files) == 7, "the document keeps every one"
+
+    def test_nothing_is_said_about_unmodelled_lines_when_every_file_is_modelled(self) -> None:
+        """The common case: some translation unit declares something in every uncovered
+        file. The sentence naming files no model reads from, and the per-file suffix that
+        backs it, must both be silent here -- not print a vacuous "0 of those line(s)"."""
+        coverage = Coverage(
+            changed_lines=6,
+            uncovered_lines=2,
+            uncovered_tokens=9,
+            files=(UncoveredFile(Side.HEAD, "seen.h", (3, 4), 9, modelled=True),),
+        )
+        doc = self._coverage_doc(coverage)
+        assert doc.completeness.uncovered is not None
+        assert doc.completeness.uncovered.lines_in_unmodelled_files == 0
+        out = draw(doc)
+        assert "no model declares anything in" not in out
+        assert "seen.h: 9 token(s) on 2 line(s)" in out
+
+    def test_excluded_files_state_each_ones_own_reason(self) -> None:
+        """ADR-025: a file set aside because it is third-party and a file set aside because
+        it is binary are excluded for different reasons, and a reader has to be able to
+        tell which is which rather than read one undifferentiated "not compared" list."""
+        coverage = Coverage(
+            changed_lines=4,
+            uncovered_lines=1,
+            uncovered_tokens=1,
+            files=(UncoveredFile(Side.HEAD, "seen.h", (1,), 1),),
+            excluded_files=(
+                ExcludedFile("vendor/lib.cc", "third-party"),
+                ExcludedFile("blob.bin", "binary"),
+            ),
+        )
+        out = draw(self._coverage_doc(coverage))
+        assert "not compared: vendor/lib.cc (third-party)" in out
+        assert "not compared: blob.bin (binary)" in out
+
+    def test_unmodelled_declarations_are_stated_per_side_and_never_a_warning(self) -> None:
+        counts = {"using_directive": 3, "friend": 12}
+        parsed = Completeness(
+            tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)], unmodelled=counts
+        )
+        doc = self._doc(parsed, parsed)
+        assert DiffDocument.from_json(doc.to_json()).completeness.head.unmodelled == counts
+        assert not doc.completeness.degraded
+        out = draw(doc)
+        assert "head 15 declaration(s) not modelled: 12 friend, 3 using_directive" in out
+
     def test_a_clean_model_does_not_claim_to_be_incomplete(self) -> None:
         doc = self._doc(
             Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)]),
             Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)]),
         )
         assert not doc.completeness.degraded
+
+
+class TestTheThirdPartySetIsReported:
+    """ADR-025: the set and the folder-name hints are data on the document, and the view
+    states both. Not yet applied to extraction."""
+
+    TP = ThirdPartySet(
+        entries=(
+            ThirdPartyEntry(
+                path="third_party/lib",
+                sources=frozenset({ThirdPartySource.SUBMODULE, ThirdPartySource.DECLARED}),
+            ),
+            ThirdPartyEntry(path="vendor/zlib", sources=frozenset({ThirdPartySource.DECLARED})),
+        ),
+        hints=("include/x/fmt/bundled",),
+    )
+
+    def _doc(self, third_party: ThirdPartySet | None) -> DiffDocument:
+        parsed = Completeness(tus_total=1, tus=[TuResult(path="a", status=TuStatus.PARSED)])
+        f = node("c:@F@f#", name="f")
+        base = model("a", f, completeness=parsed)
+        head = model("b", f, completeness=parsed)
+        return document(base, head, [], third_party=third_party)
+
+    def test_the_set_and_hints_are_in_the_json(self) -> None:
+        doc = self._doc(self.TP)
+        data = doc.model_dump(mode="json")
+        assert data["third_party"] == [
+            {"path": "third_party/lib", "sources": ["declared", "submodule"]},
+            {"path": "vendor/zlib", "sources": ["declared"]},
+        ]
+        assert data["third_party_hints"] == [
+            {
+                "path": "include/x/fmt/bundled",
+                "message": "`include/x/fmt/bundled` looks like third-party code; pass "
+                "`--third-party include/x/fmt/bundled` if it is.",
+            }
+        ]
+        assert DiffDocument.from_json(doc.to_json()) == doc
+
+    def test_the_view_states_the_set_and_the_hints(self) -> None:
+        out = draw(self._doc(self.TP))
+        assert "third-party third_party/lib (declared, submodule) · vendor/zlib (declared)" in out
+        assert "note `include/x/fmt/bundled` looks like third-party code" in out
+
+    def test_nothing_is_said_when_there_is_nothing_to_say(self) -> None:
+        doc = self._doc(None)
+        assert doc.third_party == [] and doc.third_party_hints == []
+        out = draw(doc)
+        assert "third-party" not in out
+
+    def test_a_hint_does_not_degrade_the_run(self) -> None:
+        assert not self._doc(self.TP).completeness.degraded
 
 
 class TestTheResidueIsReported:
@@ -668,41 +1003,17 @@ class TestTheResidueIsReported:
         after = node("c:@F@new#", name="new")
         doc = pipeline(model("a", before), model("b", after))
 
-        kinds = sorted(e.kind for e in doc.events)
-        assert kinds == [EventKind.NODE_ADDED, EventKind.NODE_REMOVED]
+        kinds = sorted(e.kind for e in doc.change_events)
+        assert kinds == [ChangeEventKind.NODE_ADDED, ChangeEventKind.NODE_REMOVED]
 
         r = doc.summary.residue
         assert (r.unmatched_base, r.unmatched_head) == (1, 1)
-        assert r.tiers_run == [MatchTier.DECLARED]
+        assert r.tiers_run == [MatchTier.DECLARED, MatchTier.INLINE_NAMESPACE, MatchTier.NAME]
         assert r.pairable_residue == 1, "the upper bound on what tiers 2-4 could remove"
 
         out = draw(doc)
-        assert "tier declared only" in out
+        assert "tiers declared, inline-namespace, name only" in out
         assert "removal plus an addition" in out
-
-    def test_bundled_dependency_churn_is_named_not_hidden(self) -> None:
-        """A dependency bump can be 96 % of the delta (leveldb, measured 2026-08-04, v0 tracker
-        §2, reports/2026-08-01--v0-build/STATUS.md). Ranking puts it last, so a top-N view
-        stops showing it -- which means the count has to be stated, or "almost nothing changed"
-        and "almost everything was set aside" look identical."""
-        own = node("c:@F@own#", name="own", file="src/lib.cc")
-        dep = node("c:@F@dep#", name="dep", file="third_party/gtest/gtest.cc")
-        doc = pipeline(model("a", own, dep), model("b", own))
-
-        assert doc.summary.vendored_events == 1
-        assert doc.summary.events_reported == 1, "the numerator is still the whole set"
-        assert "bundled dependencies" in doc.summary.compression
-
-    def test_the_numerator_never_shrinks_when_a_dependency_moves(self) -> None:
-        """This is the one figure nobody can audit from outside. Naming vendored churn beside
-        it is honest; subtracting it would be the redefinition that stops the metric measuring
-        anything."""
-        deps = [
-            node(f"c:@F@d{i}#", name=f"d{i}", file="third_party/gtest/gtest.cc") for i in range(5)
-        ]
-        doc = pipeline(model("a", *deps), model("b"))
-        assert doc.summary.events_reported == 5
-        assert doc.summary.vendored_events == 5
 
     def test_resolved_renames_reach_the_document(self) -> None:
         """ARCH-001 §5's one identity input that comes from outside the models.
@@ -746,11 +1057,63 @@ class TestTheDocumentIsTheContract:
             "meta",
             "completeness",
             "entities",
-            "events",
+            "change_events",
             "findings",
             "ranking",
             "summary",
         } <= keys
+
+    def test_every_key_says_change_event_not_event(self) -> None:
+        """ADR-027 (#4). A key named for "event" alone survives nowhere in the JSON."""
+        cls = node("c:@S@C", kind=NodeKind.CLASS, name="C")
+        member = node("c:@S@C@F@m#", name="m", qualified_name="C::m")
+        base = model("a", cls, member, edges=[edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS)])
+        doc = pipeline(base, model("b", node("c:@F@g#", name="g")))
+        raw = json.loads(doc.to_json())
+
+        def keys(value: object) -> set[str]:
+            if isinstance(value, dict):
+                return {str(k) for k in value} | {k for v in value.values() for k in keys(v)}
+            if isinstance(value, list):
+                return {k for v in value for k in keys(v)}
+            return set()
+
+        found = keys({k: v for k, v in raw.items() if k != "scores"})
+        found |= {k for score in raw["scores"].values() for k in keys(score)}
+        assert {k for k in found if "event" in k and "change_event" not in k} == set()
+        assert {"change_events_reported", "top_level_change_events"} <= set(raw["summary"])
+        assert raw["components"] and "change_events" in raw["components"][0]
+        assert "change_event_id" in next(iter(raw["scores"].values()))
+
+    def test_crossing_counts_per_label_reach_the_document(self) -> None:
+        """The boundary, itemized by where each relation leads (ADR-025)."""
+        counts = {"test/gtest": 3, "C++ standard library": 2}
+        head = model(
+            "b",
+            completeness=Completeness(edges_total=10, edges_dropped=5, crossings_by_label=counts),
+        )
+        doc = pipeline(model("a"), head)
+        assert doc.completeness.head.crossings_by_label == counts
+        assert list(doc.completeness.head.crossings_by_label) == sorted(counts)
+        assert doc.completeness.base.crossings_by_label == {}
+
+    def test_crossings_are_those_of_the_entities_the_change_events_reference(self) -> None:
+        """The rule `entities` follows. Every crossing in the model would make the document a
+        model dump; the totals stay in `crossings_by_label`."""
+        changed = node("c:@F@changed#", name="changed")
+        quiet = node("c:@F@quiet#", name="quiet")
+
+        def out(src: str, callee: str) -> Crossing:
+            return Crossing(src=NodeId(src), callee=callee, kind=EdgeKind.CALLS, label="test/gtest")
+
+        crossings = [out("c:@F@quiet#", "testing::Quiet"), out("c:@F@changed#", "testing::Fail")]
+        base = model("a", changed, quiet, crossings=crossings)
+        head = model("b", quiet, crossings=crossings[:1])
+        doc = pipeline(base, head)
+
+        assert [c.callee for c in doc.crossings.base] == ["testing::Fail"]
+        assert doc.crossings.head == []
+        assert DiffDocument.from_json(doc.to_json()) == doc
 
     def test_it_round_trips(self) -> None:
         """ "JSON is the product" is aspirational unless a document read off disk is the
@@ -763,7 +1126,9 @@ class TestTheDocumentIsTheContract:
         again = DiffDocument.from_json(doc.to_json())
         assert again.to_json() == doc.to_json()
         assert again == doc
-        assert [e.caused_by for e in again.events] == [e.caused_by for e in doc.events]
+        assert [e.caused_by for e in again.change_events] == [
+            e.caused_by for e in doc.change_events
+        ]
 
     def test_it_is_a_function_of_the_two_commits_and_not_of_the_clock(self) -> None:
         """Two runs over the same inputs must produce the same bytes, timings aside. §10's
@@ -791,7 +1156,7 @@ class TestTheDocumentIsTheContract:
         g = node("c:@F@g#", name="g")
         doc = pipeline(model("a", f, g), model("b", f))
 
-        assert sorted(doc.ranking) == sorted(e.id for e in doc.events)
+        assert sorted(doc.ranking) == sorted(e.id for e in doc.change_events)
         totals = [doc.scores[i].total for i in doc.ranking]
         assert totals == sorted(totals, reverse=True)
         assert [e.id for e in doc.ranked()] == doc.ranking
@@ -807,9 +1172,42 @@ class TestTheDocumentIsTheContract:
 
         from cpp_semantic_diff.rank import subject_endpoints
 
-        for e in doc.events:
+        for e in doc.change_events:
             for endpoint in subject_endpoints(e.subject):
                 assert endpoint in doc.entities, f"{e.kind.value} names an entity nobody can"
+
+    def test_a_moved_nodes_old_and_new_parent_are_both_nameable(self) -> None:
+        """`build.py`'s own claim about `NodeMoved`: "a parent may have no event of its
+        own. A view that cannot name the new container is reporting a move to nowhere."
+
+        `NodeMoved` is unreachable through tier-1 identity today (`diff/nodes.py`: a node
+        whose parent differs from its match's would not have matched at all), but it is a
+        declared member of §6.1's closed event set, and render has to handle every member
+        of that set correctly regardless of how often diff currently produces one -- the
+        same reasoning `EdgeAttrChanged`'s tests apply to a kind that is merely *rare*.
+        Built by hand, in the idiom this module's docstring names for exactly this reason.
+        """
+        old_parent = node("c:@N@a", kind=NodeKind.NAMESPACE, name="a", qualified_name="a")
+        new_parent = node("c:@N@b", kind=NodeKind.NAMESPACE, name="b", qualified_name="b")
+        moved_node = node("c:@F@m#", name="m", qualified_name="m")
+        moved = event(
+            ChangeEventKind.NODE_MOVED,
+            "c:@F@m#",
+            SURE,
+            old_parent="c:@N@a",
+            new_parent="c:@N@b",
+        )
+        base = model("a", old_parent, new_parent, moved_node)
+        head = model("b", old_parent, new_parent, moved_node)
+        doc = document(base, head, [moved])
+
+        assert NodeId("c:@N@a") in doc.entities, "the old container has no event of its own"
+        assert NodeId("c:@N@b") in doc.entities, "neither does the new one"
+        # Not just present in `entities`: nameable through the same path the view uses,
+        # and rendering must not raise reaching for a parent with no event of its own.
+        draw(doc)
+        assert doc.entity_name(NodeId("c:@N@a")) == "a"
+        assert doc.entity_name(NodeId("c:@N@b")) == "b"
 
     def test_an_entity_says_which_side_it_is_on(self) -> None:
         f = node("c:@F@f#", name="f")
@@ -830,6 +1228,187 @@ class TestTheDocumentIsTheContract:
         labels = {doc.entity_name(NodeId(n.id)) for n in (one, two)}
         assert len(labels) == 2
         assert all("f" in label for label in labels)
+
+
+class TestASignatureChangeShowsItsCallers:
+    """ADR-040: each call into a changed signature that existed before is a
+    `CallerOfChangedSignature`, nested under the change. They replace the caller list the
+    document carried beside each signature change."""
+
+    F = "c:@F@f#"
+
+    def doc(
+        self,
+        *old: str,
+        new: tuple[str, ...] = (),
+        edited: tuple[str, ...] = (),
+    ) -> DiffDocument:
+        def side(rev: str, signature: str, callers: tuple[str, ...]) -> Model:
+            f = node(self.F, name="f", signature=signature)
+            nodes = [
+                node(
+                    c,
+                    name=c.split("@")[-1].rstrip("#"),
+                    signature="void ()",
+                    body_hash=f"{rev}-body" if c in edited else "body",
+                )
+                for c in callers
+            ]
+            return model(rev, f, *nodes, edges=[edge(c, self.F) for c in callers])
+
+        return pipeline(side("a", "int ()", old), side("b", "long ()", (*old, *new)))
+
+    def callers(self, doc: DiffDocument) -> list[ChangeEvent]:
+        kind = ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
+        return [e for e in doc.change_events if e.kind is kind]
+
+    def test_each_old_caller_is_a_change_event_under_the_signature_change(self) -> None:
+        doc = self.doc("c:@F@g#", "c:@F@h#", new=("c:@F@k#",))
+        (changed,) = (
+            e for e in doc.change_events if e.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        )
+        callers = self.callers(doc)
+        assert {e.payload["caller"] for e in callers} == {"c:@F@g#", "c:@F@h#"}
+        assert all(e.caused_by == changed.id for e in callers)
+        assert {"c:@F@g#", "c:@F@h#"} <= doc.entities.keys()
+
+    def test_the_caller_list_is_gone_from_the_document(self) -> None:
+        doc = self.doc("c:@F@g#")
+        assert "callers" not in DiffDocument.model_fields
+        assert '"callers"' not in doc.to_json()
+        assert DiffDocument.from_json(doc.to_json()) == doc
+
+    def test_unedited_callers_are_read_first(self) -> None:
+        """The text diff never shows an unedited caller, so the view lists it first, even
+        where it ranks last."""
+        doc = self.doc("c:@F@a#", "c:@F@b#", "c:@F@c#", edited=("c:@F@a#", "c:@F@c#"))
+        # Rank the unedited caller last, so only the view's own ordering can lift it.
+        last = next(e.id for e in self.callers(doc) if e.payload["caller"] == "c:@F@b#")
+        doc = doc.model_copy(update={"ranking": [*(i for i in doc.ranking if i != last), last]})
+        (root,) = (
+            r
+            for r in collapse(doc).roots
+            if doc.event(r.event_id).kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        )
+        order = [doc.event(child.event_id).payload["caller"] for child in root.children]
+        assert order[0] == "c:@F@b#"
+        assert set(order[1:]) == {"c:@F@a#", "c:@F@c#"}
+        out = draw(doc)
+        assert "caller not edited" in out and "caller edited" in out
+
+    def test_the_view_shortens_a_long_list_and_says_so(self) -> None:
+        callers = tuple(f"c:@F@g{i:02}#" for i in range(CALLERS_SHOWN + 2))
+        doc = self.doc(*callers)
+        assert len(self.callers(doc)) == CALLERS_SHOWN + 2  # the document has every one
+        out = draw(doc)
+        assert out.count("CallerOfChangedSignature") == CALLERS_SHOWN
+        assert "+2 more caller(s)" in out
+        assert draw(doc, limit=0).count("CallerOfChangedSignature") == CALLERS_SHOWN + 2
+
+    def test_a_broken_override_is_read_before_the_callers(self) -> None:
+        """An override that stopped overriding is worse than a call that may convert its
+        argument, so it leads the signature change's consequences, even when ranked last."""
+        b, d = "c:@S@B", "c:@S@D"
+        old, new, over = "c:@S@B@F@f#I#", "c:@S@B@F@f#d#", "c:@S@D@F@f#I#"
+
+        def side(rev: str, virtual: str, signature: str, *more: Edge) -> Model:
+            return model(
+                rev,
+                node(b, name="B", kind=NodeKind.STRUCT),
+                node(d, name="D", kind=NodeKind.STRUCT),
+                node(
+                    virtual,
+                    name="f",
+                    qualified_name="B::f",
+                    kind=NodeKind.METHOD,
+                    signature=signature,
+                ),
+                node(
+                    over,
+                    name="f",
+                    qualified_name="D::f",
+                    kind=NodeKind.METHOD,
+                    signature="void (int)",
+                ),
+                node("c:@F@g#", name="g", signature="void ()", body_hash="body"),
+                edges=[
+                    edge(b, virtual, EdgeKind.CONTAINS),
+                    edge(d, over, EdgeKind.CONTAINS),
+                    edge(d, b, EdgeKind.INHERITS),
+                    edge("c:@F@g#", virtual),
+                    *more,
+                ],
+            )
+
+        doc = pipeline(
+            side("a", old, "void (int)", edge(over, old, EdgeKind.OVERRIDES)),
+            side("b", new, "void (double)"),
+        )
+        broken = next(e.id for e in doc.change_events if e.kind is ChangeEventKind.EDGE_REMOVED)
+        doc = doc.model_copy(update={"ranking": [*(i for i in doc.ranking if i != broken), broken]})
+        (root,) = (
+            r
+            for r in collapse(doc).roots
+            if doc.event(r.event_id).kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        )
+        kinds = [doc.event(child.event_id).kind for child in root.children]
+        assert kinds == [
+            ChangeEventKind.EDGE_REMOVED,
+            ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
+        ]
+
+
+class TestANamePairedFunctionIsOnBothSides:
+    """ADR-036: a function the name tier paired has one id at base and another at head, and
+    each id is in one model only. Both are one entity both sides hold, so neither may read as
+    added or removed -- `sides` goes through the correspondence, not the ids."""
+
+    OLD = "c:@F@f#I#"
+    NEW = "c:@F@f#I#I#"
+
+    def doc(self) -> DiffDocument:
+        g = node("c:@F@g#", name="g")
+        base = model(
+            "a",
+            node(self.OLD, name="f", signature="void (int)"),
+            g,
+            edges=[edge("c:@F@g#", self.OLD)],
+        )
+        head = model("b", node(self.NEW, name="f", signature="void (int, int)"), g)
+        return pipeline(base, head)
+
+    def test_the_signature_change_does_not_mark_its_subject_added(self) -> None:
+        doc = self.doc()
+        assert doc.entities[NodeId(self.NEW)].sides == ["base", "head"]
+        out = draw(doc, collapse_cascades=False)
+        line = next(x for x in out.splitlines() if "NodeSignatureChanged" in x)
+        assert "+ " not in line and " f" in line
+
+    def test_the_callee_of_a_removed_call_does_not_read_as_removed(self) -> None:
+        doc = self.doc()
+        (removed,) = (e for e in doc.change_events if e.kind is ChangeEventKind.EDGE_REMOVED)
+        assert removed.subject == f"c:@F@g#|calls|{self.OLD}"
+        assert doc.entities[NodeId(self.OLD)].sides == ["base", "head"]
+        assert "- " not in draw(doc, collapse_cascades=False)
+
+    def test_its_crossings_are_listed_on_both_sides(self) -> None:
+        """`entities` holds the head id only, so a base-side crossing is found through the
+        correspondence or it is lost."""
+
+        def out(src: str) -> Crossing:
+            return Crossing(src=NodeId(src), callee="lib::g", kind=EdgeKind.CALLS, label="vendor")
+
+        base = model(
+            "a", node(self.OLD, name="f", signature="void (int)"), crossings=[out(self.OLD)]
+        )
+        head = model(
+            "b", node(self.NEW, name="f", signature="void (int, int)"), crossings=[out(self.NEW)]
+        )
+        doc = pipeline(base, head)
+
+        assert NodeId(self.OLD) not in doc.entities, "the gap this test exists for"
+        assert [c.src for c in doc.crossings.base] == [self.OLD]
+        assert [c.src for c in doc.crossings.head] == [self.NEW]
 
 
 # -- 6 · a label is not an identity, and must not pretend to be one ------------------------
@@ -889,7 +1468,7 @@ class TestALabelNamesOneEntity:
         doc = specialization_document(
             record(TEMPLATE_USR, line=1056), record(PARTIAL_USR, line=1062)
         )
-        edges = [e for e in doc.events if e.kind is EventKind.EDGE_ADDED]
+        edges = [e for e in doc.change_events if e.kind is ChangeEventKind.EDGE_ADDED]
         rendered = [doc.label(e.subject) for e in edges]
 
         self_edges = [r for r in rendered if len(set(r.split(" -> "))) == 1]
@@ -970,7 +1549,7 @@ class TestTheViewIsHonestAboutItself:
         nodes = [node(f"c:@F@f{i}#", name=f"f{i}") for i in range(12)]
         doc = pipeline(model("a", *nodes), model("b"))
         out = draw(doc, limit=3)
-        assert "more top-level events" in out
+        assert "more top-level change events" in out
 
     def test_no_truncation_shows_everything(self) -> None:
         nodes = [node(f"c:@F@f{i}#", name=f"f{i}") for i in range(6)]

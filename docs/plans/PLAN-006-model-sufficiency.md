@@ -14,10 +14,11 @@ dependencies: [ARCH-001]
 
 **Reviewed 2026-10-10.** The steps were suggested alongside the findings in
 [`the-model.md`](../../reports/2026-10-10--up-to-speed/the-model.md), which is the evidence for
-everything below. Steps 1, 2, 4 and 5, and the parts of 6 and 7 that [#15](https://github.com/j-brent/cpp-semantic-diff/issues/15) and [#16](https://github.com/j-brent/cpp-semantic-diff/issues/16) need,
-are in v0 ([ADR-030](../adr/ADR-030-what-v0-is.md)). Step 1 is built:
-`tests/test_change_catalog.py`. The v0 steps are tracked in [#5](https://github.com/j-brent/cpp-semantic-diff/issues/5); steps 3, 8 and 9 in
-[#12](https://github.com/j-brent/cpp-semantic-diff/issues/12), [#13](https://github.com/j-brent/cpp-semantic-diff/issues/13) and [#14](https://github.com/j-brent/cpp-semantic-diff/issues/14).
+everything below. Steps 1, 2, 4 and 5, and step 7 except field order and layout,
+are in v0 ([ADR-030](../adr/ADR-030-what-v0-is.md), [ADR-041](../adr/ADR-041-v0-scope-of-steps-6-and-7.md)). Step 1 is built:
+`tests/test_change_catalog.py`. Step 2 is built
+([ADR-042](../adr/ADR-042-uncovered-changes-are-tokens-on-no-event-line.md)). The v0 steps are tracked in [#5](https://github.com/j-brent/cpp-semantic-diff/issues/5); steps 3, 6, 8 and 9 in
+[#12](https://github.com/j-brent/cpp-semantic-diff/issues/12), [#10](https://github.com/j-brent/cpp-semantic-diff/issues/10), [#13](https://github.com/j-brent/cpp-semantic-diff/issues/13) and [#14](https://github.com/j-brent/cpp-semantic-diff/issues/14).
 
 Delete this file when the steps that survive review are done and every case in the change
 catalog (step 1) has its expected outcome without being marked as an expected failure.
@@ -68,7 +69,8 @@ Today a blind spot reads as "nothing changed". Make it a number on every run, th
   essential.
   - **Compared as tokens, not lines**, so a whitespace or comment edit is not reported as
     uncovered.
-  - **Third-party code is excluded**, as PLAN-004 defines it.
+  - **Third-party code is excluded**, as
+    [ARCH-001 §4.5](../ARCH-001-architecture.md#45-the-boundary-of-the-model) defines it.
   - **Headers count even when no translation unit includes them.** This is how the-model.md §4.6's
     limit, a header nothing includes, becomes visible.
 - **Unmodelled declarations.** Count the declarations in repository files that the extractor
@@ -99,6 +101,14 @@ Suggested direction:
 - Parameter types and template parameters are compared state.
 - Overloads are told apart only when the name alone is ambiguous. An ambiguous pairing is left
   unpaired and reported, under the project's rule against forced matches.
+
+For parameter types and template parameters this was done without changing identity: the USR
+stays the node id, and a name tier pairs the functions and methods tier 1 leaves
+([ADR-036](../adr/ADR-036-functions-pair-by-name.md)). Inline namespaces were done the same
+way: a tier pairs what a bumped inline namespace renamed
+([ADR-044](../adr/ADR-044-inline-namespace-bump-pairs.md)). Aliases remain. Unnamed
+records and same-named statics stay as they are in v0
+([ADR-045](../adr/ADR-045-same-named-statics-and-unnamed-records-stay-out-of-v0.md)).
 
 ### Step 5 · Add the entities that carry values
 

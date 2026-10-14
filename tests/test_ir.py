@@ -15,6 +15,7 @@ from cpp_semantic_diff.model import (
     Edge,
     EdgeKind,
     Location,
+    MatchTier,
     Model,
     Node,
     NodeId,
@@ -77,6 +78,28 @@ class TestEdgeIdentity:
         calls = Edge(src=NodeId("a"), dst=NodeId("b"), kind=EdgeKind.CALLS)
         uses = Edge(src=NodeId("a"), dst=NodeId("b"), kind=EdgeKind.USES_IN_IMPLEMENTATION)
         assert calls.id != uses.id
+
+
+class TestMatchTierIsClosed:
+    """ARCH-001 §5: identity matches in tiers, most-confident first, and the tier that
+    produced a match is recorded on it and propagates into the confidence of every event
+    derived from it -- so a tier the model does not know about cannot silently appear."""
+
+    def test_tiers_are_exactly_the_ones_arch_names(self) -> None:
+        """§5's table, most recently extended by ADR-044's `inline-namespace` tier (what an
+        inline namespace bump renamed) and ADR-036's `name` tier (a function or method whose
+        signature changed, left over from tier 1's USR match). No test
+        constructed this enum's whole set before: `match.py`'s tests exercise individual
+        tiers but never check that the type has no more and no fewer than ARCH-001 names,
+        so an accidental extra member -- or a dropped one -- would pass everywhere else."""
+        assert {t.value for t in MatchTier} == {
+            "declared",
+            "inline-namespace",
+            "name",
+            "structural",
+            "positional",
+            "similarity",
+        }
 
 
 class TestFingerprint:

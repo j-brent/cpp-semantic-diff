@@ -17,21 +17,23 @@ import itertools
 from typing import Any
 
 from cpp_semantic_diff.classify import CAUSE_RULES, RuleStatus, classify_events
+from cpp_semantic_diff.derive import derive_events
 from cpp_semantic_diff.diff import diff_models
 from cpp_semantic_diff.match import Correspondence, Match, match_models
 from cpp_semantic_diff.model import (
     AttrValue,
+    ChangeEvent,
+    ChangeEventKind,
     Confidence,
     Edge,
     EdgeKind,
-    Event,
-    EventKind,
     Location,
     MatchTier,
     Model,
     Node,
     NodeId,
     NodeKind,
+    Unpaired,
 )
 
 N = NodeId("c:@N@ns")
@@ -66,19 +68,21 @@ def holds(src: str, dst: str, line: int = 1) -> Edge:
     return edge(src, dst, EdgeKind.CONTAINS, line)
 
 
-def classify(base: Model, head: Model, correspondence: Correspondence | None = None) -> list[Event]:
+def classify(
+    base: Model, head: Model, correspondence: Correspondence | None = None
+) -> list[ChangeEvent]:
     """The two stages together: the delta, then its cause links. The idiom of `test_diff`."""
     corr = correspondence or match_models(base, head)
     return classify_events(diff_models(base, head, corr), base, head, corr)
 
 
-def by_subject(events: list[Event], kind: EventKind, subject: str) -> Event:
+def by_subject(events: list[ChangeEvent], kind: ChangeEventKind, subject: str) -> ChangeEvent:
     matching = [e for e in events if e.kind is kind and e.subject == subject]
     assert len(matching) == 1, f"expected one {kind.value} on {subject}, got {len(matching)}"
     return matching[0]
 
 
-def cause_of(events: list[Event], kind: EventKind, subject: str) -> Event | None:
+def cause_of(events: list[ChangeEvent], kind: ChangeEventKind, subject: str) -> ChangeEvent | None:
     """The event named by `caused_by`, resolved -- so assertions read as claims about the
     cause rather than about an opaque digest."""
     caused_by = by_subject(events, kind, subject).caused_by
@@ -87,7 +91,7 @@ def cause_of(events: list[Event], kind: EventKind, subject: str) -> Event | None
     return next(e for e in events if e.id == caused_by)
 
 
-def roots_at(events: list[Event], event: Event) -> Event:
+def roots_at(events: list[ChangeEvent], event: ChangeEvent) -> ChangeEvent:
     """Follow `caused_by` to the top of the chain. Depth is the chain, not a flat link."""
     seen: set[str] = set()
     while event.caused_by is not None and event.id not in seen:
@@ -96,19 +100,19 @@ def roots_at(events: list[Event], event: Event) -> Event:
     return event
 
 
-def synthetic(kind: EventKind, subject: str, **payload: AttrValue) -> Event:
+def synthetic(kind: ChangeEventKind, subject: str, **payload: AttrValue) -> ChangeEvent:
     """An event the pipeline cannot currently produce.
 
-    The dormant and unreachable rules in the table (§6.3) have no reachable input, and the
-    temptation is to leave them untested until something emits their kinds. Handing the
+    The unreachable rule in the table (§6.3) has no reachable input, and the temptation is to
+    leave it untested until something emits its kind. Handing the
     driver the events it would then receive tests the rule now, the same way `test_diff`'s
     `paired` tests renames before tier 2 exists -- without any of it reaching the pipeline.
     """
-    return Event(
+    return ChangeEvent(
         kind=kind,
         subject=NodeId(subject),
         payload=dict(payload),
-        confidence=Confidence(tier=None, models_complete=True),
+        confidence=Confidence(tier=None, unpaired=Unpaired.NONE, models_complete=True),
     )
 
 
@@ -127,8 +131,8 @@ class TestRemovingAContainerExplainsItsContents:
             edges=[holds(C, M)],
         )
         events = classify(base, model("b"))
-        assert cause_of(events, EventKind.NODE_REMOVED, M) == by_subject(
-            events, EventKind.NODE_REMOVED, C
+        assert cause_of(events, ChangeEventKind.NODE_REMOVED, M) == by_subject(
+            events, ChangeEventKind.NODE_REMOVED, C
         )
 
     def test_the_outermost_removal_is_the_one_with_no_cause(self) -> None:
@@ -140,7 +144,7 @@ class TestRemovingAContainerExplainsItsContents:
             edges=[holds(N, C), holds(C, M)],
         )
         events = classify(base, model("b"))
-        assert cause_of(events, EventKind.NODE_REMOVED, N) is None
+        assert cause_of(events, ChangeEventKind.NODE_REMOVED, N) is None
 
     def test_depth_is_a_chain_and_every_removal_roots_at_the_namespace(self) -> None:
         """Removing a namespace removes classes which remove methods. Each link is to the
@@ -154,12 +158,12 @@ class TestRemovingAContainerExplainsItsContents:
             edges=[holds(N, C), holds(C, M)],
         )
         events = classify(base, model("b"))
-        namespace = by_subject(events, EventKind.NODE_REMOVED, N)
+        namespace = by_subject(events, ChangeEventKind.NODE_REMOVED, N)
 
-        assert cause_of(events, EventKind.NODE_REMOVED, M) == by_subject(
-            events, EventKind.NODE_REMOVED, C
+        assert cause_of(events, ChangeEventKind.NODE_REMOVED, M) == by_subject(
+            events, ChangeEventKind.NODE_REMOVED, C
         )
-        assert cause_of(events, EventKind.NODE_REMOVED, C) == namespace
+        assert cause_of(events, ChangeEventKind.NODE_REMOVED, C) == namespace
         assert all(roots_at(events, e) == namespace for e in events)
 
     def test_a_member_deleted_from_a_surviving_class_is_shown_not_blamed(self) -> None:
@@ -168,7 +172,7 @@ class TestRemovingAContainerExplainsItsContents:
         klass = node(C, name="C", kind=NodeKind.CLASS)
         base = model("a", klass, node(M, name="m", kind=NodeKind.METHOD), edges=[holds(C, M)])
         events = classify(base, model("b", klass))
-        assert cause_of(events, EventKind.NODE_REMOVED, M) is None
+        assert cause_of(events, ChangeEventKind.NODE_REMOVED, M) is None
 
     def test_containment_is_read_from_the_base_model(self) -> None:
         """A removed node's container only exists at base. Reading head's containment would
@@ -182,7 +186,7 @@ class TestRemovingAContainerExplainsItsContents:
         )
         head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
         events = classify(base, head)
-        assert cause_of(events, EventKind.NODE_REMOVED, M) is not None
+        assert cause_of(events, ChangeEventKind.NODE_REMOVED, M) is not None
 
     def test_an_added_class_explains_its_added_members(self) -> None:
         """§6.3's `contained-addition`. Without it a new class of twenty methods reads as
@@ -194,8 +198,8 @@ class TestRemovingAContainerExplainsItsContents:
             edges=[holds(C, M)],
         )
         events = classify(model("a"), head)
-        assert cause_of(events, EventKind.NODE_ADDED, M) == by_subject(
-            events, EventKind.NODE_ADDED, C
+        assert cause_of(events, ChangeEventKind.NODE_ADDED, M) == by_subject(
+            events, ChangeEventKind.NODE_ADDED, C
         )
 
 
@@ -211,8 +215,8 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
     def test_an_edge_into_a_removed_node_is_caused_by_that_removal(self) -> None:
         base = model("a", node(F), node(G, name="g"), edges=[edge(F, G)])
         events = classify(base, model("b", node(F)))
-        assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{G}") == by_subject(
-            events, EventKind.NODE_REMOVED, G
+        assert cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{G}") == by_subject(
+            events, ChangeEventKind.NODE_REMOVED, G
         )
 
     def test_an_edge_losing_both_endpoints_is_attributed_to_its_source(self) -> None:
@@ -221,8 +225,8 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
         carries exactly those lines as this event's provenance."""
         base = model("a", node(F), node(G, name="g"), edges=[edge(F, G)])
         events = classify(base, model("b"))
-        assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{G}") == by_subject(
-            events, EventKind.NODE_REMOVED, F
+        assert cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{G}") == by_subject(
+            events, ChangeEventKind.NODE_REMOVED, F
         )
 
     def test_a_dropped_call_between_two_surviving_nodes_has_no_cause(self) -> None:
@@ -231,7 +235,7 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
         both = (node(F), node(G, name="g"))
         base = model("a", *both, edges=[edge(F, G)])
         events = classify(base, model("b", *both))
-        assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{G}") is None
+        assert cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{G}") is None
 
     def test_a_call_moving_between_overloads_is_explained_by_the_overload_it_moved_to(
         self,
@@ -251,8 +255,8 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
         head = model("b", caller, old, new, edges=[edge(F, new.id)])
         events = classify(base, head)
 
-        assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") == by_subject(
-            events, EventKind.EDGE_ADDED, f"{F}|calls|{new.id}"
+        assert cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") == by_subject(
+            events, ChangeEventKind.EDGE_ADDED, f"{F}|calls|{new.id}"
         )
 
     def test_the_whole_chain_collapses_under_the_new_overload(self) -> None:
@@ -265,10 +269,10 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
             model("a", caller, old, edges=[edge(F, old.id)]),
             model("b", caller, old, new, edges=[edge(F, new.id)]),
         )
-        assert cause_of(events, EventKind.EDGE_ADDED, f"{F}|calls|{new.id}") == by_subject(
-            events, EventKind.NODE_ADDED, new.id
+        assert cause_of(events, ChangeEventKind.EDGE_ADDED, f"{F}|calls|{new.id}") == by_subject(
+            events, ChangeEventKind.NODE_ADDED, new.id
         )
-        assert cause_of(events, EventKind.NODE_ADDED, new.id) is None, "the root of the chain"
+        assert cause_of(events, ChangeEventKind.NODE_ADDED, new.id) is None, "the root of the chain"
 
     def test_a_call_that_moved_to_an_unrelated_function_is_not_explained_away(self) -> None:
         """The guard. The rule keys on `qualified_name`, which is what an overload set *is*;
@@ -281,27 +285,78 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
             model("a", caller, old, edges=[edge(F, old.id)]),
             model("b", caller, old, other, edges=[edge(F, other.id)]),
         )
-        assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") is None
+        assert cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") is None
 
     def test_a_removed_endpoint_still_outranks_an_overload_explanation(self) -> None:
         """Both rules can explain one `EdgeRemoved`, and table order decides. An endpoint
-        that actually went away is the better account than one the caller stopped using."""
+        that actually went away is the better account than one the caller stopped using.
+
+        Two old overloads and one new one, so the name tier cannot tell which old one the new
+        one is and pairs none (ADR-036); with one of each it would pair them as a signature
+        change, and nothing would be removed."""
         old = node("c:@F@h#c", name="h", qualified_name="ns::h")
+        other = node("c:@F@h#i", name="h", qualified_name="ns::h")
         new = node("c:@F@h#s", name="h", qualified_name="ns::h")
         caller = node(F)
         events = classify(
-            model("a", caller, old, edges=[edge(F, old.id)]),
+            model("a", caller, old, other, edges=[edge(F, old.id)]),
             model("b", caller, new, edges=[edge(F, new.id)]),
         )
-        assert cause_of(events, EventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") == by_subject(
-            events, EventKind.NODE_REMOVED, old.id
+        assert cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") == by_subject(
+            events, ChangeEventKind.NODE_REMOVED, old.id
         )
+
+    def test_a_same_named_edge_of_a_different_kind_is_not_mistaken_for_an_overload(self) -> None:
+        """The locator's own guard: "Same edge kind, and the overload set is `qualified_name`
+        equality". A relation of a *different* kind to a same-named node is not a call that
+        moved -- it is a second, unrelated fact about the caller, and nesting the dropped call
+        under it would hide that fact rather than explain this one. Drop the `edge.kind is not
+        removed.kind` check in `_overload_the_caller_moved_to` and this misfires."""
+        old = node("c:@F@h#c", name="h", qualified_name="ns::h")
+        same_name_other_relation = node("c:@F@h#s", name="h", qualified_name="ns::h")
+        caller = node(F)
+        events = classify(
+            model("a", caller, old, edges=[edge(F, old.id)]),
+            model(
+                "b",
+                caller,
+                old,
+                same_name_other_relation,
+                edges=[edge(F, same_name_other_relation.id, kind=EdgeKind.OVERRIDES)],
+            ),
+        )
+        assert cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{old.id}") is None
+
+    def test_two_new_overloads_pick_the_same_cause_every_run(self) -> None:
+        """§6.3 promises "a stable answer rather than one that depends on model construction"
+        when a caller gains more than one same-named overload. Undetectable by running the
+        pipeline once -- the bug this guards is nondeterminism, which only shows up as a flaky
+        test or, worse, a report that differs between two runs of the same diff."""
+        old = node("c:@F@h#c", name="h", qualified_name="ns::h")
+        first = node("c:@F@h#1", name="h", qualified_name="ns::h")
+        second = node("c:@F@h#2", name="h", qualified_name="ns::h")
+        caller = node(F)
+        base = model("a", caller, old, edges=[edge(F, old.id)])
+        head = model(
+            "b",
+            caller,
+            old,
+            first,
+            second,
+            edges=[edge(F, first.id, line=2), edge(F, second.id, line=3)],
+        )
+        expected = min(f"{F}|calls|{first.id}", f"{F}|calls|{second.id}")
+
+        for _ in range(5):
+            events = classify(base, head)
+            cause = cause_of(events, ChangeEventKind.EDGE_REMOVED, f"{F}|calls|{old.id}")
+            assert cause == by_subject(events, ChangeEventKind.EDGE_ADDED, expected)
 
     def test_an_edge_onto_an_added_node_is_caused_by_that_addition(self) -> None:
         head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
         events = classify(model("a", node(F)), head)
-        assert cause_of(events, EventKind.EDGE_ADDED, f"{F}|calls|{G}") == by_subject(
-            events, EventKind.NODE_ADDED, G
+        assert cause_of(events, ChangeEventKind.EDGE_ADDED, f"{F}|calls|{G}") == by_subject(
+            events, ChangeEventKind.NODE_ADDED, G
         )
 
     def test_the_endpoints_come_from_the_model_not_from_splitting_the_id(self) -> None:
@@ -315,9 +370,9 @@ class TestAnEdgeIsExplainedByTheEndpointThatVanished:
             edges=[edge(weird_src, G)],
         )
         events = classify(base, model("b"))
-        assert cause_of(events, EventKind.EDGE_REMOVED, f"{weird_src}|calls|{G}") == by_subject(
-            events, EventKind.NODE_REMOVED, weird_src
-        )
+        assert cause_of(
+            events, ChangeEventKind.EDGE_REMOVED, f"{weird_src}|calls|{G}"
+        ) == by_subject(events, ChangeEventKind.NODE_REMOVED, weird_src)
 
 
 class TestNothingIsCollapsed:
@@ -354,7 +409,7 @@ class TestNothingIsCollapsed:
         events = diff_models(base, head, corr)
         classified = classify_events(events, base, head, corr)
 
-        def shape(es: list[Event]) -> list[tuple[str, str, str]]:
+        def shape(es: list[ChangeEvent]) -> list[tuple[str, str, str]]:
             return sorted((e.kind.value, e.subject, repr(sorted(e.payload.items()))) for e in es)
 
         assert shape(classified) == shape(events)
@@ -387,7 +442,7 @@ class TestAnEventNobodyCanExplainIsShown:
         base = model("a", node(F, body_hash="aaa"))
         head = model("b", node(F, body_hash="bbb"))
         events = classify(base, head)
-        assert [e.kind for e in events] == [EventKind.NODE_BODY_CHANGED]
+        assert [e.kind for e in events] == [ChangeEventKind.NODE_BODY_CHANGED]
         assert events[0].caused_by is None
 
     def test_an_attribute_change_keeps_no_cause(self) -> None:
@@ -402,8 +457,26 @@ class TestAnEventNobodyCanExplainIsShown:
         base = model("a", *both, edges=[edge(F, G)])
         head = model("b", *both, edges=[edge(F, G, kind=EdgeKind.OVERRIDES)])
         events = classify(base, head)
-        assert [e.kind for e in events] == [EventKind.EDGE_KIND_CHANGED]
+        assert [e.kind for e in events] == [ChangeEventKind.EDGE_KIND_CHANGED]
         assert events[0].caused_by is None
+
+    def test_a_moved_node_keeps_no_cause(self) -> None:
+        """§6.3's table does not name `NodeMoved` anywhere -- not as a cause, not as a
+        consequence, not even as one of the dormant or unreachable rows. A node whose
+        container changed is diffed correctly (`diff/nodes.py`), but this stage has no row
+        to explain *why*, and must not borrow the reasoning the table gives `NodeRemoved`'s
+        and `NodeAdded`'s own unrelated neighbours for an event the table never mentions."""
+        other_ns = NodeId("c:@N@other")
+        klass = node(C, name="C", kind=NodeKind.CLASS)
+        base = model("a", node(N, name="ns", kind=NodeKind.NAMESPACE), klass, edges=[holds(N, C)])
+        head = model(
+            "b",
+            node(other_ns, name="other", kind=NodeKind.NAMESPACE),
+            klass,
+            edges=[holds(other_ns, C)],
+        )
+        events = classify(base, head)
+        assert by_subject(events, ChangeEventKind.NODE_MOVED, C).caused_by is None
 
     def test_an_unrelated_change_beside_a_cascade_is_not_swept_into_it(self) -> None:
         """The failure that would make the compression metric a lie: everything in the diff
@@ -417,7 +490,7 @@ class TestAnEventNobodyCanExplainIsShown:
         )
         head = model("b", node(F, body_hash="bbb"))
         events = classify(base, head)
-        assert by_subject(events, EventKind.NODE_BODY_CHANGED, F).caused_by is None
+        assert by_subject(events, ChangeEventKind.NODE_BODY_CHANGED, F).caused_by is None
 
 
 class TestACauseChainIsNeverACycle:
@@ -428,10 +501,10 @@ class TestACauseChainIsNeverACycle:
     link becomes no link rather than an error: §6.3 says default to showing.
     """
 
-    def links(self, events: list[Event]) -> dict[str, str]:
+    def links(self, events: list[ChangeEvent]) -> dict[str, str]:
         return {e.id: e.caused_by for e in events if e.caused_by is not None}
 
-    def assert_acyclic(self, events: list[Event]) -> None:
+    def assert_acyclic(self, events: list[ChangeEvent]) -> None:
         links = self.links(events)
         for start in links:
             seen: set[str] = set()
@@ -466,7 +539,7 @@ class TestACauseChainIsNeverACycle:
     def test_a_node_containing_itself_is_not_its_own_cause(self) -> None:
         base = model("a", node(C, name="C", kind=NodeKind.CLASS), edges=[holds(C, C)])
         events = classify(base, model("b"))
-        assert by_subject(events, EventKind.NODE_REMOVED, C).caused_by is None
+        assert by_subject(events, ChangeEventKind.NODE_REMOVED, C).caused_by is None
         self.assert_acyclic(events)
 
     def test_a_deep_cascade_is_acyclic(self) -> None:
@@ -484,7 +557,7 @@ class TestACauseChainIsNeverACycle:
 
 class TestTheStageIsAPureFunction:
     """ARCH-001 §3. And one specific claim `events.py` makes on this stage's behalf:
-    `Event.id` excludes `caused_by` from its digest precisely so that linking a cause does
+    `ChangeEvent.id` excludes `caused_by` from its digest precisely so that linking a cause does
     not renumber an event that other events already point at."""
 
     def inputs(self) -> tuple[Model, Model, Correspondence]:
@@ -552,10 +625,126 @@ class TestTheStageIsAPureFunction:
         corr = Correspondence(
             matches=[Match(base=renamed_base, head=renamed_head, tier=MatchTier.STRUCTURAL)],
             unmatched_base=[member],
+            unpaired_base={member: Unpaired.NONE},
             tiers_run=[MatchTier.DECLARED, MatchTier.STRUCTURAL],
         )
         events = classify(base, head, corr)
-        assert by_subject(events, EventKind.NODE_REMOVED, member).caused_by is None
+        assert by_subject(events, ChangeEventKind.NODE_REMOVED, member).caused_by is None
+
+
+E = NodeId("c:@E@E")
+
+
+def enum(rev: str, *members: str) -> Model:
+    """Enum `E` with its enumerators in the order written. `"A"` has an implied value, `"A=5"`
+    a written one; implied values count up from the one before, as in C++."""
+    nodes = [node(E, name="E", kind=NodeKind.ENUM)]
+    edges = []
+    value = 0
+    for line, member in enumerate(members, start=2):
+        name, _, written = member.partition("=")
+        value = int(written) if written else value
+        nodes.append(
+            node(
+                f"{E}@{name}",
+                name=name,
+                qualified_name=f"E::{name}",
+                kind=NodeKind.ENUMERATOR,
+                attrs={"value": value, "explicit_value": bool(written)},
+                location=Location(file="a.cpp", line=line),
+            )
+        )
+        edges.append(holds(E, f"{E}@{name}"))
+        value += 1
+    return model(rev, *nodes, edges=edges)
+
+
+def value_change(events: list[ChangeEvent], name: str) -> ChangeEvent:
+    (found,) = (
+        e
+        for e in events
+        if e.kind is ChangeEventKind.NODE_ATTR_CHANGED
+        and e.subject == f"{E}@{name}"
+        and e.payload["attr"] == "value"
+    )
+    return found
+
+
+def cause_of_shift(events: list[ChangeEvent], name: str) -> ChangeEvent | None:
+    caused_by = value_change(events, name).caused_by
+    return next((e for e in events if e.id == caused_by), None)
+
+
+class TestAnImpliedEnumeratorValueIsExplainedByTheChangeAboveIt:
+    """ARCH-001 §6.3's `enumerator-implicit-value-shifted`. Insert one enumerator and every
+    implied value below it changes: one decision, reported once with its consequences under
+    it, rather than as a column of unrelated value changes."""
+
+    def test_an_insertion_explains_the_values_below_it_as_a_chain(self) -> None:
+        events = classify(enum("a", "A", "B", "C"), enum("b", "X", "A", "B", "C"))
+        inserted = by_subject(events, ChangeEventKind.NODE_ADDED, f"{E}@X")
+        assert cause_of_shift(events, "A") == inserted
+        assert cause_of_shift(events, "B") == value_change(events, "A")
+        assert roots_at(events, value_change(events, "C")) == inserted
+
+    def test_a_removal_explains_the_values_below_where_it_stood(self) -> None:
+        events = classify(enum("a", "A", "X", "B", "C"), enum("b", "A", "B", "C"))
+        assert cause_of_shift(events, "B") == by_subject(
+            events, ChangeEventKind.NODE_REMOVED, f"{E}@X"
+        )
+        assert cause_of_shift(events, "C") == value_change(events, "B")
+
+    def test_a_written_value_that_changed_explains_the_implied_ones_after_it(self) -> None:
+        events = classify(enum("a", "A=1", "B", "C"), enum("b", "A=5", "B", "C"))
+        assert cause_of_shift(events, "B") == value_change(events, "A")
+        assert cause_of_shift(events, "A") is None
+
+    def test_the_nearest_change_wins_over_a_farther_one_of_another_kind(self) -> None:
+        """An insertion at the top and a written value just above: the written value is the
+        one the implied value follows from."""
+        events = classify(enum("a", "A", "B", "C"), enum("b", "X", "A", "B=10", "C"))
+        assert cause_of_shift(events, "C") == value_change(events, "B")
+
+    def test_a_written_value_on_either_side_is_its_own_change(self) -> None:
+        """A value written on one side is an edit of that line, not a consequence, even when
+        an insertion above would also explain it."""
+        events = classify(enum("a", "A", "B=1"), enum("b", "X", "A", "B=7"))
+        assert cause_of_shift(events, "B") is None
+        events = classify(enum("a", "A", "B"), enum("b", "X", "A", "B=9"))
+        assert cause_of_shift(events, "B") is None
+
+
+T = NodeId("c:@T")
+
+
+def aliased(rev: str, target: str, written: str = "void (T)") -> Model:
+    """Alias `T` and a function `f` written with it."""
+    return model(
+        rev,
+        node(T, name="T", kind=NodeKind.ALIAS, attrs={"target": target}),
+        node(F, signature=f"void ({target})", attrs={"sugared_signature": written}),
+    )
+
+
+class TestAnAliasExplainsTheSignaturesItChanged:
+    """ARCH-001 §6.3's `alias-target-changes-signature`. `using T = int` becomes `long`, and
+    every function written with `T` changes signature without a character of it changing."""
+
+    def test_the_signature_change_is_filed_under_the_alias(self) -> None:
+        events = classify(aliased("a", "int"), aliased("b", "long"))
+        cause = cause_of(events, ChangeEventKind.NODE_SIGNATURE_CHANGED, F)
+        assert cause is not None and cause.subject == T
+        assert cause.payload["attr"] == "target"
+
+    def test_a_function_whose_written_signature_changed_was_edited(self) -> None:
+        events = classify(aliased("a", "int"), aliased("b", "long", written="void (T, int)"))
+        assert cause_of(events, ChangeEventKind.NODE_SIGNATURE_CHANGED, F) is None
+
+    def test_a_function_that_does_not_name_the_alias_is_not_explained_by_it(self) -> None:
+        events = classify(
+            aliased("a", "int", written="void (int)"), aliased("b", "long", written="void (int)")
+        )
+        assert cause_of(events, ChangeEventKind.NODE_SIGNATURE_CHANGED, F) is None
 
 
 class TestTheRuleTableIsExplicit:
@@ -571,14 +760,11 @@ class TestTheRuleTableIsExplicit:
             assert rule.note, f"{rule.name} has no rationale"
             assert rule.arch, f"{rule.name} cites no ARCH section"
 
-    def test_only_the_dormant_and_unreachable_rows_cannot_fire(self) -> None:
-        """Two of §6.3's rows cannot fire. Both are in the table -- deleting them would lose
-        the argument about why -- and every other row is reachable from the events this
-        pipeline emits."""
-        cannot_fire = {
-            "rename-retargets-edges": RuleStatus.UNREACHABLE,
-            "signature-change-breaks-callers": RuleStatus.DORMANT,
-        }
+    def test_only_the_unreachable_row_cannot_fire(self) -> None:
+        """One of §6.3's rows cannot fire. It is in the table -- deleting it would lose the
+        argument about why -- and every other row is reachable from the events this pipeline
+        emits, `signature-change-breaks-callers` since the derive stage (ADR-040)."""
+        cannot_fire = {"rename-retargets-edges": RuleStatus.UNREACHABLE}
         for rule in CAUSE_RULES:
             assert rule.status is cannot_fire.get(rule.name, RuleStatus.ACTIVE), rule.name
 
@@ -593,7 +779,8 @@ class TestTheRuleTableIsExplicit:
         """§6.1: the event set is closed. A rule keyed on a kind nothing emits is a rule
         that silently never runs, which is why `RuleStatus` is on the record."""
         for rule in CAUSE_RULES:
-            assert rule.cause in EventKind and rule.consequence in EventKind
+            assert rule.cause in ChangeEventKind and rule.consequence in ChangeEventKind
+            assert all(kind in ChangeEventKind for kind in rule.also_caused_by)
 
     def test_no_dormant_or_unreachable_rule_fires_on_a_v0_delta(self) -> None:
         """If one ever does, either a later tier landed or a stage started emitting a kind
@@ -603,54 +790,330 @@ class TestTheRuleTableIsExplicit:
             node(N, name="ns", kind=NodeKind.NAMESPACE),
             node(C, name="C", kind=NodeKind.CLASS),
             node(M, name="m", kind=NodeKind.METHOD),
-            node(F, attrs={"signature": "void f()"}, body_hash="aaa"),
+            node(F, signature="void ()", body_hash="aaa"),
             edges=[holds(N, C), holds(C, M), edge(F, M)],
         )
-        head = model("b", node(F, attrs={"signature": "void f(int)"}, body_hash="bbb"))
+        head = model("b", node(F, signature="void (int)", body_hash="bbb"))
         live = {r.consequence for r in CAUSE_RULES if r.status is RuleStatus.ACTIVE}
         assert {e.kind for e in classify(base, head) if e.caused_by is not None} <= live
 
 
-class TestTheDormantRulesAreImplementedNotPretended:
-    """The rules §6.3 names that this pipeline cannot currently reach.
+class TestASignatureChangeExplainsEachCaller:
+    """§6.3's `signature-change-breaks-callers` (ADR-040): each `CallerOfChangedSignature` is
+    caused by the `NodeSignatureChanged` of the call's callee."""
 
-    They are kept and implemented rather than deleted, because deleting them loses the
-    argument about *why* they cannot fire. They are tested against events built by hand, so
-    the table entry is code that works rather than a comment claiming it would.
-    """
+    H = NodeId("c:@F@h#")
 
-    def test_the_pipeline_emits_neither_kind_the_dormant_rules_key_on(self) -> None:
-        """The claim the tests below must not be read as contradicting. `EdgeRetargeted` is
-        refused by design (`diff/edges.py`), and `SignatureIncompatible` is derived and out
-        of v0 scope (§13) -- so neither appears in any delta this pipeline produces."""
-        base = model("a", node(F), node(G, name="g"), edges=[edge(F, G)])
-        head = model("b", node(F), node(C, name="C", kind=NodeKind.CLASS), edges=[edge(F, C)])
-        dormant = {r.consequence for r in CAUSE_RULES if r.status is not RuleStatus.ACTIVE}
-        assert {e.kind for e in classify(base, head)} & dormant == set()
+    def classified(self) -> list[ChangeEvent]:
+        """`f` calls `g` and `h`, and both change signature: two causes, two callers."""
+        base = model(
+            "a",
+            node(F),
+            node(G, name="g", signature="void ()"),
+            node(self.H, name="h", signature="int ()"),
+            edges=[edge(F, G), edge(F, self.H, line=2)],
+        )
+        head = model(
+            "b",
+            node(F),
+            node(G, name="g", signature="void (int)"),
+            node(self.H, name="h", signature="long ()"),
+            edges=[edge(F, G), edge(F, self.H, line=2)],
+        )
+        corr = match_models(base, head)
+        derived = derive_events(diff_models(base, head, corr), base, head, corr)
+        return classify_events(derived, base, head, corr)
 
-    def test_a_signature_change_would_explain_an_incompatible_caller(self) -> None:
-        """§6.3's third rule. The payload filter in the table is what makes it *signature*
-        rather than any attribute -- a `virtual` flip does not break a caller's call site."""
+    def test_the_cause_is_the_signature_change_of_the_subject_edges_callee(self) -> None:
+        events = self.classified()
+        for callee in (G, self.H):
+            cause = cause_of(
+                events, ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE, f"{F}|calls|{callee}"
+            )
+            assert cause is not None
+            assert cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+            assert cause.subject == callee
+
+    def test_an_attribute_change_on_the_callee_is_not_the_cause(self) -> None:
+        """A `virtual` flip does not change what a call site was written against (ADR-035)."""
         head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
+        caller = ChangeEvent(
+            kind=ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
+            subject=edge(F, G).id,
+            payload={
+                "caller": F,
+                "callee": G,
+                "old_signature": "void ()",
+                "new_signature": "void (int)",
+                "caller_edited": False,
+            },
+            confidence=Confidence(tier=MatchTier.DECLARED, models_complete=True),
+        )
         events = [
-            synthetic(EventKind.NODE_ATTR_CHANGED, G, attr="signature", old="()", new="(int)"),
-            synthetic(EventKind.NODE_ATTR_CHANGED, G, attr="virtual", old=False, new=True),
-            synthetic(EventKind.SIGNATURE_INCOMPATIBLE, F),
+            synthetic(ChangeEventKind.NODE_ATTR_CHANGED, G, attr="virtual", old=False, new=True),
+            caller,
         ]
-        corr = match_models(head, head)
-        classified = classify_events(events, head, head, corr)
-        cause = cause_of(classified, EventKind.SIGNATURE_INCOMPATIBLE, F)
-        assert cause is not None and cause.payload["attr"] == "signature"
+        classified = classify_events(events, head, head, match_models(head, head))
+        assert (
+            cause_of(classified, ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE, caller.subject)
+            is None
+        )
 
     def test_classify_does_not_synthesize_the_derived_event_itself(self) -> None:
-        """The line this stage does not cross. §13 puts derived events out of v0 and
-        `events.py` records their payloads as undesigned; a stage whose contract is
-        relabeling must not put an event in the JSON that no stage owns."""
-        base = model("a", node(F), node(G, name="g", attrs={"signature": "()"}), edges=[edge(F, G)])
-        head = model(
-            "b", node(F), node(G, name="g", attrs={"signature": "(int)"}), edges=[edge(F, G)]
+        """The line this stage does not cross: it links events and creates none. The derive
+        stage, which runs before it, owns the caller events (ADR-040)."""
+        base = model("a", node(F), node(G, name="g", signature="void ()"), edges=[edge(F, G)])
+        head = model("b", node(F), node(G, name="g", signature="void (int)"), edges=[edge(F, G)])
+        kinds = {e.kind for e in classify(base, head)}
+        assert ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE not in kinds
+
+    def test_the_callee_comes_from_the_edges_real_destination_not_the_payload(self) -> None:
+        """`_callee_of_call`'s own reason for reading the head model instead of the payload:
+        "the ambiguity is an artifact of the payload being empty, not a property of the
+        relation ... this locator should read it from [the model]" -- and once the payload
+        does carry a `callee`, nothing stops it going stale against the edge it rides on. A
+        locator that read `payload["callee"]` instead of the edge's own destination would
+        pass every other test in this class, because there the two always agree."""
+        wrong_callee = NodeId("c:@F@not_the_real_callee#")
+        head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
+        signature_changed = ChangeEvent(
+            kind=ChangeEventKind.NODE_SIGNATURE_CHANGED,
+            subject=G,
+            payload={"old_signature": "void ()", "new_signature": "void (int)"},
+            confidence=Confidence(tier=MatchTier.DECLARED, models_complete=True),
         )
-        assert EventKind.SIGNATURE_INCOMPATIBLE not in {e.kind for e in classify(base, head)}
+        caller = ChangeEvent(
+            kind=ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
+            subject=edge(F, G).id,
+            payload={
+                "caller": F,
+                "callee": wrong_callee,
+                "old_signature": "void ()",
+                "new_signature": "void (int)",
+                "caller_edited": False,
+            },
+            confidence=Confidence(tier=MatchTier.DECLARED, models_complete=True),
+        )
+        classified = classify_events(
+            [signature_changed, caller], head, head, match_models(head, head)
+        )
+        cause = cause_of(classified, ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE, caller.subject)
+        assert cause is not None
+        assert cause.subject == G
+
+
+class TestAnOverrideLeftBehindIsExplainedByTheSignatureChange:
+    """§6.3's `signature-change-breaks-overrides` (ADR-040): a virtual function changes
+    signature, an override keeps the old one, and the `overrides` edge is removed while both
+    functions survive."""
+
+    B = NodeId("c:@S@B")
+    D = NodeId("c:@S@D")
+    OVERRIDE = NodeId("c:@S@D@F@f#I#")
+    OLD = NodeId("c:@S@B@F@f#I#")
+    NEW = NodeId("c:@S@B@F@f#d#")
+
+    def method(self, usr: str, qualified: str, signature: str) -> Node:
+        return node(
+            usr, name="f", qualified_name=qualified, kind=NodeKind.METHOD, signature=signature
+        )
+
+    def side(self, rev: str, virtual: str, signature: str, *, inherits: bool) -> Model:
+        """`struct B { virtual void f(...); }; struct D : B { void f(int); };`"""
+        b = node(self.B, name="B", kind=NodeKind.STRUCT)
+        d = node(self.D, name="D", kind=NodeKind.STRUCT)
+        edges = [holds(self.B, virtual), holds(self.D, self.OVERRIDE)]
+        if inherits:
+            edges.append(edge(self.D, self.B, EdgeKind.INHERITS))
+        if virtual == self.OLD and signature == "void (int)" and inherits:
+            edges.append(edge(self.OVERRIDE, virtual, EdgeKind.OVERRIDES))
+        return model(
+            rev,
+            b,
+            d,
+            self.method(virtual, "B::f", signature),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=edges,
+        )
+
+    def removed_cause(self, head: Model) -> ChangeEvent | None:
+        base = self.side("a", self.OLD, "void (int)", inherits=True)
+        removed = edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES).id
+        return cause_of(classify(base, head), ChangeEventKind.EDGE_REMOVED, removed)
+
+    def test_the_removed_override_is_caused_by_the_signature_change(self) -> None:
+        cause = self.removed_cause(self.side("b", self.NEW, "void (double)", inherits=True))
+        assert cause is not None
+        assert cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        assert cause.subject == self.NEW
+
+    def test_a_class_that_stopped_inheriting_lost_the_override_for_that_reason(self) -> None:
+        """D no longer derives from B, so B::f's signature change is not why D::f stopped
+        overriding it, and the edge stays at top level."""
+        head = self.side("b", self.NEW, "void (double)", inherits=False)
+        assert self.removed_cause(head) is None
+
+    def test_without_a_signature_change_the_removed_override_stays_unexplained(self) -> None:
+        head = self.side("b", self.OLD, "void (int)", inherits=False)
+        assert self.removed_cause(head) is None
+
+
+class TestAnOverrideStaysExplainedThroughAnIndirectOrRenamedBase:
+    """ADR-040's own two extra claims about `signature-change-breaks-overrides`, neither
+    exercised by `TestAnOverrideLeftBehindIsExplainedByTheSignatureChange` (which only tests
+    one direct, unrenamed hop): the override's class must still derive from the virtual
+    function's class at head "directly or not", and that check goes "through the
+    correspondence" rather than by comparing ids. `_still_derives` walks `head_out_edges`
+    with a loop a one-hop test cannot tell from a single `==` comparison, and maps both
+    classes through `correspondence.head_for` before it starts."""
+
+    B = NodeId("c:@S@B")
+    M = NodeId("c:@S@M")
+    D = NodeId("c:@S@D")
+    OVERRIDE = NodeId("c:@S@D@F@f#I#")
+    OLD = NodeId("c:@S@B@F@f#I#")
+    NEW = NodeId("c:@S@B@F@f#d#")
+
+    def method(self, usr: str, qualified: str, signature: str) -> Node:
+        return node(
+            usr, name="f", qualified_name=qualified, kind=NodeKind.METHOD, signature=signature
+        )
+
+    def removed_cause(
+        self, base: Model, head: Model, corr: Correspondence | None = None
+    ) -> ChangeEvent | None:
+        removed = edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES).id
+        return cause_of(classify(base, head, corr), ChangeEventKind.EDGE_REMOVED, removed)
+
+    def test_two_inherits_hops_away_still_counts_as_deriving(self) -> None:
+        """D inherits M, M inherits B: not a direct base of D's, but still one "directly or
+        not" should reach."""
+        base = model(
+            "a",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.OLD, "B::f", "void (int)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.OLD),
+                holds(self.D, self.OVERRIDE),
+                edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES),
+            ],
+        )
+        head = model(
+            "b",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.M, name="M", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.NEW, "B::f", "void (double)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.NEW),
+                holds(self.D, self.OVERRIDE),
+                edge(self.D, self.M, EdgeKind.INHERITS),
+                edge(self.M, self.B, EdgeKind.INHERITS),
+            ],
+        )
+        cause = self.removed_cause(base, head)
+        assert cause is not None
+        assert cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        assert cause.subject == self.NEW
+
+    def test_a_break_partway_up_the_chain_leaves_it_unexplained(self) -> None:
+        """D inherits M, but M does not inherit B: D is not "directly or not" derived from
+        B, so the signature change is not why the override was lost. Distinguishes a real
+        indirect base from a locator that just checks "does D inherit *something*"."""
+        base = model(
+            "a",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.OLD, "B::f", "void (int)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.OLD),
+                holds(self.D, self.OVERRIDE),
+                edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES),
+            ],
+        )
+        head = model(
+            "b",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.M, name="M", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.NEW, "B::f", "void (double)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.NEW),
+                holds(self.D, self.OVERRIDE),
+                edge(self.D, self.M, EdgeKind.INHERITS),
+            ],
+        )
+        assert self.removed_cause(base, head) is None
+
+    def test_the_overridden_functions_class_is_mapped_through_the_correspondence(self) -> None:
+        """B is renamed to B2 at head, which v0's matcher never does on its own (rename
+        detection is tier 2, ARCH-001 §13) -- so the only way to pose this case is to hand
+        classify a correspondence that already made the pairing, the same way
+        `TestTheStageIsAPureFunction.test_links_go_through_the_correspondence_not_through_ids`
+        does for containment. If `_still_derives` compared `base_class` to a raw head id
+        instead of mapping it with `correspondence.head_for`, it would look for an `inherits`
+        edge to B's *base* id, which no head edge ever names, and wrongly decide D no longer
+        derives from it."""
+        b2 = NodeId("c:@S@B2")
+        base = model(
+            "a",
+            node(self.B, name="B", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.OLD, "B::f", "void (int)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(self.B, self.OLD),
+                holds(self.D, self.OVERRIDE),
+                edge(self.OVERRIDE, self.OLD, EdgeKind.OVERRIDES),
+            ],
+        )
+        head = model(
+            "b",
+            node(b2, name="B2", kind=NodeKind.STRUCT),
+            node(self.D, name="D", kind=NodeKind.STRUCT),
+            self.method(self.NEW, "B2::f", "void (double)"),
+            self.method(self.OVERRIDE, "D::f", "void (int)"),
+            edges=[
+                holds(b2, self.NEW),
+                holds(self.D, self.OVERRIDE),
+                edge(self.D, b2, EdgeKind.INHERITS),
+            ],
+        )
+        corr = Correspondence(
+            matches=[
+                Match(base=self.B, head=b2, tier=MatchTier.STRUCTURAL),
+                Match(base=self.D, head=self.D, tier=MatchTier.DECLARED),
+                Match(base=self.OVERRIDE, head=self.OVERRIDE, tier=MatchTier.DECLARED),
+                Match(base=self.OLD, head=self.NEW, tier=MatchTier.NAME),
+            ],
+            tiers_run=[MatchTier.DECLARED, MatchTier.STRUCTURAL, MatchTier.NAME],
+        )
+        cause = self.removed_cause(base, head, corr)
+        assert cause is not None
+        assert cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+        assert cause.subject == self.NEW
+
+
+class TestTheUnreachableRuleIsImplementedNotPretended:
+    """The rule §6.3 names that this pipeline cannot reach.
+
+    It is kept and implemented rather than deleted, because deleting it loses the argument
+    about *why* it cannot fire. It is tested against events built by hand, so the table entry
+    is code that works rather than a comment claiming it would.
+    """
+
+    def test_the_pipeline_never_emits_the_kind_the_unreachable_rule_keys_on(self) -> None:
+        """The claim the test below must not be read as contradicting. `EdgeRetargeted` is
+        refused by design (`diff/edges.py`), so it appears in no delta this pipeline produces."""
+        base = model("a", node(F), node(G, name="g"), edges=[edge(F, G)])
+        head = model("b", node(F), node(C, name="C", kind=NodeKind.CLASS), edges=[edge(F, C)])
+        unreachable = {r.consequence for r in CAUSE_RULES if r.status is not RuleStatus.ACTIVE}
+        assert {e.kind for e in classify(base, head)} & unreachable == set()
 
     def test_a_rename_would_explain_a_retargeted_edge(self) -> None:
         """§6.3's first rule, against the only input that could ever trigger it. It cannot
@@ -659,10 +1122,12 @@ class TestTheDormantRulesAreImplementedNotPretended:
         events at all rather than 200 needing collapse."""
         head = model("b", node(F), node(G, name="g"), edges=[edge(F, G)])
         events = [
-            synthetic(EventKind.NODE_RENAMED, G, old_name="old", new_name="g"),
-            synthetic(EventKind.EDGE_RETARGETED, f"{F}|calls|{G}", old_dst="c:@F@was#", new_dst=G),
+            synthetic(ChangeEventKind.NODE_RENAMED, G, old_name="old", new_name="g"),
+            synthetic(
+                ChangeEventKind.EDGE_RETARGETED, f"{F}|calls|{G}", old_dst="c:@F@was#", new_dst=G
+            ),
         ]
         corr = match_models(head, head)
         classified = classify_events(events, head, head, corr)
-        cause = cause_of(classified, EventKind.EDGE_RETARGETED, f"{F}|calls|{G}")
-        assert cause is not None and cause.kind is EventKind.NODE_RENAMED
+        cause = cause_of(classified, ChangeEventKind.EDGE_RETARGETED, f"{F}|calls|{G}")
+        assert cause is not None and cause.kind is ChangeEventKind.NODE_RENAMED

@@ -18,14 +18,22 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner, Result
 
+import cpp_semantic_diff.produce as produce
+import cpp_semantic_diff.render as render_module
 from conftest import commit, git
 from cpp_semantic_diff import __version__, cli
 from cpp_semantic_diff.errors import ExitCode, GitError
+from cpp_semantic_diff.model import Model
+from cpp_semantic_diff.produce.toolchain import Toolchain
+from cpp_semantic_diff.render import DEFAULT_LIMIT
 
 runner = CliRunner()
 
@@ -100,6 +108,58 @@ def branch_without_build(bare_repo: Path) -> Path:
     return bare_repo
 
 
+@pytest.fixture
+def repo_with_vendor_dir(bare_repo: Path) -> Path:
+    """A `vendor/dep` directory, present and unchanged on both sides of a branch."""
+    commit(bare_repo, "vendor/dep/dep.h", "// vendored\n", "add vendor/dep")
+    commit(bare_repo, "a.cpp", "int a() { return 1; }\n", "A")
+    git(bare_repo, "checkout", "-q", "-b", "feature")
+    commit(bare_repo, "a.cpp", "int a() { return 2; }\n", "change a")
+    return bare_repo
+
+
+def mock_pipeline(
+    monkeypatch: pytest.MonkeyPatch, base_model: Model, head_model: Model
+) -> list[dict[str, object]]:
+    """Replace the two stages that need a system libclang and a compile database --
+    `produce.load` and `produce.build_model` -- with the two models given, and `checkout`
+    with a bare stand-in that does no real `git worktree add`.
+
+    Everything else `diff` does is real: resolving the revisions, computing the
+    third-party set, matching, diffing, deriving, classifying, ranking and building the
+    document. That is what makes this useful for a wiring test -- it runs the actual CLI
+    command end to end against a plain git repository with no cmake and no libclang, and
+    the gap it can see is exactly "does the flag the person typed reach the stage it is
+    documented to reach", not "does that stage do the right thing with it" (covered where
+    each stage has its own test file).
+
+    Returns the keyword arguments `build_model` was called with, once per side, in call
+    order (base, then head) -- the only way to see what the CLI resolved `--workers` and
+    `--third-party` to, since neither name is in the JSON document.
+    """
+    monkeypatch.setattr(
+        produce,
+        "load",
+        lambda: Toolchain(library=Path("/fake/libclang.so"), version="18.1.3", release="18.1.3"),
+    )
+
+    @contextmanager
+    def fake_checkout(repo: Path, rev: str) -> Iterator[SimpleNamespace]:
+        yield SimpleNamespace(rev=rev, path=repo, cpp_entries=[])
+
+    monkeypatch.setattr(cli, "checkout", fake_checkout)
+
+    models = iter([base_model, head_model])
+    calls: list[dict[str, object]] = []
+
+    def fake_build_model(checkout: object, **kwargs: object) -> Model:
+        calls.append(kwargs)
+        return next(models)
+
+    monkeypatch.setattr(produce, "build_model", fake_build_model)
+    return calls
+
+
 # -- 0: success -------------------------------------------------------------------------------
 
 
@@ -117,6 +177,20 @@ def test_plan_reports_only_the_branchs_own_change(diverged_repo: Path) -> None:
     assert re.search(r"C\+\+ files\s+1\b", result.stdout), result.stdout
 
 
+def test_plan_warns_rather_than_refuses_when_head_is_the_merge_base(bare_repo: Path) -> None:
+    """`diff` refuses this exact condition with exit 3 (`EmptyComparisonError`, see
+    `test_an_empty_comparison_is_refused_by_diff_with_exit_3` below); `plan` answers "what
+    would be analyzed" even when the answer is nothing, so it must stay at exit 0 and only
+    say so. The two commands disagreeing about whether an empty comparison is a failure
+    would be a design regression that no other test here would catch, since each
+    command's tests live in their own place."""
+    commit(bare_repo, "a.cpp", "int a() { return 1; }\n", "A")
+    result = runner.invoke(cli.app, ["plan", str(bare_repo)])
+    assert_reported(result, ExitCode.OK)
+    assert "head is the merge base" in flat(result.stdout)
+    assert "nothing to review" in flat(result.stdout)
+
+
 def test_cache_status_succeeds_on_an_empty_cache() -> None:
     result = runner.invoke(cli.app, ["cache", "status"])
     assert_reported(result, ExitCode.OK)
@@ -127,6 +201,28 @@ def test_cache_gc_dry_run_succeeds_and_says_it_would_collect() -> None:
     result = runner.invoke(cli.app, ["cache", "gc", "--dry-run"])
     assert_reported(result, ExitCode.OK)
     assert "would collect" in result.stdout
+
+
+def test_cache_gc_without_dry_run_says_collected_not_would_collect() -> None:
+    """The one branch `--dry-run`'s own test cannot exercise: nothing to collect from an
+    empty cache either way, so this is the only thing that tells the two modes apart."""
+    result = runner.invoke(cli.app, ["cache", "gc"])
+    assert_reported(result, ExitCode.OK)
+    assert "collected" in result.stdout
+    assert "would collect" not in result.stdout
+
+
+@pytest.mark.usefixtures("warm_cache")
+def test_acquire_reports_each_revisions_compile_database(cmake_branch: Path) -> None:
+    """`acquire` is the only command whose own report nothing else here exercises: `doctor`
+    and `plan` never touch a compile database, and `diff` folds this exact step into its
+    own pipeline rather than running it standalone. Only a test that runs `acquire` by
+    itself can tell whether its two-revision report is still right."""
+    result = runner.invoke(cli.app, ["acquire", str(cmake_branch)])
+    assert_reported(result, ExitCode.OK)
+    assert result.stdout.count("C++ TUs of") == 2, "one line per revision, base and head"
+    assert re.search(r"base\s+\w{12}", result.stdout)
+    assert re.search(r"head\s+\w{12}", result.stdout)
 
 
 # -- 2: input the caller can fix --------------------------------------------------------------
@@ -155,6 +251,24 @@ def test_a_malformed_environment_setting_is_a_usage_error_with_exit_2(
     assert_reported(result, ExitCode.USAGE, "cannot analyze", "CPPSD_RENAME_SIMILARITY='abc'")
 
 
+def test_a_third_party_path_neither_revision_has_is_a_usage_error_with_exit_2(
+    diverged_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A typo would leave the library in the model, so it is refused -- before any worktree,
+    so the refusal costs no checkout (ADR-025). Every missing path is named."""
+    require_libclang()
+
+    def no_checkout(*args: object, **kwargs: object) -> None:
+        raise AssertionError("a worktree was requested before the refusal")
+
+    monkeypatch.setattr(cli, "checkout", no_checkout)
+    result = runner.invoke(
+        cli.app,
+        ["diff", str(diverged_repo), "--third-party", "vendr", "--third-party", "libs/x/"],
+    )
+    assert_reported(result, ExitCode.USAGE, "cannot analyze", "neither revision", "vendr, libs/x")
+
+
 # -- 3: the repository or revisions cannot be compared ----------------------------------------
 
 
@@ -174,6 +288,53 @@ def test_an_unknown_base_is_refused_with_exit_3_and_named_verbatim(diverged_repo
 def test_shallow_clone_is_refused_with_exit_3(shallow_repo: Path) -> None:
     result = runner.invoke(cli.app, ["plan", str(shallow_repo)])
     assert_reported(result, ExitCode.REPOSITORY, "shallow clone", "fetch --unshallow")
+
+
+def test_a_changed_third_party_dependency_is_refused_with_exit_3(
+    submodule_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A submodule bump and a change in a declared path, both named, before any worktree, so
+    the refusal costs no checkout and no parse (ADR-025)."""
+    require_libclang()
+    git(submodule_repo, "checkout", "-q", "-b", "feature")
+    sha = commit(tmp_path / "inner", "vendor.h", "int vendored(int);\n", "vendor moves")
+    git(submodule_repo, "update-index", "--cacheinfo", f"160000,{sha},dep")
+    git(submodule_repo, "commit", "-q", "-m", "bump dep")
+    commit(submodule_repo, "libs/z/z.h", "// z\n", "copy z")
+
+    def no_checkout(*args: object, **kwargs: object) -> None:
+        raise AssertionError("a worktree was requested before the refusal")
+
+    monkeypatch.setattr(cli, "checkout", no_checkout)
+    result = runner.invoke(cli.app, ["diff", str(submodule_repo), "--third-party", "libs/z"])
+    assert_reported(
+        result, ExitCode.REPOSITORY, "cannot analyze", "Third-party code changed", "dep, libs/z."
+    )
+
+
+def test_a_changed_third_party_dependency_wins_over_a_base_that_does_not_build(
+    bare_repo: Path,
+) -> None:
+    """Ordering, not just precondition: `cli.diff` computes the third-party refusal (ADR-025)
+    before either revision is checked out, so it is reported even when the base would have
+    failed to build anyway (ADR-010).
+
+    This repository carries no `CMakeLists.txt` at all -- exactly
+    `test_a_repository_with_no_build_description_is_refused_with_exit_4`'s shape, which exits
+    4. The checkout here is real, not mocked away: if the ordering ever flipped, the base
+    would actually be configured and this would surface as exit 4 instead of 3. The bump to
+    the declared path is the only change, so nothing else could be refusing it first.
+    """
+    require_libclang()
+    commit(bare_repo, "a.cpp", "int a() { return 1; }\n", "A")
+    commit(bare_repo, "libs/z/z.h", "// z\n", "copy z")
+    git(bare_repo, "checkout", "-q", "-b", "feature")
+    commit(bare_repo, "libs/z/z.h", "// z changed\n", "bump z")
+
+    result = runner.invoke(cli.app, ["diff", str(bare_repo), "--third-party", "libs/z"])
+    assert_reported(
+        result, ExitCode.REPOSITORY, "cannot analyze", "Third-party code changed", "libs/z."
+    )
 
 
 def test_a_missing_git_is_named_with_exit_3(
@@ -277,6 +438,89 @@ def test_an_unexpected_exception_is_not_swallowed_and_exits_1(
     assert "failed" not in result.stderr
 
 
+# -- wiring: a flag typed on the command line reaches the stage documented for it -------------
+#
+# `diff` "holds no presentation and no analysis" (this module's own docstring): every flag
+# below is a value the command only has to carry, unchanged, to the one place that gives it
+# meaning. That is exactly the kind of bug that is invisible in a design review and silent in
+# the output -- `--expand` quietly inverted still produces a document, still renders, and
+# still passes every test that checks the *document's* contract (`test_render.py` already
+# does, thoroughly). `mock_pipeline` stands in for a system libclang and a compile database so
+# these can run as plain, fast, deterministic tests of the CLI's own glue, against a git
+# repository with neither.
+
+
+def test_diff_threads_declared_third_party_paths_into_the_document(
+    repo_with_vendor_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--third-party` reaching `third_party_set` is the whole of the CLI's job for the flag
+    (ADR-025). The error-path tests above (a path neither revision has; a path that
+    changed) monkeypatch `checkout` away specifically so the worktree is never touched --
+    which means neither of them can see whether a *valid* declared path actually reaches
+    the document once `diff` keeps going."""
+    mock_pipeline(monkeypatch, Model(rev="a"), Model(rev="b"))
+    result = runner.invoke(
+        cli.app,
+        ["diff", str(repo_with_vendor_dir), "--third-party", "vendor/dep", "--json"],
+    )
+    assert_reported(result, ExitCode.OK)
+    document = json.loads(result.stdout)
+    assert document["third_party"] == [{"path": "vendor/dep", "sources": ["declared"]}]
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        ([], {"collapse_cascades": True, "limit": DEFAULT_LIMIT}),
+        (["--expand", "--limit", "0"], {"collapse_cascades": False, "limit": 0}),
+    ],
+    ids=["documented-defaults", "expand-and-unlimited"],
+)
+def test_expand_and_limit_are_forwarded_to_the_view_unaltered(
+    diverged_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+    expected: dict[str, object],
+) -> None:
+    """`--expand`'s and `--limit`'s own collapse/top-level semantics belong to `render` and
+    are `test_render.py`'s claim to defend; what only a CLI-level test can see is whether
+    the value the person typed is still the value `render` receives, two option parses and
+    a document build later."""
+    mock_pipeline(monkeypatch, Model(rev="a"), Model(rev="b"))
+    calls: list[dict[str, object]] = []
+
+    def fake_render(document: object, console: object, **kwargs: object) -> None:
+        calls.append(kwargs)
+
+    monkeypatch.setattr(render_module, "render", fake_render)
+
+    result = runner.invoke(cli.app, ["diff", str(diverged_repo), *argv])
+    assert_reported(result, ExitCode.OK)
+    assert calls == [expected]
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_workers"),
+    [([], None), (["--workers", "3"], 3)],
+    ids=["unset-stays-none", "explicit-value-passes-through"],
+)
+def test_the_workers_flag_reaches_build_model_unfilled_by_the_cli(
+    diverged_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+    expected_workers: int | None,
+) -> None:
+    """`build_model`'s own precedence is flag > `$CPPSD_WORKERS` > what the machine can run
+    (`produce.parallel.worker_count`) -- a promise this module's `diff` docstring says the
+    CLI must not quietly break by filling in a default of its own before this call, which
+    would be two mechanisms resolving one knob and disagreeing silently. `None` has to
+    reach `build_model` unchanged when the flag is absent, not some number computed here."""
+    calls = mock_pipeline(monkeypatch, Model(rev="a"), Model(rev="b"))
+    result = runner.invoke(cli.app, ["diff", str(diverged_repo), *argv])
+    assert_reported(result, ExitCode.OK)
+    assert [call["workers"] for call in calls] == [expected_workers, expected_workers]
+
+
 # -- end to end: a real diff of a tiny CMake project ------------------------------------------
 
 
@@ -292,6 +536,7 @@ def cmake_branch(tmp_path_factory: pytest.TempPathFactory) -> Path:
     git(repo, "config", "user.name", "Test")
     git(repo, "config", "commit.gpgsign", "false")
     commit(repo, "a.cpp", "int f() { return 1; }\n", "A")
+    commit(repo, "orphan.h", "int limit = 1;\n", "a header no translation unit includes")
     commit(
         repo,
         "CMakeLists.txt",
@@ -300,6 +545,7 @@ def cmake_branch(tmp_path_factory: pytest.TempPathFactory) -> Path:
     )
     git(repo, "checkout", "-q", "-b", "feature")
     commit(repo, "a.cpp", "int f() { return 2; }\n", "change f")
+    commit(repo, "orphan.h", "int limit = 2;\n", "change what no model can see")
     return repo
 
 
@@ -333,6 +579,33 @@ def test_diff_json_puts_one_document_on_stdout_and_names_the_repo_by_its_directo
 
     assert json.loads(out.read_text(encoding="utf-8")) == document
     assert [p.name for p in out.parent.iterdir()] == ["doc.json"]
+
+
+@pytest.mark.usefixtures("warm_cache")
+def test_diff_json_carries_the_third_party_set_and_hints(cmake_branch: Path) -> None:
+    """Present on every document, empty when the repository has neither (ADR-025)."""
+    result = runner.invoke(cli.app, ["diff", str(cmake_branch), "--json", "-j", "1"])
+    assert_reported(result, ExitCode.OK)
+    document = json.loads(result.stdout)
+    assert document["third_party"] == []
+    assert document["third_party_hints"] == []
+
+
+@pytest.mark.usefixtures("warm_cache")
+def test_a_change_no_model_can_see_is_reported_as_uncovered(cmake_branch: Path) -> None:
+    """`f`'s change is on its change event's lines; the header nothing includes is in no
+    model, so its change is uncovered rather than silently absent (ADR-042)."""
+    result = runner.invoke(cli.app, ["diff", str(cmake_branch), "--json", "-j", "1"])
+    assert_reported(result, ExitCode.OK)
+    document = json.loads(result.stdout)
+    summary = document["summary"]
+    assert (summary["changed_cpp_lines"], summary["uncovered_lines"]) == (4, 2)
+    assert {(f["side"], f["path"]) for f in document["completeness"]["uncovered"]["files"]} == {
+        ("base", "orphan.h"),
+        ("head", "orphan.h"),
+    }
+    assert "2 of 4 changed C++ lines explained by no change event" in summary["compression"]
+    assert document["completeness"]["uncovered"]["lines_in_unmodelled_files"] == 2
 
 
 @pytest.mark.usefixtures("warm_cache")

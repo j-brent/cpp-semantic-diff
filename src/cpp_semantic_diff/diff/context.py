@@ -18,7 +18,9 @@ from cpp_semantic_diff.model import (
     MatchTier,
     Model,
     Node,
+    NodeId,
     Side,
+    Unpaired,
 )
 
 #: ARCH-001 §5's tier table, most confident first. The order lives here rather than on
@@ -26,10 +28,22 @@ from cpp_semantic_diff.model import (
 #: an event resting on two matches is no more confident than the weaker of them.
 TIER_ORDER: tuple[MatchTier, ...] = (
     MatchTier.DECLARED,
+    MatchTier.INLINE_NAMESPACE,
+    MatchTier.NAME,
     MatchTier.STRUCTURAL,
     MatchTier.POSITIONAL,
     MatchTier.SIMILARITY,
 )
+
+
+#: Why an endpoint is unmatched, least doubtful first (ADR-034). An edge event resting on two
+#: unmatched endpoints is as doubtful as the more doubtful of them, which is a §11 question
+#: for the same reason `TIER_ORDER` is. `rank.weights.UNCERTAINTY_BY_UNPAIRED` must rise along
+#: it; `tests/test_rank.py` holds the two together.
+UNPAIRED_ORDER: tuple[Unpaired, ...] = (Unpaired.NONE, Unpaired.CANDIDATE, Unpaired.AMBIGUOUS)
+
+#: What an event rests on for one entity: its match tier, or why it has none.
+type Footing = tuple[MatchTier | None, Unpaired | None]
 
 
 @dataclass(frozen=True)
@@ -38,26 +52,45 @@ class DiffContext:
     head: Model
     correspondence: Correspondence
 
-    def confidence(self, tier: MatchTier | None) -> Confidence:
+    def confidence(self, tier: MatchTier | None, unpaired: Unpaired | None = None) -> Confidence:
         """ARCH-001 §11: match tier plus the completeness of *both* models.
 
         Completeness is read from the models rather than passed in, because an event that
         could be constructed without it would let a caller claim, by omission, that nothing
-        was missing.
+        was missing. `unpaired` is required exactly when `tier` is None (`Confidence`).
         """
-        return Confidence.derive(tier, self.base.completeness, self.head.completeness)
+        return Confidence.derive(tier, self.base.completeness, self.head.completeness, unpaired)
 
-    def weakest(self, *tiers: MatchTier | None) -> MatchTier | None:
-        """The least confident of several tiers; None if any of them is None.
+    def footing(self, side: Side, node_id: NodeId) -> Footing:
+        """The tier that matched this node, or why nothing did."""
+        corr = self.correspondence
+        index = corr.by_base if side is Side.BASE else corr.by_head
+        if (m := index.get(node_id)) is not None:
+            return (m.tier, None)
+        # A node the correspondence says nothing about is not in the model on that side --
+        # an edge endpoint the producer kept without a node. There is no evidence about its
+        # partner either way, which is the most doubt there is.
+        return (None, corr.unpaired_for(side, node_id) or Unpaired.AMBIGUOUS)
 
-        An edge event rests on the match of each endpoint. If one endpoint was never
-        matched there is no tier to report -- not a default one -- and None is exactly what
-        `Confidence.tier` means by unmatched residue.
+    def weakest(self, *footings: Footing) -> Footing:
+        """The least confident of several footings: an edge event rests on both endpoints.
+
+        If any endpoint was never matched there is no tier to report -- not a default one,
+        and not the tier of the endpoint that *was* matched -- so `tier` is None, which is
+        what `Confidence.tier` means by unmatched residue. The `unpaired` reason is then the most
+        doubtful of the unmatched endpoints' (ADR-034), so an edge between a matched entity
+        and a plain addition is no more doubtful than the addition.
+
+        One thing is lost, knowingly: with `tier` None, the matched endpoint's tier is not
+        carried, so an edge between an entity paired by name and a plain addition reads as
+        doubtful as the addition alone, 0.0 rather than the name tier's 0.25. ADR-034 records
+        the trade, and ADR-036 that the name tier makes it reachable in v0.
         """
-        present = [t for t in tiers if t is not None]
-        if len(present) < len(tiers):
-            return None
-        return max(present, key=TIER_ORDER.index)
+        reasons = [r for t, r in footings if t is None and r is not None]
+        if reasons:
+            return (None, max(reasons, key=UNPAIRED_ORDER.index))
+        tiers = [t for t, _ in footings if t is not None]
+        return (max(tiers, key=TIER_ORDER.index), None)
 
 
 def node_hunks(*sides: tuple[Side, Node]) -> list[Hunk]:
@@ -65,9 +98,21 @@ def node_hunks(*sides: tuple[Side, Node]) -> list[Hunk]:
 
     `Location` is provenance and never identity (§4.1) -- a node that only moved file
     produces no event at all -- but it is precisely what a reviewer needs to get from an
-    event to the lines, so an event about two sides carries a hunk for each.
+    event to the lines, so an event about two sides carries hunks for each.
+
+    One hunk per site, not only the winning location. A function declared in a header and
+    defined in a source file is one entity with two places a reviewer may have edited; with the
+    location alone, a changed declaration in the header points at no event, and the reverse
+    direction of §6.2 is broken exactly where interfaces change. The location comes first, so
+    the hunk a view reads first is the one it always was.
     """
-    return [Hunk(side=side, location=n.location) for side, n in sides if n.location is not None]
+    return [
+        Hunk(side=side, location=location)
+        for side, n in sides
+        for location in dict.fromkeys(
+            (*((n.location,) if n.location is not None else ()), *n.sites)
+        )
+    ]
 
 
 def edge_hunks(*sides: tuple[Side, Edge]) -> list[Hunk]:

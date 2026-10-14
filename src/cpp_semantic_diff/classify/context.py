@@ -1,6 +1,6 @@
 """The lookups the cause rules need, built once from the two models (ARCH-001 §6.3).
 
-ARCH-001 §3's stage table gives classify a single input -- the `Event` list -- and that
+ARCH-001 §3's stage table gives classify a single input -- the `ChangeEvent` list -- and that
 understates it. Every rule in §6.3 is a statement about the *graph*: what contained what,
 which entities an edge related, whether an entity survived. None of those questions can be
 answered from a list of events, and the ones that look answerable are traps. Containment
@@ -21,9 +21,8 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from cpp_semantic_diff.diff import containers
-from cpp_semantic_diff.match import Correspondence
-from cpp_semantic_diff.model import Edge, EdgeId, EdgeKind, Model, NodeId
+from cpp_semantic_diff.match import Correspondence, containers
+from cpp_semantic_diff.model import Edge, EdgeId, EdgeKind, Model, Node, NodeId, NodeKind
 
 
 @dataclass(frozen=True)
@@ -44,10 +43,6 @@ class ClassifyContext:
     base_endpoints: Mapping[EdgeId, tuple[NodeId, NodeId]]
     head_endpoints: Mapping[EdgeId, tuple[NodeId, NodeId]]
 
-    #: Caller -> callees, head side. Used only by the dormant `SignatureIncompatible` rule
-    #: (§6.3), and built anyway so that rule is a table entry rather than a rewrite.
-    head_callees: Mapping[NodeId, tuple[NodeId, ...]]
-
     #: Edge id -> the edge, base side. An edge event's subject names an edge, and a rule that
     #: needs its *kind* must not recover it by splitting the id: `Edge.id` is `src|kind|dst`
     #: over USRs, and a USR is an opaque clang string that may contain anything.
@@ -58,34 +53,43 @@ class ClassifyContext:
     #: any event.
     head_out_edges: Mapping[NodeId, tuple[Edge, ...]]
 
+    #: Enum -> its enumerators in source order, on each side. An implied enumerator value
+    #: follows from the one before it, so a rule about one needs the order; the model holds
+    #: no order of its own, and location is used only to sort siblings, never to pair them.
+    base_enumerators: Mapping[NodeId, tuple[NodeId, ...]]
+    head_enumerators: Mapping[NodeId, tuple[NodeId, ...]]
+
+    #: Unqualified name -> the aliases of that name, head side, sorted by id. How a rule gets
+    #: from a name written in a signature to the alias it may mean.
+    head_aliases: Mapping[str, tuple[NodeId, ...]]
+
     @classmethod
     def build(cls, base: Model, head: Model, correspondence: Correspondence) -> ClassifyContext:
-        callees: dict[NodeId, set[NodeId]] = defaultdict(set)
         out: dict[NodeId, list[Edge]] = defaultdict(list)
         for edge in head.edges:
-            if edge.kind is EdgeKind.CALLS:
-                callees[edge.src].add(edge.dst)
             out[edge.src].append(edge)
         return cls(
             base=base,
             head=head,
             correspondence=correspondence,
-            # Reused from the diff stage rather than re-derived. `contains` follows the
-            # *semantic* parent (`diff/nodes.py`), so an out-of-line definition belongs to its
-            # class; a second copy of that rule here would drift from the one the diff
+            # The one definition match and diff share, not re-derived. `contains` follows the
+            # *semantic* parent (`match/unpaired.py`), so an out-of-line definition belongs to
+            # its class; a second copy of that rule here would drift from the one the diff
             # stage compares parents with, and the two stages would disagree about what
             # "contained" means while both looked right.
             base_parents=containers(base),
             head_parents=containers(head),
             base_endpoints=_endpoints(base),
             head_endpoints=_endpoints(head),
-            head_callees={src: tuple(sorted(dsts)) for src, dsts in callees.items()},
             base_edges={edge.id: edge for edge in base.edges},
             # Sorted by id so a rule yielding several candidates yields them in an order
             # that does not depend on model construction (§3).
             head_out_edges={
                 src: tuple(sorted(edges, key=lambda e: e.id)) for src, edges in out.items()
             },
+            base_enumerators=_enumerators(base),
+            head_enumerators=_enumerators(head),
+            head_aliases=_aliases(head),
         )
 
     def removed(self, base_id: NodeId) -> bool:
@@ -113,3 +117,36 @@ def _endpoints(model: Model) -> dict[EdgeId, tuple[NodeId, NodeId]]:
     the wrong parent.
     """
     return {edge.id: (edge.src, edge.dst) for edge in model.edges}
+
+
+def _enumerators(model: Model) -> dict[NodeId, tuple[NodeId, ...]]:
+    """Enum -> its enumerators, sorted by where they are written; the id breaks a tie, so the
+    order never depends on model construction (§3)."""
+    members: dict[NodeId, list[Node]] = defaultdict(list)
+    for edge in model.edges:
+        child = model.nodes.get(edge.dst)
+        if (
+            edge.kind is EdgeKind.CONTAINS
+            and child is not None
+            and child.kind is NodeKind.ENUMERATOR
+        ):
+            members[edge.src].append(child)
+    return {
+        enum: tuple(node.id for node in sorted(nodes, key=_source_order))
+        for enum, nodes in members.items()
+    }
+
+
+def _source_order(node: Node) -> tuple[str, int, int, str]:
+    at = node.location
+    if at is None:
+        return ("", 0, 0, node.id)
+    return (at.file, at.line, at.column or 0, node.id)
+
+
+def _aliases(model: Model) -> dict[str, tuple[NodeId, ...]]:
+    by_name: dict[str, list[NodeId]] = defaultdict(list)
+    for node in model.nodes.values():
+        if node.kind is NodeKind.ALIAS:
+            by_name[node.name].append(node.id)
+    return {name: tuple(sorted(ids)) for name, ids in by_name.items()}

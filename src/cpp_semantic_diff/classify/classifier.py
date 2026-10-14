@@ -12,7 +12,7 @@ The rules live in `rules.py` and are a table, per §6.3's insistence that cause 
 explicit rather than inferred. This module is only the driver: it indexes the events, asks
 each rule, and refuses any link that would close a cycle.
 
-Purity (§3) has a specific consequence here worth stating. `Event.id` is derived from kind,
+Purity (§3) has a specific consequence here worth stating. `ChangeEvent.id` is derived from kind,
 subject and payload and deliberately *excludes* `caused_by` (`events.py`), so assigning a
 cause cannot renumber an event that other events already point at. That is what makes a
 single pass sound: the ids are fixed before this stage begins and are still the same ids
@@ -27,20 +27,27 @@ from collections.abc import Mapping, Sequence
 from cpp_semantic_diff.classify.context import ClassifyContext
 from cpp_semantic_diff.classify.rules import CAUSE_RULES, CauseRule
 from cpp_semantic_diff.match import Correspondence
-from cpp_semantic_diff.model import AnyId, AttrValue, Event, EventId, EventKind, Model
+from cpp_semantic_diff.model import (
+    AnyId,
+    AttrValue,
+    ChangeEvent,
+    ChangeEventId,
+    ChangeEventKind,
+    Model,
+)
 
 #: (kind, subject) -> the events with that kind and subject, by id. A pair is not unique:
 #: `NodeAttrChanged` emits one event per attribute on the same subject (§6.1), which is why
 #: the rule table can filter a cause on its payload.
-type EventIndex = Mapping[tuple[EventKind, AnyId], Sequence[Event]]
+type EventIndex = Mapping[tuple[ChangeEventKind, AnyId], Sequence[ChangeEvent]]
 
 
 def classify_events(
-    events: Sequence[Event],
+    events: Sequence[ChangeEvent],
     base: Model,
     head: Model,
     correspondence: Correspondence,
-) -> list[Event]:
+) -> list[ChangeEvent]:
     """Link consequences to causes (ARCH-001 §6.3). Same events, same order, same ids.
 
     Pure: the inputs are not touched, and the returned events are copies carrying the one
@@ -53,20 +60,20 @@ def classify_events(
     # so far, so the order in which links are proposed is part of the answer -- and input
     # order is a property of the caller, which would make the stage a function of how it was
     # called rather than of what it was given (§3).
-    links: dict[EventId, EventId] = {}
+    links: dict[ChangeEventId, ChangeEventId] = {}
     for event in sorted(events, key=lambda e: e.id):
         cause = _cause_for(ctx, index, event)
         if cause is not None and not _reaches(links, cause, event.id):
             links[event.id] = cause
 
     # A copy per event, including the unlinked ones. Returning the caller's objects would
-    # leave the two lists sharing mutable state, and `Event` is not frozen -- a later stage
+    # leave the two lists sharing mutable state, and `ChangeEvent` is not frozen -- a later stage
     # setting a field would edit the diff stage's output retroactively.
     return [event.model_copy(update={"caused_by": links.get(event.id)}) for event in events]
 
 
-def _index(events: Sequence[Event]) -> EventIndex:
-    by_key: dict[tuple[EventKind, AnyId], list[Event]] = defaultdict(list)
+def _index(events: Sequence[ChangeEvent]) -> EventIndex:
+    by_key: dict[tuple[ChangeEventKind, AnyId], list[ChangeEvent]] = defaultdict(list)
     for event in events:
         by_key[(event.kind, event.subject)].append(event)
     # Sorted by id so that a rule whose candidate is ambiguous at the payload level still
@@ -74,7 +81,7 @@ def _index(events: Sequence[Event]) -> EventIndex:
     return {key: sorted(group, key=lambda e: e.id) for key, group in by_key.items()}
 
 
-def _cause_for(ctx: ClassifyContext, index: EventIndex, event: Event) -> EventId | None:
+def _cause_for(ctx: ClassifyContext, index: EventIndex, event: ChangeEvent) -> ChangeEventId | None:
     """The first cause the table finds for this event, or None -- which is a real answer.
 
     §6.3: events with no matching rule get no cause link and are shown. Guessing at one from
@@ -84,20 +91,26 @@ def _cause_for(ctx: ClassifyContext, index: EventIndex, event: Event) -> EventId
         if rule.consequence is not event.kind:
             continue
         for subject in rule.subjects(ctx, event):
-            for candidate in index.get((rule.cause, subject), ()):
-                # An event cannot cause itself. Reachable in principle -- a malformed model
-                # containing a node in itself would ask for exactly that -- and §6.3 would
-                # rather show the event than record a link that means nothing.
-                if candidate.id != event.id and _payload_matches(candidate.payload, rule):
-                    return candidate.id
+            for kind in (rule.cause, *rule.also_caused_by):
+                for candidate in index.get((kind, subject), ()):
+                    # An event cannot cause itself. Reachable in principle -- a malformed
+                    # model containing a node in itself would ask for exactly that -- and
+                    # §6.3 would rather show the event than record a link that means nothing.
+                    if candidate.id != event.id and _payload_matches(candidate, rule):
+                        return candidate.id
     return None
 
 
-def _payload_matches(payload: Mapping[str, AttrValue], rule: CauseRule) -> bool:
+def _payload_matches(candidate: ChangeEvent, rule: CauseRule) -> bool:
+    if candidate.kind is not rule.cause:
+        return True
+    payload: Mapping[str, AttrValue] = candidate.payload
     return all(payload.get(key) == value for key, value in rule.cause_payload.items())
 
 
-def _reaches(links: Mapping[EventId, EventId], start: EventId, target: EventId) -> bool:
+def _reaches(
+    links: Mapping[ChangeEventId, ChangeEventId], start: ChangeEventId, target: ChangeEventId
+) -> bool:
     """Whether following `caused_by` from `start` arrives at `target`.
 
     A cause chain must be a chain. `caused_by` is a single optional id, so the link graph is
@@ -111,8 +124,8 @@ def _reaches(links: Mapping[EventId, EventId], start: EventId, target: EventId) 
     The refused link becomes no link, not an error. §6.3: when cause attribution is
     uncertain, default to showing.
     """
-    seen: set[EventId] = set()
-    current: EventId | None = start
+    seen: set[ChangeEventId] = set()
+    current: ChangeEventId | None = start
     while current is not None and current not in seen:
         if current == target:
             return True

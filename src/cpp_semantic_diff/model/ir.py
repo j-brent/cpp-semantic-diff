@@ -65,6 +65,8 @@ class NodeKind(StrEnum):
     ENUMERATOR = "enumerator"
     ALIAS = "alias"
     VARIABLE = "variable"
+    MACRO = "macro"
+    STATIC_ASSERTION = "static_assertion"
     TEMPLATE = "template"
     FILE = "file"
     TARGET = "target"
@@ -98,6 +100,8 @@ class MatchTier(StrEnum):
     """
 
     DECLARED = "declared"  # tier 1: USR
+    INLINE_NAMESPACE = "inline-namespace"  # tier-1 leftovers under a bumped inline namespace
+    NAME = "name"  # functions and methods left by tier 1: kind + qualified name (ADR-036)
     STRUCTURAL = "structural"  # tier 2: body hash
     POSITIONAL = "positional"  # tier 3: (parent, kind, ordinal)
     SIMILARITY = "similarity"  # tier 4: weighted similarity above threshold
@@ -109,9 +113,26 @@ class Location(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     file: str = Field(description="Repository-relative, forward slashes.")
-    line: int
+    line: int = Field(description="Where the entity's name is, or the site itself for an edge.")
     end_line: int | None = None
     column: int | None = None
+    start_line: int | None = Field(
+        default=None,
+        description="Where the declaration's text begins, when that is before `line`: a "
+        "`template <...>` header, an attribute, a return type on the line above the name. "
+        "A change on those lines is a change to this declaration, and a span that started "
+        "at the name would point nowhere for it.",
+    )
+
+    @property
+    def first_line(self) -> int:
+        """The first line of the span: `start_line` where it is known and earlier."""
+        return min(self.line, self.start_line) if self.start_line is not None else self.line
+
+    @property
+    def sort_key(self) -> tuple[str, int, int, int, int]:
+        """A total order over locations, so a set of them can be stored in one order."""
+        return (self.file, self.first_line, self.line, self.end_line or 0, self.column or 0)
 
     @field_validator("file")
     @classmethod
@@ -151,10 +172,20 @@ class Node(BaseModel):
     )
 
     location: Location | None = None
+    sites: tuple[Location, ...] = Field(
+        default=(),
+        description="Every place this entity is declared or defined -- a header declaration "
+        "and the definition in a source file, each redeclaration -- sorted and deduplicated. "
+        "Provenance only, like `location`, which is one of them. **The one field merged as a "
+        "union** rather than taken from the observation that wins (`extract.merge_node`): a "
+        "change event about the entity has to point at every line that declares it, or a "
+        "reviewer cannot get from an edited declaration in a header to the event it caused "
+        "(ARCH-001 §6.2). Never compared, ranked or hashed.",
+    )
     tu: str | None = Field(
         default=None,
         description="Defining translation unit. Identity-relevant for internal linkage, "
-        "where USRs incorporate the file path (ARCH-001 §5).",
+        "where USRs incorporate the file name (ARCH-001 §5).",
     )
 
     @field_validator("attrs", mode="before")
@@ -192,6 +223,41 @@ class Edge(BaseModel):
         return EdgeId(f"{self.src}|{self.kind.value}|{self.dst}")
 
 
+#: Crossing labels that name no path or library (ADR-025). A third-party crossing is
+#: labelled with its directory (`test/gtest`) and an outside-the-repository one with the library
+#: (`C++ standard library`, `boost`).
+UNTRACKED = "untracked"
+IMPLICIT = "implicit"
+FUNCTION_LOCAL = "function-local"
+TEMPLATE_INSTANTIATION = "template instantiation"
+COMPILER_BUILTINS = "compiler builtins"
+UNRESOLVED = "unresolved"
+
+
+class Crossing(BaseModel):
+    """A relation from the model to something outside it (ADR-025).
+
+    For visualization only: matching, diffing, classification and ranking never read it, and
+    `Model.fingerprint` leaves it out. The callee is a qualified name and not an identity,
+    because there is no node to identify -- overloads of one name are one crossing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    src: NodeId
+    callee: str = Field(description="Qualified name of what the relation leads to.")
+    kind: EdgeKind
+    label: str = Field(
+        description="Where it leads: a third-party path, a library outside the repository, "
+        "`untracked`, or what kind of in-repository entity no declaration produced."
+    )
+    locations: list[Location] = Field(default_factory=list)
+
+    @property
+    def id(self) -> str:
+        return f"{self.src}|{self.kind.value}|{self.callee}"
+
+
 class TuStatus(StrEnum):
     PARSED = "parsed"
     FAILED = "failed"
@@ -223,9 +289,10 @@ class Completeness(BaseModel):
     about entities in the TUs that did parse, because what is missing may be what would
     have contradicted them.
 
-    *Boundary* is what `edges_closed` measures: relations whose endpoint no declaration in this
-    repository owns, dropped by the builder because they cannot be nodes. Calls into `std::`,
-    into libc, and into implicit special members nobody wrote. This is not a hole in coverage;
+    *Boundary* is what `edges_closed` measures: relations whose endpoint is outside the model,
+    kept as crossings rather than edges because they cannot be nodes. Calls into `std::`, into
+    libc, into third-party code (ADR-025), and into implicit special members nobody wrote.
+    `crossings_by_label` itemizes them by where they lead. This is not a hole in coverage;
     it is where the modelled world ends, and with full coverage every dropped edge points
     outside it by construction. It is *expected*, it is large on any real repository
     (`produce/build.py` gives fmt's figure), and it must be stated as a number on every run
@@ -250,9 +317,15 @@ class Completeness(BaseModel):
     )
     edges_dropped: int = Field(
         default=0,
-        description="Distinct edges dropped because an endpoint resolves to no declared "
-        "node (ARCH-001 §11). The boundary of the model, quantified -- see the class "
-        "docstring on why this is not the same kind of incompleteness as a failed TU.",
+        description="Distinct relations that lead outside the model (ARCH-001 §11): the "
+        "total of `crossings_by_label`. The boundary of the model, quantified -- see the "
+        "class docstring on why this is not the same kind of incompleteness as a failed TU.",
+    )
+    crossings_by_label: dict[str, int] = Field(
+        default_factory=dict,
+        description="`edges_dropped`, itemized by where each relation leads. "
+        "Counts the model's crossings, and also the ones dropped because their caller is not a "
+        "node, under the same labels.",
     )
 
     build_available: bool = False
@@ -266,6 +339,20 @@ class Completeness(BaseModel):
         "the AST that nothing else in this record captures: raising CMAKE_CXX_STANDARD is one "
         "line of diff and changes which declarations exist, and in the delta that is "
         "indistinguishable from new code (ARCH-001 §11, §12.1).",
+    )
+    unmodelled: dict[str, int] = Field(
+        default_factory=dict,
+        description="Declarations in the repository's own files that the model skips, "
+        "counted by clang's cursor kind (`using_directive`, `friend`, ...), each declaration "
+        "once however many TUs saw it. What is in the code and not in the model, as a number "
+        "(ARCH-001 §4.4, §11).",
+    )
+    not_visible: list[str] = Field(
+        default_factory=list,
+        description="What no model from this producer can show, whatever the source: "
+        "implicit special members, which libclang does not expose (ADR-029). "
+        "The same on every run, and stated on every run, so a change the model cannot see "
+        "reads as unseen rather than as absent (ARCH-001 §11).",
     )
     notes: list[str] = Field(
         default_factory=list,
@@ -345,6 +432,11 @@ class Model(BaseModel):
     rev: str = Field(description="Resolved commit SHA, not a ref name.")
     nodes: dict[NodeId, Node] = Field(default_factory=dict)
     edges: list[Edge] = Field(default_factory=list)
+    crossings: list[Crossing] = Field(
+        default_factory=list,
+        description="Relations that leave the model, for visualization only (ADR-025). "
+        "Nothing that compares or ranks reads them.",
+    )
     completeness: Completeness = Field(default_factory=Completeness)
 
     def add_node(self, node: Node) -> None:

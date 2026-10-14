@@ -21,8 +21,9 @@ edge is written in its source's text, so the source is what changed.
 
 Two rules that look like plausible fixes were measured and are *not* here, because after
 the home rule neither buys anything: suppressing high-degree hub entities as connectors
-(any cap from 3 to 20: no change to the partition) and refusing connections through vendored
-code (no change). Both were fixes for a symptom of the attribution bug.
+(any cap from 3 to 20: no change to the partition) and refusing connections through bundled
+code (no change). Both were fixes for a symptom of the attribution bug. Third-party code is
+no longer in the model at all (ADR-025), so it connects nothing.
 
 Four rules, each earning its place:
 
@@ -68,7 +69,7 @@ from collections import defaultdict
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from cpp_semantic_diff.model import EdgeKind, Event, EventId, Model, NodeId
+from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, EdgeKind, Model, NodeId
 from cpp_semantic_diff.rank.graph import (
     DEPENDENCY_EDGES,
     containers,
@@ -92,22 +93,22 @@ class Component(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     index: int
-    events: list[EventId] = Field(description="Ordered as the ranking orders them.")
+    change_events: list[ChangeEventId] = Field(description="Ordered as the ranking orders them.")
     top_score: float = Field(description="The highest event total in the component.")
 
     @property
     def size(self) -> int:
-        return len(self.events)
+        return len(self.change_events)
 
 
 class _Union:
     """Union-find over event ids. Ordered by construction: `find` never reorders anything,
     and the caller assigns component indices from scores rather than from merge order."""
 
-    def __init__(self, ids: list[EventId]) -> None:
-        self.parent: dict[EventId, EventId] = {i: i for i in ids}
+    def __init__(self, ids: list[ChangeEventId]) -> None:
+        self.parent: dict[ChangeEventId, ChangeEventId] = {i: i for i in ids}
 
-    def find(self, a: EventId) -> EventId:
+    def find(self, a: ChangeEventId) -> ChangeEventId:
         root = a
         while self.parent[root] != root:
             root = self.parent[root]
@@ -115,7 +116,7 @@ class _Union:
             self.parent[a], a = root, self.parent[a]
         return root
 
-    def join(self, a: EventId, b: EventId) -> None:
+    def join(self, a: ChangeEventId, b: ChangeEventId) -> None:
         ra, rb = self.find(a), self.find(b)
         if ra != rb:
             # Smaller id becomes the root, so the partition is a function of the data and
@@ -124,8 +125,10 @@ class _Union:
             self.parent[hi] = lo
 
 
-def partition(events: list[Event], base: Model, head: Model) -> dict[EventId, EventId]:
-    """Event id -> the id of its component's representative. The four rules, in order.
+def partition(
+    events: list[ChangeEvent], base: Model, head: Model
+) -> dict[ChangeEventId, ChangeEventId]:
+    """ChangeEvent id -> the id of its component's representative. The four rules, in order.
 
     Order-independent by construction: `_Union.join` always roots a merged set at its
     smallest id, so the representative of a set is the minimum id in it whatever sequence
@@ -139,7 +142,7 @@ def partition(events: list[Event], base: Model, head: Model) -> dict[EventId, Ev
     # Rule 1: one home entity per event (`graph.subject_home`), and events sharing it are one
     # change. An edge event is homed on its source, never on both endpoints -- see the module
     # docstring for what that cost.
-    at_home: dict[NodeId, list[EventId]] = defaultdict(list)
+    at_home: dict[NodeId, list[ChangeEventId]] = defaultdict(list)
     for event in events:
         at_home[subject_home(event.subject)].append(event.id)
     for group in at_home.values():
@@ -172,7 +175,7 @@ def partition(events: list[Event], base: Model, head: Model) -> dict[EventId, Ev
     # class itself has no event of its own.
     for model in (base, head):
         parents = containers(model, coupling_only=True)
-        siblings: dict[NodeId, list[EventId]] = defaultdict(list)
+        siblings: dict[NodeId, list[ChangeEventId]] = defaultdict(list)
         for node_id, group in at_home.items():
             parent = parents.get(node_id)
             if parent is None:
@@ -186,18 +189,18 @@ def partition(events: list[Event], base: Model, head: Model) -> dict[EventId, Ev
     return {i: union.find(i) for i in ids}
 
 
-def _join_all(union: _Union, group: list[EventId]) -> None:
+def _join_all(union: _Union, group: list[ChangeEventId]) -> None:
     for other in group[1:]:
         union.join(group[0], other)
 
 
 def components(
-    events: list[Event],
+    events: list[ChangeEvent],
     base: Model,
     head: Model,
-    order: list[EventId],
-    totals: dict[EventId, float],
-) -> tuple[list[Component], dict[EventId, int]]:
+    order: list[ChangeEventId],
+    totals: dict[ChangeEventId, float],
+) -> tuple[list[Component], dict[ChangeEventId, int]]:
     """The partition, numbered by descending risk.
 
     `order` is the ranking, and members are listed in it, so a component reads top-down the
@@ -206,7 +209,7 @@ def components(
     """
     representative = partition(events, base, head)
 
-    members: dict[EventId, list[EventId]] = defaultdict(list)
+    members: dict[ChangeEventId, list[ChangeEventId]] = defaultdict(list)
     for event_id in order:
         members[representative[event_id]].append(event_id)
 
@@ -216,12 +219,12 @@ def components(
     )
 
     result: list[Component] = []
-    index_of: dict[EventId, int] = {}
+    index_of: dict[ChangeEventId, int] = {}
     for index, (_, member_ids) in enumerate(ranked):
         result.append(
             Component(
                 index=index,
-                events=member_ids,
+                change_events=member_ids,
                 top_score=max(totals[e] for e in member_ids),
             )
         )

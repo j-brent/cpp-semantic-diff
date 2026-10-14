@@ -1,11 +1,11 @@
 """The terminal view: a consumer of the document, and nothing more. ARCH-001 §10.
 
 **Every number on this page comes out of a `DiffDocument`.** No `Model`, no `Correspondence`,
-no `Ranking`, no `Event` that is not already in `document.events`. The function signatures
-enforce it -- `render()` takes a document and a handful of display flags -- and the reason is
-§10's: the moment a view can reach a model, a number that "was easier to get from the model"
-lands in the presentation layer, and the analysis core has a delivery surface inside it. That
-is the mistake §10 names. **If this view needs a number the document does not carry, the fix
+no `Ranking`, no `ChangeEvent` that is not already in `document.change_events`. The function
+signatures enforce it -- `render()` takes a document and a handful of display flags -- and the
+reason is §10's: the moment a view can reach a model, a number that "was easier to get from the
+model" lands in the presentation layer, and the analysis core has a delivery surface inside it.
+That is the mistake §10 names. **If this view needs a number the document does not carry, the fix
 is to put it in the document.**
 
 **No document string passes through the markup parser.** Every value read off the document is
@@ -29,12 +29,13 @@ The page is ordered by what §11 and §10 say must be seen first:
 
 1. **Completeness, at the top, never in a log** (§11, rule 2). What was missing precedes what was
    found, because a reader who scrolls past the events has already formed a belief.
-2. **The compression line** (§10). The product's own success metric, printed on every run.
+2. **The compression line** (§10). The product's own success metric, printed on every run,
+   with the changes no change event explains beneath it (ADR-042).
 3. **The events**, in ranking order (§7), grouped by component and with consequences nested
    under their causes (§6.3, `collapse.py`).
 4. **The tier-1 residue** (§13). v0's deliberate rename damage, stated as a measurement rather
    than left to be inferred from an inflated event count.
-5. **§11's two systematic limits**, which are true of every run and are printed on every one.
+5. **§11's systematic limits**, which are true of every run and are printed on every one.
 """
 
 from __future__ import annotations
@@ -43,9 +44,8 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from cpp_semantic_diff.model import AnyId, EventId, Side
+from cpp_semantic_diff.model import AnyId, ChangeEvent, ChangeEventId, ChangeEventKind, Side
 from cpp_semantic_diff.rank import subject_endpoints
-from cpp_semantic_diff.rank.exposure import Exposure
 from cpp_semantic_diff.render.collapse import Collapsed, CollapseNode, collapse
 from cpp_semantic_diff.render.document import CompletenessBlock, DiffDocument
 
@@ -54,6 +54,10 @@ from cpp_semantic_diff.render.document import CompletenessBlock, DiffDocument
 #: right default -- but truncation that does not announce itself is §11's failure in
 #: miniature, so the count of what was withheld is always printed.
 DEFAULT_LIMIT = 25
+
+#: Callers of one changed signature shown before the view says how many more there are. The
+#: document carries every one (ADR-040); `limit=0` shows them all here too.
+CALLERS_SHOWN = 10
 
 
 def render(
@@ -68,7 +72,9 @@ def render(
 
     _header(document, console)
     _completeness(document, console)
+    _third_party(document, console)
     _compression(document, tree, console)
+    _uncovered(document, console)
     _events(document, tree, console, limit=limit)
     _residue(document, console)
     _limits(document, console)
@@ -99,9 +105,9 @@ def _completeness(document: DiffDocument, console: Console) -> None:
     lives in the document (§10) and every consumer gets it as a number.
 
     **Coverage** -- `CompletenessBlock.degraded` -- is the yellow banner, and it fires only
-    when something actually went wrong: a TU that would not parse, or a note the builder
-    chose to record. Warnings print verbatim rather than summarized; a summary of a caveat
-    is a smaller caveat.
+    when something actually went wrong: a TU that would not parse, a note the builder
+    chose to record, or a rename map git cut short at `diff.renameLimit`. Warnings print
+    verbatim rather than summarized; a summary of a caveat is a smaller caveat.
     """
     block = document.completeness
     parsed = (
@@ -113,12 +119,16 @@ def _completeness(document: DiffDocument, console: Console) -> None:
     if not block.degraded:
         console.print(f"[dim]{parsed} · both sides parsed clean[/]")
         _boundary(block, console)
+        _unmodelled(block, console)
         # Both sides can parse perfectly and still have been asked different questions.
         _language_mode(block, console)
         return
 
     console.print()
     console.print("[bold yellow]this model is incomplete[/] [dim]— read what follows knowing it[/]")
+    if (renames := block.renames.warning) is not None:
+        # Labelled "both": the rename map is input shared by the two sides, not either's.
+        console.print(f"  [yellow]both[/] {escape(renames)}")
     for side, warning in block.warnings:
         console.print(f"  [yellow]{side.value:4}[/] {escape(warning)}")
     for report in (block.base, block.head):
@@ -140,6 +150,7 @@ def _completeness(document: DiffDocument, console: Console) -> None:
             console.print(f"  [dim]{report.side.value:4} … {len(report.failures) - 5} more[/]")
     console.print(f"  [dim]{parsed}[/]")
     _boundary(block, console)
+    _unmodelled(block, console)
     _language_mode(block, console)
 
 
@@ -166,6 +177,24 @@ def _language_mode(block: CompletenessBlock, console: Console) -> None:
     )
 
 
+def _unmodelled(block: CompletenessBlock, console: Console) -> None:
+    """What is declared in the repository and not in the model, per side, by kind (#6).
+
+    Dim, like the boundary: the scope of the model rather than a fault, stated every run.
+    """
+    for report in (block.base, block.head):
+        if not report.unmodelled:
+            continue
+        total = sum(report.unmodelled.values())
+        kinds = ", ".join(
+            f"{n:,} {escape(kind)}"
+            for kind, n in sorted(report.unmodelled.items(), key=lambda kv: (-kv[1], kv[0]))
+        )
+        console.print(
+            f"  [dim]{report.side.value:4} {total:,} declaration(s) not modelled: {kinds}[/]"
+        )
+
+
 def _boundary(block: CompletenessBlock, console: Console) -> None:
     """Where the modelled world ends, in numbers, on every run (ARCH-001 §11).
 
@@ -177,6 +206,22 @@ def _boundary(block: CompletenessBlock, console: Console) -> None:
         console.print(f"  [dim]{side.value:4} {escape(sentence)}[/]")
 
 
+def _third_party(document: DiffDocument, console: Console) -> None:
+    """The third-party set and the folder-name hints (ADR-025), when there are any.
+
+    The set is dim: it is what the run was told, not news. A hint is yellow because it asks
+    the reader to act -- a library the set does not name is analyzed as the repository's own.
+    """
+    if document.third_party:
+        listed = " · ".join(
+            f"{escape(p.path)} ({', '.join(s.value for s in p.sources)})"
+            for p in document.third_party
+        )
+        console.print(f"  [dim]third-party {listed}[/]")
+    for hint in document.third_party_hints:
+        console.print(f"  [yellow]note[/] {escape(hint.message)}")
+
+
 # -- 2 · the metric the project is pointed at --------------------------------------------
 
 
@@ -185,9 +230,8 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
 
     The sentence is taken from `summary.compression` rather than rebuilt, so that the JSON and the
     terminal cannot disagree about the one claim the project is testing. The line below it separates
-    the two counts that are easy to conflate: `events_reported` is the complete delta, and its
-    first-party part is the numerator; the collapsed count is what this view chose to nest, and is
-    never the numerator.
+    the two counts that are easy to conflate: `change_events_reported` is the complete delta and the
+    numerator; the collapsed count is what this view chose to nest, and is never the numerator.
     """
     s = document.summary
     console.print()
@@ -195,14 +239,9 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
 
     parts = []
     if s.compression_ratio is not None:
-        parts.append(f"{s.compression_ratio:.1f} lines per event")
-    # Counted over first-party events only, like the sentence above it. A collapse count
-    # taken over the whole forest would sit beside a first-party headline and describe a
-    # different set -- which is the straddle this line would otherwise reintroduce one row
-    # below the place it was fixed.
-    vendored_ids = {i for i, sc in document.scores.items() if sc.exposure is Exposure.VENDORED}
-    roots = sum(1 for r in tree.roots if r.event_id not in vendored_ids)
-    nested = sum(1 for i in tree.flatten() if i not in vendored_ids) - roots
+        parts.append(f"{s.compression_ratio:.1f} lines per change event")
+    roots = len(tree.roots)
+    nested = len(tree.flatten()) - roots
     parts.append(f"{roots} top-level, {nested} nested under a cause")
     parts.append(f"{s.components} component{'' if s.components == 1 else 's'}")
     parts.append(f"{s.files_changed} files ({s.cpp_files_changed} C++)")
@@ -210,23 +249,55 @@ def _compression(document: DiffDocument, tree: Collapsed, console: Console) -> N
         parts.append(f"{document.meta.timings.total:.1f}s")
     console.print(f"  [dim]{' · '.join(parts)}[/]")
 
-    if s.vendored_events:
-        # The events are ranked last, so on a dependency bump a top-N view simply stops
-        # showing them -- and silence there is indistinguishable from "nothing changed".
-        # A reviewer is reviewing their own code, but they are entitled to know how much
-        # was set aside on their behalf and that it is in the JSON.
-        share = s.vendored_events / s.events_reported if s.events_reported else 0.0
-        console.print(
-            f"  [dim]{s.vendored_events:,} event(s) in bundled dependencies "
-            f"({share:.0%} of the delta) ranked last — in the JSON, not shown here[/]"
-        )
-
     if tree.promoted:
         # §6.3: when cause attribution is uncertain, show. Saying so is the other half --
         # a refusal nobody is told about looks exactly like a rule that never fired.
         console.print(
-            f"  [yellow]{len(tree.promoted)} event(s) had an unusable cause link and are "
+            f"  [yellow]{len(tree.promoted)} change event(s) had an unusable cause link and are "
             f"shown at top level[/]"
+        )
+
+
+def _uncovered(document: DiffDocument, console: Console) -> None:
+    """Where the changes no change event explains are, beside the claim they qualify (ADR-042).
+
+    Printed on every run where it was measured, nothing to report included, because a missing
+    line would read as "everything was explained". The files are named, most first, so a reader
+    knows where to look; the JSON has every line.
+    """
+    s = document.summary
+    report = document.completeness.uncovered
+    if report is None or s.uncovered_lines is None or s.uncovered_tokens is None:
+        return
+    line = (
+        f"  [dim]{s.uncovered_lines:,} changed C++ line(s), {s.uncovered_tokens:,} token(s), "
+        f"are on no change event's lines — a lower bound on what the model cannot explain"
+    )
+    if report.moved_tokens:
+        line += f"; {report.moved_tokens:,} token(s) moved unchanged"
+    console.print(line + "[/]")
+    if s.uncovered_lines and report.lines_in_unmodelled_files:
+        console.print(
+            f"  [dim]  about {report.lines_in_unmodelled_files:,} of those line(s) are in files "
+            f"no model declares anything in (roughly: no translation unit includes them)[/]"
+        )
+    by_size = sorted(report.files, key=lambda f: (-f.tokens, f.path, f.side.value))
+    for f in by_size[:5]:
+        unread = "" if f.modelled else ", no model declares anything in it"
+        console.print(
+            f"  [dim]  {f.side.value:4} {escape(f.path)}: {f.tokens:,} token(s) on "
+            f"{len(f.lines):,} line(s){unread}[/]"
+        )
+    if len(by_size) > 5:
+        console.print(f"  [dim]  … {len(by_size) - 5} more file(s) in the JSON[/]")
+    if not report.renames_complete:
+        console.print(
+            "  [yellow]  git skipped inexact rename detection for this count: a file renamed "
+            "and edited counts as wholly changed[/]"
+        )
+    for excluded in report.excluded_files:
+        console.print(
+            f"  [dim]  not compared: {escape(excluded.path)} ({escape(excluded.reason)})[/]"
         )
 
 
@@ -265,7 +336,7 @@ def _events(document: DiffDocument, tree: Collapsed, console: Console, *, limit:
     for shown, root in enumerate(roots):
         if limit and shown >= limit:
             console.print(
-                f"\n[dim]… {len(tree.roots) - shown} more top-level events "
+                f"\n[dim]… {len(tree.roots) - shown} more top-level change events "
                 f"(--limit 0 for all, or --json for every one)[/]"
             )
             break
@@ -274,7 +345,7 @@ def _events(document: DiffDocument, tree: Collapsed, console: Console, *, limit:
         if component != current:
             current = component
             _component_header(document, component, console)
-        _event(document, root, console, depth=0)
+        _event(document, root, console, depth=0, limit=limit)
 
 
 def _component_header(document: DiffDocument, index: int | None, console: Console) -> None:
@@ -282,11 +353,13 @@ def _component_header(document: DiffDocument, index: int | None, console: Consol
         console.print("\n[bold dim]unranked[/]")
         return
     part = next((c for c in document.components if c.index == index), None)
-    size = f"{part.size} event{'' if part and part.size == 1 else 's'}" if part else "?"
+    size = f"{part.size} change event{'' if part and part.size == 1 else 's'}" if part else "?"
     console.print(f"\n[bold]component {index}[/] [dim]· {size}[/]")
 
 
-def _event(document: DiffDocument, node: CollapseNode, console: Console, *, depth: int) -> None:
+def _event(
+    document: DiffDocument, node: CollapseNode, console: Console, *, depth: int, limit: int
+) -> None:
     event = document.by_id[node.event_id]
     score = document.score(node.event_id)
     indent = "  " + "   " * depth
@@ -294,23 +367,51 @@ def _event(document: DiffDocument, node: CollapseNode, console: Console, *, dept
     total = f"{score.total:.2f}" if score else "  — "
     # `is_high_risk`, never `total >= HIGH_RISK`. They are different questions: `total`
     # includes uncertainty so that a low-confidence event sorts *up* (ARCH-001 §7), while
-    # the high-risk verdict deliberately excludes it -- otherwise, under tier-1-only
-    # identity where every add and remove is unmatched residue, the marker would fire on
-    # novelty alone. Recomputing the threshold here is how the dots came to disagree with
-    # the count in `summary`, which is the number the reader is being asked to trust.
+    # the high-risk verdict deliberately excludes it, because our doubt about a match is not
+    # a consequence of the change. (Before ADR-034, when every add and remove scored maximum
+    # uncertainty, the marker fired on novelty alone.) Recomputing the threshold here is how
+    # the dots came to disagree with the count in `summary`, which is the number the reader
+    # is being asked to trust.
     marker = "[red]●[/]" if score and score.is_high_risk else "[dim]·[/]"
     glyph = "" if depth == 0 else "[dim]└ [/]"
 
     console.print(
         f"{indent}[dim]{total}[/] {marker} {glyph}[bold]{event.kind.value}[/]  "
-        f"{_subject(document, event.subject)}"
+        f"{_subject(document, event.subject)}{_caller_note(event)}"
     )
 
     if depth == 0:
         _why(document, node, console, indent=indent)
 
+    shown = withheld = 0
     for child in node.children:
-        _event(document, child, console, depth=depth + 1)
+        if limit and _is_caller(document, child):
+            if shown >= CALLERS_SHOWN:
+                withheld += 1 + child.hidden
+                continue
+            shown += 1
+        _event(document, child, console, depth=depth + 1, limit=limit)
+    if withheld:
+        # Announced, like the top-level truncation: a short list that does not say it is
+        # short reads as every caller.
+        console.print(
+            f"{indent}   [dim]└ +{withheld} more caller(s) (--limit 0 for all, or --json)[/]"
+        )
+
+
+def _is_caller(document: DiffDocument, node: CollapseNode) -> bool:
+    return document.by_id[node.event_id].kind is ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
+
+
+def _caller_note(event: ChangeEvent) -> str:
+    """Whether a caller of a changed signature was edited in this diff (ADR-040).
+
+    An unedited caller is the one the text diff does not show, so the line says which it is.
+    """
+    if event.kind is not ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE:
+        return ""
+    edited = event.payload.get("caller_edited") is True
+    return f"  [dim]{'caller edited' if edited else 'caller not edited'}[/]"
 
 
 def _subject(document: DiffDocument, subject: AnyId) -> str:
@@ -384,8 +485,9 @@ def _residue(document: DiffDocument, console: Console) -> None:
     r = document.summary.residue
     renamed = document.summary.files_renamed
     tiers = ", ".join(t.value for t in r.tiers_run) or "none"
+    plural = "s" if len(r.tiers_run) > 1 else ""
     console.print()
-    console.print(f"[dim]identity: tier {tiers} only (ARCH-001 §13, STATUS §6)[/]")
+    console.print(f"[dim]identity: tier{plural} {tiers} only (ARCH-001 §13)[/]")
     console.print(
         f"  [dim]{r.matched:,} matched · {r.unmatched_base:,} base / {r.unmatched_head:,} "
         f"head unmatched[/]"
@@ -426,7 +528,7 @@ def _limits(document: DiffDocument, console: Console) -> None:
         console.print(f"  [dim]{escape(limit)}[/]")
 
 
-def hidden_ids(tree: Collapsed) -> set[EventId]:
+def hidden_ids(tree: Collapsed) -> set[ChangeEventId]:
     """Every event the view nested under a cause. Exposed for tests of the §6.3 invariant:
     the document must still carry all of these."""
     return {node.event_id for root in tree.roots for node, depth in root.walk() if depth}

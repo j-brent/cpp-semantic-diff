@@ -14,9 +14,12 @@ from conftest import commit, git
 from cpp_semantic_diff.acquire import workspace
 from cpp_semantic_diff.acquire.workspace import (
     CompileDatabase,
+    CompileEntry,
     cache_root,
     checkout,
     configure,
+    is_rooted,
+    require_this_checkout,
     select_generator,
 )
 from cpp_semantic_diff.errors import (
@@ -224,6 +227,43 @@ class TestAMalformedCompileDatabaseIsRefused:
             CompileDatabase.load(path, rev="abc123")
 
 
+class TestIsRooted:
+    """`is_rooted` is the one thing standing between a cross-platform path and a path to
+    nothing: `Path.is_absolute()` answers only for the platform running the code, so a
+    Windows-generated database read on this (Linux) host would otherwise look relative and
+    get silently joined onto the build directory."""
+
+    def test_recognises_either_path_flavour_as_absolute(self) -> None:
+        assert is_rooted("/posix/absolute/path.cpp")
+        assert is_rooted("C:\\windows\\absolute\\path.cpp")
+        assert is_rooted("C:/windows/absolute/path.cpp")
+
+    def test_a_relative_path_is_neither(self) -> None:
+        assert not is_rooted("relative/path.cpp")
+        assert not is_rooted("just-a-file.cpp")
+
+    def test_a_windows_absolute_file_is_not_joined_onto_the_directory(self, tmp_path: Path) -> None:
+        """What `is_rooted` exists to prevent: on POSIX, a Windows path is not absolute by
+        `Path.is_absolute()`'s own reckoning, so without the flavour-agnostic check this
+        entry would be read as `directory / file` -- a nonsense path built out of two
+        absolute paths glued together -- rather than kept as the absolute path it names."""
+        path = tmp_path / "compile_commands.json"
+        path.write_text(
+            json.dumps(
+                [
+                    {
+                        "directory": "C:\\build",
+                        "file": "C:\\project\\a.cpp",
+                        "arguments": ["cl", "/c", "C:\\project\\a.cpp"],
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        db = CompileDatabase.load(path, rev="abc123")
+        assert str(db.entries[0].file) == "C:\\project\\a.cpp"
+
+
 class TestADatabaseFromAnotherCheckoutIsRefused:
     def test_a_committed_database_with_foreign_paths(self, bare_repo: Path) -> None:
         """Every TU outside the worktree means every declaration is pruned while every TU
@@ -247,6 +287,30 @@ class TestADatabaseFromAnotherCheckoutIsRefused:
             pass
         marker = cache_root() / "worktrees" / bare_repo.name / f"{rev}.complete"
         assert not marker.exists(), "a refused checkout must not be marked complete"
+
+    def test_some_entries_outside_the_worktree_is_ordinary(self, tmp_path: Path) -> None:
+        """Only "none inside" is refused -- a build that compiles one file from a sibling
+        checkout is unremarkable and must stay visible in the output. That asymmetry is the
+        whole point of `require_this_checkout`; until now only the "all outside" half of it
+        had a test, so a change that tightened the check to "any outside" would pass the
+        suite while silently refusing every ordinary partial build.
+        """
+        worktree = tmp_path / "wt"
+        worktree.mkdir()
+        inside = worktree / "a.cpp"
+        inside.write_text("int a();\n", encoding="utf-8")
+        db = CompileDatabase(
+            path=tmp_path / "compile_commands.json",
+            entries=[
+                CompileEntry(file=inside, directory=worktree, arguments=["c++", "-c", str(inside)]),
+                CompileEntry(
+                    file=Path("/elsewhere/b.cpp"),
+                    directory=Path("/elsewhere"),
+                    arguments=["c++", "-c", "/elsewhere/b.cpp"],
+                ),
+            ],
+        )
+        require_this_checkout(db, worktree, "abc123")  # must not raise
 
 
 class TestConfigureFailsAsABuildProblem:
@@ -279,6 +343,104 @@ class TestConfigureFailsAsABuildProblem:
         """CMake reads it natively; an explicit `-G Ninja` would silently override it."""
         monkeypatch.setenv("CMAKE_GENERATOR", "Unix Makefiles")
         assert select_generator(None) == []
+
+    def test_an_explicit_generator_flag_is_also_respected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The command-line twin of the environment-variable case above: `--configure-arg
+        -G Xcode` must win over the tool's own default just as plainly. Forcing ninja to
+        appear available proves the `-G` check is what stops it, not an absent ninja."""
+        monkeypatch.setattr(
+            "cpp_semantic_diff.acquire.workspace.shutil.which", lambda name: f"/usr/bin/{name}"
+        )
+        assert select_generator(["-G", "Xcode"]) == []
+        assert select_generator(["-GXcode"]) == []
+
+    def test_a_build_failure_is_reported_not_raised_as_a_traceback(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ADR-010: a base that does not build is a hard failure, with no partial mode.
+        This is the exit code CMake actually uses to say so -- the sibling tests in this
+        class cover cmake being absent or hanging, never cmake running and refusing."""
+        (tmp_path / "CMakeLists.txt").write_text("project(x CXX)\n", encoding="utf-8")
+        monkeypatch.setattr(
+            "cpp_semantic_diff.acquire.workspace.shutil.which", lambda name: f"/usr/bin/{name}"
+        )
+
+        def broken(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(
+                argv, 1, stdout="", stderr='CMake Error: Unknown CMake command "nonsense".\n'
+            )
+
+        monkeypatch.setattr("cpp_semantic_diff.acquire.workspace.subprocess.run", broken)
+        with pytest.raises(ConfigureError, match="Unknown CMake command"):
+            configure(tmp_path, "abc123")
+
+    def test_a_generator_that_cannot_emit_a_database_is_named(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ARCH-001 §3.1's central claim about this stage: Visual Studio and Xcode configure
+        *successfully* and emit nothing, turning a hard precondition into a silent one
+        unless something checks for the database's absence after a clean configure. Neither
+        test file exercised this path before -- every other configure test fails for a
+        reason CMake itself reports.
+        """
+        (tmp_path / "CMakeLists.txt").write_text("project(x CXX)\n", encoding="utf-8")
+        monkeypatch.setattr(
+            "cpp_semantic_diff.acquire.workspace.shutil.which",
+            lambda name: "/usr/bin/cmake" if name == "cmake" else None,
+        )
+        build_dir = tmp_path / "build"
+
+        def configures_but_emits_nothing(
+            argv: list[str], **kwargs: object
+        ) -> subprocess.CompletedProcess[str]:
+            build_dir.mkdir(parents=True, exist_ok=True)
+            (build_dir / "CMakeCache.txt").write_text(
+                "CMAKE_GENERATOR:INTERNAL=Xcode\n", encoding="utf-8"
+            )
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(
+            "cpp_semantic_diff.acquire.workspace.subprocess.run", configures_but_emits_nothing
+        )
+        with pytest.raises(CompileDatabaseError, match="Ninja"):
+            configure(tmp_path, "abc123")
+
+    def test_a_stale_incompatible_generator_is_discarded(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ARCH-001 §3.1: configure "discards a cached build tree whose generator cannot
+        emit one." CMake refuses to switch generators on an existing cache, so a build
+        directory left over from a Visual Studio or Xcode configure would otherwise fail to
+        reconfigure in place, and every later run would hit the same wall forever.
+        """
+        (tmp_path / "CMakeLists.txt").write_text("project(x CXX)\n", encoding="utf-8")
+        build_dir = tmp_path / "build"
+        build_dir.mkdir()
+        (build_dir / "CMakeCache.txt").write_text(
+            "CMAKE_GENERATOR:INTERNAL=Xcode\n", encoding="utf-8"
+        )
+        (build_dir / "stale-from-xcode").write_text("", encoding="utf-8")
+        monkeypatch.setattr(
+            "cpp_semantic_diff.acquire.workspace.shutil.which", lambda name: f"/usr/bin/{name}"
+        )
+
+        def reconfigures_cleanly(
+            argv: list[str], **kwargs: object
+        ) -> subprocess.CompletedProcess[str]:
+            assert not (build_dir / "stale-from-xcode").exists(), (
+                "the stale build tree was reconfigured in place instead of discarded first"
+            )
+            build_dir.mkdir(parents=True, exist_ok=True)
+            (build_dir / "compile_commands.json").write_text("[]", encoding="utf-8")
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(
+            "cpp_semantic_diff.acquire.workspace.subprocess.run", reconfigures_cleanly
+        )
+        database = configure(tmp_path, "abc123")
+        assert database == build_dir / "compile_commands.json"
 
 
 class TestSubmodulesWithoutGit:

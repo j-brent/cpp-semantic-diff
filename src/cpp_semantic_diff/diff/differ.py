@@ -1,4 +1,4 @@
-"""The diff stage: two `Model`s plus a `Correspondence` -> a list of `Event` (ARCH-001 §6).
+"""The diff stage: two `Model`s plus a `Correspondence` -> a list of `ChangeEvent` (ARCH-001 §6).
 
 A pure function of its three inputs and nothing else. It reads no files, consults no
 parser, and does not touch the models it is given. That is what makes the stage testable
@@ -8,12 +8,13 @@ cheaply: two models with the same `Model.fingerprint()` must produce an empty li
 Three things this stage deliberately does *not* do.
 
 **It does not decide identity.** Every "these two are the same entity" judgement arrives in the
-`Correspondence`. v0 runs tier 1 alone (ARCH-001 §13), so a renamed function arrives as one
-unmatched base node and one unmatched head node and leaves here as `NodeRemoved` plus
-`NodeAdded`. That reads badly on purpose: the size of that residue is the measurement that
-decides whether tiers 2-4 are worth building, and any softening here -- a name-based fallback,
-a similarity guess -- would both destroy the measurement and put an identity decision somewhere
-nobody would think to look for one.
+`Correspondence`. v0 has no rename detection (ARCH-001 §13): its tiers pair on the USR and,
+for a function whose signature changed, on the qualified name (ADR-036). So a renamed function
+arrives as one unmatched base node and one unmatched head node and leaves here as `NodeRemoved`
+plus `NodeAdded`. That reads badly on purpose: the size of that residue is the measurement that
+decides whether tiers 2-4 are worth building, and any softening here -- a similarity guess --
+would both destroy the measurement and put an identity decision somewhere nobody would think to
+look for one.
 
 **It does not collapse cascades.** Removing a class emits the removal of the class, of
 every member, and of every edge that touched them. ARCH-001 §6.3 puts collapse at render
@@ -37,10 +38,10 @@ from cpp_semantic_diff.diff.edges import edge_events
 from cpp_semantic_diff.diff.nodes import node_events
 from cpp_semantic_diff.errors import ToolchainMismatchError
 from cpp_semantic_diff.match import Correspondence
-from cpp_semantic_diff.model import Event, Model, NodeId, Side
+from cpp_semantic_diff.model import ChangeEvent, Model, NodeId, Side
 
 
-def diff_models(base: Model, head: Model, correspondence: Correspondence) -> list[Event]:
+def diff_models(base: Model, head: Model, correspondence: Correspondence) -> list[ChangeEvent]:
     """Every node and edge event the two models and their correspondence support."""
     _check_one_toolchain(base, head)
 

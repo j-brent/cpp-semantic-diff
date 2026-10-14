@@ -21,12 +21,13 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field
 
 from cpp_semantic_diff.model import (
+    ChangeEvent,
+    ChangeEventId,
+    ChangeEventKind,
     Confidence,
-    Event,
-    EventId,
-    EventKind,
     Model,
     NodeId,
+    Unpaired,
 )
 from cpp_semantic_diff.rank import weights as w
 from cpp_semantic_diff.rank.exposure import EXPOSURE_ORDER, Exposure, exposure_map
@@ -35,7 +36,7 @@ from cpp_semantic_diff.rank.graph import BlastGraph, subject_endpoints, subject_
 
 class FactorName(StrEnum):
     """The four inputs of ARCH-001 §7, named so consumers switch on a value rather than a
-    string literal -- the same reason `EventKind` is a closed set (`events.py`)."""
+    string literal -- the same reason `ChangeEventKind` is a closed set (`events.py`)."""
 
     BLAST_RADIUS = "blast_radius"
     EXPOSURE = "exposure"
@@ -54,8 +55,9 @@ class Factor(BaseModel):
     contribution: float = Field(description="value * weight -- what this term added.")
     detail: str = Field(
         description="The raw measurement in words: '37 dependent(s), 4 direct', 'public', "
-        "'NodeAttrChanged(virtual)', 'unmatched'. This is what a reviewer reads when the "
-        "ranking surprises them, and it is deliberately not reconstructible from `value`."
+        "'NodeAttrChanged(virtual)', 'unmatched, no candidate'. This is what a reviewer "
+        "reads when the ranking surprises them, and it is deliberately not reconstructible "
+        "from `value`."
     )
 
 
@@ -64,7 +66,7 @@ class RiskScore(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    event_id: EventId
+    change_event_id: ChangeEventId
     total: float = Field(
         description="Sum of the contributions, in [0, 1] -- except where `bounded_by` "
         "names a cause, in which case it is the cause's total (see `ranker.py`)."
@@ -87,7 +89,7 @@ class RiskScore(BaseModel):
         "Components are numbered by descending risk, so component 0 is the change a "
         "reviewer should read first.",
     )
-    bounded_by: EventId | None = Field(
+    bounded_by: ChangeEventId | None = Field(
         default=None,
         description="The cause (§6.3) whose score capped this one. Recorded rather than "
         "applied silently: `total` is otherwise the sum of the contributions, and a number "
@@ -95,25 +97,30 @@ class RiskScore(BaseModel):
     )
     exposure: Exposure = Field(
         default=Exposure.INTERNAL,
-        description="The subject's exposure class, carried as a field and not only inside "
-        "`factors` because the order partitions on it: no vendored event outranks any "
-        "first-party one, whatever the scores say (`ranker.py`).",
+        description="The subject's exposure class, also carried inside `factors`.",
+    )
+
+    informational: bool = Field(
+        default=False,
+        description="The change event records a change of spelling only: an attribute in "
+        "`weights.INFORMATIONAL_ATTRS`, or a payload marked `spelling_only`. Listed and "
+        "ordered as usual, never counted as high risk (ADR-046).",
     )
 
     def factor(self, name: FactorName) -> Factor:
         for f in self.factors:
             if f.name is name:
                 return f
-        raise KeyError(f"score for {self.event_id} carries no {name.value} factor")
+        raise KeyError(f"score for {self.change_event_id} carries no {name.value} factor")
 
     @property
     def is_high_risk(self) -> bool:
         """ARCH-001 §10's `summary.high_risk_count`, one event at a time.
 
-        On `impact`, not on `total`, and the reason is structural rather than a retune. In v0
-        (tier-1 identity only, §13) every add and every remove is unmatched residue, so the
-        uncertainty factor is pinned at its maximum for that whole population -- a constant
-        offset, carrying no information *within* it. Against a fixed threshold that offset is
+        On `impact`, not on `total`, and the reason is structural rather than a retune. Until
+        ADR-034, every unmatched entity scored maximum uncertainty, and in v0 (tier-1 identity
+        only, §13) that is every add and every remove -- a constant offset, carrying no
+        information *within* that population. Against a fixed threshold that offset was
         decisive: a public `NodeAdded` with no dependents at all scored 0.25 + 0.2125 + 0.15 =
         0.6125 and cleared 0.6 on the strength of being new. On fmt at `HEAD~100` that made 133
         of 335 events (40 %) "high risk" (commit `ef2daff`, 2026-08-02), which is a measurement
@@ -123,8 +130,11 @@ class RiskScore(BaseModel):
         about attention -- uncertainty is a reason for a human to look -- and attention is
         the ordering, which still reads all four factors. Risk is a claim about
         consequences, and our doubt about a match is not one of them.
+
+        A change of spelling only is never high risk (ADR-046), whatever its impact: it clears
+        the line on blast radius and exposure, and nothing outside the diff can break.
         """
-        return self.impact >= w.HIGH_RISK
+        return not self.informational and self.impact >= w.HIGH_RISK
 
 
 @dataclass(frozen=True)
@@ -155,7 +165,7 @@ class ScoringContext:
         )
 
 
-def score_event(event: Event, ctx: ScoringContext) -> RiskScore:
+def score_event(event: ChangeEvent, ctx: ScoringContext) -> RiskScore:
     """One event -> one score. No ordering, no components; `ranker.py` owns both."""
     factors = [
         _blast_radius(event, ctx),
@@ -166,11 +176,22 @@ def score_event(event: Event, ctx: ScoringContext) -> RiskScore:
     total = sum(f.contribution for f in factors)
     measured = sum(f.contribution for f in factors if f.name.value in w.IMPACT_FACTORS)
     return RiskScore(
-        event_id=event.id,
+        change_event_id=event.id,
         total=total,
         impact=measured / w.IMPACT_WEIGHT,
         factors=factors,
         exposure=exposure_of(event, ctx),
+        informational=is_informational(event),
+    )
+
+
+def is_informational(event: ChangeEvent) -> bool:
+    """Whether an event records a change of spelling only (ADR-046)."""
+    if event.payload.get("spelling_only") is True:
+        return True
+    return (
+        event.kind is ChangeEventKind.NODE_ATTR_CHANGED
+        and event.payload.get("attr") in w.INFORMATIONAL_ATTRS
     )
 
 
@@ -183,7 +204,7 @@ def _factor(name: FactorName, value: float, detail: str) -> Factor:
 # -- 1 · blast radius -------------------------------------------------------------------
 
 
-def _blast_radius(event: Event, ctx: ScoringContext) -> Factor:
+def _blast_radius(event: ChangeEvent, ctx: ScoringContext) -> Factor:
     """How much depends on what changed, bounded (ARCH-001 §7).
 
     Computed on the **head** model as §7 says, with one documented exception: a subject that
@@ -231,7 +252,7 @@ def _saturate(count: int) -> float:
 # -- 2 · exposure -----------------------------------------------------------------------
 
 
-def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
+def exposure_of(event: ChangeEvent, ctx: ScoringContext) -> Exposure:
     """The subject's exposure class -- `exposure.py` owns the heuristic.
 
     **An edge takes the maximum of its two endpoints, and deliberately does not follow
@@ -247,10 +268,7 @@ def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
     reports/2026-08-01--v0-build/STATUS.md):
 
     - **spdlog `HEAD~30` (9 edge events) and leveldb `HEAD~10` (2,351) are identical.** Not
-      one event changes class, score, rank, component or high-risk status. On leveldb every
-      edge that crosses the vendored boundary crosses *into* it -- 114 `test -> vendored` and
-      2 `public -> vendored`, the repository's own tests calling googletest -- where the
-      source is already the more exposed end and the two rules agree by construction.
+      one event changes class, score, rank, component or high-risk status.
     - **fmt `HEAD~12` holds the only two divergences, and they are the argument for max.**
       Both are the `contains` edges that put this commit's two new partial specializations
       into `namespace fmt::v12::detail`; the specializations are declared in
@@ -267,18 +285,8 @@ def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
     question, and max is the reading that cannot hide: it only ever moves an event toward the
     reviewer, never out of sight.
 
-    **The one direction max can err in, named rather than guarded.** It never pulls a
-    first-party event into `ranker.py`'s vendored block, but the reverse is open: an
-    `EdgeAdded(gtest_helper -> leveldb::Status)` would score PUBLIC and escape the partition
-    on the strength of an endpoint its source did not write. There are **zero** such events
-    across the three fixtures -- no `vendored -> {test, internal, public}` edge event on
-    leveldb, the only one with a moving vendored dependency -- so flooring the partition on
-    the source class while the weighted factor kept the max would be a second mechanism
-    defending a hazard nothing has produced. The trigger to revisit is an observed instance,
-    and it is cheap to watch for: it is a divergence whose source is VENDORED.
-
-    A subject in neither model is INTERNAL rather than VENDORED: the partition in `ranker.py`
-    hides vendored events, and an unclassifiable subject must not be hidden by accident.
+    A subject in neither model is INTERNAL: no evidence demotes it to TEST or promotes it to
+    PUBLIC.
     """
     endpoints = subject_endpoints(event.subject)
     classes = [ctx.exposure[n] for n in endpoints if n in ctx.exposure]
@@ -287,7 +295,7 @@ def exposure_of(event: Event, ctx: ScoringContext) -> Exposure:
     return max(classes, key=EXPOSURE_ORDER.index)
 
 
-def _exposure(event: Event, ctx: ScoringContext) -> Factor:
+def _exposure(event: ChangeEvent, ctx: ScoringContext) -> Factor:
     exposure = exposure_of(event, ctx)
     known = any(n in ctx.exposure for n in subject_endpoints(event.subject))
     detail = exposure.value if known else f"{exposure.value} (subject not in either model)"
@@ -297,13 +305,13 @@ def _exposure(event: Event, ctx: ScoringContext) -> Factor:
 # -- 3 · novelty ------------------------------------------------------------------------
 
 
-def _novelty(event: Event) -> Factor:
+def _novelty(event: ChangeEvent) -> Factor:
     """What kind of change it is (ARCH-001 §7), refined by which attribute for attr events.
 
     The attribute table is a contract with the producer rather than with the doc's prose --
     see `weights.NOVELTY_BY_ATTR`, which is where the mismatch is spelled out.
     """
-    if event.kind is EventKind.NODE_ATTR_CHANGED:
+    if event.kind is ChangeEventKind.NODE_ATTR_CHANGED:
         attr = event.payload.get("attr")
         key = attr if isinstance(attr, str) else ""
         value = w.NOVELTY_BY_ATTR.get(key, w.NOVELTY_BY_KIND[event.kind])
@@ -312,6 +320,15 @@ def _novelty(event: Event) -> Factor:
 
 
 # -- 4 · confidence, inverted -----------------------------------------------------------
+
+
+#: What a reviewer reads for an unmatched subject. Says why, because "unmatched" alone reads
+#: as doubt and is not (ADR-034).
+_UNPAIRED_DETAIL: dict[Unpaired, str] = {
+    Unpaired.NONE: "unmatched, no candidate",
+    Unpaired.CANDIDATE: "unmatched, candidate on the other side",
+    Unpaired.AMBIGUOUS: "unmatched, ambiguous pairing",
+}
 
 
 def _uncertainty(confidence: Confidence) -> Factor:
@@ -324,8 +341,14 @@ def _uncertainty(confidence: Confidence) -> Factor:
     to a scalar (`events.py`) precisely so that this inversion is applied once, here, by the
     stage that owns the weighting.
     """
-    value = w.UNCERTAINTY_BY_TIER[confidence.tier]
-    detail = confidence.tier.value if confidence.tier else "unmatched"
+    if confidence.tier is not None:
+        value = w.UNCERTAINTY_BY_TIER[confidence.tier]
+        detail = confidence.tier.value
+    else:
+        # `Confidence` refuses a None tier without a reason, so this cannot fire.
+        assert confidence.unpaired is not None
+        value = w.UNCERTAINTY_BY_UNPAIRED[confidence.unpaired]
+        detail = _UNPAIRED_DETAIL[confidence.unpaired]
     if not confidence.models_complete:
         value += w.UNCERTAINTY_INCOMPLETE_MODELS
         detail = f"{detail}, incomplete models"

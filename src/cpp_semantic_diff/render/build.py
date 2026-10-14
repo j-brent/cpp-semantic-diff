@@ -12,30 +12,46 @@ Two things it deliberately does not do.
 list in the order the diff stage emitted it. Collapse is a view concern (§6.3, `collapse.py`)
 and this document is what the views agree on.
 
-**It does not improve the numerator.** `summary.events_reported` is `len(events)`, and the
-numerator is its first-party part (schema 1.2; `compression_sentence` says why). §10 makes
-the compression ratio the experiment this project runs on itself, and there is no filter,
-bucket or threshold here that could flatter it.
+**It does not improve the numerator.** `summary.change_events_reported` is `len(events)`, and
+it is the numerator. §10 makes the compression ratio the experiment this project runs on
+itself, and there is no filter, bucket or threshold here that could flatter it.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from cpp_semantic_diff import __version__
-from cpp_semantic_diff.acquire import RevPair
+from cpp_semantic_diff.acquire import RenameLimitHit, RevPair, ThirdPartySet
+from cpp_semantic_diff.acquire.third_party import hint_message
+from cpp_semantic_diff.diff.coverage import Coverage
 from cpp_semantic_diff.match import Correspondence
-from cpp_semantic_diff.model import Event, Model, Node, NodeId, Side
+from cpp_semantic_diff.model import (
+    ChangeEvent,
+    Model,
+    Node,
+    NodeId,
+    Side,
+)
+from cpp_semantic_diff.model.ir import Crossing
 from cpp_semantic_diff.rank import Ranking, subject_endpoints
 from cpp_semantic_diff.render.document import (
+    SYSTEMATIC_LIMITS,
     CompletenessBlock,
     CompletenessReport,
+    CrossingsBlock,
     DiffDocument,
     EntitySummary,
+    ExcludedFile,
     Meta,
+    RenameDetection,
     Residue,
     Summary,
+    ThirdPartyHint,
+    ThirdPartyPath,
     Timings,
+    UncoveredFile,
+    UncoveredReport,
 )
 
 
@@ -46,13 +62,16 @@ def build_document(
     base: Model,
     head: Model,
     correspondence: Correspondence,
-    events: Sequence[Event],
+    events: Sequence[ChangeEvent],
     ranking: Ranking,
     lines_changed: int,
     files_changed: int,
     cpp_files_changed: int,
     files_renamed: int = 0,
+    rename_limit: RenameLimitHit | None = None,
+    third_party: ThirdPartySet | None = None,
     timings: Timings | None = None,
+    coverage: Coverage | None = None,
 ) -> DiffDocument:
     """Assemble ARCH-001 §10's document from the stage outputs.
 
@@ -61,15 +80,28 @@ def build_document(
     being re-derived from the scores, because two implementations of one threshold is one
     too many.
     """
-    entities = _entities(events, base, head)
+    entities = _entities(events, base, head, correspondence)
     completeness = CompletenessBlock(
         base=CompletenessReport.of(Side.BASE, base.rev, base.completeness),
         head=CompletenessReport.of(Side.HEAD, head.rev, head.completeness),
+        renames=RenameDetection(
+            complete=rename_limit is None,
+            limit_needed=rename_limit.needed if rename_limit is not None else None,
+        ),
+        # §11's standing limits, then what either producer says it cannot see (ADR-029).
+        # Deduplicated in order: both sides normally state the same limits, and the reader
+        # needs each once.
+        limits=list(
+            dict.fromkeys(
+                [*SYSTEMATIC_LIMITS, *base.completeness.not_visible, *head.completeness.not_visible]
+            )
+        ),
+        uncovered=_uncovered(coverage),
     )
 
+    third_party = third_party or ThirdPartySet()
     high_risk = ranking.high_risk_count
     count = len(events)
-    first_party = ranking.first_party_count
 
     return DiffDocument(
         meta=Meta(
@@ -82,28 +114,47 @@ def build_document(
             timings=timings or Timings(),
         ),
         completeness=completeness,
+        third_party=[
+            ThirdPartyPath(path=e.path, sources=sorted(e.sources)) for e in third_party.entries
+        ],
+        third_party_hints=[
+            ThirdPartyHint(path=path, message=hint_message(path)) for path in third_party.hints
+        ],
         entities=entities,
+        crossings=CrossingsBlock(
+            base=_crossings_from(base, entities, correspondence.head_for),
+            head=_crossings_from(head, entities, correspondence.base_for),
+        ),
         # The complete, uncollapsed set (§6.3). Copied into a list rather than aliased:
         # a document that shared its list with the caller's would let a later mutation
         # rewrite an already-serialized product.
-        events=list(events),
+        change_events=list(events),
         findings=[],  # §8 is deferred (§13); the key exists so consumers do not change.
         ranking=ranking.order,
-        scores={s.event_id: s for s in ranking.scores},
+        scores={s.change_event_id: s for s in ranking.scores},
         components=list(ranking.components),
         summary=Summary(
             lines_changed=lines_changed,
             files_changed=files_changed,
             cpp_files_changed=cpp_files_changed,
             files_renamed=files_renamed,
-            events_reported=count,
-            vendored_events=ranking.vendored_count,
+            changed_cpp_lines=coverage.changed_lines if coverage is not None else None,
+            uncovered_lines=coverage.uncovered_lines if coverage is not None else None,
+            uncovered_tokens=coverage.uncovered_tokens if coverage is not None else None,
+            change_events_reported=count,
             compression=compression_sentence(
-                lines_changed, first_party, high_risk, ranking.vendored_count
+                lines_changed,
+                count,
+                high_risk,
+                uncovered=(
+                    (coverage.uncovered_lines, coverage.changed_lines)
+                    if coverage is not None
+                    else None
+                ),
             ),
-            compression_ratio=(lines_changed / first_party) if first_party else None,
+            compression_ratio=(lines_changed / count) if count else None,
             high_risk_count=high_risk,
-            top_level_events=sum(1 for e in events if e.caused_by is None),
+            top_level_change_events=sum(1 for e in events if e.caused_by is None),
             components=len(ranking.components),
             residue=Residue(
                 matched=len(correspondence.matches),
@@ -116,8 +167,14 @@ def build_document(
     )
 
 
-def compression_sentence(lines_changed: int, events: int, high_risk: int, vendored: int = 0) -> str:
-    """§10's line, verbatim in shape: *2,431 lines changed -> 9 semantic events, 2 high-risk*.
+def compression_sentence(
+    lines_changed: int,
+    events: int,
+    high_risk: int,
+    *,
+    uncovered: tuple[int, int] | None = None,
+) -> str:
+    """§10's line, verbatim in shape: *2,431 lines changed -> 9 change events, 2 high-risk*.
 
     Built here rather than in a view so that every consumer prints the same claim, and so
     that the claim is in the JSON -- §10 says it "prints on every run", and a sentence a
@@ -129,34 +186,73 @@ def compression_sentence(lines_changed: int, events: int, high_risk: int, vendor
     result this tool can report -- it means the change had no semantic content the model can
     see, which is either excellent news or a hole in the model.
 
-    **`events` here is the first-party count, and the two sides must match.** The denominator
-    is lines of text diff -- "the number a reviewer would otherwise have read" -- and git
-    renders a submodule bump as two lines, not the hundred thousand inside it. Dividing that
-    by every modelled event compares a first-party denominator against a whole-world
-    numerator, which on leveldb read 0.0 lines per event. So vendored events are named beside
-    the sentence and excluded from the arithmetic, and the fix is a real cost rather than a
-    flattering one: aligning the universes made leveldb's ratio finite but still inverted,
-    which is the honest result.
+    **Both sides count only the repository's own code.** The denominator is lines of text
+    diff, and the numerator is every change event. Third-party code is in neither (ADR-025):
+    no lines, because a comparison across a third-party change is refused, and no change
+    events, because extraction leaves third-party code out of the model.
 
-    `summary.events_reported` is untouched and remains the complete set. It is the one figure
-    nobody can audit from outside, and it may not shrink because a dependency moved.
+    **`uncovered` is (uncovered lines, changed C++ lines)**, and when it was measured it is
+    part of the claim. On its own the ratio improves when the model sees *less* -- a change it
+    cannot see is one fewer event over the same lines. Beside the count of changed lines no
+    event explains, it cannot (ADR-042).
     """
-    head = (
-        f"{lines_changed:,} lines changed -> {events:,} semantic event{'' if events == 1 else 's'}"
-    )
+    head = f"{lines_changed:,} lines changed -> {events:,} change event{'' if events == 1 else 's'}"
+    unexplained = ""
+    if uncovered is not None:
+        missed, changed = uncovered
+        unexplained = (
+            f" · {missed:,} of {changed:,} changed C++ line{'' if changed == 1 else 's'} "
+            f"explained by no change event"
+        )
     if not events:
-        if vendored:
-            # Distinct from "nothing changed": a dependency moved and none of it reached
-            # the reviewer's own code, which is a result rather than an absence of one.
-            return f"{head} (all {vendored:,} of it in bundled dependencies)"
-        return f"{head} (no semantic change the model can see)"
-    tail = f", {high_risk:,} high-risk"
-    if vendored:
-        tail += f" · {vendored:,} more in bundled dependencies, ranked last"
-    return f"{head}{tail}"
+        return f"{head} (no semantic change the model can see){unexplained}"
+    return f"{head}, {high_risk:,} high-risk{unexplained}"
 
 
-def _entities(events: Sequence[Event], base: Model, head: Model) -> dict[NodeId, EntitySummary]:
+def _crossings_from(
+    model: Model,
+    entities: dict[NodeId, EntitySummary],
+    partner: Callable[[NodeId], NodeId | None],
+) -> list[Crossing]:
+    """The model's crossings whose caller is a referenced entity, in a stable order.
+
+    The caller counts when its own id or its partner on the other side is referenced:
+    `entities` holds one id per matched entity, and a function the name tier paired has a
+    different id on each side (ADR-036), so its crossings on the other side would be lost.
+    """
+
+    def referenced(src: NodeId) -> bool:
+        other = partner(src)
+        return src in entities or (other is not None and other in entities)
+
+    return sorted((c for c in model.crossings if referenced(c.src)), key=lambda c: c.id)
+
+
+def _uncovered(coverage: Coverage | None) -> UncoveredReport | None:
+    if coverage is None:
+        return None
+    return UncoveredReport(
+        files=[
+            UncoveredFile(
+                side=f.side, path=f.path, lines=list(f.lines), tokens=f.tokens, modelled=f.modelled
+            )
+            for f in coverage.files
+        ],
+        moved_tokens=coverage.moved_tokens,
+        lines_in_unmodelled_files=coverage.unmodelled_lines,
+        renames_complete=coverage.renames_complete,
+        excluded_files=[
+            ExcludedFile(path=e.path, reason=e.reason) for e in coverage.excluded_files
+        ],
+    )
+
+
+def _entities(
+    events: Sequence[ChangeEvent],
+    base: Model,
+    head: Model,
+    correspondence: Correspondence,
+) -> dict[NodeId, EntitySummary]:
     """The node summaries the events reference, and only those (ARCH-001 §10).
 
     An event's subject is a node id or an edge id (§6.2); `subject_endpoints` resolves both,
@@ -168,6 +264,11 @@ def _entities(events: Sequence[Event], base: Model, head: Model) -> dict[NodeId,
     is carried only through `sides`, which is what lets a view say "removed" without
     inspecting the event kind. Removals are base-only ids and are found in `base` alone,
     which is the reason both models are consulted rather than head only.
+
+    **`sides` goes through the correspondence, not through the ids.** A function the name
+    tier paired has one USR at base and another at head (ADR-036), so each id is in one
+    model only. Either id of a match is an entity both sides hold; read off the ids, the
+    view would mark a changed function as added, or the callee of a removed call as removed.
     """
     wanted: set[NodeId] = set()
     for event in events:
@@ -191,11 +292,15 @@ def _entities(events: Sequence[Event], base: Model, head: Model) -> dict[NodeId,
             # through a subject. Omitting the summary is honest -- the view falls back to the
             # raw id, which is all that is actually known about it.
             continue
-        out[node_id] = _summary(node, in_base is not None, in_head is not None)
+        matched = node_id in correspondence.by_base or node_id in correspondence.by_head
+        out[node_id] = _summary(
+            node, matched or in_base is not None, matched or in_head is not None
+        )
     return out
 
 
 def _summary(node: Node, in_base: bool, in_head: bool) -> EntitySummary:
+    """`in_base` and `in_head` say which sides hold the entity, through the correspondence."""
     return EntitySummary(
         id=node.id,
         kind=node.kind,

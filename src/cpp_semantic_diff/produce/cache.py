@@ -88,8 +88,14 @@ import cpp_semantic_diff.model.ir as ir
 import cpp_semantic_diff.produce.extract as extract_module
 from cpp_semantic_diff.acquire.workspace import Checkout, CompileEntry, cache_root
 from cpp_semantic_diff.errors import InvalidSettingError
-from cpp_semantic_diff.model.ir import Edge, Node, NodeId, TuResult
-from cpp_semantic_diff.produce.extract import TuExtract, extract, parse_arguments
+from cpp_semantic_diff.model.ir import Crossing, Edge, Node, NodeId, TuResult
+from cpp_semantic_diff.produce.extract import (
+    NO_BOUNDARY,
+    Boundary,
+    TuExtract,
+    extract,
+    parse_arguments,
+)
 from cpp_semantic_diff.produce.toolchain import (
     MINIMUM_MAJOR,
     Toolchain,
@@ -101,7 +107,13 @@ from cpp_semantic_diff.produce.toolchain import (
 #: existing entry unreachable, which is the only safe response to a change in what is
 #: stored or in what the key covers: an entry written under the old recipe cannot be known
 #: to be valid under the new one.
-ENTRY_FORMAT = 1
+#:
+#: 2, for all of v0. Stored: `Location.start_line`, `Node.sites`, `TuExtract.unmodelled`,
+#: `TuExtract.crossings` and `TuExtract.targets`. Keyed: the third-party set in `identity`
+#: (ADR-025) and each repository header's tracked bit in `key` (ADR-037). Two branches filled
+#: this one number, so `loads` requires every stored field by name: an entry written by either
+#: branch alone is missing one, raises, and is a miss rather than a partial claiming nothing.
+ENTRY_FORMAT = 2
 
 
 @functools.cache
@@ -392,8 +404,16 @@ def dumps(partial: TuExtract) -> bytes:
         "nodes": [n.model_dump(mode="json") for n in partial.nodes.values()],
         "edges": [e.model_dump(mode="json") for e in partial.edges.values()],
         "aliases": partial.aliases,
+        "unmodelled": sorted(partial.unmodelled),
+        "crossings": [c.model_dump(mode="json") for c in partial.crossings.values()],
+        "targets": partial.targets,
     }
     return gzip.compress(json.dumps(payload).encode(), compresslevel=1)
+
+
+def _require(raw: dict[str, object], key: str) -> None:
+    if key not in raw:
+        raise ValueError(f"entry lacks {key!r}; written by a different producer")
 
 
 def loads(blob: bytes) -> TuExtract:
@@ -404,12 +424,27 @@ def loads(blob: bytes) -> TuExtract:
 
     nodes: dict[NodeId, Node] = {}
     for raw in payload["nodes"]:
+        # Fields with a default are still required here. The model would fill a missing one
+        # in, and an entry written by another build of the same format number -- a branch that
+        # stored less -- would then load as a partial claiming no sites, which is stale data
+        # served as a hit. `dumps` always writes every field, so a missing one means the entry
+        # is not ours.
+        _require(raw, "sites")
+        for location in (raw["location"], *raw["sites"]):
+            if location is not None:
+                _require(location, "start_line")
         node = Node.model_validate(raw)
         nodes[node.id] = node
     edges: dict[str, Edge] = {}
     for raw in payload["edges"]:
         edge = Edge.model_validate(raw)
         edges[edge.id] = edge
+
+    crossings: dict[str, Crossing] = {}
+    for raw in payload["crossings"]:
+        crossing = Crossing.model_validate(raw)
+        crossings[crossing.id] = crossing
+    targets = {usr: (name, label) for usr, (name, label) in payload["targets"].items()}
 
     result = TuResult.model_validate(payload["result"])
     # The record of *how the model was built* (ARCH-001 §4.4). Set here rather than
@@ -421,6 +456,12 @@ def loads(blob: bytes) -> TuExtract:
         nodes=nodes,
         edges=edges,
         aliases=dict(payload["aliases"]),
+        unmodelled={
+            (str(file), int(line), int(column), str(kind))
+            for file, line, column, kind in payload["unmodelled"]
+        },
+        crossings=crossings,
+        targets=targets,
     )
 
 
@@ -615,8 +656,13 @@ class TuCache:
         closures: dict[Path, list[Path]],
         disabled: str = "",
         remedy: str = "",
+        boundary: Boundary = NO_BOUNDARY,
     ) -> None:
         self.root = root.resolve()
+        #: What extraction leaves out of the model. Runtime input that changes what an entry
+        #: holds, so it is in the key: the third-party paths in `identity` (ADR-025), and each
+        #: in-repository header's tracked bit in `key` (ADR-037).
+        self.boundary = boundary
         #: Both spellings of the worktree path. A compile database records the path it was
         #: configured with, which may differ from the resolved one by a symlink; a key that
         #: normalized only one of them would carry the revision SHA and never be shared.
@@ -644,6 +690,7 @@ class TuCache:
         *,
         toolchain: Toolchain,
         store: Path | None = None,
+        boundary: Boundary = NO_BOUNDARY,
     ) -> TuCache:
         """Resolve the scanner, scan the database, and be ready to answer.
 
@@ -670,6 +717,7 @@ class TuCache:
                 closures={},
                 disabled=reason,
                 remedy=remedy,
+                boundary=boundary,
             )
         closures = include_closures(scanner, checkout.compile_db.path)
         if not closures:
@@ -679,8 +727,15 @@ class TuCache:
                 store=store,
                 closures={},
                 disabled=f"{scanner} produced no include closures for {checkout.compile_db.path}",
+                boundary=boundary,
             )
-        cache = cls(root=checkout.path, toolchain=toolchain, store=store, closures=closures)
+        cache = cls(
+            root=checkout.path,
+            toolchain=toolchain,
+            store=store,
+            closures=closures,
+            boundary=boundary,
+        )
         # Decided after construction because the check reads the closures and wants the
         # instance's own path-resolution memo (`_relative`), which `key()` pays for anyway.
         cache.disabled, cache.remedy = cache._uncovered_resource_dir()
@@ -810,6 +865,11 @@ class TuCache:
         digest.update(f"{self._relative(entry.file)}\0".encode())
         for arg in self.flags(entry):
             digest.update(f"{arg}\0".encode())
+        # What extraction leaves out of the model (ADR-025). Separated from the flags by a
+        # marker, so a path cannot be read as a flag or the other way round.
+        digest.update(b"third-party\0")
+        for path in sorted(self.boundary.third_party):
+            digest.update(f"{path}\0".encode())
         return digest.hexdigest()
 
     def key(self, entry: CompileEntry) -> str | None:
@@ -847,8 +907,23 @@ class TuCache:
                 content = "absent"
             contents[relative] = content
         for relative in sorted(contents):
-            digest.update(f"{relative}\0{contents[relative]}\0".encode())
+            tracked = self._tracked(relative)
+            digest.update(f"{relative}\0{contents[relative]}\0{tracked}\0".encode())
         return digest.hexdigest()
+
+    def _tracked(self, relative: str) -> str:
+        """Whether git tracks an in-repository closure member: `t`, `u`, or `-` if not known.
+
+        Part of the key because extraction models only tracked files (ADR-037), and tracking
+        is not content: a header generated untracked at one revision and committed byte for
+        byte at another hashes the same both times. Per header rather than the whole list, so
+        adding an unrelated file to the repository invalidates nothing. Files outside the
+        repository answer `-`.
+        """
+        prefix = ROOT_TOKEN + "/"
+        if self.boundary.tracked is None or not relative.startswith(prefix):
+            return "-"
+        return "t" if relative.removeprefix(prefix) in self.boundary.tracked else "u"
 
     # -- storage ---------------------------------------------------------------
 
@@ -959,7 +1034,13 @@ class TuCache:
             elif not self.disabled:
                 self.stats.uncacheable += 1
 
-            partial = extract(entry, root=self.root, toolchain=self.toolchain, index=index)
+            partial = extract(
+                entry,
+                root=self.root,
+                toolchain=self.toolchain,
+                index=index,
+                boundary=self.boundary,
+            )
             # Only a successful parse is stored. A failure's cause is routinely *outside*
             # the key -- a header that does not exist is in no closure -- so an entry for
             # it could not be invalidated by the fix, and the tool would keep reporting a

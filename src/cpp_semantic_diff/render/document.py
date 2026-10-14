@@ -8,8 +8,8 @@ and nothing else. That is what keeps delivery surfaces out of the analysis core,
 carry, the fix is to put it here**, never to hand the view a `Model`.
 
 §10 gives seven top-level keys and this module gives those seven, plus `scores` and
-`components`. Where §10 is a sketch rather than a spec, the choice made is recorded on the
-field:
+`components`. Where §10 is a sketch rather than a spec, the choice made is
+recorded on the field:
 
 - **`ranking`** is `[event id]` verbatim, so a consumer that only wants reading order gets
   it without parsing scores. But a view that must *explain* the order needs the factors,
@@ -19,7 +19,7 @@ field:
 - **`entities`** carries only the nodes events reference. §10 says "for events to
   reference"; a real model has thousands of nodes and a review touches tens of them, and a
   document that inlined the whole node set would be a model dump with a delta attached.
-- **`completeness`** carries the two systematic limits of §11 as data rather than as prose
+- **`completeness`** carries the systematic limits of §11 as data rather than as prose
   in one view, because §11 requires them stated "in the output itself, every time" -- and
   the output is this document, not the terminal.
 - **`summary`** carries §10's four keys plus others, the tier-1 residue among them. ARCH-001
@@ -38,16 +38,18 @@ from functools import cached_property
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from cpp_semantic_diff.acquire import ThirdPartySource
 from cpp_semantic_diff.model import (
+    ChangeEvent,
+    ChangeEventId,
     Completeness,
-    Event,
-    EventId,
     Location,
     MatchTier,
     NodeId,
     NodeKind,
     Side,
 )
+from cpp_semantic_diff.model.ir import Crossing
 from cpp_semantic_diff.rank import Component, RiskScore
 
 #: Bumped when a consumer that understood the previous version could misread this one.
@@ -68,9 +70,47 @@ from cpp_semantic_diff.rank import Component, RiskScore
 #: 1.1 consumer would read the new ratio as the old one and see a repository's compression
 #: apparently improve on precisely the commit where a dependency was bumped. `events_reported`
 #: is untouched and still the complete set -- the one number that may never quietly shrink.
-SCHEMA_VERSION = "1.2"
+#:
+#: 1.2 -> 2.0: milestone v0. Every v0 change to the output landed under one bump, so a
+#: consumer sees one for the milestone rather than one per change; while it was in development
+#: on `dev` it was "2.0.dev". What 2.0 changes:
+#:
+#: - Renamed, for the term "change event" (ADR-027): `events` -> `change_events`,
+#:   `summary.events_reported` -> `summary.change_events_reported`,
+#:   `summary.top_level_events` -> `summary.top_level_change_events`,
+#:   `components[].events` -> `components[].change_events`, and
+#:   `scores{}.event_id` -> `scores{}.change_event_id`.
+#: - Removed: `summary.vendored_events`, and the exposure class `vendored` from
+#:   `scores{}.exposure` and the exposure factor. Third-party code is not in the model
+#:   (ADR-025), so `compression_ratio` and `high_risk_count` are taken over every change
+#:   event.
+#: - Changed meaning: `completeness.*.edges_dropped` counts every relation that leads
+#:   outside the model, third-party code included, and `edges_total` is resolved edges plus
+#:   those. The `uncertainty` factor in `scores{}.factors` is doubt about the pairing,
+#:   valued by `confidence.unpaired`, not the absence of a partner (ADR-034).
+#:   `high_risk_count` leaves out informational change events (ADR-046).
+#: - Added: `third_party` and `third_party_hints`; `completeness.*.crossings_by_label`
+#:   and `completeness.*.unmodelled`; `crossings`, from the referenced entities only;
+#:   `completeness.renames`;
+#:   `completeness.uncovered` with `summary.changed_cpp_lines`, `uncovered_lines` and
+#:   `uncovered_tokens` (ADR-042); what the producer cannot see in `completeness.limits`;
+#:   `meta.timings.derive` and `coverage`; `Location.start_line`; `scores{}.informational`,
+#:   and `spelling_only` in a `NodeAttrChanged` payload (ADR-046).
+#: - Change events: `NodeSignatureChanged` and `CallerOfChangedSignature` are new kinds and
+#:   `SignatureIncompatible` is gone; `confidence.unpaired` says why an entity is
+#:   unmatched; the match tiers `inline-namespace` and `name` are new.
+#: - Entities: the kinds `macro` and `static_assertion` are new, and enums, enumerators,
+#:   aliases and variables are now modelled, so they appear as entities (ADR-038, ADR-039).
+#: - Attributes, and so `NodeAttrChanged` payloads: functions and methods gain
+#:   `sugared_signature`, `template_parameters`, `default_arguments` (ADR-043), `constexpr`,
+#:   `nodiscard` and `deprecated`; classes, structs and unions `final`, `deprecated` and
+#:   `base_order` (ADR-043); fields `default_member_init`; namespaces `inline`. The newly
+#:   modelled kinds carry their own.
+SCHEMA_VERSION = "2.0"
 
-#: ARCH-001 §11: "Two systematic limits get stated in the output itself, every time."
+#: ARCH-001 §11: systematic limits "get stated in the output itself, every time". These are the
+#: two that hold of any static model of one configuration; the third, what this producer cannot
+#: see, comes from the models (`Completeness.not_visible`) and is appended by `build.py`.
 #: They are data on the document rather than a line in one view, because "every time"
 #: means every consumer, and a limit that lives in `terminal.py` is absent from the JSON
 #: that §10 calls the product. Phrased as claims about *this* output, not as general
@@ -139,6 +179,15 @@ class CompletenessReport(BaseModel):
         description="Distinct edges dropped because an endpoint is not declared in this "
         "repository. The model's boundary, quantified -- see the class docstring.",
     )
+    crossings_by_label: dict[str, int] = Field(
+        default_factory=dict,
+        description="`edges_dropped`, itemized by where each relation leads: a third-party "
+        "path, a library outside the repository (`C++ standard library`, `boost`), "
+        "`untracked`, or the kind of in-repository entity no declaration produced "
+        "(`implicit`, `function-local`, `template instantiation`, `compiler builtins`, "
+        "`unresolved`). For visualization only: nothing in the comparison or the ranking "
+        "reads it (ADR-025).",
+    )
 
     build_available: bool = Field(
         description="Whether binary artifacts existed. Configure-only in v0 (§3.1), so "
@@ -146,6 +195,12 @@ class CompletenessReport(BaseModel):
     )
     producer_version: str
     producers: list[str] = Field(default_factory=list)
+    unmodelled: dict[str, int] = Field(
+        default_factory=dict,
+        description="Declarations in the repository's own files the model skips, by kind "
+        "(`Completeness.unmodelled`). Stated on every run, never a warning: it is the scope "
+        "of the model, like the boundary.",
+    )
     language_modes: list[str] = Field(
         default_factory=list,
         description="`-std=` values this side was parsed at, sorted. Empty means the build "
@@ -179,10 +234,12 @@ class CompletenessReport(BaseModel):
             tus_cached=sum(1 for t in completeness.tus if t.cache_hit),
             edges_total=completeness.edges_total,
             edges_dropped=completeness.edges_dropped,
+            crossings_by_label=dict(sorted(completeness.crossings_by_label.items())),
             build_available=completeness.build_available,
             producer_version=completeness.producer_version,
             producers=list(completeness.producers),
             language_modes=list(completeness.language_modes),
+            unmodelled=dict(completeness.unmodelled),
             tus_complete=completeness.is_complete,
             failures=[
                 TuFailure(path=t.path, detail=t.detail)
@@ -243,6 +300,111 @@ class CompletenessReport(BaseModel):
         return out
 
 
+class RenameDetection(BaseModel):
+    """Whether git's rename map -- an input to identity (ARCH-001 §5) -- is complete.
+
+    Not a property of either model, so it sits beside the per-side records rather than in
+    one of them. When `diff.renameLimit` is exceeded git skips inexact rename detection and
+    says so only on stderr: exact renames are still found, but a file renamed *and* edited
+    arrives as a delete plus an add, and every internal-linkage entity in it as a removal
+    plus an addition. What was missing is stated at the top (§11, rule 2), and per event the
+    match stage records every unpaired entity in an added or deleted file as having a
+    candidate (`Unpaired.CANDIDATE`), so none of them reads as a confident addition or
+    removal (`match.unpaired.unpaired_reasons`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    complete: bool = Field(
+        default=True,
+        description="False when git skipped inexact rename detection because "
+        "`diff.renameLimit` was exceeded. The limit is not lifted (`-l0` is potentially "
+        "quadratic on the large diffs that hit it); it is reported instead.",
+    )
+    limit_needed: int | None = Field(
+        default=None,
+        description="The `diff.renameLimit` git said would have sufficed, when it said.",
+    )
+
+    @property
+    def warning(self) -> str | None:
+        if self.complete:
+            return None
+        advice = (
+            f"; setting diff.renameLimit to at least {self.limit_needed:,} would find them"
+            if self.limit_needed is not None
+            else ""
+        )
+        return (
+            "git skipped inexact rename detection (diff.renameLimit exceeded): only exact "
+            "renames were applied, so a file renamed and edited reads as deleted and added, "
+            f"and its file-scoped entities as removed and re-added{advice}"
+        )
+
+
+class UncoveredFile(BaseModel):
+    """One side of one file's changed tokens that no change event explains."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    side: Side
+    path: str
+    lines: list[int] = Field(description="The lines the uncovered tokens are on, ascending.")
+    tokens: int
+    modelled: bool = Field(
+        default=True,
+        description="Whether either model declares anything in this file. Checked by path "
+        "against both models together, not against this side's model alone. False is roughly "
+        "'no translation unit includes it'; approximate, because an included file that "
+        "declares nothing the model records also reads False.",
+    )
+
+
+class ExcludedFile(BaseModel):
+    """A changed C++ file whose tokens were not compared, and why."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    reason: str
+
+
+class UncoveredReport(BaseModel):
+    """Where the changes no change event explains are (ADR-042).
+
+    The counts are in `summary`; this is the detail a reader needs to go and look. Not a
+    warning and not part of `degraded`: it is stated on every run, like the boundary, because
+    it is a standing measure of what the model sees rather than a sign that something failed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    files: list[UncoveredFile] = Field(default_factory=list)
+    moved_tokens: int = Field(
+        default=0,
+        description="Changed tokens in blocks deleted in one place and inserted token for "
+        "token in another. Textually identical, which is not the same as semantically "
+        "unchanged; counted apart from uncovered tokens, not as explained.",
+    )
+    excluded_files: list[ExcludedFile] = Field(
+        default_factory=list,
+        description="Changed C++ files whose tokens were not compared, with the reason: "
+        "'binary', or 'third-party' for a file in the third-party set (ADR-025).",
+    )
+    lines_in_unmodelled_files: int = Field(
+        default=0,
+        description="Of `summary.uncovered_lines`, those in files neither model declares "
+        "anything in -- roughly, files no translation unit includes. Approximate, as "
+        "`UncoveredFile.modelled` says.",
+    )
+    renames_complete: bool = Field(
+        default=True,
+        description="False when git skipped inexact rename detection for the text diff, so a "
+        "file renamed and edited counts every token as changed. Detected separately from "
+        "`completeness.renames`, because this diff covers only C++ files and can differ.",
+    )
+
+
 class CompletenessBlock(BaseModel):
     """§10's `completeness: { per-side completeness records }`, plus §11's standing limits."""
 
@@ -250,10 +412,21 @@ class CompletenessBlock(BaseModel):
 
     base: CompletenessReport
     head: CompletenessReport
+    renames: RenameDetection = Field(
+        default_factory=RenameDetection,
+        description="Whether git's rename map was complete. Shared by both sides.",
+    )
     limits: list[str] = Field(
         default_factory=lambda: list(SYSTEMATIC_LIMITS),
-        description="ARCH-001 §11's two systematic limits, carried on every document so "
-        "that every consumer states them rather than each remembering to.",
+        description="ARCH-001 §11's systematic limits, then what the producer cannot see "
+        "(`Completeness.not_visible`, ADR-029), carried on every document so that every "
+        "consumer states them rather than each remembering to.",
+    )
+
+    uncovered: UncoveredReport | None = Field(
+        default=None,
+        description="Where the changes no change event explains are. None when they were "
+        "not measured, which is not the same as none.",
     )
 
     @property
@@ -290,8 +463,52 @@ class CompletenessBlock(BaseModel):
         unconditionally through `boundaries` instead of intermittently through here.
         Reading it as degradation made every fmt and spdlog run announce itself as
         incomplete, which is how a §11 signal stops being read at all.
+
+        A truncated rename map degrades the run too: it is identity input that is missing,
+        and the events it distorts look like ordinary additions and removals.
         """
-        return bool(self.warnings)
+        return bool(self.warnings) or not self.renames.complete
+
+
+class CrossingsBlock(BaseModel):
+    """Each side's boundary crossings out of the entities the change events reference.
+
+    The same rule as `entities`: a review touches tens of entities, and every crossing in the
+    model would make the document a model dump, megabytes on a real repository. The totals per
+    label are in `completeness.*.crossings_by_label`. For visualization only:
+    nothing in the comparison or the ranking reads them (ADR-025).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    base: list[Crossing] = Field(default_factory=list)
+    head: list[Crossing] = Field(default_factory=list)
+
+
+class ThirdPartyPath(BaseModel):
+    """One directory of the third-party set, and where it came from (ADR-025).
+
+    `sources` lists both when a submodule was also declared: each is a separate reason the
+    path is third-party, and a consumer should not have to guess which one applied.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str
+    sources: list[ThirdPartySource]
+
+
+class ThirdPartyHint(BaseModel):
+    """A tracked directory named like a dependency that is not in the third-party set.
+
+    A note and nothing more: it excludes nothing (ADR-025). Structured, so a consumer can act
+    on `path` without parsing `message`.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str
+    message: str
 
 
 class EntitySummary(BaseModel):
@@ -316,9 +533,11 @@ class EntitySummary(BaseModel):
     )
     location: Location | None = None
     sides: list[Side] = Field(
-        description="Which model(s) contain this id. A one-sided entity is exactly what a "
-        "tier-1-only pipeline produces for a rename (STATUS §6), so the view can say "
-        "'gone' or 'new' without re-deriving it from the event kind."
+        description="Which sides hold this entity, through the correspondence: either id of "
+        "a match counts as both, since a function paired by name has a different id on each "
+        "side (ADR-036). A one-sided entity is exactly what a "
+        "pipeline without rename detection produces for a rename, so the view "
+        "can say 'gone' or 'new' without re-deriving it from the event kind."
     )
 
 
@@ -356,7 +575,13 @@ class Timings(BaseModel):
     produce_head: float = 0.0
     match: float = 0.0
     diff: float = 0.0
+    derive: float = 0.0
     classify: float = 0.0
+    coverage: float = Field(
+        default=0.0,
+        description="Reading the C++ text diff as tokens and setting it against "
+        "the change events (ADR-042).",
+    )
     rank: float = 0.0
     total: float = 0.0
 
@@ -422,15 +647,15 @@ class Residue(BaseModel):
 class Summary(BaseModel):
     """§10's `summary`, and the sentence the whole project is pointed at.
 
-    **`compression` is computed honestly or not at all.** `events_reported` is the length
-    of `events` -- the complete, uncollapsed set, before any view hides anything. §10 is
-    blunt about why: if the ratio is not dramatic on real commits then RESEARCH-002's
+    **`compression` is computed honestly or not at all.** `change_events_reported` is the
+    length of `change_events` -- the complete, uncollapsed set, before any view hides anything.
+    §10 is blunt about why: if the ratio is not dramatic on real commits then RESEARCH-002's
     thesis is wrong, and the design should surface that in week one rather than month six.
     A numerator improved by filtering, bucketing or suppressing would destroy the only
     experiment this tool runs on itself.
 
-    `top_level_events` is reported *beside* it and is never the numerator. It is a property
-    of one view's collapse policy (§6.3), not of the delta.
+    `top_level_change_events` is reported *beside* it and is never the numerator. It is a
+    property of one view's collapse policy (§6.3), not of the delta.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -450,34 +675,47 @@ class Summary(BaseModel):
         "applied or missed entirely, and those produce very different deltas.",
     )
 
-    events_reported: int = Field(
-        description="`len(events)`. The complete set. Not the visible set, not the "
+    changed_cpp_lines: int | None = Field(
+        default=None,
+        description="Lines in C++ files, headers included, carrying a changed token; a "
+        "deleted line and its replacement count as two. Tokens, not text: a whitespace or "
+        "comment edit changes none (ADR-042). None when not measured.",
+    )
+    uncovered_lines: int | None = Field(
+        default=None,
+        description="Of `changed_cpp_lines`, those carrying a changed token on no change "
+        "event's lines. **A lower bound** on what the model cannot explain: an event's hunk "
+        "covers whole lines, so an unexplained edit inside a changed entity's span is counted "
+        "as explained. Reported beside the compression, so the ratio cannot improve by the "
+        "model seeing less. Files in the third-party set are not counted (ADR-025).",
+    )
+    uncovered_tokens: int | None = Field(
+        default=None,
+        description="The changed tokens behind `uncovered_lines`, moved tokens excluded.",
+    )
+
+    change_events_reported: int = Field(
+        description="`len(change_events)`. The complete set. Not the visible set, not the "
         "top-level set, not a filtered set."
     )
-    vendored_events: int = Field(
-        default=0,
-        description="How many of `events_reported` are in bundled dependencies, which rank "
-        "after everything first-party as a block. Stated separately and never subtracted "
-        "from the numerator: a dependency bump can be 96 % of the delta, and a reviewer has "
-        "to be able to tell 'almost nothing changed' from 'almost everything was set aside'.",
-    )
     compression: str = Field(
-        description="§10's sentence, ready to print: '2,431 lines changed -> 9 semantic "
+        description="§10's sentence, ready to print: '2,431 lines changed -> 9 change "
         "events, 2 high-risk'. Rendered here so every view prints the same claim."
     )
     compression_ratio: float | None = Field(
-        description="lines_changed / first-party events (`events_reported` minus "
-        "`vendored_events`). Not over the whole event set: the denominator is lines of text "
-        "diff, and git shows a submodule bump as two lines rather than the hundred thousand "
-        "inside it, so dividing by every modelled event compares two different universes. "
-        "None when there are no first-party events, because 'infinite compression' and "
-        "'nothing of yours changed' are different facts and a sentinel would let a consumer "
-        "average over them."
+        description="lines_changed / change_events_reported. None when there are no "
+        "change events, because 'infinite compression' and 'no change the model can see' "
+        "are different facts, and a sentinel would let a consumer average over them."
     )
-    high_risk_count: int = Field(description="Scores at or above `rank.HIGH_RISK`.")
+    high_risk_count: int = Field(
+        description="Change events whose `impact` is at or above `rank.HIGH_RISK`. `impact` "
+        "is the score without the uncertainty factor (`RiskScore.is_high_risk`), so doubt "
+        "about a match orders the list but does not make a change event high-risk."
+    )
 
-    top_level_events: int = Field(
-        description="Events with no `caused_by` -- what a collapsing view shows at depth 0. "
+    top_level_change_events: int = Field(
+        description="Change events with no `caused_by` -- what a collapsing view shows at "
+        "depth 0. "
         "A view statistic, reported for honesty about what the terminal does, and never "
         "the compression numerator."
     )
@@ -609,8 +847,8 @@ _DISCRIMINATORS: tuple[Callable[[NodeId, EntitySummary], str | None], ...] = (
 class DiffDocument(BaseModel):
     """ARCH-001 §10's document. The product.
 
-    The invariant that outranks every other property of this type: **`events` is complete and
-    uncollapsed**. `caused_by` is a link and never a deletion (§6.3), so a view may nest but
+    The invariant that outranks every other property of this type: **`change_events` is complete
+    and uncollapsed**. `caused_by` is a link and never a deletion (§6.3), so a view may nest but
     the document always carries every event the diff produced. A view that hides a consequence
     is a choice a reader can undo; a document that never carried it is a change nobody can
     recover.
@@ -620,14 +858,29 @@ class DiffDocument(BaseModel):
 
     meta: Meta
     completeness: CompletenessBlock
+    third_party: list[ThirdPartyPath] = Field(
+        default_factory=list,
+        description="The third-party set: submodules at either revision and `--third-party` "
+        "paths. v0 analyzes only code the repository owns (ADR-025).",
+    )
+    third_party_hints: list[ThirdPartyHint] = Field(
+        default_factory=list,
+        description="Tracked directories whose name suggests a dependency and that are not in "
+        "`third_party`. Hints only: folder names never exclude anything.",
+    )
     entities: dict[NodeId, EntitySummary] = Field(default_factory=dict)
-    events: list[Event] = Field(default_factory=list)
+    crossings: CrossingsBlock = Field(
+        default_factory=CrossingsBlock,
+        description="Relations from the entities in `entities` to code outside the model, "
+        "per side, each labelled with where it leads.",
+    )
+    change_events: list[ChangeEvent] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
-    ranking: list[EventId] = Field(
+    ranking: list[ChangeEventId] = Field(
         default_factory=list,
         description="§10 verbatim: event ids, highest risk first. Reading order.",
     )
-    scores: dict[EventId, RiskScore] = Field(
+    scores: dict[ChangeEventId, RiskScore] = Field(
         default_factory=dict,
         description="Beside `ranking`, not instead of it. `RiskScore.factors` carries the "
         "per-factor `detail` that lets a view say *why* something is first without "
@@ -655,18 +908,18 @@ class DiffDocument(BaseModel):
 
     # -- accessors a view needs, so no view re-derives them ------------------------------
 
-    def event(self, event_id: EventId) -> Event:
+    def event(self, event_id: ChangeEventId) -> ChangeEvent:
         return self.by_id[event_id]
 
     @property
-    def by_id(self) -> dict[EventId, Event]:
+    def by_id(self) -> dict[ChangeEventId, ChangeEvent]:
         # Recomputed per access rather than cached: `DiffDocument` is not frozen, and a cached
         # index on a mutable model is the kind of staleness this project spends its whole
         # design budget avoiding. Documents are built once and read tens of times; the cost is
         # a dict comprehension over a list a reviewer could read.
-        return {e.id: e for e in self.events}
+        return {e.id: e for e in self.change_events}
 
-    def ranked(self) -> list[Event]:
+    def ranked(self) -> list[ChangeEvent]:
         """Events in reading order (ARCH-001 §7). Anything unranked follows, in document
         order -- an event omitted from `ranking` is a defect, but dropping it here would
         turn a broken ranking into a missing change."""
@@ -674,10 +927,10 @@ class DiffDocument(BaseModel):
         seen = set(self.ranking)
         return [
             *(index[i] for i in self.ranking if i in index),
-            *(e for e in self.events if e.id not in seen),
+            *(e for e in self.change_events if e.id not in seen),
         ]
 
-    def score(self, event_id: EventId) -> RiskScore | None:
+    def score(self, event_id: ChangeEventId) -> RiskScore | None:
         return self.scores.get(event_id)
 
     def label(self, subject: str) -> str:

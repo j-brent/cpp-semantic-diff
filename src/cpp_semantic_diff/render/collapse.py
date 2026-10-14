@@ -40,7 +40,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from cpp_semantic_diff.model import EventId
+from cpp_semantic_diff.model import ChangeEvent, ChangeEventId, ChangeEventKind
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle only at type-check time
     from cpp_semantic_diff.render.document import DiffDocument
@@ -50,7 +50,7 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle only at type-check time
 class CollapseNode:
     """One event and the events it explains, in reading order."""
 
-    event_id: EventId
+    event_id: ChangeEventId
     children: tuple[CollapseNode, ...] = ()
 
     @property
@@ -74,13 +74,13 @@ class Collapsed:
     #: Events whose cause link was refused -- dangling or cyclic, see the module docstring.
     #: They are top-level in `roots` like any uncaused event; this names *why*, so that a
     #: refusal is diagnosable instead of merely invisible.
-    promoted: tuple[EventId, ...] = ()
+    promoted: tuple[ChangeEventId, ...] = ()
 
-    def flatten(self) -> list[EventId]:
+    def flatten(self) -> list[ChangeEventId]:
         """Every event id in the forest, in reading order.
 
         The §6.3 invariant is a set equality against the document, and this is the half of
-        it the view side owns: `set(flatten()) == {e.id for e in document.events}`, always.
+        it the view side owns: `set(flatten()) == {e.id for e in document.change_events}`, always.
         """
         return [node.event_id for root in self.roots for node, _ in root.walk()]
 
@@ -91,6 +91,9 @@ class Collapsed:
 
 def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     """Nest consequences under causes, in the document's ranking order (ARCH-001 §7).
+
+    One exception to ranking order among siblings: unedited callers of a changed signature
+    come first, after broken overrides (`_sibling_rank`).
 
     `enabled=False` returns the same events as a flat forest rather than a different set.
     That is the point of the flag: "show me everything" and "show me the tree" must differ
@@ -107,8 +110,8 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     # A cause link is used only when it survives all three refusals. `promoted` records
     # the ones that did not, because a link that was silently ignored is a link nobody will
     # ever find the bug in.
-    parent: dict[EventId, EventId] = {}
-    promoted: list[EventId] = []
+    parent: dict[ChangeEventId, ChangeEventId] = {}
+    promoted: list[ChangeEventId] = []
     for event_id in order:
         cause = index[event_id].caused_by
         if cause is None:
@@ -122,12 +125,18 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
         del parent[event_id]
         promoted.append(event_id)  # refusal 3: cyclic
 
-    children: dict[EventId, list[EventId]] = defaultdict(list)
+    children: dict[ChangeEventId, list[ChangeEventId]] = defaultdict(list)
     for event_id in order:  # ranking order in, ranking order out, at every depth
         if (cause := parent.get(event_id)) is not None:
             children[cause].append(event_id)
+    for cause, siblings in children.items():
+        # Stable, so this only lifts broken overrides, then unedited callers, ahead of
+        # their siblings.
+        cause_event = index[cause]
+        ranks = {i: _sibling_rank(index[i], cause_event) for i in siblings}
+        siblings.sort(key=ranks.__getitem__)
 
-    def build(event_id: EventId) -> CollapseNode:
+    def build(event_id: ChangeEventId) -> CollapseNode:
         return CollapseNode(
             event_id=event_id,
             children=tuple(build(child) for child in children[event_id]),
@@ -137,7 +146,33 @@ def collapse(document: DiffDocument, *, enabled: bool = True) -> Collapsed:
     return Collapsed(roots=roots, promoted=tuple(promoted))
 
 
-def _on_a_cycle(parent: dict[EventId, EventId]) -> set[EventId]:
+def _sibling_rank(event: ChangeEvent, cause: ChangeEvent) -> int:
+    """Where an event goes among its siblings; equal ranks keep ranking order (ADR-040).
+
+    0. A removed `overrides` edge: under a signature change, an override that stopped
+       overriding. Calls through the base now skip it, which is worse than a call that may
+       convert its argument.
+    1. A caller of a changed signature that this diff did not touch. The text diff never
+       shows it, so only this view can send the reviewer there.
+    2. Everything else, edited callers included.
+    """
+    # Only `signature-change-breaks-overrides` files an `EdgeRemoved` under a signature
+    # change, so the pair of kinds says it is a broken override. Read off the kinds rather
+    # than out of the edge id: a USR may contain anything, `|` included.
+    if (
+        event.kind is ChangeEventKind.EDGE_REMOVED
+        and cause.kind is ChangeEventKind.NODE_SIGNATURE_CHANGED
+    ):
+        return 0
+    if (
+        event.kind is ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE
+        and event.payload.get("caller_edited") is False
+    ):
+        return 1
+    return 2
+
+
+def _on_a_cycle(parent: dict[ChangeEventId, ChangeEventId]) -> set[ChangeEventId]:
     """Every event lying on a cause cycle. **All of them lose their link, not one of them.**
 
     Breaking a cycle at an arbitrary link would leave the rest of it nested -- which is to
@@ -151,12 +186,12 @@ def _on_a_cycle(parent: dict[EventId, EventId]) -> set[EventId]:
     tail of the path from that node is the cycle.
     """
     VISITING, DONE = 0, 1
-    colour: dict[EventId, int] = {}
-    on_cycle: set[EventId] = set()
+    colour: dict[ChangeEventId, int] = {}
+    on_cycle: set[ChangeEventId] = set()
 
     for start in parent:
-        path: list[EventId] = []
-        current: EventId | None = start
+        path: list[ChangeEventId] = []
+        current: ChangeEventId | None = start
         while current is not None and current not in colour:
             colour[current] = VISITING
             path.append(current)

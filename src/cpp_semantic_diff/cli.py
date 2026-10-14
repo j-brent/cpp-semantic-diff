@@ -29,7 +29,15 @@ from rich.markup import escape
 from rich.table import Table
 
 from cpp_semantic_diff import __version__
-from cpp_semantic_diff.acquire import diff_line_count, file_changes, resolve_revs
+from cpp_semantic_diff.acquire import (
+    diff_line_count,
+    file_changes,
+    refuse_changed_third_party,
+    resolve_revs,
+    third_party_set,
+    tracked_files,
+)
+from cpp_semantic_diff.acquire.tokens import is_cpp
 from cpp_semantic_diff.acquire.workspace import checkout
 from cpp_semantic_diff.errors import (
     EmptyComparisonError,
@@ -38,10 +46,6 @@ from cpp_semantic_diff.errors import (
     SemanticDiffError,
 )
 from cpp_semantic_diff.render import DEFAULT_LIMIT
-
-#: Suffixes counted as C++ for the summary's `cpp_files_changed`. A reporting figure only --
-#: what is actually modelled is whatever the compile database lists (`Checkout.cpp_entries`).
-CPP_SUFFIXES = frozenset({".cpp", ".cc", ".cxx", ".c++", ".h", ".hpp", ".hh", ".hxx", ".inl"})
 
 app = typer.Typer(
     name="cppsd",
@@ -253,7 +257,7 @@ def cache_gc(
 
     `TuCache._evict` trims within one TU's directory and cannot reach the case that actually
     accumulates: every change to the extraction code gives each TU a new identity directory,
-    and nothing ever writes to the old ones again (ARCH-001 §9, STATUS §6).
+    and nothing ever writes to the old ones again (ARCH-001 §9).
 
     Safe by construction -- an entry collected here is reparsed on the next run that wants
     it, which is the same cost as one that was never written.
@@ -285,7 +289,7 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     changes = file_changes(repo, revs)
     files = changes.paths
     lines = diff_line_count(repo, revs)
-    cpp = [f for f in files if Path(f).suffix.lower() in CPP_SUFFIXES]
+    cpp = [f for f in files if is_cpp(f)]
 
     table = Table(show_header=False, box=None, pad_edge=False)
     table.add_column(style="dim")
@@ -299,6 +303,15 @@ def plan(repo: RepoArg, base: BaseOpt = None, head: HeadOpt = "HEAD") -> None:
     # analyzed" in a second, and this is now part of the answer rather than something a
     # reviewer discovers two minutes into a `diff`.
     table.add_row("files renamed", str(len(changes.renames)))
+    if changes.rename_limit is not None:
+        # ARCH-001 §11: a rename map git cut short is stated, not left for `diff` to inherit.
+        needed = changes.rename_limit.needed
+        table.add_row(
+            "",
+            "[yellow]exact renames only: git's diff.renameLimit was exceeded"
+            + (f" (needs {needed})" if needed is not None else "")
+            + "[/]",
+        )
     table.add_row("lines changed", str(lines))
     console.print(table)
 
@@ -343,7 +356,7 @@ def diff(
     ] = None,
     limit: Annotated[
         int,
-        typer.Option("--limit", min=0, help="Top-level events to show. 0 shows all."),
+        typer.Option("--limit", min=0, help="Top-level change events to show. 0 shows all."),
     ] = DEFAULT_LIMIT,
     expand: Annotated[
         bool,
@@ -367,6 +380,17 @@ def diff(
             ),
         ),
     ] = None,
+    third_party: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--third-party",
+            metavar="PATH",
+            help=(
+                "A directory of third-party code copied into the repository, relative to its "
+                "root. Repeatable. Submodules are third-party without it."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Diff the semantic models at two revisions -- the whole pipeline (ARCH-001 §3).
 
@@ -374,8 +398,11 @@ def diff(
     of it. The two are the same document: `--json` changes which consumer runs, never what
     was analyzed.
     """
+    from cpp_semantic_diff.acquire.tokens import token_delta
     from cpp_semantic_diff.classify import classify_events
+    from cpp_semantic_diff.derive import derive_events
     from cpp_semantic_diff.diff import diff_models
+    from cpp_semantic_diff.diff.coverage import measure_coverage, modelled_files
     from cpp_semantic_diff.match import match_models
     from cpp_semantic_diff.produce import build_model, load
     from cpp_semantic_diff.rank import rank_events
@@ -403,7 +430,15 @@ def diff(
             f"point to analyze.\nCheck out the branch under review, or pass --base."
         )
 
+    # ADR-025. Before any worktree, so a mistyped `--third-party` is refused in a
+    # second. Reported in the document, checked for changes below, and left out of both
+    # models.
+    third_party_paths = third_party_set(repo, revs, third_party or ())
+
     changes = file_changes(repo, revs)
+    # ADR-025: third-party code must not change between the two points. Refused here,
+    # before any worktree, so a dependency bump costs no checkout and no parse.
+    refuse_changed_third_party(third_party_paths, changes)
     files = changes.paths
     lines = diff_line_count(repo, revs)
 
@@ -428,11 +463,19 @@ def diff(
             # that resolves flag > $CPPSD_WORKERS > what this machine can run, and a
             # default filled in at this layer would shadow the environment variable
             # for every run -- two mechanisms for one knob, disagreeing silently.
-            models[label] = build_model(co, toolchain=toolchain, cache=cache, workers=workers)
+            models[label] = build_model(
+                co,
+                toolchain=toolchain,
+                cache=cache,
+                workers=workers,
+                third_party=third_party_paths,
+                # ADR-037: only what git tracks at this revision is modelled.
+                tracked=tracked_files(repo, co.rev),
+            )
             setattr(timings, slot, time.perf_counter() - t)
         base_model, head_model = models["base"], models["head"]
 
-    # From here the pipeline is pure (ARCH-001 §3): four functions over what is already in
+    # From here the pipeline is pure (ARCH-001 §3): five functions over what is already in
     # memory, each the input of the next, none of them touching the disk.
     t = time.perf_counter()
     # ARCH-001 §5: renames are resolved from git *before* matching, because USRs for
@@ -440,7 +483,12 @@ def diff(
     # rename breaks tier 1 for every one of them. Git's answer is passed through unfiltered
     # -- deciding which renames count is `RenameMap`'s job, and inventing or narrowing one
     # here would put an identity decision in the CLI.
-    correspondence = match_models(base_model, head_model, renames=changes.renames)
+    correspondence = match_models(
+        base_model,
+        head_model,
+        renames=changes.renames,
+        missed_rename_files=changes.missed_rename_files,
+    )
     timings.match = time.perf_counter() - t
 
     t = time.perf_counter()
@@ -451,8 +499,23 @@ def diff(
     timings.diff = time.perf_counter() - t
 
     t = time.perf_counter()
+    events = derive_events(events, base_model, head_model, correspondence)
+    timings.derive = time.perf_counter() - t
+
+    t = time.perf_counter()
     events = classify_events(events, base_model, head_model, correspondence)
     timings.classify = time.perf_counter() - t
+
+    t = time.perf_counter()
+    # Over the final change events, so it measures what the reviewer is given (ADR-042).
+    # The text diff is read here rather than with `file_changes` so that its cost is timed
+    # with the measurement it serves.
+    coverage = measure_coverage(
+        token_delta(repo, revs, third_party=third_party_paths),
+        events,
+        modelled_files(base_model, head_model),
+    )
+    timings.coverage = time.perf_counter() - t
 
     t = time.perf_counter()
     ranking = rank_events(events, base_model, head_model)
@@ -469,9 +532,12 @@ def diff(
         ranking=ranking,
         lines_changed=lines,
         files_changed=len(files),
-        cpp_files_changed=sum(1 for f in files if Path(f).suffix.lower() in CPP_SUFFIXES),
+        cpp_files_changed=sum(1 for f in files if is_cpp(f)),
         files_renamed=len(changes.renames),
+        rename_limit=changes.rename_limit,
+        third_party=third_party_paths,
         timings=timings,
+        coverage=coverage,
     )
 
     if out is not None:

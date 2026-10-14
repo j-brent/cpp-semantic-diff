@@ -25,7 +25,7 @@ each working session. Started 2026-08-01 as a handover note; kept as a tracker b
 Setup, requirements and the commands that work today are in [`README.md`](../../README.md). Design is
 [ARCH-001](../../docs/ARCH-001-architecture.md); this file is state, not design.
 
-Active plans: [PLAN-004](../../docs/plans/PLAN-004-third-party-boundary.md) — third-party code outside the model,
+Active plans: [PLAN-004](https://github.com/j-brent/cpp-semantic-diff/blob/62dc064/docs/plans/PLAN-004-third-party-boundary.md) — third-party code outside the model,
 decided 2026-10-10 and not started; PLAN-003 (`docs/plans/ship-v0.md`, deleted 2026-10-10) — what remains before v0
 ships, measured rather than estimated from this file; [PLAN-002](../../docs/plans/PLAN-002-bitcoin-probe.md) —
 Bitcoin Core as a scale-and-shape probe. Each says in its own header what it is deleted into here,
@@ -767,7 +767,7 @@ below.
 | Check what the whole key already covers before widening an identity | The stdlib and builtin headers turned out to be content-keyed via the include closure. Every redundant key component costs a mass invalidation to defend against a defended hazard. |
 | Workers use `spawn`, not `fork` | A forked child inherits the parent's verified libclang, so the toolchain guarantee would hold *by accident of start method* and stop holding silently if that default changed. |
 | Low confidence ranks **up** | Uncertainty is a reason for a human to look, not a reason to hide (ARCH §7). Guarded by mutation-tested cases. |
-| Vendored code is **partitioned** out of the ranking, not merely down-weighted | The reviewer is reviewing their own code; a bumped dependency is context, not the subject. As a weighted term it lost — measured on leveldb, where blast radius plus novelty (0.60) beat all of exposure (0.25) and put googletest in the top 12. Raising the weight would fossilize a number against one repository and still lose on the next. The claim is "not what is being reviewed", which is an ordering, not a quantity. Only VENDORED — the project's own tests are its code and keep the weighted demotion. **Superseded 2026-10-10** by ARCH §13's prerequisite: third-party code must not change and is not modelled ([PLAN-004](../../docs/plans/PLAN-004-third-party-boundary.md), known issue 7). Until PLAN-004 is built, the partition is what the code does. |
+| Vendored code is **partitioned** out of the ranking, not merely down-weighted | The reviewer is reviewing their own code; a bumped dependency is context, not the subject. As a weighted term it lost — measured on leveldb, where blast radius plus novelty (0.60) beat all of exposure (0.25) and put googletest in the top 12. Raising the weight would fossilize a number against one repository and still lose on the next. The claim is "not what is being reviewed", which is an ordering, not a quantity. Only VENDORED — the project's own tests are its code and keep the weighted demotion. **Superseded 2026-10-10** by ARCH §13's prerequisite: third-party code must not change and is not modelled ([PLAN-004](https://github.com/j-brent/cpp-semantic-diff/blob/62dc064/docs/plans/PLAN-004-third-party-boundary.md), known issue 7). Until PLAN-004 is built, the partition is what the code does. |
 
 ---
 

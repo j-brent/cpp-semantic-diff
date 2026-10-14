@@ -25,19 +25,20 @@ import pytest
 
 from cpp_semantic_diff.model import (
     AttrValue,
+    ChangeEvent,
+    ChangeEventId,
+    ChangeEventKind,
     Confidence,
     Edge,
     EdgeId,
     EdgeKind,
-    Event,
-    EventId,
-    EventKind,
     Location,
     MatchTier,
     Model,
     Node,
     NodeId,
     NodeKind,
+    Unpaired,
 )
 from cpp_semantic_diff.rank import (
     Exposure,
@@ -51,12 +52,14 @@ from cpp_semantic_diff.rank import (
 from cpp_semantic_diff.rank import weights as w
 
 PUBLIC = "include/fmt/format.h"
-VENDORED = "test/gtest/gtest.h"
+OWN_TEST = "test/format-test.cc"
 LIB_SOURCE = "src/format.cc"
 
 SURE = Confidence(tier=MatchTier.DECLARED, models_complete=True)
 UNSURE = Confidence(tier=MatchTier.SIMILARITY, models_complete=True)
-RESIDUE = Confidence(tier=None, models_complete=True)
+RESIDUE = Confidence(tier=None, unpaired=Unpaired.NONE, models_complete=True)
+CANDIDATE = Confidence(tier=None, unpaired=Unpaired.CANDIDATE, models_complete=True)
+AMBIGUOUS = Confidence(tier=None, unpaired=Unpaired.AMBIGUOUS, models_complete=True)
 
 
 # -- builders ---------------------------------------------------------------------------
@@ -86,26 +89,26 @@ def edge(src: str, dst: str, kind: EdgeKind = EdgeKind.CALLS) -> Edge:
 
 
 def event(
-    kind: EventKind, subject: str, confidence: Confidence = SURE, **payload: AttrValue
-) -> Event:
-    return Event(kind=kind, subject=NodeId(subject), payload=payload, confidence=confidence)
+    kind: ChangeEventKind, subject: str, confidence: Confidence = SURE, **payload: AttrValue
+) -> ChangeEvent:
+    return ChangeEvent(kind=kind, subject=NodeId(subject), payload=payload, confidence=confidence)
 
 
-def body(subject: str, confidence: Confidence = SURE) -> Event:
-    return event(EventKind.NODE_BODY_CHANGED, subject, confidence)
+def body(subject: str, confidence: Confidence = SURE) -> ChangeEvent:
+    return event(ChangeEventKind.NODE_BODY_CHANGED, subject, confidence)
 
 
 def edge_event(
     src: str,
     dst: str,
-    kind: EventKind = EventKind.EDGE_ADDED,
+    kind: ChangeEventKind = ChangeEventKind.EDGE_ADDED,
     *,
     edge_kind: EdgeKind = EdgeKind.CALLS,
     confidence: Confidence = RESIDUE,
-    caused_by: Event | None = None,
-) -> Event:
+    caused_by: ChangeEvent | None = None,
+) -> ChangeEvent:
     """An event whose subject is an edge id -- `src|kind|dst` (ARCH-001 §4.2)."""
-    return Event(
+    return ChangeEvent(
         kind=kind,
         subject=EdgeId(f"{src}|{edge_kind.value}|{dst}"),
         caused_by=caused_by.id if caused_by is not None else None,
@@ -113,15 +116,17 @@ def edge_event(
     )
 
 
-def rank(events: list[Event], base: Model | None = None, head: Model | None = None) -> Ranking:
+def rank(
+    events: list[ChangeEvent], base: Model | None = None, head: Model | None = None
+) -> Ranking:
     return rank_events(events, base or model("a"), head or model("b"))
 
 
-def position(ranking: Ranking, subject_event: Event) -> int:
+def position(ranking: Ranking, subject_event: ChangeEvent) -> int:
     return ranking.order.index(subject_event.id)
 
 
-def outranks(ranking: Ranking, first: Event, second: Event) -> bool:
+def outranks(ranking: Ranking, first: ChangeEvent, second: ChangeEvent) -> bool:
     return position(ranking, first) < position(ranking, second)
 
 
@@ -154,29 +159,70 @@ class TestUncertaintyRanksUpNotDown:
         ranking = rank([certain, doubtful], self.side(), self.side())
         assert outranks(ranking, doubtful, certain)
 
-    def test_unmatched_residue_outranks_every_tier(self) -> None:
-        """None is the maximum, not a missing value. In v0 (tier 1 only, §13) it is also every
-        add, remove and rename -- the population v0 exists to measure."""
+    def test_an_ambiguous_pairing_outranks_every_tier(self) -> None:
+        """A tier that found partners and refused to choose is the most doubt there is: the
+        pairing itself is what is in question (ADR-034)."""
         events = [
             body("c:@F@f#", SURE),
             body("c:@F@g#", UNSURE),
-            body("c:@F@h#", RESIDUE),
+            body("c:@F@h#", AMBIGUOUS),
         ]
         head = model("m", node("c:@F@f#"), node("c:@F@g#"), node("c:@F@h#"))
         ranking = rank(events, head, head)
         assert ranking.order == [events[2].id, events[1].id, events[0].id]
 
+    def test_a_plain_addition_is_as_certain_as_a_declared_match(self) -> None:
+        """Issue #17. Every genuine addition has no partner by definition, so having none is
+        not doubt: with nothing on the other side that could be its partner, an addition
+        carries the uncertainty of a tier-1 match, not the maximum."""
+        added = event(ChangeEventKind.NODE_ADDED, "c:@F@f#", RESIDUE)
+        score = rank([added], self.side(), self.side()).score_for(added.id)
+        uncertainty = score.factor(FactorName.UNCERTAINTY)
+        assert uncertainty.value == w.UNCERTAINTY_BY_TIER[MatchTier.DECLARED] == 0.0
+        assert uncertainty.detail == "unmatched, no candidate"
+
+    def test_a_candidate_on_the_other_side_is_doubt_and_ranks_up(self) -> None:
+        """An addition with a same-kind sibling removed beside it may be a rename tier 1
+        cannot see, and that is worth a human's eye."""
+        plain = event(ChangeEventKind.NODE_ADDED, "c:@F@f#", RESIDUE)
+        maybe_renamed = event(ChangeEventKind.NODE_ADDED, "c:@F@g#", CANDIDATE)
+        ranking = rank([plain, maybe_renamed], self.side(), self.side())
+        assert outranks(ranking, maybe_renamed, plain)
+        detail = ranking.score_for(maybe_renamed.id).factor(FactorName.UNCERTAINTY).detail
+        assert detail == "unmatched, candidate on the other side"
+
     def test_the_tier_ladder_runs_the_same_direction_as_arch_5(self) -> None:
         """Each successive tier is a weaker claim that two entities are the same entity,
         so each carries more uncertainty than the one above it (§5's table, read down)."""
-        ladder = [
-            w.UNCERTAINTY_BY_TIER[MatchTier.DECLARED],
-            w.UNCERTAINTY_BY_TIER[MatchTier.STRUCTURAL],
-            w.UNCERTAINTY_BY_TIER[MatchTier.POSITIONAL],
-            w.UNCERTAINTY_BY_TIER[MatchTier.SIMILARITY],
-            w.UNCERTAINTY_BY_TIER[None],
-        ]
+        from cpp_semantic_diff.diff.context import TIER_ORDER
+
+        assert set(TIER_ORDER) == set(MatchTier)
+        ladder = [w.UNCERTAINTY_BY_TIER[t] for t in TIER_ORDER]
         assert ladder == sorted(ladder), "uncertainty must increase as the tier weakens"
+        assert len(set(ladder)) == len(ladder)
+
+    def test_a_name_pairing_is_doubtful_but_less_than_a_candidate(self) -> None:
+        """ADR-036: the name tier pairs only where the name is one-to-one, so it carries some
+        doubt -- more than a USR match -- but less than an entity left unpaired beside a
+        possible partner."""
+        name = w.UNCERTAINTY_BY_TIER[MatchTier.NAME]
+        assert w.UNCERTAINTY_BY_TIER[MatchTier.DECLARED] < name
+        assert name < w.UNCERTAINTY_BY_UNPAIRED[Unpaired.CANDIDATE]
+
+    def test_the_unpaired_ladder_runs_the_same_direction_as_the_diff_stage_orders_it(
+        self,
+    ) -> None:
+        """`diff.context.UNPAIRED_ORDER` picks an edge event's most doubtful endpoint; the
+        weights must agree with it about which that is, or an edge would report its less
+        doubtful endpoint."""
+        from cpp_semantic_diff.diff.context import UNPAIRED_ORDER
+
+        ladder = [w.UNCERTAINTY_BY_UNPAIRED[r] for r in UNPAIRED_ORDER]
+        assert ladder == sorted(ladder) and len(set(ladder)) == len(ladder)
+        assert set(UNPAIRED_ORDER) == set(Unpaired)
+        assert w.UNCERTAINTY_BY_UNPAIRED[Unpaired.AMBIGUOUS] == max(
+            *w.UNCERTAINTY_BY_TIER.values(), *w.UNCERTAINTY_BY_UNPAIRED.values()
+        )
 
     def test_an_incomplete_model_adds_uncertainty_rather_than_removing_it(self) -> None:
         """§11: output built on an incomplete model must say so. Saying so by ranking the
@@ -275,10 +321,53 @@ class TestBlastRadiusIsWhatMakesThisWorthBuilding:
             *callers,
             edges=[edge(c.id, "c:@F@gone#") for c in callers],
         )
-        removed = event(EventKind.NODE_REMOVED, "c:@F@gone#", RESIDUE)
+        removed = event(ChangeEventKind.NODE_REMOVED, "c:@F@gone#", RESIDUE)
         score = rank([removed], base, model("b")).score_for(removed.id)
         detail = score.factor(FactorName.BLAST_RADIUS).detail
         assert "9 dependent(s)" in detail and "base model" in detail
+
+
+class TestBlastRadiusIsBoundedAndSaysSoWhenItTruncates:
+    """`graph.py`'s module docstring, the other half of "bounded": depth is capped, and so
+    is the number of nodes visited, and a walk that hits either limit has to report the
+    limit rather than quietly returning a smaller number than the graph actually has.
+
+    Neither limit is exercised above: `TestBlastRadiusIsWhatMakesThisWorthBuilding` builds
+    graphs shallow and small enough that the cap never fires.
+    """
+
+    def test_a_caller_chain_longer_than_the_depth_cap_stops_counting_at_the_cap(self) -> None:
+        """The claim is boundedness, not a particular depth, so the chain length and the
+        expected count are both derived from `w.BLAST_MAX_DEPTH` rather than written as
+        literals -- a retune of the cap must not make this test wrong."""
+        depth = w.BLAST_MAX_DEPTH
+        target = node("c:@F@target#")
+        chain = [node(f"c:@F@c{i}#") for i in range(depth + 2)]
+        edges = [edge(chain[0].id, target.id)]
+        edges += [edge(chain[i].id, chain[i - 1].id) for i in range(1, len(chain))]
+        head = model("m", target, *chain, edges=edges)
+        changed = body(target.id)
+        detail = (
+            rank([changed], head, head).score_for(changed.id).factor(FactorName.BLAST_RADIUS).detail
+        )
+        # `depth` callers are within the cap; the remaining two in the chain are not.
+        assert detail.startswith(f"{depth} dependent(s)"), detail
+
+    def test_hitting_the_visit_cap_is_reported_not_hidden(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`weights.py`: "Reported through `BlastResult.saturated` rather than silently
+        truncated (§11)." A cap that truncated silently would look like a smaller blast
+        radius instead of an unmeasured one -- indistinguishable from a real leaf."""
+        monkeypatch.setattr(w, "BLAST_VISIT_CAP", 3)
+        target = node("c:@F@target#")
+        callers = [node(f"c:@F@c{i}#") for i in range(10)]
+        head = model("m", target, *callers, edges=[edge(c.id, target.id) for c in callers])
+        changed = body(target.id)
+        detail = (
+            rank([changed], head, head).score_for(changed.id).factor(FactorName.BLAST_RADIUS).detail
+        )
+        assert detail.startswith("3+ dependent(s)"), detail
 
 
 class TestAnEdgeEventIsAboutItsSourceNotItsBusiestEndpoint:
@@ -321,7 +410,7 @@ class TestAnEdgeEventIsAboutItsSourceNotItsBusiestEndpoint:
     def test_the_entity_that_changed_outranks_the_edge_that_records_it(self) -> None:
         """Even with no `caused_by` link at all -- rank must not depend on classify."""
         head = self.graph()
-        changed = event(EventKind.NODE_ADDED, "c:@F@newcomer#", RESIDUE)
+        changed = event(ChangeEventKind.NODE_ADDED, "c:@F@newcomer#", RESIDUE)
         call = edge_event("c:@F@newcomer#", "c:@F@hot#")
         assert call.caused_by is None
         assert outranks(rank([changed, call], head, head), changed, call)
@@ -351,8 +440,8 @@ class TestAConsequenceNeverOutranksItsCause:
             edges=[edge("c:@S@Test@F@TestBody#", "c:@F@format#")],
         )
 
-    def cascade(self) -> tuple[Event, Event]:
-        cause = event(EventKind.NODE_ADDED, "c:@S@Test@F@TestBody#", RESIDUE)
+    def cascade(self) -> tuple[ChangeEvent, ChangeEvent]:
+        cause = event(ChangeEventKind.NODE_ADDED, "c:@S@Test@F@TestBody#", RESIDUE)
         return cause, edge_event("c:@S@Test@F@TestBody#", "c:@F@format#", caused_by=cause)
 
     def test_the_cause_is_read_first(self) -> None:
@@ -393,9 +482,9 @@ class TestAConsequenceNeverOutranksItsCause:
                 edge("c:@S@C@F@m#", "c:@F@format#"),
             ],
         )
-        root = event(EventKind.NODE_ADDED, "c:@S@C", RESIDUE)
-        middle = Event(
-            kind=EventKind.NODE_ADDED,
+        root = event(ChangeEventKind.NODE_ADDED, "c:@S@C", RESIDUE)
+        middle = ChangeEvent(
+            kind=ChangeEventKind.NODE_ADDED,
             subject=NodeId("c:@S@C@F@m#"),
             caused_by=root.id,
             confidence=RESIDUE,
@@ -409,10 +498,10 @@ class TestAConsequenceNeverOutranksItsCause:
         """The same rule `components.py` applies: rank holds no opinion about how the list
         was assembled, so a dangling link is ignored rather than raised on."""
         head = model("m", node("c:@F@f#", file=PUBLIC))
-        dangling = Event(
-            kind=EventKind.NODE_BODY_CHANGED,
+        dangling = ChangeEvent(
+            kind=ChangeEventKind.NODE_BODY_CHANGED,
             subject=NodeId("c:@F@f#"),
-            caused_by=EventId("NodeAdded:deadbeefdeadbeef"),
+            caused_by=ChangeEventId("NodeAdded:deadbeefdeadbeef"),
             confidence=SURE,
         )
         score = rank([dangling], head, head).score_for(dangling.id)
@@ -432,27 +521,40 @@ class TestNoveltyPrefersStructureOverBodies:
     def test_an_added_entity_outranks_a_modified_body(self) -> None:
         # Both given the same confidence so the comparison isolates novelty. In real output
         # an add also carries no tier, which pushes it further up -- the two factors agree.
-        added = event(EventKind.NODE_ADDED, "c:@F@f#", SURE)
+        added = event(ChangeEventKind.NODE_ADDED, "c:@F@f#", SURE)
         modified = body("c:@F@g#", SURE)
         assert outranks(rank([added, modified], self.side(), self.side()), added, modified)
 
     def test_a_removed_entity_outranks_an_added_one(self) -> None:
         """An added entity is a new promise; a removed one is a broken promise, and only the
         second can break code that is not in the diff."""
-        assert w.NOVELTY_BY_KIND[EventKind.NODE_REMOVED] > w.NOVELTY_BY_KIND[EventKind.NODE_ADDED]
+        assert (
+            w.NOVELTY_BY_KIND[ChangeEventKind.NODE_REMOVED]
+            > w.NOVELTY_BY_KIND[ChangeEventKind.NODE_ADDED]
+        )
 
     def test_an_interface_attribute_change_outranks_a_body_change(self) -> None:
         virtual = event(
-            EventKind.NODE_ATTR_CHANGED, "c:@S@C@F@m#", SURE, attr="virtual", old=False, new=True
+            ChangeEventKind.NODE_ATTR_CHANGED,
+            "c:@S@C@F@m#",
+            SURE,
+            attr="virtual",
+            old=False,
+            new=True,
         )
         modified = body("c:@F@g#", SURE)
         assert outranks(rank([virtual, modified], self.side(), self.side()), virtual, modified)
 
     def test_the_attribute_is_named_in_the_score_not_only_the_kind(self) -> None:
-        """`virtual: false -> true` and `mutable: false -> true` are the same `EventKind`
+        """`virtual: false -> true` and `mutable: false -> true` are the same `ChangeEventKind`
         and different amounts of risk, so the score has to say which attribute it read."""
         changed = event(
-            EventKind.NODE_ATTR_CHANGED, "c:@S@C@F@m#", SURE, attr="const", old=True, new=False
+            ChangeEventKind.NODE_ATTR_CHANGED,
+            "c:@S@C@F@m#",
+            SURE,
+            attr="const",
+            old=True,
+            new=False,
         )
         score = rank([changed], self.side(), self.side()).score_for(changed.id)
         assert score.factor(FactorName.NOVELTY).detail == "NodeAttrChanged(const)"
@@ -462,12 +564,12 @@ class TestNoveltyPrefersStructureOverBodies:
         as nothing. An attribute with no rule is still a specific, named semantic change,
         and §7's rule that uncertainty is a reason to look applies to our own ignorance."""
         assert (
-            w.NOVELTY_BY_KIND[EventKind.NODE_ATTR_CHANGED]
-            > w.NOVELTY_BY_KIND[EventKind.NODE_BODY_CHANGED]
+            w.NOVELTY_BY_KIND[ChangeEventKind.NODE_ATTR_CHANGED]
+            > w.NOVELTY_BY_KIND[ChangeEventKind.NODE_BODY_CHANGED]
         )
         assert "surprise" not in w.NOVELTY_BY_ATTR
         unknown = event(
-            EventKind.NODE_ATTR_CHANGED, "c:@S@C@F@m#", SURE, attr="surprise", old=1, new=2
+            ChangeEventKind.NODE_ATTR_CHANGED, "c:@S@C@F@m#", SURE, attr="surprise", old=1, new=2
         )
         modified = body("c:@F@g#", SURE)
         assert outranks(rank([unknown, modified], self.side(), self.side()), unknown, modified)
@@ -476,7 +578,7 @@ class TestNoveltyPrefersStructureOverBodies:
         """`events.py` makes the event set closed and gives every kind an entry in
         `REQUIRED_PAYLOAD` so that adding one is a deliberate act. Same rule here: a kind
         with no weight would raise at scoring time, or worse, default to zero."""
-        assert set(w.NOVELTY_BY_KIND) == set(EventKind)
+        assert set(w.NOVELTY_BY_KIND) == set(ChangeEventKind)
 
 
 class TestTheAttributeKeysAreAContractWithTheProducer:
@@ -498,7 +600,7 @@ class TestTheAttributeKeysAreAContractWithTheProducer:
 
     def test_the_three_attributes_arch_names_and_can_exist_are_weighted_high(self) -> None:
         for attr in ("virtual", "const", "access"):
-            assert w.NOVELTY_BY_ATTR[attr] > w.NOVELTY_BY_KIND[EventKind.NODE_BODY_CHANGED]
+            assert w.NOVELTY_BY_ATTR[attr] > w.NOVELTY_BY_KIND[ChangeEventKind.NODE_BODY_CHANGED]
 
     def test_there_is_no_signature_attribute_and_return_type_stands_in_for_it(self) -> None:
         """§7's fourth named attribute does not exist and cannot.
@@ -507,38 +609,40 @@ class TestTheAttributeKeysAreAContractWithTheProducer:
         mechanical attribute diff can never emit `NodeAttrChanged(signature)`. In v0 a
         changed signature also changes the USR, which is tier-1 identity (§5), so the pair
         is never matched and the change arrives as remove + add. What *does* survive as an
-        attribute is `return_type` -- C++ cannot overload on it, so the USR does not encode
-        it, so it is the one part of a signature that changes while identity holds.
+        attribute is `return_type`; where it changes with the signature it arrives as
+        `NodeSignatureChanged` instead (ADR-035), weighted level with it.
         """
         assert "signature" not in self.producer_keys()
         assert "signature" not in w.NOVELTY_BY_ATTR
         assert w.NOVELTY_BY_ATTR["return_type"] >= max(w.NOVELTY_BY_ATTR.values())
+        assert (
+            w.NOVELTY_BY_KIND[ChangeEventKind.NODE_SIGNATURE_CHANGED]
+            == w.NOVELTY_BY_ATTR["return_type"]
+        )
 
 
 # -- exposure: the factor that decides whether this works on a real repository ------------
 
 
-class TestVendoredAndTestCodeDoNotDrownTheLibrary:
+class TestTestCodeDoesNotDrownTheLibrary:
     """The measured problem, not a hypothetical one.
 
-    The model built from `fmt` was 80.6 % test code, 31.7 % of it vendored `test/gtest`,
-    measured 2026-08-02 (v0 tracker §5, reports/2026-08-01--v0-build/STATUS.md). Extraction is
-    right to include it. A ranking that puts a change to bundled googletest above a change to
-    `fmt::format` is useless, and a reviewer shown that once will not read the second page.
+    The model built from `fmt` was 80.6 % test code, measured 2026-08-02 (v0 tracker §5,
+    reports/2026-08-01--v0-build/STATUS.md). Extraction is right to include it. A ranking that
+    puts a change to a test helper above a change to `fmt::format` is useless, and a reviewer
+    shown that once will not read the second page.
     """
 
-    def test_a_public_api_change_outranks_an_identical_change_to_vendored_test_code(
-        self,
-    ) -> None:
-        head = model("m", node("c:@F@format#", file=PUBLIC), node("c:@F@helper#", file=VENDORED))
-        public, vendored = body("c:@F@format#"), body("c:@F@helper#")
-        assert outranks(rank([public, vendored], head, head), public, vendored)
+    def test_a_public_api_change_outranks_an_identical_change_to_test_code(self) -> None:
+        head = model("m", node("c:@F@format#", file=PUBLIC), node("c:@F@helper#", file=OWN_TEST))
+        public, test = body("c:@F@format#"), body("c:@F@helper#")
+        assert outranks(rank([public, test], head, head), public, test)
 
-    def test_one_library_change_beats_a_page_of_vendored_ones(self) -> None:
-        """The realistic shape. It is not enough that public > vendored for one identical
-        pair: on fmt the vendored events *outnumber* the library ones four to one, so the
-        library change has to reach the top of a mixed list, not merely beat its twin."""
-        helpers = [node(f"c:@F@h{i}#", file=VENDORED) for i in range(10)]
+    def test_one_library_change_beats_a_page_of_test_changes(self) -> None:
+        """The realistic shape. It is not enough that public > test for one identical pair:
+        on fmt the test events *outnumber* the library ones, so the library change has to
+        reach the top of a mixed list, not merely beat its twin."""
+        helpers = [node(f"c:@F@h{i}#", file=OWN_TEST) for i in range(10)]
         callers = [node(f"c:@F@c{i}#", file=LIB_SOURCE) for i in range(12)]
         head = model(
             "m",
@@ -548,71 +652,9 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
             edges=[edge(c.id, "c:@F@format#") for c in callers],
         )
         library = body("c:@F@format#")
-        noise = [event(EventKind.NODE_REMOVED, h.id, RESIDUE) for h in helpers]
+        noise = [event(ChangeEventKind.NODE_REMOVED, h.id, RESIDUE) for h in helpers]
         ranking = rank([*noise, library], head, head)
         assert ranking.order[0] == library.id
-
-    def test_test_code_ranks_above_vendored_code(self) -> None:
-        """First-party tests are worth diffing -- a deleted assertion is RESEARCH-002 §3.9's
-        most review-worthy event. Somebody else's test framework is not."""
-        head = model(
-            "m", node("c:@F@t#", file="test/format-test.cc"), node("c:@F@v#", file=VENDORED)
-        )
-        own_test, vendored = body("c:@F@t#"), body("c:@F@v#")
-        assert outranks(rank([own_test, vendored], head, head), own_test, vendored)
-
-    def test_a_heavily_depended_on_vendored_removal_still_loses_to_a_trivial_own_change(
-        self,
-    ) -> None:
-        """The case the weighted term could not win, measured on leveldb before this held.
-
-        A submodule bump removes googletest entities with hundreds of dependents. Blast
-        radius (0.35) plus novelty for a removal (0.25) is 0.60, while all of exposure is
-        0.25 -- so the vendored removal scored 0.76 and a changed public attribute scored
-        about 0.44. The top 12 events and 44 of the top 50 were bundled googletest.
-
-        The claim is not that vendored is worth less. It is that it is not what is being
-        reviewed, which is an ordering and not a quantity -- so it is a partition, and no
-        blast radius can buy a way out of it.
-        """
-        dependents = [node(f"c:@F@d{i}#", file=VENDORED) for i in range(40)]
-        head = model(
-            "m",
-            node("c:@F@assert_helper#", file=VENDORED),
-            node("c:@F@own#", file=PUBLIC),
-            *dependents,
-            edges=[edge(d.id, "c:@F@assert_helper#") for d in dependents],
-        )
-        vendored = event(EventKind.NODE_REMOVED, "c:@F@assert_helper#", RESIDUE)
-        mine = body("c:@F@own#")
-
-        ranking = rank([vendored, mine], head, head)
-        totals = {s.event_id: s.total for s in ranking.scores}
-
-        # Without this the test could pass because the scores happen to order correctly,
-        # and it would keep passing if the partition were deleted. The point is that the
-        # vendored event scores *higher* and is still ranked below.
-        assert totals[vendored.id] > totals[mine.id], (
-            "the weighted score still prefers the vendored removal -- that is the defect "
-            "the partition exists to overrule, so this test is vacuous without it"
-        )
-        assert ranking.order[0] == mine.id, "a page of googletest is not the review"
-        assert ranking.vendored_count == 1
-
-    def test_vendored_events_keep_their_order_among_themselves(self) -> None:
-        """The partition decides which block, never the order inside it. Zeroing the weight
-        would make every bundled change equally uninteresting, so a reviewer who does go
-        looking finds them shuffled."""
-        dependents = [node(f"c:@F@d{i}#", file=VENDORED) for i in range(30)]
-        head = model(
-            "m",
-            node("c:@F@big#", file=VENDORED),
-            node("c:@F@small#", file=VENDORED),
-            *dependents,
-            edges=[edge(d.id, "c:@F@big#") for d in dependents],
-        )
-        big, small = body("c:@F@big#"), body("c:@F@small#")
-        assert outranks(rank([small, big], head, head), big, small)
 
     @pytest.mark.parametrize(
         ("path", "expected"),
@@ -622,8 +664,10 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
             ("src/format.cc", Exposure.INTERNAL),
             ("include/spdlog/details/os.h", Exposure.INTERNAL),
             ("test/format-test.cc", Exposure.TEST),
-            ("test/gtest/gtest.h", Exposure.VENDORED),
-            ("third_party/zlib/zlib.h", Exposure.VENDORED),
+            # Folder names exclude nothing (ADR-025): a library that is not declared
+            # third-party is ranked as the repository's own code.
+            ("test/gtest/gtest.h", Exposure.TEST),
+            ("third_party/zlib/zlib.h", Exposure.PUBLIC),
             ("examples/demo.cc", Exposure.TEST),
             ("support/tools_test.cc", Exposure.TEST),
             # leveldb: tests live *beside* the code they test, with no `test/` directory
@@ -634,7 +678,7 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
             ("util/coding_test.cc", Exposure.TEST),
             ("include/leveldb/db.h", Exposure.PUBLIC),
             ("benchmarks/db_bench.cc", Exposure.TEST),
-            ("third_party/googletest/googletest/src/gtest.cc", Exposure.VENDORED),
+            ("third_party/googletest/googletest/src/gtest.cc", Exposure.INTERNAL),
         ],
     )
     def test_the_path_convention_reads_the_layouts_it_claims_to(
@@ -656,17 +700,6 @@ class TestVendoredAndTestCodeDoNotDrownTheLibrary:
             edges=[edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS)],
         )
         assert exposure_map(head)[NodeId("c:@S@C@F@m#")] is Exposure.PUBLIC
-
-    def test_promotion_never_lifts_vendored_code_into_the_library(self) -> None:
-        """The demotion has to win, or bundled googletest's own class hierarchy would
-        promote its members straight back onto the first page."""
-        head = model(
-            "m",
-            node("c:@S@Test", file=VENDORED, kind=NodeKind.CLASS),
-            node("c:@S@Test@F@m#", file=VENDORED, kind=NodeKind.METHOD),
-            edges=[edge("c:@S@Test", "c:@S@Test@F@m#", EdgeKind.CONTAINS)],
-        )
-        assert exposure_map(head)[NodeId("c:@S@Test@F@m#")] is Exposure.VENDORED
 
 
 class TestAnEdgeIsAsExposedAsEitherOfItsEnds:
@@ -727,28 +760,44 @@ class TestAnEdgeIsAsExposedAsEitherOfItsEnds:
         §6, reports/2026-08-01--v0-build/STATUS.md)."""
         base, head = self.side(with_added=False), self.side(with_added=True)
         containment = edge_event(self.NAMESPACE, self.ADDED, edge_kind=EdgeKind.CONTAINS)
-        churn = event(EventKind.NODE_REMOVED, self.OWN_TEST, RESIDUE)
+        churn = event(ChangeEventKind.NODE_REMOVED, self.OWN_TEST, RESIDUE)
         ranking = rank([churn, containment], base, head)
         assert outranks(ranking, containment, churn)
 
-    def test_a_first_party_call_into_vendored_code_stays_first_party(self) -> None:
-        """The direction max is safe in, and the one leveldb actually contains: 114 of its
-        116 boundary-crossing edge events are the repository's own tests calling googletest.
-        Taking the max cannot pull such an event into `ranker.py`'s vendored block, so the
-        partition still holds -- and the two rules agree here, because the source is already
-        the more exposed end."""
-        head = model(
-            "m",
-            node("c:@F@db_test#", file="db/db_test.cc"),
-            node("c:@F@assert_helper#", file=VENDORED),
-        )
-        call = edge_event("c:@F@db_test#", "c:@F@assert_helper#")
-        vendored = body("c:@F@assert_helper#")
-        ranking = rank([vendored, call], head, head)
 
-        assert ranking.score_for(call.id).exposure is Exposure.TEST
-        assert ranking.vendored_count == 1
-        assert outranks(ranking, call, vendored)
+class TestExposureReadsTheHeadWhenTheTwoModelsDisagree:
+    """`ScoringContext.of`: "Head first, then base, so a node present on both sides is
+    classified by what it is *now*: a helper moved out of a public header during this
+    change is internal." Every exposure test above gives an entity one location, so the
+    merge order this comment describes has never actually been exercised.
+    """
+
+    def test_an_entity_moved_out_of_a_public_header_is_read_as_internal(self) -> None:
+        base = model("a", node("c:@F@x#", file=PUBLIC))
+        head = model("b", node("c:@F@x#", file=LIB_SOURCE))
+        changed = body("c:@F@x#")
+        score = rank([changed], base, head).score_for(changed.id)
+        assert score.exposure is Exposure.INTERNAL
+        assert score.factor(FactorName.EXPOSURE).detail == "internal"
+
+    def test_an_entity_moved_into_a_public_header_is_read_as_public(self) -> None:
+        """The same claim, the other direction: the merge must not simply prefer whichever
+        class is more exposed, only whichever model is head."""
+        base = model("a", node("c:@F@x#", file=LIB_SOURCE))
+        head = model("b", node("c:@F@x#", file=PUBLIC))
+        changed = body("c:@F@x#")
+        score = rank([changed], base, head).score_for(changed.id)
+        assert score.exposure is Exposure.PUBLIC
+
+    def test_an_edge_whose_endpoints_are_in_neither_model_is_internal_not_unknown(self) -> None:
+        """`score.exposure_of`: "A subject in neither model is INTERNAL: no evidence
+        demotes it to TEST or promotes it to PUBLIC." The node case already has a test
+        (`test_an_event_about_an_entity_in_neither_model_still_scores`); the edge case,
+        whose exposure is read from *two* endpoints instead of one, does not."""
+        stray = edge_event("c:@F@ghost1#", "c:@F@ghost2#")
+        score = rank([stray]).score_for(stray.id)
+        assert score.exposure is Exposure.INTERNAL
+        assert score.factor(FactorName.EXPOSURE).detail == "internal (subject not in either model)"
 
 
 # -- decomposition ----------------------------------------------------------------------
@@ -763,7 +812,7 @@ class TestThreeDisconnectedChangesAreThreeChanges:
     works.
     """
 
-    def three_islands(self) -> tuple[Model, list[Event]]:
+    def three_islands(self) -> tuple[Model, list[ChangeEvent]]:
         head = model(
             "m",
             node("c:@F@a1#"),
@@ -785,7 +834,7 @@ class TestThreeDisconnectedChangesAreThreeChanges:
     def test_every_event_lands_in_exactly_one_component(self) -> None:
         head, events = self.three_islands()
         ranking = rank(events, head, head)
-        placed = [e for c in ranking.components for e in c.events]
+        placed = [e for c in ranking.components for e in c.change_events]
         assert sorted(placed) == sorted(e.id for e in events)
 
     def test_a_call_between_two_changed_entities_makes_them_one_change(self) -> None:
@@ -833,8 +882,8 @@ class TestThreeDisconnectedChangesAreThreeChanges:
         have run, so this stage reads the link when it is there and never requires it."""
         head = model("m", node("c:@F@a1#"), node("c:@F@c1#"))
         cause = body("c:@F@a1#")
-        effect = Event(
-            kind=EventKind.NODE_BODY_CHANGED,
+        effect = ChangeEvent(
+            kind=ChangeEventKind.NODE_BODY_CHANGED,
             subject=NodeId("c:@F@c1#"),
             caused_by=cause.id,
             confidence=SURE,
@@ -844,10 +893,10 @@ class TestThreeDisconnectedChangesAreThreeChanges:
     def test_a_cause_link_pointing_outside_the_list_is_ignored(self) -> None:
         """Rank must not acquire an opinion about how the event list was assembled."""
         head = model("m", node("c:@F@a1#"), node("c:@F@c1#"))
-        dangling = Event(
-            kind=EventKind.NODE_BODY_CHANGED,
+        dangling = ChangeEvent(
+            kind=ChangeEventKind.NODE_BODY_CHANGED,
             subject=NodeId("c:@F@c1#"),
-            caused_by=EventId("NodeAdded:deadbeefdeadbeef"),
+            caused_by=ChangeEventId("NodeAdded:deadbeefdeadbeef"),
             confidence=SURE,
         )
         assert len(rank([body("c:@F@a1#"), dangling], head, head).components) == 2
@@ -928,11 +977,43 @@ class TestThreeDisconnectedChangesAreThreeChanges:
         assert len(rank(events, head, head).components) == 2
 
     def test_components_are_numbered_by_risk_so_the_first_one_is_read_first(self) -> None:
-        head = model("m", node("c:@F@a1#", file=VENDORED), node("c:@F@c1#", file=PUBLIC))
+        head = model("m", node("c:@F@a1#", file=OWN_TEST), node("c:@F@c1#", file=PUBLIC))
         low, high = body("c:@F@a1#"), body("c:@F@c1#")
         ranking = rank([low, high], head, head)
-        assert ranking.components[0].events == [high.id]
+        assert ranking.components[0].change_events == [high.id]
         assert ranking.score_for(high.id).component == 0
+
+
+class TestDecompositionReadsBothModelsNotJustHead:
+    """`partition`'s rule 3 reads `for model in (base, head)`, and so does rule 4's
+    containment loop. The module docstring gives the reason for rule 3: "Both models are
+    read because an edge deleted by the change still testifies that the two entities were
+    related when the author started." Every decomposition test above passes the same model
+    object as both `base` and `head`, so neither loop has ever been asked to disagree.
+    """
+
+    def test_an_edge_removed_by_this_change_still_joins_its_two_endpoints(self) -> None:
+        base = model("a", node("c:@F@f#"), node("c:@F@g#"), edges=[edge("c:@F@f#", "c:@F@g#")])
+        head = model("b", node("c:@F@f#"), node("c:@F@g#"))
+        events = [body("c:@F@f#"), body("c:@F@g#")]
+        assert len(rank(events, base, head).components) == 1
+
+    def test_a_container_that_existed_only_in_base_still_joins_its_members(self) -> None:
+        """A class deleted by this change still explains why its two methods are one
+        change, even though head has no containment -- or the class itself -- left to read."""
+        base = model(
+            "a",
+            node("c:@S@C", kind=NodeKind.CLASS),
+            node("c:@S@C@F@m#", kind=NodeKind.METHOD),
+            node("c:@S@C@F@n#", kind=NodeKind.METHOD),
+            edges=[
+                edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS),
+                edge("c:@S@C", "c:@S@C@F@n#", EdgeKind.CONTAINS),
+            ],
+        )
+        head = model("b")
+        events = [body("c:@S@C@F@m#"), body("c:@S@C@F@n#")]
+        assert len(rank(events, base, head).components) == 1
 
 
 # -- the stage's own contract ------------------------------------------------------------
@@ -959,7 +1040,7 @@ class TestHighRiskCountsConsequencesNotNovelty:
     def test_a_public_addition_that_nothing_depends_on_is_not_high_risk(self) -> None:
         """The 40 % population, one event at a time. It is worth reading -- it is at the top
         of a small delta -- but "high risk" has to mean something a reviewer can act on."""
-        added = event(EventKind.NODE_ADDED, "c:@F@fresh#", RESIDUE)
+        added = event(ChangeEventKind.NODE_ADDED, "c:@F@fresh#", RESIDUE)
         score = rank([added], self.side(), self.side()).score_for(added.id)
         assert score.factor(FactorName.BLAST_RADIUS).value == 0.0
         assert not score.is_high_risk
@@ -973,23 +1054,27 @@ class TestHighRiskCountsConsequencesNotNovelty:
             *callers,
             edges=[edge(c.id, "c:@F@fresh#") for c in callers],
         )
-        added = event(EventKind.NODE_ADDED, "c:@F@fresh#", RESIDUE)
+        added = event(ChangeEventKind.NODE_ADDED, "c:@F@fresh#", RESIDUE)
         assert rank([added], head, head).score_for(added.id).is_high_risk
 
     def test_the_matcher_does_not_decide_what_is_dangerous(self) -> None:
         """The property the old threshold lacked: an event's risk must not move when a tier
         that has nothing to do with it starts or stops running. Tiers 2-4 may land later, and
         `high_risk_count` must not swing when they do."""
-        tiers = [None, MatchTier.SIMILARITY, MatchTier.POSITIONAL, MatchTier.DECLARED]
+        confidences = [
+            AMBIGUOUS,
+            CANDIDATE,
+            RESIDUE,
+            *(
+                Confidence(tier=t, models_complete=True)
+                for t in (MatchTier.SIMILARITY, MatchTier.POSITIONAL, MatchTier.DECLARED)
+            ),
+        ]
         verdicts = {
-            rank(
-                [body("c:@F@fresh#", Confidence(tier=t, models_complete=True))],
-                self.side(),
-                self.side(),
-            )
+            rank([body("c:@F@fresh#", c)], self.side(), self.side())
             .score_for(body("c:@F@fresh#").id)
             .is_high_risk
-            for t in tiers
+            for c in confidences
         }
         assert len(verdicts) == 1
 
@@ -1014,6 +1099,63 @@ class TestHighRiskCountsConsequencesNotNovelty:
         head = model("m", node("c:@F@fresh#", file=PUBLIC))
         for score in rank([body("c:@F@fresh#")], head, head).scores:
             assert 0.0 <= score.impact <= 1.0
+
+
+class TestASpellingOnlyChangeIsListedButNeverHighRisk:
+    """ADR-046: a change of spelling alone clears the line on blast radius and exposure, and
+    nothing outside the diff can break. It stays listed and ordered; it is not counted."""
+
+    def widely_called(self) -> Model:
+        callers = [node(f"c:@F@c{i}#", file=LIB_SOURCE) for i in range(40)]
+        return model(
+            "m",
+            node("c:@F@f#", file=PUBLIC),
+            *callers,
+            edges=[edge(c.id, "c:@F@f#") for c in callers],
+        )
+
+    def score(self, changed: ChangeEvent) -> tuple[Ranking, bool, float]:
+        head = self.widely_called()
+        ranking = rank([changed], head, head)
+        score = ranking.score_for(changed.id)
+        return ranking, score.is_high_risk, score.impact
+
+    def attr(self, attr: str, old: AttrValue, new: AttrValue, **extra: AttrValue) -> ChangeEvent:
+        return event(
+            ChangeEventKind.NODE_ATTR_CHANGED, "c:@F@f#", SURE, attr=attr, old=old, new=new, **extra
+        )
+
+    def test_a_lone_sugared_signature_change_is_listed_but_not_high_risk(self) -> None:
+        changed = self.attr("sugared_signature", "void (size_type)", "void (unsigned long)")
+        ranking, high_risk, impact = self.score(changed)
+        assert changed.id in ranking.order
+        assert impact >= w.HIGH_RISK, "the gate, not the score, keeps it out of the count"
+        assert not high_risk
+
+    def test_every_informational_attribute_is_gated(self) -> None:
+        for attr in w.INFORMATIONAL_ATTRS:
+            assert not self.score(self.attr(attr, "a", "b"))[1], attr
+
+    def test_a_default_marked_spelling_only_is_not_high_risk(self) -> None:
+        changed = self.attr("default_arguments", "ns::details::x", "details::x", spelling_only=True)
+        ranking, high_risk, impact = self.score(changed)
+        assert changed.id in ranking.order
+        assert impact >= w.HIGH_RISK
+        assert not high_risk
+
+    def test_a_real_default_change_is_high_risk_as_before(self) -> None:
+        assert self.score(self.attr("default_arguments", "1", "2"))[1]
+
+    def test_the_gate_does_not_move_the_order(self) -> None:
+        """Only the count changes: the score that orders the page is the same."""
+        informational = self.attr("sugared_signature", "a", "b")
+        plain = self.attr("initializer_hash", "a", "b")
+        head = self.widely_called()
+        one = rank([informational], head, head).score_for(informational.id)
+        two = rank([plain], head, head).score_for(plain.id)
+        assert one.informational and not two.informational
+        assert w.NOVELTY_BY_ATTR["sugared_signature"] < w.NOVELTY_BY_ATTR["initializer_hash"]
+        assert one.total < two.total
 
 
 class TestTheScoreIsInspectableNotAMagicNumber:
@@ -1055,18 +1197,18 @@ class TestTheStageIsPureAndDeterministic:
     produces a different document for the same two commits, which makes every diff of the
     output meaningless and every regression test flaky."""
 
-    def fixture(self) -> tuple[Model, list[Event]]:
+    def fixture(self) -> tuple[Model, list[ChangeEvent]]:
         head = model(
             "m",
             node("c:@F@f#", file=PUBLIC),
             node("c:@F@g#", file=LIB_SOURCE),
-            node("c:@F@h#", file=VENDORED),
+            node("c:@F@h#", file=OWN_TEST),
             edges=[edge("c:@F@g#", "c:@F@f#"), edge("c:@F@h#", "c:@F@g#")],
         )
         events = [
             body("c:@F@f#"),
-            event(EventKind.NODE_ADDED, "c:@F@g#", RESIDUE),
-            event(EventKind.NODE_REMOVED, "c:@F@h#", RESIDUE),
+            event(ChangeEventKind.NODE_ADDED, "c:@F@g#", RESIDUE),
+            event(ChangeEventKind.NODE_REMOVED, "c:@F@h#", RESIDUE),
         ]
         return head, events
 
@@ -1093,7 +1235,7 @@ class TestTheStageIsPureAndDeterministic:
         assert ranking.order == sorted(ranking.order)  # equal totals, so id decides
 
     def test_ranking_does_not_mutate_its_inputs(self) -> None:
-        """Not tidiness. `Event` is mutable, `caused_by` is written by a different stage,
+        """Not tidiness. `ChangeEvent` is mutable, `caused_by` is written by a different stage,
         and a rank that quietly stamped a score onto an event would make the pipeline order
         load-bearing and the stage untestable in isolation."""
         head, events = self.fixture()

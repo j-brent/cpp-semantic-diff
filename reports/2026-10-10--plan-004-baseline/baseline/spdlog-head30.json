@@ -1,0 +1,2864 @@
+{
+  "meta": {
+    "tool": "cpp-semantic-diff",
+    "tool_version": "0.0.1",
+    "schema_version": "1.2",
+    "repo": "spdlog",
+    "base_ref": "HEAD~30",
+    "head_ref": "HEAD",
+    "base_rev": "566b2d14043a439ed83cd02774af44f225ecad72",
+    "head_rev": "989d28dd768adef702538634857942db24e1058a",
+    "timings": {
+      "acquire": 6.584134251999785,
+      "produce_base": 7.572942814003909,
+      "produce_head": 4.972741379999206,
+      "match": 0.008562345996324439,
+      "diff": 0.10576676500204485,
+      "classify": 0.024908640996727627,
+      "rank": 0.03863041600561701,
+      "total": 20.563413240000955
+    }
+  },
+  "completeness": {
+    "base": {
+      "side": "base",
+      "rev": "566b2d14043a439ed83cd02774af44f225ecad72",
+      "tus_total": 8,
+      "tus_parsed": 8,
+      "tus_failed": 0,
+      "tus_cached": 0,
+      "edges_total": 5351,
+      "edges_dropped": 1203,
+      "build_available": false,
+      "producer_version": "libclang 18.1.3 x86_64-pc-linux-gnu",
+      "producers": [
+        "libclang 18.1.3 x86_64-pc-linux-gnu"
+      ],
+      "language_modes": [
+        "c++11"
+      ],
+      "tus_complete": true,
+      "failures": [],
+      "notes": []
+    },
+    "head": {
+      "side": "head",
+      "rev": "989d28dd768adef702538634857942db24e1058a",
+      "tus_total": 8,
+      "tus_parsed": 8,
+      "tus_failed": 0,
+      "tus_cached": 0,
+      "edges_total": 5352,
+      "edges_dropped": 1207,
+      "build_available": false,
+      "producer_version": "libclang 18.1.3 x86_64-pc-linux-gnu",
+      "producers": [
+        "libclang 18.1.3 x86_64-pc-linux-gnu"
+      ],
+      "language_modes": [
+        "c++11"
+      ],
+      "tus_complete": true,
+      "failures": [],
+      "notes": []
+    },
+    "limits": [
+      "One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not implied.",
+      "Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact."
+    ]
+  },
+  "entities": {
+    "c:@N@fmt@N@v12@N@detail@ST>1#T@buffer@F@data#1": {
+      "id": "c:@N@fmt@N@v12@N@detail@ST>1#T@buffer@F@data#1",
+      "kind": "method",
+      "name": "data",
+      "qualified_name": "fmt::v12::detail::buffer::data",
+      "signature": "const type-parameter-0-0 *() const",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/fmt/bundled/base.h",
+        "line": 1822,
+        "end_line": 1822,
+        "column": 22
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@N@detail@ST>1#T@buffer@F@size#1": {
+      "id": "c:@N@fmt@N@v12@N@detail@ST>1#T@buffer@F@size#1",
+      "kind": "method",
+      "name": "size",
+      "qualified_name": "fmt::v12::detail::buffer::size",
+      "signature": "unsigned long () const",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/fmt/bundled/base.h",
+        "line": 1815,
+        "end_line": 1815,
+        "column": 18
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@SP>1#T@formatter>#>@N@spdlog@N@details@ST>1#T@dump_info1t0.0#C#v@FT@>1#Tput_newline#t1.0#l#v#1": {
+      "id": "c:@N@fmt@N@v12@SP>1#T@formatter>#>@N@spdlog@N@details@ST>1#T@dump_info1t0.0#C#v@FT@>1#Tput_newline#t1.0#l#v#1",
+      "kind": "method",
+      "name": "put_newline",
+      "qualified_name": "fmt::v12::formatter::put_newline",
+      "signature": "void (type-parameter-1-0, unsigned long) const",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/fmt/bin_to_hex.h",
+        "line": 213,
+        "end_line": 222,
+        "column": 10
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@fmt@N@v12@ST>1#T@basic_string_view@F@basic_string_view#*1t0.0#l#": {
+      "id": "c:@N@fmt@N@v12@ST>1#T@basic_string_view@F@basic_string_view#*1t0.0#l#",
+      "kind": "method",
+      "name": "basic_string_view<Char>",
+      "qualified_name": "fmt::v12::basic_string_view::basic_string_view<Char>",
+      "signature": "void (const type-parameter-0-0 *, unsigned long)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/fmt/bundled/base.h",
+        "line": 534,
+        "end_line": 535,
+        "column": 13
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@F@set_pattern#$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#$@N@spdlog@E@pattern_time_type#": {
+      "id": "c:@N@spdlog@F@set_pattern#$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#$@N@spdlog@E@pattern_time_type#",
+      "kind": "function",
+      "name": "set_pattern",
+      "qualified_name": "spdlog::set_pattern",
+      "signature": "void (std::basic_string<char>, spdlog::pattern_time_type)",
+      "symbol": "_ZN6spdlog11set_patternENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEENS_17pattern_time_typeE",
+      "location": {
+        "file": "include/spdlog/spdlog-inl.h",
+        "line": 27,
+        "end_line": 30,
+        "column": 20
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@FT@>1#Tudp_logger_mt#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#$@N@spdlog@N@sinks@S@udp_sink_config#$@N@std@S@shared_ptr>#$@N@spdlog@S@logger#": {
+      "id": "c:@N@spdlog@FT@>1#Tudp_logger_mt#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#$@N@spdlog@N@sinks@S@udp_sink_config#$@N@std@S@shared_ptr>#$@N@spdlog@S@logger#",
+      "kind": "function",
+      "name": "udp_logger_mt",
+      "qualified_name": "spdlog::udp_logger_mt",
+      "signature": "std::shared_ptr<spdlog::logger> (const std::basic_string<char> &, spdlog::sinks::udp_sink_config)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/sinks/udp_sink.h",
+        "line": 64,
+        "end_line": 67,
+        "column": 32
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details": {
+      "id": "c:@N@spdlog@N@details",
+      "kind": "namespace",
+      "name": "details",
+      "qualified_name": "spdlog::details",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/pattern_formatter.h",
+        "line": 20,
+        "end_line": 54,
+        "column": 11
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@F@to_string_view#$@N@fmt@N@v12@S@basic_string_view>#C#": {
+      "id": "c:@N@spdlog@N@details@F@to_string_view#$@N@fmt@N@v12@S@basic_string_view>#C#",
+      "kind": "function",
+      "name": "to_string_view",
+      "qualified_name": "spdlog::details::to_string_view",
+      "signature": "fmt::basic_string_view<char> (fmt::basic_string_view<char>)",
+      "symbol": "_ZN6spdlog7details14to_string_viewEN3fmt3v1217basic_string_viewIcEE",
+      "location": {
+        "file": "include/spdlog/common.h",
+        "line": 350,
+        "end_line": 353,
+        "column": 45
+      },
+      "sides": [
+        "base"
+      ]
+    },
+    "c:@N@spdlog@N@details@F@to_string_view#&1$@N@fmt@N@v12@S@basic_memory_buffer>#C#Vl250#$@N@fmt@N@v12@N@detail@S@allocator>#C#": {
+      "id": "c:@N@spdlog@N@details@F@to_string_view#&1$@N@fmt@N@v12@S@basic_memory_buffer>#C#Vl250#$@N@fmt@N@v12@N@detail@S@allocator>#C#",
+      "kind": "function",
+      "name": "to_string_view",
+      "qualified_name": "spdlog::details::to_string_view",
+      "signature": "fmt::basic_string_view<char> (const fmt::basic_memory_buffer<char, 250> &)",
+      "symbol": "_ZN6spdlog7details14to_string_viewERKN3fmt3v1219basic_memory_bufferIcLm250ENS2_6detail9allocatorIcEEEE",
+      "location": {
+        "file": "include/spdlog/common.h",
+        "line": 345,
+        "end_line": 348,
+        "column": 45
+      },
+      "sides": [
+        "base"
+      ]
+    },
+    "c:@N@spdlog@N@details@N@os@F@create_dir#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#": {
+      "id": "c:@N@spdlog@N@details@N@os@F@create_dir#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "kind": "function",
+      "name": "create_dir",
+      "qualified_name": "spdlog::details::os::create_dir",
+      "signature": "bool (const std::basic_string<char> &)",
+      "symbol": "_ZN6spdlog7details2os10create_dirERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+      "location": {
+        "file": "include/spdlog/details/os-inl.h",
+        "line": 485,
+        "end_line": 522,
+        "column": 20
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@N@os@F@path_exists#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#": {
+      "id": "c:@N@spdlog@N@details@N@os@F@path_exists#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "kind": "function",
+      "name": "path_exists",
+      "qualified_name": "spdlog::details::os::path_exists",
+      "signature": "bool (const std::basic_string<char> &)",
+      "symbol": "_ZN6spdlog7details2os11path_existsERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+      "location": {
+        "file": "include/spdlog/details/os-inl.h",
+        "line": 180,
+        "end_line": 192,
+        "column": 20
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@N@os@F@remove_if_exists#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#": {
+      "id": "c:@N@spdlog@N@details@N@os@F@remove_if_exists#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "kind": "function",
+      "name": "remove_if_exists",
+      "qualified_name": "spdlog::details::os::remove_if_exists",
+      "signature": "int (const std::basic_string<char> &)",
+      "symbol": "_ZN6spdlog7details2os16remove_if_existsERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+      "location": {
+        "file": "include/spdlog/details/os-inl.h",
+        "line": 164,
+        "end_line": 169,
+        "column": 19
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@S@log_msg_buffer": {
+      "id": "c:@N@spdlog@N@details@S@log_msg_buffer",
+      "kind": "class",
+      "name": "log_msg_buffer",
+      "qualified_name": "spdlog::details::log_msg_buffer",
+      "signature": null,
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/details/log_msg_buffer.h",
+        "line": 14,
+        "end_line": 26,
+        "column": 18
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@S@log_msg_buffer@F@append_source#": {
+      "id": "c:@N@spdlog@N@details@S@log_msg_buffer@F@append_source#",
+      "kind": "method",
+      "name": "append_source",
+      "qualified_name": "spdlog::details::log_msg_buffer::append_source",
+      "signature": "void ()",
+      "symbol": "_ZN6spdlog7details14log_msg_buffer13append_sourceEv",
+      "location": {
+        "file": "include/spdlog/details/log_msg_buffer-inl.h",
+        "line": 57,
+        "end_line": 64,
+        "column": 36
+      },
+      "sides": [
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@S@log_msg_buffer@F@log_msg_buffer#&1$@N@spdlog@N@details@S@log_msg#": {
+      "id": "c:@N@spdlog@N@details@S@log_msg_buffer@F@log_msg_buffer#&1$@N@spdlog@N@details@S@log_msg#",
+      "kind": "method",
+      "name": "log_msg_buffer",
+      "qualified_name": "spdlog::details::log_msg_buffer::log_msg_buffer",
+      "signature": "void (const spdlog::details::log_msg &)",
+      "symbol": "_ZN6spdlog7details14log_msg_bufferC1ERKNS0_7log_msgE",
+      "location": {
+        "file": "include/spdlog/details/log_msg_buffer-inl.h",
+        "line": 16,
+        "end_line": 22,
+        "column": 31
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@S@log_msg_buffer@F@log_msg_buffer#&1$@N@spdlog@N@details@S@log_msg_buffer#": {
+      "id": "c:@N@spdlog@N@details@S@log_msg_buffer@F@log_msg_buffer#&1$@N@spdlog@N@details@S@log_msg_buffer#",
+      "kind": "method",
+      "name": "log_msg_buffer",
+      "qualified_name": "spdlog::details::log_msg_buffer::log_msg_buffer",
+      "signature": "void (const spdlog::details::log_msg_buffer &)",
+      "symbol": "_ZN6spdlog7details14log_msg_bufferC1ERKS1_",
+      "location": {
+        "file": "include/spdlog/details/log_msg_buffer-inl.h",
+        "line": 24,
+        "end_line": 30,
+        "column": 31
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@S@log_msg_buffer@F@update_string_views#": {
+      "id": "c:@N@spdlog@N@details@S@log_msg_buffer@F@update_string_views#",
+      "kind": "method",
+      "name": "update_string_views",
+      "qualified_name": "spdlog::details::log_msg_buffer::update_string_views",
+      "signature": "void ()",
+      "symbol": "_ZN6spdlog7details14log_msg_buffer19update_string_viewsEv",
+      "location": {
+        "file": "include/spdlog/details/log_msg_buffer-inl.h",
+        "line": 66,
+        "end_line": 80,
+        "column": 36
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@S@registry@F@registry#": {
+      "id": "c:@N@spdlog@N@details@S@registry@F@registry#",
+      "kind": "method",
+      "name": "registry",
+      "qualified_name": "spdlog::details::registry::registry",
+      "signature": "void ()",
+      "symbol": "_ZN6spdlog7details8registryC1Ev",
+      "location": {
+        "file": "include/spdlog/details/registry-inl.h",
+        "line": 33,
+        "end_line": 48,
+        "column": 25
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@details@S@thread_pool@F@thread_pool#l#l#$@N@std@S@function>#Fv()#S0_#": {
+      "id": "c:@N@spdlog@N@details@S@thread_pool@F@thread_pool#l#l#$@N@std@S@function>#Fv()#S0_#",
+      "kind": "method",
+      "name": "thread_pool",
+      "qualified_name": "spdlog::details::thread_pool::thread_pool",
+      "signature": "void (unsigned long, unsigned long, std::function<void ()>, std::function<void ()>)",
+      "symbol": "_ZN6spdlog7details11thread_poolC1EmmSt8functionIFvvEES4_",
+      "location": {
+        "file": "include/spdlog/details/thread_pool-inl.h",
+        "line": 16,
+        "end_line": 33,
+        "column": 28
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@sinks@S@sink@F@level#1": {
+      "id": "c:@N@spdlog@N@sinks@S@sink@F@level#1",
+      "kind": "method",
+      "name": "level",
+      "qualified_name": "spdlog::sinks::sink::level",
+      "signature": "spdlog::level::level_enum () const",
+      "symbol": "_ZNK6spdlog5sinks4sink5levelEv",
+      "location": {
+        "file": "include/spdlog/sinks/sink-inl.h",
+        "line": 22,
+        "end_line": 24,
+        "column": 46
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@sinks@ST>1#T@ansicolor_sink@F@set_pattern#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#": {
+      "id": "c:@N@spdlog@N@sinks@ST>1#T@ansicolor_sink@F@set_pattern#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "kind": "method",
+      "name": "set_pattern",
+      "qualified_name": "spdlog::sinks::ansicolor_sink::set_pattern",
+      "signature": "void (const std::basic_string<char> &)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/sinks/ansicolor_sink-inl.h",
+        "line": 72,
+        "end_line": 75,
+        "column": 50
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@sinks@ST>1#T@base_sink@F@set_pattern_#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#": {
+      "id": "c:@N@spdlog@N@sinks@ST>1#T@base_sink@F@set_pattern_#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "kind": "method",
+      "name": "set_pattern_",
+      "qualified_name": "spdlog::sinks::base_sink::set_pattern_",
+      "signature": "void (const std::basic_string<char> &)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/sinks/base_sink-inl.h",
+        "line": 53,
+        "end_line": 55,
+        "column": 45
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@sinks@ST>1#T@stdout_sink_base@F@set_pattern#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#": {
+      "id": "c:@N@spdlog@N@sinks@ST>1#T@stdout_sink_base@F@set_pattern#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "kind": "method",
+      "name": "set_pattern",
+      "qualified_name": "spdlog::sinks::stdout_sink_base::set_pattern",
+      "signature": "void (const std::basic_string<char> &)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/sinks/stdout_sinks-inl.h",
+        "line": 83,
+        "end_line": 86,
+        "column": 52
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@sinks@ST>1#T@stdout_sink_base@F@stdout_sink_base#*$@S@_IO_FILE#": {
+      "id": "c:@N@spdlog@N@sinks@ST>1#T@stdout_sink_base@F@stdout_sink_base#*$@S@_IO_FILE#",
+      "kind": "method",
+      "name": "stdout_sink_base<ConsoleMutex>",
+      "qualified_name": "spdlog::sinks::stdout_sink_base::stdout_sink_base<ConsoleMutex>",
+      "signature": "void (_IO_FILE *)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/sinks/stdout_sinks-inl.h",
+        "line": 33,
+        "end_line": 49,
+        "column": 47
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@sinks@ST>1#T@udp_sink@F@sink_it_#&1$@N@spdlog@N@details@S@log_msg#": {
+      "id": "c:@N@spdlog@N@sinks@ST>1#T@udp_sink@F@sink_it_#&1$@N@spdlog@N@details@S@log_msg#",
+      "kind": "method",
+      "name": "sink_it_",
+      "qualified_name": "spdlog::sinks::udp_sink::sink_it_",
+      "signature": "void (const spdlog::details::log_msg &)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/sinks/udp_sink.h",
+        "line": 45,
+        "end_line": 49,
+        "column": 10
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@N@sinks@ST>2#T#T@daily_file_sink@F@now_tm#$@N@std@N@chrono@S@time_point>#$@N@std@N@chrono@N@_V2@S@system_clock#$@N@std@N@chrono@S@duration>#L#$@N@std@S@ratio>#VL1#VL1000000000#": {
+      "id": "c:@N@spdlog@N@sinks@ST>2#T#T@daily_file_sink@F@now_tm#$@N@std@N@chrono@S@time_point>#$@N@std@N@chrono@N@_V2@S@system_clock#$@N@std@N@chrono@S@duration>#L#$@N@std@S@ratio>#VL1#VL1000000000#",
+      "kind": "method",
+      "name": "now_tm",
+      "qualified_name": "spdlog::sinks::daily_file_sink::now_tm",
+      "signature": "tm (std::chrono::time_point<std::chrono::system_clock, std::chrono::duration<long, std::ratio<1, 1000000000>>>)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/sinks/daily_file_sink.h",
+        "line": 146,
+        "end_line": 149,
+        "column": 8
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@S@async_logger@F@clone#$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#": {
+      "id": "c:@N@spdlog@S@async_logger@F@clone#$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "kind": "method",
+      "name": "clone",
+      "qualified_name": "spdlog::async_logger::clone",
+      "signature": "std::shared_ptr<spdlog::logger> (std::basic_string<char>)",
+      "symbol": "_ZN6spdlog12async_logger5cloneENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+      "location": {
+        "file": "include/spdlog/async_logger-inl.h",
+        "line": 82,
+        "end_line": 86,
+        "column": 53
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@S@logger@FT@>1#pTlog#$@N@spdlog@S@source_loc#$@N@spdlog@N@level@E@level_enum#^fstring<type-parameter-0-0...>:::t#P&&t0.0#v#": {
+      "id": "c:@N@spdlog@S@logger@FT@>1#pTlog#$@N@spdlog@S@source_loc#$@N@spdlog@N@level@E@level_enum#^fstring<type-parameter-0-0...>:::t#P&&t0.0#v#",
+      "kind": "method",
+      "name": "log",
+      "qualified_name": "spdlog::logger::log",
+      "signature": "void (spdlog::source_loc, spdlog::level::level_enum, typename fstring<type-parameter-0-0...>::t, type-parameter-0-0 &&...)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/logger.h",
+        "line": 79,
+        "end_line": 85,
+        "column": 10
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    },
+    "c:@N@spdlog@S@synchronous_factory@FT@>2#T#pTcreate#$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#P&&t0.1#$@N@std@S@shared_ptr>#$@N@spdlog@S@logger#S": {
+      "id": "c:@N@spdlog@S@synchronous_factory@FT@>2#T#pTcreate#$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#P&&t0.1#$@N@std@S@shared_ptr>#$@N@spdlog@S@logger#S",
+      "kind": "method",
+      "name": "create",
+      "qualified_name": "spdlog::synchronous_factory::create",
+      "signature": "std::shared_ptr<spdlog::logger> (std::basic_string<char>, type-parameter-0-1 &&...)",
+      "symbol": null,
+      "location": {
+        "file": "include/spdlog/details/synchronous_factory.h",
+        "line": 15,
+        "end_line": 20,
+        "column": 36
+      },
+      "sides": [
+        "base",
+        "head"
+      ]
+    }
+  },
+  "events": [
+    {
+      "id": "EdgeAdded:37a7b19683a24003",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@spdlog@N@details@S@log_msg_buffer@F@log_msg_buffer#&1$@N@spdlog@N@details@S@log_msg#|calls|c:@N@spdlog@N@details@S@log_msg_buffer@F@append_source#",
+      "payload": {},
+      "caused_by": "NodeAdded:a6f1e911d3157787",
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/log_msg_buffer-inl.h",
+            "line": 20,
+            "end_line": 20,
+            "column": 5
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:2d5a806f74d1a504",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@spdlog@N@details@S@log_msg_buffer@F@log_msg_buffer#&1$@N@spdlog@N@details@S@log_msg_buffer#|calls|c:@N@spdlog@N@details@S@log_msg_buffer@F@append_source#",
+      "payload": {},
+      "caused_by": "NodeAdded:a6f1e911d3157787",
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/log_msg_buffer-inl.h",
+            "line": 28,
+            "end_line": 28,
+            "column": 5
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeAdded:6dfdd4fbcd428b22",
+      "kind": "EdgeAdded",
+      "subject": "c:@N@spdlog@N@details@S@log_msg_buffer|contains|c:@N@spdlog@N@details@S@log_msg_buffer@F@append_source#",
+      "payload": {},
+      "caused_by": "NodeAdded:a6f1e911d3157787",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:b534253b36390115",
+      "kind": "EdgeRemoved",
+      "subject": "c:@N@spdlog@N@details@F@to_string_view#&1$@N@fmt@N@v12@S@basic_memory_buffer>#C#Vl250#$@N@fmt@N@v12@N@detail@S@allocator>#C#|calls|c:@N@fmt@N@v12@N@detail@ST>1#T@buffer@F@data#1",
+      "payload": {},
+      "caused_by": "NodeRemoved:47e97fffd446cb99",
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/common.h",
+            "line": 347,
+            "end_line": 347,
+            "column": 34
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:6f765d9272debeee",
+      "kind": "EdgeRemoved",
+      "subject": "c:@N@spdlog@N@details@F@to_string_view#&1$@N@fmt@N@v12@S@basic_memory_buffer>#C#Vl250#$@N@fmt@N@v12@N@detail@S@allocator>#C#|calls|c:@N@fmt@N@v12@N@detail@ST>1#T@buffer@F@size#1",
+      "payload": {},
+      "caused_by": "NodeRemoved:47e97fffd446cb99",
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/common.h",
+            "line": 347,
+            "end_line": 347,
+            "column": 46
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:531b9e309f85bc3b",
+      "kind": "EdgeRemoved",
+      "subject": "c:@N@spdlog@N@details@F@to_string_view#&1$@N@fmt@N@v12@S@basic_memory_buffer>#C#Vl250#$@N@fmt@N@v12@N@detail@S@allocator>#C#|calls|c:@N@fmt@N@v12@ST>1#T@basic_string_view@F@basic_string_view#*1t0.0#l#",
+      "payload": {},
+      "caused_by": "NodeRemoved:47e97fffd446cb99",
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/common.h",
+            "line": 347,
+            "end_line": 347,
+            "column": 12
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:0ed3e5715975ead7",
+      "kind": "EdgeRemoved",
+      "subject": "c:@N@spdlog@N@details@N@os@F@remove_if_exists#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#|calls|c:@N@spdlog@N@details@N@os@F@path_exists#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/details/os-inl.h",
+            "line": 165,
+            "end_line": 165,
+            "column": 12
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:83605021624f382a",
+      "kind": "EdgeRemoved",
+      "subject": "c:@N@spdlog@N@details|contains|c:@N@spdlog@N@details@F@to_string_view#$@N@fmt@N@v12@S@basic_string_view>#C#",
+      "payload": {},
+      "caused_by": "NodeRemoved:bfe18c0f9607ff93",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "EdgeRemoved:045b717070c082ac",
+      "kind": "EdgeRemoved",
+      "subject": "c:@N@spdlog@N@details|contains|c:@N@spdlog@N@details@F@to_string_view#&1$@N@fmt@N@v12@S@basic_memory_buffer>#C#Vl250#$@N@fmt@N@v12@N@detail@S@allocator>#C#",
+      "payload": {},
+      "caused_by": "NodeRemoved:47e97fffd446cb99",
+      "provenance": [],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeAdded:a6f1e911d3157787",
+      "kind": "NodeAdded",
+      "subject": "c:@N@spdlog@N@details@S@log_msg_buffer@F@append_source#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/log_msg_buffer-inl.h",
+            "line": 57,
+            "end_line": 64,
+            "column": 36
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:b5f703019e50c3bf",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@fmt@N@v12@SP>1#T@formatter>#>@N@spdlog@N@details@ST>1#T@dump_info1t0.0#C#v@FT@>1#Tput_newline#t1.0#l#v#1",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/fmt/bin_to_hex.h",
+            "line": 213,
+            "end_line": 222,
+            "column": 10
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/fmt/bin_to_hex.h",
+            "line": 213,
+            "end_line": 222,
+            "column": 10
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:b8f78b2b538491f7",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@F@set_pattern#$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#$@N@spdlog@E@pattern_time_type#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/spdlog-inl.h",
+            "line": 27,
+            "end_line": 30,
+            "column": 20
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/spdlog-inl.h",
+            "line": 27,
+            "end_line": 30,
+            "column": 20
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:221e3b5c75dc1952",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@FT@>1#Tudp_logger_mt#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#$@N@spdlog@N@sinks@S@udp_sink_config#$@N@std@S@shared_ptr>#$@N@spdlog@S@logger#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/sinks/udp_sink.h",
+            "line": 64,
+            "end_line": 67,
+            "column": 32
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/sinks/udp_sink.h",
+            "line": 64,
+            "end_line": 67,
+            "column": 32
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:82d2bd6ede2cefc0",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@details@N@os@F@create_dir#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/details/os-inl.h",
+            "line": 482,
+            "end_line": 517,
+            "column": 20
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/os-inl.h",
+            "line": 485,
+            "end_line": 522,
+            "column": 20
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:6a314951e6f188bc",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@details@N@os@F@remove_if_exists#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/details/os-inl.h",
+            "line": 164,
+            "end_line": 166,
+            "column": 19
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/os-inl.h",
+            "line": 164,
+            "end_line": 169,
+            "column": 19
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:050734320e6082cb",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@details@S@log_msg_buffer@F@log_msg_buffer#&1$@N@spdlog@N@details@S@log_msg#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/details/log_msg_buffer-inl.h",
+            "line": 13,
+            "end_line": 18,
+            "column": 31
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/log_msg_buffer-inl.h",
+            "line": 16,
+            "end_line": 22,
+            "column": 31
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:09de6c1a9a515ec7",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@details@S@log_msg_buffer@F@log_msg_buffer#&1$@N@spdlog@N@details@S@log_msg_buffer#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/details/log_msg_buffer-inl.h",
+            "line": 20,
+            "end_line": 25,
+            "column": 31
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/log_msg_buffer-inl.h",
+            "line": 24,
+            "end_line": 30,
+            "column": 31
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:01380793d1e0e0cc",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@details@S@log_msg_buffer@F@update_string_views#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/details/log_msg_buffer-inl.h",
+            "line": 48,
+            "end_line": 51,
+            "column": 36
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/log_msg_buffer-inl.h",
+            "line": 66,
+            "end_line": 80,
+            "column": 36
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:c9d432e0081d744a",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@details@S@registry@F@registry#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/details/registry-inl.h",
+            "line": 33,
+            "end_line": 48,
+            "column": 25
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/registry-inl.h",
+            "line": 33,
+            "end_line": 48,
+            "column": 25
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:ef8f4afd07995b38",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@details@S@thread_pool@F@thread_pool#l#l#$@N@std@S@function>#Fv()#S0_#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/details/thread_pool-inl.h",
+            "line": 16,
+            "end_line": 33,
+            "column": 28
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/thread_pool-inl.h",
+            "line": 16,
+            "end_line": 33,
+            "column": 28
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:7eebec2eea9df8f8",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@sinks@S@sink@F@level#1",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/sinks/sink-inl.h",
+            "line": 20,
+            "end_line": 22,
+            "column": 62
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/sinks/sink-inl.h",
+            "line": 22,
+            "end_line": 24,
+            "column": 46
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:59473be1b45fdd56",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@sinks@ST>1#T@ansicolor_sink@F@set_pattern#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/sinks/ansicolor_sink-inl.h",
+            "line": 72,
+            "end_line": 75,
+            "column": 50
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/sinks/ansicolor_sink-inl.h",
+            "line": 72,
+            "end_line": 75,
+            "column": 50
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:e096242363f84c56",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@sinks@ST>1#T@base_sink@F@set_pattern_#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/sinks/base_sink-inl.h",
+            "line": 51,
+            "end_line": 53,
+            "column": 53
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/sinks/base_sink-inl.h",
+            "line": 53,
+            "end_line": 55,
+            "column": 45
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:5ba37e58c4985759",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@sinks@ST>1#T@stdout_sink_base@F@set_pattern#&1$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/sinks/stdout_sinks-inl.h",
+            "line": 83,
+            "end_line": 86,
+            "column": 52
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/sinks/stdout_sinks-inl.h",
+            "line": 83,
+            "end_line": 86,
+            "column": 52
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:b8f03fcfe7b4f019",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@sinks@ST>1#T@stdout_sink_base@F@stdout_sink_base#*$@S@_IO_FILE#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/sinks/stdout_sinks-inl.h",
+            "line": 33,
+            "end_line": 49,
+            "column": 47
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/sinks/stdout_sinks-inl.h",
+            "line": 33,
+            "end_line": 49,
+            "column": 47
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:b4ceeff20154a5c0",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@sinks@ST>1#T@udp_sink@F@sink_it_#&1$@N@spdlog@N@details@S@log_msg#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/sinks/udp_sink.h",
+            "line": 45,
+            "end_line": 49,
+            "column": 10
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/sinks/udp_sink.h",
+            "line": 45,
+            "end_line": 49,
+            "column": 10
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:dc16ee5171e388b7",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@N@sinks@ST>2#T#T@daily_file_sink@F@now_tm#$@N@std@N@chrono@S@time_point>#$@N@std@N@chrono@N@_V2@S@system_clock#$@N@std@N@chrono@S@duration>#L#$@N@std@S@ratio>#VL1#VL1000000000#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/sinks/daily_file_sink.h",
+            "line": 146,
+            "end_line": 149,
+            "column": 8
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/sinks/daily_file_sink.h",
+            "line": 146,
+            "end_line": 149,
+            "column": 8
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:024a911e25a03b04",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@S@async_logger@F@clone#$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/async_logger-inl.h",
+            "line": 80,
+            "end_line": 84,
+            "column": 69
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/async_logger-inl.h",
+            "line": 82,
+            "end_line": 86,
+            "column": 53
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:5c2aa832b4a86d3b",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@S@logger@FT@>1#pTlog#$@N@spdlog@S@source_loc#$@N@spdlog@N@level@E@level_enum#^fstring<type-parameter-0-0...>:::t#P&&t0.0#v#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/logger.h",
+            "line": 79,
+            "end_line": 81,
+            "column": 10
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/logger.h",
+            "line": 79,
+            "end_line": 85,
+            "column": 10
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeBodyChanged:22631d47d36153eb",
+      "kind": "NodeBodyChanged",
+      "subject": "c:@N@spdlog@S@synchronous_factory@FT@>2#T#pTcreate#$@N@std@N@__cxx11@S@basic_string>#C#$@N@std@S@char_traits>#C#$@N@std@S@allocator>#C#P&&t0.1#$@N@std@S@shared_ptr>#$@N@spdlog@S@logger#S",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/details/synchronous_factory.h",
+            "line": 15,
+            "end_line": 20,
+            "column": 44
+          }
+        },
+        {
+          "side": "head",
+          "location": {
+            "file": "include/spdlog/details/synchronous_factory.h",
+            "line": 15,
+            "end_line": 20,
+            "column": 36
+          }
+        }
+      ],
+      "confidence": {
+        "tier": "declared",
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeRemoved:bfe18c0f9607ff93",
+      "kind": "NodeRemoved",
+      "subject": "c:@N@spdlog@N@details@F@to_string_view#$@N@fmt@N@v12@S@basic_string_view>#C#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/common.h",
+            "line": 350,
+            "end_line": 353,
+            "column": 45
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    },
+    {
+      "id": "NodeRemoved:47e97fffd446cb99",
+      "kind": "NodeRemoved",
+      "subject": "c:@N@spdlog@N@details@F@to_string_view#&1$@N@fmt@N@v12@S@basic_memory_buffer>#C#Vl250#$@N@fmt@N@v12@N@detail@S@allocator>#C#",
+      "payload": {},
+      "caused_by": null,
+      "provenance": [
+        {
+          "side": "base",
+          "location": {
+            "file": "include/spdlog/common.h",
+            "line": 345,
+            "end_line": 348,
+            "column": 45
+          }
+        }
+      ],
+      "confidence": {
+        "tier": null,
+        "models_complete": true
+      }
+    }
+  ],
+  "findings": [],
+  "ranking": [
+    "NodeRemoved:47e97fffd446cb99",
+    "NodeRemoved:bfe18c0f9607ff93",
+    "NodeAdded:a6f1e911d3157787",
+    "EdgeAdded:37a7b19683a24003",
+    "EdgeRemoved:531b9e309f85bc3b",
+    "EdgeRemoved:6f765d9272debeee",
+    "EdgeRemoved:b534253b36390115",
+    "EdgeRemoved:045b717070c082ac",
+    "EdgeRemoved:83605021624f382a",
+    "NodeBodyChanged:7eebec2eea9df8f8",
+    "NodeBodyChanged:c9d432e0081d744a",
+    "EdgeAdded:2d5a806f74d1a504",
+    "NodeBodyChanged:e096242363f84c56",
+    "EdgeAdded:6dfdd4fbcd428b22",
+    "NodeBodyChanged:59473be1b45fdd56",
+    "NodeBodyChanged:dc16ee5171e388b7",
+    "NodeBodyChanged:5ba37e58c4985759",
+    "NodeBodyChanged:b8f03fcfe7b4f019",
+    "NodeBodyChanged:01380793d1e0e0cc",
+    "NodeBodyChanged:050734320e6082cb",
+    "NodeBodyChanged:82d2bd6ede2cefc0",
+    "NodeBodyChanged:221e3b5c75dc1952",
+    "NodeBodyChanged:5c2aa832b4a86d3b",
+    "NodeBodyChanged:b4ceeff20154a5c0",
+    "NodeBodyChanged:b5f703019e50c3bf",
+    "NodeBodyChanged:b8f78b2b538491f7",
+    "NodeBodyChanged:024a911e25a03b04",
+    "NodeBodyChanged:ef8f4afd07995b38",
+    "EdgeRemoved:0ed3e5715975ead7",
+    "NodeBodyChanged:09de6c1a9a515ec7",
+    "NodeBodyChanged:6a314951e6f188bc",
+    "NodeBodyChanged:22631d47d36153eb"
+  ],
+  "scores": {
+    "NodeRemoved:47e97fffd446cb99": {
+      "event_id": "NodeRemoved:47e97fffd446cb99",
+      "total": 0.7333161993561573,
+      "impact": 0.6862543521837144,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeRemoved:bfe18c0f9607ff93": {
+      "event_id": "NodeRemoved:bfe18c0f9607ff93",
+      "total": 0.7333161993561573,
+      "impact": 0.6862543521837144,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "NodeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeAdded:a6f1e911d3157787": {
+      "event_id": "NodeAdded:a6f1e911d3157787",
+      "total": 0.7009495376127389,
+      "impact": 0.6481759266032222,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.5384272503221113,
+          "weight": 0.35,
+          "contribution": 0.18844953761273892,
+          "detail": "11 dependent(s), 3 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.85,
+          "weight": 0.25,
+          "contribution": 0.2125,
+          "detail": "NodeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "EdgeAdded:37a7b19683a24003": {
+      "event_id": "EdgeAdded:37a7b19683a24003",
+      "total": 0.5977666765131631,
+      "impact": 0.5267843253096036,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.6007619328947518,
+          "weight": 0.35,
+          "contribution": 0.2102666765131631,
+          "detail": "15 dependent(s), 3 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "EdgeRemoved:531b9e309f85bc3b": {
+      "event_id": "EdgeRemoved:531b9e309f85bc3b",
+      "total": 0.5833161993561573,
+      "impact": 0.5097837639484204,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeRemoved:6f765d9272debeee": {
+      "event_id": "EdgeRemoved:6f765d9272debeee",
+      "total": 0.5833161993561573,
+      "impact": 0.5097837639484204,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeRemoved:b534253b36390115": {
+      "event_id": "EdgeRemoved:b534253b36390115",
+      "total": 0.5833161993561573,
+      "impact": 0.5097837639484204,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, base model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeRemoved:045b717070c082ac": {
+      "event_id": "EdgeRemoved:045b717070c082ac",
+      "total": 0.5525666691282908,
+      "impact": 0.47360784603328326,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeRemoved:83605021624f382a": {
+      "event_id": "EdgeRemoved:83605021624f382a",
+      "total": 0.5525666691282908,
+      "impact": 0.47360784603328326,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.15019048322368794,
+          "weight": 0.35,
+          "contribution": 0.05256666912829078,
+          "detail": "1 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 0,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:7eebec2eea9df8f8": {
+      "event_id": "NodeBodyChanged:7eebec2eea9df8f8",
+      "total": 0.5398643067501899,
+      "impact": 0.6351344785296352,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.613898019286257,
+          "weight": 0.35,
+          "contribution": 0.21486430675018994,
+          "detail": "16 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 2,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:c9d432e0081d744a": {
+      "event_id": "NodeBodyChanged:c9d432e0081d744a",
+      "total": 0.5355055635163655,
+      "impact": 0.6300065453133712,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.8871587529039013,
+          "weight": 0.35,
+          "contribution": 0.31050556351636543,
+          "detail": "59 dependent(s), 2 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 3,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "EdgeAdded:2d5a806f74d1a504": {
+      "event_id": "EdgeAdded:2d5a806f74d1a504",
+      "total": 0.5095560259036265,
+      "impact": 0.4230070892983842,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.34873150258179014,
+          "weight": 0.35,
+          "contribution": 0.12205602590362655,
+          "detail": "4 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:e096242363f84c56": {
+      "event_id": "NodeBodyChanged:e096242363f84c56",
+      "total": 0.5068507972688543,
+      "impact": 0.5962950556104168,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.5195737064824407,
+          "weight": 0.35,
+          "contribution": 0.18185079726885425,
+          "detail": "10 dependent(s), 2 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 4,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "EdgeAdded:6dfdd4fbcd428b22": {
+      "event_id": "EdgeAdded:6dfdd4fbcd428b22",
+      "total": 0.4926333382565815,
+      "impact": 0.403098045007743,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 2 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.35,
+          "weight": 0.25,
+          "contribution": 0.0875,
+          "detail": "EdgeAdded"
+        },
+        {
+          "name": "uncertainty",
+          "value": 1.0,
+          "weight": 0.15,
+          "contribution": 0.15,
+          "detail": "unmatched"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:59473be1b45fdd56": {
+      "event_id": "NodeBodyChanged:59473be1b45fdd56",
+      "total": 0.48270000738487234,
+      "impact": 0.5678823616292616,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.45057144967106383,
+          "weight": 0.35,
+          "contribution": 0.15770000738487233,
+          "detail": "7 dependent(s), 2 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 5,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:dc16ee5171e388b7": {
+      "event_id": "NodeBodyChanged:dc16ee5171e388b7",
+      "total": 0.48270000738487234,
+      "impact": 0.5678823616292616,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.45057144967106383,
+          "weight": 0.35,
+          "contribution": 0.15770000738487233,
+          "detail": "7 dependent(s), 5 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 6,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:5ba37e58c4985759": {
+      "event_id": "NodeBodyChanged:5ba37e58c4985759",
+      "total": 0.46088286848444815,
+      "impact": 0.5422151393934684,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.38823676709842325,
+          "weight": 0.35,
+          "contribution": 0.13588286848444814,
+          "detail": "5 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 7,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:b8f03fcfe7b4f019": {
+      "event_id": "NodeBodyChanged:b8f03fcfe7b4f019",
+      "total": 0.46088286848444815,
+      "impact": 0.5422151393934684,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.38823676709842325,
+          "weight": 0.35,
+          "contribution": 0.13588286848444814,
+          "detail": "5 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 7,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:01380793d1e0e0cc": {
+      "event_id": "NodeBodyChanged:01380793d1e0e0cc",
+      "total": 0.4352666765131631,
+      "impact": 0.5120784429566625,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.6007619328947518,
+          "weight": 0.35,
+          "contribution": 0.2102666765131631,
+          "detail": "15 dependent(s), 6 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:050734320e6082cb": {
+      "event_id": "NodeBodyChanged:050734320e6082cb",
+      "total": 0.4352666765131631,
+      "impact": 0.5120784429566625,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.6007619328947518,
+          "weight": 0.35,
+          "contribution": 0.2102666765131631,
+          "detail": "15 dependent(s), 3 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:82d2bd6ede2cefc0": {
+      "event_id": "NodeBodyChanged:82d2bd6ede2cefc0",
+      "total": 0.4352666765131631,
+      "impact": 0.5120784429566625,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.6007619328947518,
+          "weight": 0.35,
+          "contribution": 0.2102666765131631,
+          "detail": "15 dependent(s), 2 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 8,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:221e3b5c75dc1952": {
+      "event_id": "NodeBodyChanged:221e3b5c75dc1952",
+      "total": 0.43013333825658157,
+      "impact": 0.5060392214783312,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 2 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 9,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:5c2aa832b4a86d3b": {
+      "event_id": "NodeBodyChanged:5c2aa832b4a86d3b",
+      "total": 0.43013333825658157,
+      "impact": 0.5060392214783312,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 10,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:b4ceeff20154a5c0": {
+      "event_id": "NodeBodyChanged:b4ceeff20154a5c0",
+      "total": 0.43013333825658157,
+      "impact": 0.5060392214783312,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 11,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:b5f703019e50c3bf": {
+      "event_id": "NodeBodyChanged:b5f703019e50c3bf",
+      "total": 0.43013333825658157,
+      "impact": 0.5060392214783312,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 12,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:b8f78b2b538491f7": {
+      "event_id": "NodeBodyChanged:b8f78b2b538491f7",
+      "total": 0.43013333825658157,
+      "impact": 0.5060392214783312,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 3 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 13,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:024a911e25a03b04": {
+      "event_id": "NodeBodyChanged:024a911e25a03b04",
+      "total": 0.40831619935615737,
+      "impact": 0.4803719992425381,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 1.0,
+          "weight": 0.25,
+          "contribution": 0.25,
+          "detail": "public"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 14,
+      "bounded_by": null,
+      "exposure": "public"
+    },
+    "NodeBodyChanged:ef8f4afd07995b38": {
+      "event_id": "NodeBodyChanged:ef8f4afd07995b38",
+      "total": 0.3608828684844481,
+      "impact": 0.42456808056993894,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.38823676709842325,
+          "weight": 0.35,
+          "contribution": 0.13588286848444814,
+          "detail": "5 dependent(s), 3 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 15,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "EdgeRemoved:0ed3e5715975ead7": {
+      "event_id": "EdgeRemoved:0ed3e5715975ead7",
+      "total": 0.35513333825658155,
+      "impact": 0.41780392736068417,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.4,
+          "weight": 0.25,
+          "contribution": 0.1,
+          "detail": "EdgeRemoved"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 16,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:09de6c1a9a515ec7": {
+      "event_id": "NodeBodyChanged:09de6c1a9a515ec7",
+      "total": 0.34705602590362655,
+      "impact": 0.40830120694544303,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.34873150258179014,
+          "weight": 0.35,
+          "contribution": 0.12205602590362655,
+          "detail": "4 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 1,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:6a314951e6f188bc": {
+      "event_id": "NodeBodyChanged:6a314951e6f188bc",
+      "total": 0.33013333825658153,
+      "impact": 0.3883921626548018,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.3003809664473759,
+          "weight": 0.35,
+          "contribution": 0.10513333825658155,
+          "detail": "3 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 16,
+      "bounded_by": null,
+      "exposure": "internal"
+    },
+    "NodeBodyChanged:22631d47d36153eb": {
+      "event_id": "NodeBodyChanged:22631d47d36153eb",
+      "total": 0.30831619935615734,
+      "impact": 0.36272494041900866,
+      "factors": [
+        {
+          "name": "blast_radius",
+          "value": 0.23804628387473528,
+          "weight": 0.35,
+          "contribution": 0.08331619935615735,
+          "detail": "2 dependent(s), 1 direct, head model"
+        },
+        {
+          "name": "exposure",
+          "value": 0.6,
+          "weight": 0.25,
+          "contribution": 0.15,
+          "detail": "internal"
+        },
+        {
+          "name": "novelty",
+          "value": 0.3,
+          "weight": 0.25,
+          "contribution": 0.075,
+          "detail": "NodeBodyChanged"
+        },
+        {
+          "name": "uncertainty",
+          "value": 0.0,
+          "weight": 0.15,
+          "contribution": 0.0,
+          "detail": "declared"
+        }
+      ],
+      "component": 17,
+      "bounded_by": null,
+      "exposure": "internal"
+    }
+  },
+  "components": [
+    {
+      "index": 0,
+      "events": [
+        "NodeRemoved:47e97fffd446cb99",
+        "NodeRemoved:bfe18c0f9607ff93",
+        "EdgeRemoved:531b9e309f85bc3b",
+        "EdgeRemoved:6f765d9272debeee",
+        "EdgeRemoved:b534253b36390115",
+        "EdgeRemoved:045b717070c082ac",
+        "EdgeRemoved:83605021624f382a"
+      ],
+      "top_score": 0.7333161993561573
+    },
+    {
+      "index": 1,
+      "events": [
+        "NodeAdded:a6f1e911d3157787",
+        "EdgeAdded:37a7b19683a24003",
+        "EdgeAdded:2d5a806f74d1a504",
+        "EdgeAdded:6dfdd4fbcd428b22",
+        "NodeBodyChanged:01380793d1e0e0cc",
+        "NodeBodyChanged:050734320e6082cb",
+        "NodeBodyChanged:09de6c1a9a515ec7"
+      ],
+      "top_score": 0.7009495376127389
+    },
+    {
+      "index": 2,
+      "events": [
+        "NodeBodyChanged:7eebec2eea9df8f8"
+      ],
+      "top_score": 0.5398643067501899
+    },
+    {
+      "index": 3,
+      "events": [
+        "NodeBodyChanged:c9d432e0081d744a"
+      ],
+      "top_score": 0.5355055635163655
+    },
+    {
+      "index": 4,
+      "events": [
+        "NodeBodyChanged:e096242363f84c56"
+      ],
+      "top_score": 0.5068507972688543
+    },
+    {
+      "index": 5,
+      "events": [
+        "NodeBodyChanged:59473be1b45fdd56"
+      ],
+      "top_score": 0.48270000738487234
+    },
+    {
+      "index": 6,
+      "events": [
+        "NodeBodyChanged:dc16ee5171e388b7"
+      ],
+      "top_score": 0.48270000738487234
+    },
+    {
+      "index": 7,
+      "events": [
+        "NodeBodyChanged:5ba37e58c4985759",
+        "NodeBodyChanged:b8f03fcfe7b4f019"
+      ],
+      "top_score": 0.46088286848444815
+    },
+    {
+      "index": 8,
+      "events": [
+        "NodeBodyChanged:82d2bd6ede2cefc0"
+      ],
+      "top_score": 0.4352666765131631
+    },
+    {
+      "index": 9,
+      "events": [
+        "NodeBodyChanged:221e3b5c75dc1952"
+      ],
+      "top_score": 0.43013333825658157
+    },
+    {
+      "index": 10,
+      "events": [
+        "NodeBodyChanged:5c2aa832b4a86d3b"
+      ],
+      "top_score": 0.43013333825658157
+    },
+    {
+      "index": 11,
+      "events": [
+        "NodeBodyChanged:b4ceeff20154a5c0"
+      ],
+      "top_score": 0.43013333825658157
+    },
+    {
+      "index": 12,
+      "events": [
+        "NodeBodyChanged:b5f703019e50c3bf"
+      ],
+      "top_score": 0.43013333825658157
+    },
+    {
+      "index": 13,
+      "events": [
+        "NodeBodyChanged:b8f78b2b538491f7"
+      ],
+      "top_score": 0.43013333825658157
+    },
+    {
+      "index": 14,
+      "events": [
+        "NodeBodyChanged:024a911e25a03b04"
+      ],
+      "top_score": 0.40831619935615737
+    },
+    {
+      "index": 15,
+      "events": [
+        "NodeBodyChanged:ef8f4afd07995b38"
+      ],
+      "top_score": 0.3608828684844481
+    },
+    {
+      "index": 16,
+      "events": [
+        "EdgeRemoved:0ed3e5715975ead7",
+        "NodeBodyChanged:6a314951e6f188bc"
+      ],
+      "top_score": 0.35513333825658155
+    },
+    {
+      "index": 17,
+      "events": [
+        "NodeBodyChanged:22631d47d36153eb"
+      ],
+      "top_score": 0.30831619935615734
+    }
+  ],
+  "summary": {
+    "lines_changed": 1708,
+    "files_changed": 101,
+    "cpp_files_changed": 93,
+    "files_renamed": 0,
+    "events_reported": 32,
+    "vendored_events": 0,
+    "compression": "1,708 lines changed -> 32 semantic events, 5 high-risk",
+    "compression_ratio": 53.375,
+    "high_risk_count": 5,
+    "top_level_events": 24,
+    "components": 18,
+    "residue": {
+      "matched": 2477,
+      "unmatched_base": 2,
+      "unmatched_head": 1,
+      "internal_linkage_residue": 0,
+      "tiers_run": [
+        "declared"
+      ]
+    }
+  }
+}

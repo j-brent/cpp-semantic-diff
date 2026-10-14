@@ -1,6 +1,8 @@
 """The match stage: two `Model`s -> one `Correspondence` (ARCH-001 §3, §5).
 
-The stage is a driver over a *sequence* of tiers, even though v0 registers exactly one.
+The stage is a driver over a *sequence* of tiers. v0 registers three: tier 1, the
+inline-namespace tier for what an inline namespace bump left (ADR-044), and the name tier for
+the functions and methods left after that (ADR-036).
 ARCH-001 §5 defines the scheme as tiers running "most-confident first, each tier running
 only over the residue the previous tiers left unmatched", and that sequencing -- not the
 tier-1 lookup -- is the part that is expensive to retrofit. Tier 1 is a keyed intersection;
@@ -14,11 +16,14 @@ else uses.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Protocol
 
 from cpp_semantic_diff.match.correspondence import Correspondence, Match
 from cpp_semantic_diff.match.declared import DeclaredTier
+from cpp_semantic_diff.match.inline import InlineNamespaceTier
+from cpp_semantic_diff.match.name import NameTier
+from cpp_semantic_diff.match.unpaired import unpaired_reasons
 from cpp_semantic_diff.model import MatchTier, Model, NodeId
 
 
@@ -30,6 +35,10 @@ class Tier(Protocol):
     residue the previous tiers left. Resolving its own ambiguity is the tier's job: proposing
     two pairs that share a node is a contract violation, not something for the driver to
     break arbitrarily.
+
+    `head_for` is the pairs the earlier tiers made, base id to head id. A tier that asks
+    whether two nodes sit under the same parent asks it through these, the way
+    `unpaired.unpaired_reasons` does; the name tier pairs nothing under an unpaired parent.
     """
 
     tier: MatchTier
@@ -40,18 +49,37 @@ class Tier(Protocol):
         head: Model,
         base_pool: frozenset[NodeId],
         head_pool: frozenset[NodeId],
+        head_for: Mapping[NodeId, NodeId],
     ) -> Iterable[tuple[NodeId, NodeId]]: ...
+
+    def ambiguous(
+        self,
+        base: Model,
+        head: Model,
+        base_pool: frozenset[NodeId],
+        head_pool: frozenset[NodeId],
+        head_for: Mapping[NodeId, NodeId],
+    ) -> tuple[Collection[NodeId], Collection[NodeId]]:
+        """(base, head) nodes this tier found partners for but refused to pair, because it
+        could not choose between them. Asked over the same pools as `propose`. Only the
+        tier knows it declined a choice, and that is the most doubtful residue there is
+        (ADR-034)."""
+        ...
 
 
 def default_tiers(renames: Mapping[str, str] | None = None) -> tuple[Tier, ...]:
-    """v0 runs tier 1 and nothing else (ARCH-001 §13).
+    """v0 runs tier 1, then the inline-namespace tier, then the name tier over the functions
+    and methods left (ARCH-001 §5, §13).
 
-    Tiers 2-4 are excluded on purpose: a rename surfaces as a remove plus an add, and how
-    badly that reads on real branches is a v0 deliverable. Softening it here -- a name-based
-    fallback, a similarity guess -- would destroy the measurement that decides whether the
-    remaining tiers are worth building.
+    The inline-namespace tier pairs what an inline namespace bump renamed, `lib::v1::f` with
+    `lib::v2::f` (ADR-044). It runs before the name tier because it pairs the namespaces, and
+    the name tier pairs nothing under a parent that is not paired: a function whose signature
+    changed in the same bump pairs only once its namespace has. The name tier pairs a function
+    with itself after its signature changed (ADR-036). Neither pairs a rename: tiers 2-4 stay
+    excluded, and a renamed entity still surfaces as a remove plus an add, which is the
+    measurement that decides whether they are worth building.
     """
-    return (DeclaredTier(renames),)
+    return (DeclaredTier(renames), InlineNamespaceTier(renames), NameTier(renames))
 
 
 def match_models(
@@ -59,6 +87,7 @@ def match_models(
     head: Model,
     *,
     renames: Mapping[str, str] | None = None,
+    missed_rename_files: Collection[str] = (),
     tiers: Sequence[Tier] | None = None,
 ) -> Correspondence:
     """Pair base nodes with head nodes, most-confident tier first.
@@ -66,19 +95,28 @@ def match_models(
     `renames` is base path -> head path as resolved by git. ARCH-001 §5 requires it to be an
     input rather than something the matcher infers; it only affects entities whose USR is
     file-scoped (see `declared.usr_file`).
+
+    `missed_rename_files` is non-empty only when git's rename map is known to be short
+    (`acquire.FileChanges.missed_rename_files`); see `unpaired.unpaired_reasons`.
     """
     tiers = default_tiers(renames) if tiers is None else tiers
 
     base_pool = set(base.nodes)
     head_pool = set(head.nodes)
     matches: list[Match] = []
+    ambiguous_base: set[NodeId] = set()
+    ambiguous_head: set[NodeId] = set()
 
     for tier in tiers:
-        # Snapshot the pools: a tier reads the residue as it stood when the tier began, so
-        # its proposals cannot depend on the order the driver consumed its own output.
-        for base_id, head_id in tier.propose(
-            base, head, frozenset(base_pool), frozenset(head_pool)
-        ):
+        # Snapshot the pools and the pairs: a tier reads the residue as it stood when the
+        # tier began, so its proposals cannot depend on the order the driver consumed its
+        # own output.
+        pools = (frozenset(base_pool), frozenset(head_pool))
+        made = {m.base: m.head for m in matches}
+        refused_base, refused_head = tier.ambiguous(base, head, *pools, made)
+        ambiguous_base.update(refused_base)
+        ambiguous_head.update(refused_head)
+        for base_id, head_id in tier.propose(base, head, *pools, made):
             if base_id not in base_pool or head_id not in head_pool:
                 raise ValueError(
                     f"tier {tier.tier.value!r} proposed {base_id!r} -> {head_id!r}, but one "
@@ -89,11 +127,25 @@ def match_models(
             head_pool.discard(head_id)
             matches.append(Match(base=base_id, head=head_id, tier=tier.tier))
 
+    # A node one tier refused may still be paired by a later one; only what is left over
+    # at the end is residue, and only residue gets a reason.
+    unpaired_base, unpaired_head = unpaired_reasons(
+        base,
+        head,
+        base_pool,
+        head_pool,
+        {m.base: m.head for m in matches},
+        ambiguous_base & base_pool,
+        ambiguous_head & head_pool,
+        missed_rename_files,
+    )
     return Correspondence(
         # Sorted so the stage is deterministic: the same two models produce the same
         # correspondence, and therefore the same events and the same JSON, on every run.
         matches=sorted(matches, key=lambda m: (m.base, m.head)),
         unmatched_base=sorted(base_pool),
         unmatched_head=sorted(head_pool),
+        unpaired_base=dict(sorted(unpaired_base.items())),
+        unpaired_head=dict(sorted(unpaired_head.items())),
         tiers_run=[t.tier for t in tiers],
     )

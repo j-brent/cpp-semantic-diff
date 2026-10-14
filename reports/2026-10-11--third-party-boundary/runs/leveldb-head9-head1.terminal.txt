@@ -1,0 +1,55 @@
+leveldb  HEAD~9...HEAD~1  (23e35d792b91 -> 9e273a6aef69)
+
+this model is incomplete — read what follows knowing it
+  base 25 of 94 compile-database entries are not C++ and were not modelled
+  base 24 of 93 C++ compile-database entries are third-party and were not parsed
+  head 25 of 94 compile-database entries are not C++ and were not modelled
+  head 24 of 93 C++ compile-database entries are third-party and were not parsed
+  base 69/69 TUs · head 69/69 TUs · libclang 18.1.3 x86_64-pc-linux-gnu
+  base 3,762 of 12,832 distinct edges (29.3%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit 
+special members). Expected, and a lower bound on the call graph, not a defect.
+  head 3,762 of 12,832 distinct edges (29.3%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit 
+special members). Expected, and a lower bound on the call graph, not a defect.
+  base 41 declaration(s) not modelled: 24 using_declaration, 15 friend, 2 linkage_spec
+  head 41 declaration(s) not modelled: 24 using_declaration, 15 friend, 2 linkage_spec
+  language mode differs: base c++11 → head c++17 — additions and removals may be the standard moving rather than the code
+  third-party third_party/benchmark (submodule) · third_party/googletest (submodule)
+
+45 lines changed -> 6 change events, 3 high-risk · 11 of 35 changed C++ lines explained by no change event
+  7.5 lines per change event · 6 top-level, 0 nested under a cause · 4 components · 6 files (5 C++) · 24.8s
+  11 changed C++ line(s), 75 token(s), are on no change event's lines — a lower bound on what the model cannot explain
+    about 10 of those line(s) are in files no model declares anything in (roughly: no translation unit includes them)
+    head util/env_windows.cc: 50 token(s) on 6 line(s), no model declares anything in it
+    base util/env_windows.cc: 20 token(s) on 4 line(s), no model declares anything in it
+    head util/no_destructor.h: 5 token(s) on 1 line(s)
+
+component 0 · 1 change event
+  0.67 ● NodeBodyChanged    leveldb::DBImpl::TEST_CompactMemTable  db/db_impl.cc:643
+         blast radius 115 dependent(s), 31 direct, head model · exposure public · novelty NodeBodyChanged · uncertainty declared
+
+component 1 · 2 change events
+  0.58 ● NodeAttrChanged    leveldb::NoDestructor::instance_storage_  util/no_destructor.h:45
+         exposure public · novelty NodeAttrChanged(type) · blast radius 2 dependent(s), 1 direct, head model · uncertainty declared
+  0.41 · NodeBodyChanged    leveldb::NoDestructor::NoDestructor<InstanceType>  util/no_destructor.h:21
+         exposure public · blast radius 2 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 2 · 2 change events
+  0.54 ● NodeBodyChanged    leveldb::SingletonEnv::SingletonEnv<EnvType>  util/env_posix.cc:871
+         blast radius 62 dependent(s), 2 direct, head model · exposure internal · novelty NodeBodyChanged · uncertainty declared
+  0.51 · NodeAttrChanged    leveldb::SingletonEnv::env_storage_  util/env_posix.cc:899
+         novelty NodeAttrChanged(type) · exposure internal · blast radius 3 dependent(s), 1 direct, head model · uncertainty declared
+
+component 3 · 1 change event
+  0.47 · NodeBodyChanged    leveldb::Hash  util/hash.cc:22
+         blast radius 23 dependent(s), 7 direct, head model · exposure internal · novelty NodeBodyChanged · uncertainty declared
+
+identity: tiers declared, inline-namespace, name only (ARCH-001 §13)
+  4,179 matched · 0 base / 0 head unmatched
+  git found no renames; one it could not detect would read here as a removal plus an addition
+
+true of every run:
+  One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not 
+implied.
+  Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.
+  Implicit special members are not visible. libclang does not expose the copy and move operations the compiler writes, so a change that adds or removes one 
+implicitly -- adding a destructor removes the implicit move operations -- produces no change event.

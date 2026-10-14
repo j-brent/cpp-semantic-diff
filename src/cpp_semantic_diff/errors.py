@@ -8,6 +8,7 @@ they are raised before any analysis runs and are never caught to produce a degra
 from __future__ import annotations
 
 import shlex
+from collections.abc import Sequence
 from enum import IntEnum
 
 
@@ -52,6 +53,32 @@ class InvalidSettingError(PreconditionError):
     """
 
     exit_code = ExitCode.USAGE
+
+
+class ThirdPartyPathError(InvalidSettingError):
+    """A `--third-party` path that cannot name a directory in either revision.
+
+    Refused rather than ignored: a mistyped path would silently leave the library it meant
+    in the model (ADR-025).
+    """
+
+
+class ThirdPartyChangedError(PreconditionError):
+    """Third-party code differs between the two points (ADR-025).
+
+    v0 analyzes only changes the repository controls directly. A dependency that moves also
+    changes what the project's own code means, so the comparison is refused rather than
+    analyzed with the change ignored. Deferred, not rejected: a later version analyzes these.
+    """
+
+    def __init__(self, paths: Sequence[str]) -> None:
+        self.paths = tuple(paths)
+        super().__init__(
+            "Third-party code changed between the two revisions: "
+            + ", ".join(self.paths)
+            + ".\nv0 does not analyze changes to third-party code, so this comparison is "
+            "refused (ADR-025).\nCompare a range in which these dependencies do not change."
+        )
 
 
 class GitNotFoundError(PreconditionError):

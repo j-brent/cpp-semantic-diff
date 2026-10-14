@@ -1,6 +1,6 @@
 """The delta: what a two-point analysis is allowed to say.
 
-ARCH-001 §6. The event set is **closed**. A new signal becomes a new `EventKind`, never a
+ARCH-001 §6. The event set is **closed**. A new signal becomes a new `ChangeEventKind`, never a
 new string in a free-form field -- because every downstream stage (classify's cause rules
 §6.3, rank's novelty weights §7, render's collapse §6.3) switches on the kind, and a
 stringly-typed kind turns each of those into a place where an unknown value is silently
@@ -24,12 +24,13 @@ from cpp_semantic_diff.model.ir import (
     Completeness,
     Location,
     MatchTier,
+    NodeKind,
 )
 
-EventId = NewType("EventId", str)
+ChangeEventId = NewType("ChangeEventId", str)
 
 
-class EventKind(StrEnum):
+class ChangeEventKind(StrEnum):
     """The closed set of ARCH-001 §6.1.
 
     Node and edge events are read off the two models plus the correspondence. Derived
@@ -44,6 +45,11 @@ class EventKind(StrEnum):
     NODE_RENAMED = "NodeRenamed"
     NODE_ATTR_CHANGED = "NodeAttrChanged"
     NODE_BODY_CHANGED = "NodeBodyChanged"
+    #: A function's or method's signature differs between two paired versions of it.
+    #: Its own kind rather than `NodeAttrChanged(signature)`: `signature` is a field of the
+    #: node (ARCH-001 §4.1), not an attribute, and a reviewer's question about it -- did
+    #: every caller follow? -- is not the question any attribute change raises (ADR-035).
+    NODE_SIGNATURE_CHANGED = "NodeSignatureChanged"
 
     # Edge
     EDGE_ADDED = "EdgeAdded"
@@ -66,90 +72,125 @@ class EventKind(StrEnum):
     CYCLE_INTRODUCED = "CycleIntroduced"
     FAN_IN_CHANGED = "FanInChanged"
     LAYER_VIOLATION_INTRODUCED = "LayerViolationIntroduced"
-    SIGNATURE_INCOMPATIBLE = "SignatureIncompatible"
+    #: A call from G to F, present on both sides, where F's signature changed (ADR-040). The
+    #: subject is the head call edge, so its home is the caller. It states an observation --
+    #: this call site was written against the old signature -- and claims nothing about
+    #: whether it still compiles or behaves the same. It replaces ARCH-001's never-emitted
+    #: `SignatureIncompatible`, a name that claimed a verdict no stage makes.
+    #:
+    #: A **lower bound**: only calls the model sees. Calls that depend on a template
+    #: parameter, calls from initializers and default arguments (issue #13), and
+    #: calls through a function pointer are not call edges into F, so their callers get no
+    #: event.
+    CALLER_OF_CHANGED_SIGNATURE = "CallerOfChangedSignature"
 
 
-NODE_KINDS: frozenset[EventKind] = frozenset(
+NODE_KINDS: frozenset[ChangeEventKind] = frozenset(
     {
-        EventKind.NODE_ADDED,
-        EventKind.NODE_REMOVED,
-        EventKind.NODE_MOVED,
-        EventKind.NODE_RENAMED,
-        EventKind.NODE_ATTR_CHANGED,
-        EventKind.NODE_BODY_CHANGED,
+        ChangeEventKind.NODE_ADDED,
+        ChangeEventKind.NODE_REMOVED,
+        ChangeEventKind.NODE_MOVED,
+        ChangeEventKind.NODE_RENAMED,
+        ChangeEventKind.NODE_ATTR_CHANGED,
+        ChangeEventKind.NODE_BODY_CHANGED,
+        ChangeEventKind.NODE_SIGNATURE_CHANGED,
     }
 )
 
-EDGE_KINDS: frozenset[EventKind] = frozenset(
+EDGE_KINDS: frozenset[ChangeEventKind] = frozenset(
     {
-        EventKind.EDGE_ADDED,
-        EventKind.EDGE_REMOVED,
-        EventKind.EDGE_RETARGETED,
-        EventKind.EDGE_KIND_CHANGED,
-        EventKind.EDGE_ATTR_CHANGED,
+        ChangeEventKind.EDGE_ADDED,
+        ChangeEventKind.EDGE_REMOVED,
+        ChangeEventKind.EDGE_RETARGETED,
+        ChangeEventKind.EDGE_KIND_CHANGED,
+        ChangeEventKind.EDGE_ATTR_CHANGED,
     }
 )
 
-DERIVED_KINDS: frozenset[EventKind] = frozenset(EventKind) - NODE_KINDS - EDGE_KINDS
+DERIVED_KINDS: frozenset[ChangeEventKind] = frozenset(ChangeEventKind) - NODE_KINDS - EDGE_KINDS
 
-#: What v0 actually emits: ARCH-001 §13's "node add/remove/attr/body and edge
-#: add/remove/kind/attr". `EdgeKindChanged` and `EdgeAttrChanged` are reachable on tier-1
+#: What v0 actually emits: ARCH-001 §13's "node add/remove/attr/body/signature and edge
+#: add/remove/kind/attr", plus `CallerOfChangedSignature`, the one derived kind in v0, which the
+#: derive stage emits (ADR-040). `EdgeKindChanged` and `EdgeAttrChanged` are reachable on tier-1
 #: input for one argument applied twice (§6.1, `diff/edges.py`) -- an edge's endpoints are
 #: identity and belong to the matcher, while its kind and its attrs are diffable state, so
 #: between two entities tier 1 has already paired, a relation that changed kind or changed
 #: `access` needs no new identity claim from this stage.
 #:
-#: What stays out is what v0 genuinely cannot reach: `NodeRenamed` and `NodeMoved` need a
-#: tier past 1 (the USR encodes name and scope, so a matched pair agrees on both by
-#: construction), `EdgeRetargeted` is refused outright (§6.1), and the derived kinds are
-#: deferred by §13. The rest of the set is still declared in `EventKind` because the schema
-#: is the contract the whole pipeline is written against; declaring it late would mean
-#: rewriting consumers rather than extending them.
-V0_KINDS: frozenset[EventKind] = frozenset(
+#: What stays out is what v0 genuinely cannot reach: `NodeRenamed` and `NodeMoved` need
+#: rename detection (both v0 tiers pair only entities that agree on name and scope: the USR
+#: encodes both, and the name tier keys on the qualified name under a paired parent),
+#: `EdgeRetargeted` is refused outright (§6.1), and the other derived kinds are deferred by §13.
+#: The rest of the set is still declared in `ChangeEventKind` because the schema is the
+#: contract the whole pipeline is written against; declaring it late would mean rewriting
+#: consumers rather than extending them.
+V0_KINDS: frozenset[ChangeEventKind] = frozenset(
     {
-        EventKind.NODE_ADDED,
-        EventKind.NODE_REMOVED,
-        EventKind.NODE_ATTR_CHANGED,
-        EventKind.NODE_BODY_CHANGED,
-        EventKind.EDGE_ADDED,
-        EventKind.EDGE_REMOVED,
-        EventKind.EDGE_KIND_CHANGED,
-        EventKind.EDGE_ATTR_CHANGED,
+        ChangeEventKind.NODE_ADDED,
+        ChangeEventKind.NODE_REMOVED,
+        ChangeEventKind.NODE_ATTR_CHANGED,
+        ChangeEventKind.NODE_BODY_CHANGED,
+        ChangeEventKind.NODE_SIGNATURE_CHANGED,
+        ChangeEventKind.EDGE_ADDED,
+        ChangeEventKind.EDGE_REMOVED,
+        ChangeEventKind.EDGE_KIND_CHANGED,
+        ChangeEventKind.EDGE_ATTR_CHANGED,
+        ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE,
     }
 )
 
 #: The other half of what `V0_KINDS` says, stated positively so a test can assert it: kinds no
 #: amount of real v0 input can produce. A delta containing one of these means a later tier
 #: landed, or that some stage started inferring identity on its own.
-UNREACHABLE_IN_V0: frozenset[EventKind] = frozenset(EventKind) - V0_KINDS
+UNREACHABLE_IN_V0: frozenset[ChangeEventKind] = frozenset(ChangeEventKind) - V0_KINDS
+
+#: The node kinds a node change event can be about, for the kinds that cannot be about every
+#: node (ARCH-001 §6.1's applicability table; ADR-035). Only a function or a method has a
+#: signature or a code body: the producer leaves `signature` and `body_hash` empty for every
+#: other kind, and "methods" includes constructors, destructors and conversion operators,
+#: which the model classifies as methods. A kind absent here applies to every node kind.
+#: The diff stage reads this rather than trusting the producer to keep the fields empty.
+APPLIES_TO: dict[ChangeEventKind, frozenset[NodeKind]] = {
+    ChangeEventKind.NODE_SIGNATURE_CHANGED: frozenset({NodeKind.FUNCTION, NodeKind.METHOD}),
+    ChangeEventKind.NODE_BODY_CHANGED: frozenset({NodeKind.FUNCTION, NodeKind.METHOD}),
+}
 
 #: Payload keys a kind must carry, for the kinds ARCH-001 §6.1 names or directly implies.
 #: This is a floor, not a ceiling: a kind may carry more, but a consumer switching on the
-#: kind can rely on these being present. The derived kinds carry no requirement because
-#: their payloads are not designed yet (§13 puts them out of v0) -- an empty entry here
-#: means "undesigned", and adding a kind without adding an entry is a deliberate choice
-#: rather than an oversight, which is why every kind appears.
-REQUIRED_PAYLOAD: dict[EventKind, frozenset[str]] = {
-    EventKind.NODE_ADDED: frozenset(),
-    EventKind.NODE_REMOVED: frozenset(),
-    EventKind.NODE_MOVED: frozenset({"old_parent", "new_parent"}),
-    EventKind.NODE_RENAMED: frozenset({"old_name", "new_name"}),
-    EventKind.NODE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
-    EventKind.NODE_BODY_CHANGED: frozenset(),
-    EventKind.EDGE_ADDED: frozenset(),
-    EventKind.EDGE_REMOVED: frozenset(),
-    EventKind.EDGE_RETARGETED: frozenset({"old_dst", "new_dst"}),
-    EventKind.EDGE_KIND_CHANGED: frozenset({"old_kind", "new_kind"}),
+#: kind can rely on these being present. The derived kinds other than
+#: `CallerOfChangedSignature` carry no requirement because their payloads are not designed yet
+#: (§13 puts them out of v0) -- an empty entry here means "undesigned", and adding a kind
+#: without adding an entry is a deliberate choice rather than an oversight, which is why every
+#: kind appears.
+REQUIRED_PAYLOAD: dict[ChangeEventKind, frozenset[str]] = {
+    ChangeEventKind.NODE_ADDED: frozenset(),
+    ChangeEventKind.NODE_REMOVED: frozenset(),
+    ChangeEventKind.NODE_MOVED: frozenset({"old_parent", "new_parent"}),
+    ChangeEventKind.NODE_RENAMED: frozenset({"old_name", "new_name"}),
+    ChangeEventKind.NODE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
+    ChangeEventKind.NODE_BODY_CHANGED: frozenset(),
+    ChangeEventKind.NODE_SIGNATURE_CHANGED: frozenset({"old_signature", "new_signature"}),
+    ChangeEventKind.EDGE_ADDED: frozenset(),
+    ChangeEventKind.EDGE_REMOVED: frozenset(),
+    ChangeEventKind.EDGE_RETARGETED: frozenset({"old_dst", "new_dst"}),
+    ChangeEventKind.EDGE_KIND_CHANGED: frozenset({"old_kind", "new_kind"}),
     # The same three keys as `NodeAttrChanged`, deliberately: it is the same mechanical
     # attribute diff (§4.3) over `Edge.attrs` instead of `Node.attrs`, and a consumer that
     # can read one should not have to learn a second shape to read the other.
-    EventKind.EDGE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
-    EventKind.BECAME_UNREACHABLE: frozenset(),
-    EventKind.BECAME_REACHABLE: frozenset(),
-    EventKind.CYCLE_INTRODUCED: frozenset(),
-    EventKind.FAN_IN_CHANGED: frozenset(),
-    EventKind.LAYER_VIOLATION_INTRODUCED: frozenset(),
-    EventKind.SIGNATURE_INCOMPATIBLE: frozenset(),
+    ChangeEventKind.EDGE_ATTR_CHANGED: frozenset({"attr", "old", "new"}),
+    ChangeEventKind.BECAME_UNREACHABLE: frozenset(),
+    ChangeEventKind.BECAME_REACHABLE: frozenset(),
+    ChangeEventKind.CYCLE_INTRODUCED: frozenset(),
+    ChangeEventKind.FAN_IN_CHANGED: frozenset(),
+    ChangeEventKind.LAYER_VIOLATION_INTRODUCED: frozenset(),
+    # Both ends by id, though the subject edge names them, so a consumer never parses an
+    # edge id. Both signatures, so the call can be read against the change without looking
+    # the cause up. `caller_edited`: the caller has its own `NodeBodyChanged` or
+    # `NodeSignatureChanged` in this diff. An unedited caller is the one a text diff never
+    # shows the reviewer (ADR-040).
+    ChangeEventKind.CALLER_OF_CHANGED_SIGNATURE: frozenset(
+        {"caller", "callee", "old_signature", "new_signature", "caller_edited"}
+    ),
 }
 
 
@@ -158,6 +199,28 @@ class Side(StrEnum):
 
     BASE = "base"
     HEAD = "head"
+
+
+class Unpaired(StrEnum):
+    """Why an entity has no partner on the other side -- the match stage's doubt about it.
+
+    An entity no tier paired is not, by that fact alone, a doubtful pairing: a genuine
+    addition has no partner by definition, and nothing about it is uncertain. What makes an
+    unpaired entity doubtful is evidence that a partner may have been missed, so that is what
+    this records (ADR-034). Ordered weakest doubt first; `diff.context.UNPAIRED_ORDER` relies
+    on the order and `rank.weights.UNCERTAINTY_BY_UNPAIRED` values it.
+    """
+
+    #: Nothing on the other side's residue could be this entity's partner: no unpaired entity
+    #: of the same kind under the same parent. A plain addition or removal.
+    NONE = "none"
+    #: The other side's residue holds at least one entity of the same kind under the same
+    #: parent -- ARCH-001 §5's tier-4 candidate set, counted rather than scored. A rename
+    #: that tier 1 cannot see lands here.
+    CANDIDATE = "candidate"
+    #: A tier found partners but could not choose between them, so it paired none (e.g.
+    #: `match.declared._index` on a colliding key). The pairing itself is in doubt.
+    AMBIGUOUS = "ambiguous"
 
 
 class Hunk(BaseModel):
@@ -179,11 +242,15 @@ class Hunk(BaseModel):
 
     def contains(self, line: int) -> bool:
         end = self.location.end_line or self.location.line
-        return self.location.line <= line <= end
+        return self.location.first_line <= line <= end
 
 
 class Confidence(BaseModel):
     """The two inputs ARCH-001 §11 names, carried verbatim -- not a score.
+
+    The match half is `tier` when the subject was matched and `unpaired` when it was not:
+    an unmatched subject still has a match-stage verdict, namely how likely it is that a
+    partner exists and was missed (ADR-034).
 
     §11: "Every event carries confidence derived from its match tier and the completeness of
     both models." The derivation is deliberately *not* performed here. Rank (§7) owns the
@@ -191,17 +258,27 @@ class Confidence(BaseModel):
     low-confidence event ranks **up**, not down. Collapsing tier and completeness into one
     number here would force that rule to be re-derived from a lossy input.
 
-    Both fields are required. A default would let a caller omit completeness and thereby
-    claim, silently, that nothing was missing -- the exact substitution of absence of
-    evidence for evidence of absence that §11 exists to prevent.
+    `tier` and `models_complete` are required. A default would let a caller omit
+    completeness and thereby claim, silently, that nothing was missing -- the exact
+    substitution of absence of evidence for evidence of absence that §11 exists to prevent.
+    `unpaired` defaults to None only because the validator below refuses that default
+    wherever it would be a claim.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     tier: MatchTier | None = Field(
         description="The tier that matched the subject, or None when it was unmatched "
-        "residue. In v0 only tier 1 runs (ARCH-001 §13), so None also covers every rename "
-        "-- which is what makes the rename damage measurable rather than invisible.",
+        "residue -- for an edge event, when either endpoint was. v0 has no rename detection "
+        "(ARCH-001 §13), so None also covers every rename -- which is what makes the rename "
+        "damage measurable rather than invisible.",
+    )
+    unpaired: Unpaired | None = Field(
+        default=None,
+        description="Why the subject is unmatched, set exactly when `tier` is None: "
+        "unmatched means *no partner*, not *doubtful pairing*, and this says how much "
+        "doubt there is (ADR-034). For an edge event, the most doubtful of its unmatched "
+        "endpoints.",
     )
     models_complete: bool = Field(
         description="Both models parsed every TU they attempted -- **source coverage, and "
@@ -211,8 +288,24 @@ class Confidence(BaseModel):
         "consumer it has to say so.",
     )
 
+    @model_validator(mode="after")
+    def _unpaired_iff_unmatched(self) -> Confidence:
+        # Defaulted, but never silently: an unmatched subject without a reason would leave
+        # rank to guess how doubtful it is, and a matched one with a reason claims both.
+        if self.tier is None and self.unpaired is None:
+            raise ValueError("an unmatched subject (tier None) must say why: unpaired is required")
+        if self.tier is not None and self.unpaired is not None:
+            raise ValueError(f"a subject matched at {self.tier.value!r} has no unpaired reason")
+        return self
+
     @classmethod
-    def derive(cls, tier: MatchTier | None, base: Completeness, head: Completeness) -> Confidence:
+    def derive(
+        cls,
+        tier: MatchTier | None,
+        base: Completeness,
+        head: Completeness,
+        unpaired: Unpaired | None = None,
+    ) -> Confidence:
         """Coverage on both sides, because an event rests on both models (ARCH-001 §11).
 
         `Completeness` measures two unrelated kinds of incompleteness and only one of them
@@ -227,10 +320,12 @@ class Confidence(BaseModel):
         that is always on promotes nothing. The residue is reported by its own numbers on
         `Completeness` and by `render.CompletenessReport.boundary`.
         """
-        return cls(tier=tier, models_complete=base.is_complete and head.is_complete)
+        return cls(
+            tier=tier, unpaired=unpaired, models_complete=base.is_complete and head.is_complete
+        )
 
 
-def _derive_id(kind: EventKind, subject: str, payload: dict[str, AttrValue]) -> EventId:
+def _derive_id(kind: ChangeEventKind, subject: str, payload: dict[str, AttrValue]) -> ChangeEventId:
     """Content-derived, so that re-running the pipeline produces the same JSON.
 
     A counter would make ids depend on iteration order, which breaks the §3 promise that
@@ -245,10 +340,10 @@ def _derive_id(kind: EventKind, subject: str, payload: dict[str, AttrValue]) -> 
     h.update(subject.encode())
     for key in sorted(payload):
         h.update(f"\x00{key}={payload[key]!r}".encode())
-    return EventId(f"{kind.value}:{h.hexdigest()}")
+    return ChangeEventId(f"{kind.value}:{h.hexdigest()}")
 
 
-class Event(BaseModel):
+class ChangeEvent(BaseModel):
     """ARCH-001 §6.2. The fields are exactly the seven named there.
 
     **Frozen**, like `Match`, `Hunk` and `Confidence`. ARCH-001 §3 specifies every stage as
@@ -268,12 +363,12 @@ class Event(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    id: EventId = Field(
-        default=EventId(""),
+    id: ChangeEventId = Field(
+        default=ChangeEventId(""),
         description="Derived from kind + subject + payload when not supplied, so it is "
         "stable across runs and survives a JSON round trip.",
     )
-    kind: EventKind
+    kind: ChangeEventKind
     subject: AnyId
 
     payload: dict[str, AttrValue] = Field(
@@ -283,7 +378,7 @@ class Event(BaseModel):
         "would need bespoke construction and bespoke rendering per kind.",
     )
 
-    caused_by: EventId | None = Field(
+    caused_by: ChangeEventId | None = Field(
         default=None,
         description="The event this one is a consequence of (ARCH-001 §6.3). A link, never "
         "a removal: collapse happens at render, so the JSON always carries the full set. "
@@ -313,7 +408,7 @@ class Event(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _complete_the_event(self) -> Event:
+    def _complete_the_event(self) -> ChangeEvent:
         missing = REQUIRED_PAYLOAD[self.kind] - self.payload.keys()
         if missing:
             raise ValueError(
@@ -336,7 +431,7 @@ class Event(BaseModel):
         return self.kind in DERIVED_KINDS
 
 
-def events_at(events: Iterable[Event], side: Side, file: str, line: int) -> list[Event]:
+def events_at(events: Iterable[ChangeEvent], side: Side, file: str, line: int) -> list[ChangeEvent]:
     """The reverse half of ARCH-001 §6.2: from a source line to the events it caused.
 
     Without this direction the tool is a second artifact to read *alongside* the diff, which

@@ -79,7 +79,10 @@ half-answer.
                                                       match          (§5 identity)
                                                          │
                                                          ▼
-                                                       diff          (§6 events)
+                                                       diff          (§6 change events)
+                                                         │
+                                                         ▼
+                                                      derive         (§6.1 derived change events)
                                                          │
                                                          ▼
                                                      classify        (§6.3 cause/cascade)
@@ -100,14 +103,15 @@ and inspect at any boundary — which matters because most debugging here is "wh
 
 | Stage | Input | Output |
 |---|---|---|
-| **acquire** | two revs | two worktrees + compile databases + completeness record |
+| **acquire** | two revs + declared third-party paths | the third-party set (§4.5), checked unchanged + two worktrees + compile databases + completeness record |
 | **produce** | worktree + compile db | `Model` (§4) |
 | **match** | two `Model`s | `Correspondence` — bipartite matching with per-pair tier |
-| **diff** | two `Model`s + `Correspondence` | `Event` list, deterministically ordered |
-| **classify** | events + two `Model`s + `Correspondence` | events with `caused_by` links |
-| **enrich** | events + head model + tool output | events with blast radius and `Finding`s attached |
-| **rank** | enriched events | ordered events with risk scores |
-| **render** | ranked events | JSON document; terminal/HTML views consume it |
+| **diff** | two `Model`s + `Correspondence` | `ChangeEvent` list, deterministically ordered |
+| **derive** | change events + two `Model`s + `Correspondence` | the same change events plus derived ones (§6.1) |
+| **classify** | change events + two `Model`s + `Correspondence` | change events with `caused_by` links |
+| **enrich** | change events + head model + tool output | change events with blast radius and `Finding`s attached |
+| **rank** | enriched change events | ordered change events with risk scores |
+| **render** | ranked change events | JSON document; terminal/HTML views consume it |
 
 ### 3.1 What "two commits" means
 
@@ -156,14 +160,16 @@ locate a change in source, it does not go in the model.
 Node
   id            stable identity key (§5)
   kind          namespace | class | struct | union | function | method | field
-                | enum | enumerator | alias | variable | template | file | target
+                | enum | enumerator | alias | variable | macro | static_assertion
+                | template | file | target
   name          unqualified
   qualified_name
-  signature     normalized: typedefs resolved, defaults included, cv/ref qualifiers explicit
+  signature     normalized: typedefs resolved, cv/ref qualifiers explicit; defaults are an attribute
   symbol        mangled symbol name, when the entity has linkage
   attrs         flat, comparable key→scalar map (§4.3)
   body_hash     normalized subtree hash — formatting- and comment-insensitive
   location      file, line span   ── provenance only, never identity
+  sites         every declaration's location ── provenance
   tu            defining translation unit (identity-relevant for internal linkage)
 ```
 
@@ -171,9 +177,55 @@ Node
 between the model and every binary-level tool — `abidiff`, `bloaty`, `nm`, coverage. Adding it
 later means reprocessing every cached model.
 
+**Compared state.** What `attrs` holds, per kind. Each key has a novelty weight in
+`rank/weights.py`, and is set for every node of its kinds except where noted.
+
+| Entity | Attributes |
+|---|---|
+| function, method | `access` (members only), `return_type`, `template`, `template_parameters`, `deleted`, `defaulted`, `exception_spec`, `default_arguments`, `constexpr`, `nodiscard`, `deprecated` |
+| method only | `static`, `virtual`, `pure_virtual`, `const`, `explicit` |
+| field | `access` (members only), `type`, `mutable`, `default_member_init`, `bitfield_width` (bit-fields only) |
+| class, struct, union | `access` (members only), `template`, `abstract`, `deprecated`, `final`, `base_order` |
+| `inherits` edge | `access`, `virtual` |
+
+A constructor's member initializer list is part of its `body_hash`, not an attribute.
+
+Default arguments are not part of the signature, which is the function's type: a changed
+default is `NodeAttrChanged(default_arguments)` on the same function. `base_order` is reported
+only where the bases on both sides are in a different relative order, so a base added or
+removed is its `inherits` edge event alone. That is a diff rule, not a cause rule, and §6.3 has
+no row for it ([ADR-043](adr/ADR-043-default-arguments-and-base-order-are-attributes.md)).
+
+Known gaps: clang does not print `constexpr` on a defaulted special member, so it reads
+`false`; a function-try-block has no `body_hash`.
+
 `body_hash` is deliberately separate from `attrs`. An attribute change (`virtual` added, `const`
-dropped, access widened) is a *specific* semantic event with a known meaning. A body change is
-"something inside changed, look closer". Different events, different weights, different rendering.
+dropped, access widened) is a *specific* change event with a known meaning. A body change is
+"something inside changed, look closer". Different change events, different weights, different rendering.
+
+A line span starts where the declaration's text starts, not at its name: a `template <...>`
+header or a return type on the line above is part of the declaration. `sites` holds every place
+the entity is declared or defined, such as a header declaration and the definition in a source
+file. It is the one field merged as a union across observations rather than taken from the
+observation that wins, and it is never compared or hashed. A change event points at every site,
+so an edited header declaration leads to the change event about it (§6.2).
+
+The entities that carry values hold them in `attrs`, one compared fact per key
+([ADR-038](adr/ADR-038-entities-that-carry-values.md); macros,
+[ADR-039](adr/ADR-039-synthesized-identities.md)):
+
+| Kind | Compared |
+|---|---|
+| enum | `underlying_type` (canonical), `scoped` |
+| enumerator | `value`, `explicit_value` (written, or implied by the one before) |
+| alias | `target` (canonical), `template` |
+| macro | `replacement_hash` (its tokens after the name), `function_like` |
+| static_assertion | `message`; its condition is its identity |
+| variable, at namespace scope or a static data member | `type`, `value` (as clang evaluates it), `initializer_hash` (only where it cannot), `constexpr`, `storage`, `linkage`, `thread_local` |
+
+A function or method also carries `sugared_signature`: its type as written, aliases kept. When an
+alias's target changes, the canonical `signature` of every function written with it changes while
+this does not, which is how a cause rule (§6.3) tells that from an edit to the function.
 
 ### 4.2 Edges
 
@@ -183,7 +235,7 @@ Edge
   kind          contains | declares | defines | inherits | overrides | calls
                 | instantiates | has-a | holds-a | uses-in-interface
                 | uses-in-implementation | includes | needs-symbol | resolves-to
-  attrs         e.g. virtual/direct for calls, access for inherits
+  attrs         e.g. virtual/direct for calls, access and virtual for inherits
   location      call site or declaration site — provenance
 ```
 
@@ -194,15 +246,62 @@ diff-relevance; the full vocabulary is the reference, not the target.
 ### 4.3 Attributes must be flat
 
 Every attribute is a scalar keyed by a stable name, because **an attribute diff is a first-class
-event**. `attrs["virtual"] = false → true` becomes `NodeAttrChanged(virtual, false, true)`
+change event**. `attrs["virtual"] = false → true` becomes `NodeAttrChanged(virtual, false, true)`
 mechanically. Nested or free-form attributes would require bespoke diff logic per kind, which is
 how these systems rot.
 
 ### 4.4 Completeness record
 
 Every `Model` carries how it was built: TUs attempted, parsed, failed (with reasons); whether a
-build was available; which producers ran; producer version. This is not diagnostics — it is
-load-bearing input to §11.
+build was available; which producers ran; producer version; what the producer cannot see
+whatever the source (§11); and how many declarations in the repository's own files the model
+skips, counted by kind, each declaration once however many TUs saw it; and how many
+relationships lead outside the model, counted per boundary label (§4.5). This is not
+diagnostics — it is load-bearing input to §11.
+
+### 4.5 The boundary of the model
+
+The model holds the code the repository owns and contains: files git tracks at that revision,
+outside the third-party set. Everything else is outside it, the way the standard library is:
+parsed where the repository's code includes it, because that code depends on it, but never a
+node ([ADR-025](adr/ADR-025-third-party-code-must-not-change.md)).
+
+- **The third-party set** of a comparison is every git submodule (a gitlink in either revision's
+  tree) plus every directory passed as `--third-party`. A declared path that exists at neither
+  revision is refused as a probable typo. A tracked directory whose name looks like third-party
+  code (`third_party`, `vendor`, `bundled`, …) and is not in the set gets a note suggesting the
+  option. The name alone never leaves anything out.
+- **A hint names the topmost such directory**, at either revision, that is neither in, under nor
+  above a set entry. A `third_party` folder that holds only submodules gets no hint.
+- **Where entries nest**, such as a submodule inside a declared folder, a file belongs to the
+  innermost entry, the more specific name.
+- **Third-party code must not change.** Before any worktree is built, the changed files are
+  checked against the set, and a comparison where any third-party path changed is refused,
+  naming each one. A rename is checked at both ends. Analyzing third-party changes is deferred,
+  not rejected.
+- **Third-party translation units are not parsed.** Their compile-database entries are dropped,
+  and the count is stated.
+- **Untracked files are outside the model too**, such as generated headers and downloaded
+  dependencies under the build directory inside the worktree
+  ([ADR-037](adr/ADR-037-only-tracked-files-are-modelled.md)).
+- **A relationship that leads outside the model is a boundary crossing:** caller, callee
+  qualified name, kind, every site, and a label saying where it leads. The label is the
+  third-party path for third-party code; the library's name for code outside the repository,
+  read from the header's path under its include directory (`C++ standard library`,
+  `C library`, `compiler builtins`, `boost`); `untracked`; and, for a target inside the
+  repository that no node holds, what the extractor saw (`implicit` for special members clang
+  generated, `function-local`, `template instantiation`, else `unresolved`).
+- **The include directories that name a library** are the TU's `-I`, `-isystem`, `-iquote` and
+  `-idirafter` directories, the toolchain's builtin header directory, `/usr/local/include` and
+  `/usr/include`, with the multiarch subdirectory (`x86_64-linux-gnu`) skipped. None are
+  discovered from the compiler.
+- **A crossing whose caller is no node is dropped**, and still counted under its label. The
+  completeness record's `edges_total` is resolved edges plus crossings, dropped ones included.
+- **Crossings are for visualization only.** Match, diff, classify and rank never read them, and
+  a test holds that adding or removing crossings leaves the change events and the ranking
+  identical. A wrong label costs nothing beyond the picture it appears in.
+- **The per-TU cache key covers the boundary** (§9): the third-party set, and whether git
+  tracks each repository header the TU reads.
 
 ---
 
@@ -213,14 +312,30 @@ the tool is a worse `git diff` with more machinery.
 
 No single scheme survives all edits, so match in **tiers, most-confident first**, each tier running
 only over the residue the previous tiers left unmatched. The tier that produced a match is recorded
-on the match and propagates into the confidence of every event derived from it.
+on the match and propagates into the confidence of every change event derived from it.
 
 | Tier | Key | Survives | Broken by |
 |---|---|---|---|
 | **1 · declared** | libclang USR — kind + qualified name + signature | body edits, file moves, reformatting | rename, signature change, namespace move |
+| **inline namespace** | tier 1's key, with a bumped inline namespace's old path rewritten to its new one | an inline namespace version bump (`v1` to `v2`) | a plain namespace rename, a bump in which nothing inside pairs |
+| **name** | kind + name + file and TU for internal linkage + paired parent; functions and methods only | signature change: parameters, return type, `const` | rename, namespace move, an ambiguous name |
 | **2 · structural** | `body_hash` — normalized subtree hash | rename, move, reformatting | any body edit |
 | **3 · positional** | (parent id, kind, ordinal) | renames of unnamed things | reordering, parent change |
 | **4 · similarity** | weighted name + signature + body similarity over candidate pairs | rename *and* edit together | genuine rewrites |
+
+The **inline namespace** tier runs over what tier 1 left. Where one inline namespace replaced
+one other under the same paired parent, it rewrites the old namespace's path in base USRs, only
+where a USR starts, and keys the result as tier 1 does. The mapping stands only if something
+inside pairs through it, so the namespaces read as one rename and nothing in them moves
+([ADR-044](adr/ADR-044-inline-namespace-bump-pairs.md)).
+
+The **name** tier runs over what the tiers before it left, and only over functions and methods, the only
+entities whose USR holds more than their kind, name and scope. It pairs a function with itself
+after its signature changed. Its parent must already be paired, so it never reports a move. A
+name with one leftover on each side pairs; leftovers on both sides that are not one to one pair
+none and are reported as an ambiguous pairing; there is no tie-break
+([ADR-036](adr/ADR-036-functions-pair-by-name.md)). The signature, the template parameters and
+the rest are then compared state.
 
 Tier 3 exists for entities with no name at all: lambdas, anonymous namespaces and structs, unnamed
 parameters. Tier 4 is the `git -M` analogue, with the same threshold-tuning problem and the same
@@ -236,13 +351,18 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
 - **Templates.** The template and each instantiation need separate identity. Instantiation sets
   differ between commits for reasons unrelated to the change — an unrelated new call site can
   materialize an instantiation. Instantiation-only deltas must be suppressible.
-- **Overloads.** Name is never identity. Signature normalization (typedef resolution, default
-  arguments, cv/ref qualification) is required for tier 1 to work at all.
+- **Overloads.** Name is never identity on its own. Signature normalization (typedef
+  resolution, cv/ref qualification) is required for tier 1 to work at all,
+  and the name tier pairs by name only where the name leaves no choice.
 - **Internal linkage and anonymous namespaces.** USRs incorporate the file path, so a file rename
   breaks tier 1 for everything in them. Identity must include the TU, and file renames must be
   resolved from git before matching — not discovered by the matcher.
 - **Macros.** An entity's very existence may depend on a macro that itself changed. The model is
-  one preprocessor configuration; see §11.
+  one preprocessor configuration; see §11. A macro's own USR holds the byte offset of its
+  definition, so a macro is identified by its file and name instead, numbered where one file
+  defines a name again ([ADR-039](adr/ADR-039-synthesized-identities.md)).
+- **Static assertions.** A `static_assert` has no USR. Its id is synthesized from its file, its
+  scope and a hash of its condition, so a changed condition is a different assertion (ADR-039).
 - **ODR.** The same declared identity can appear in multiple TUs with different definitions. Dedup
   by USR is a correctness requirement, not an optimization — the CodeAtlas measurements found
   15,656 method cursors collapsing to 161 classes in FTXUI, because every header is reparsed per TU.
@@ -251,12 +371,31 @@ Pretending a split is a rename is exactly the confident-and-wrong failure mode t
 
 ## 6 · The delta
 
-### 6.1 Event types
+### 6.1 Change event types
 
-A closed, typed set. New signals become new event kinds, never free-text.
+A closed, typed set. New signals become new change event kinds, never free-text.
 
 **Node** — `NodeAdded` · `NodeRemoved` · `NodeMoved` (parent changed) · `NodeRenamed` ·
-`NodeAttrChanged(attr, old, new)` · `NodeBodyChanged`
+`NodeAttrChanged(attr, old, new)` · `NodeBodyChanged` ·
+`NodeSignatureChanged(old_signature, new_signature)`
+
+Most node change events can happen to any kind of entity. Two cannot, and the set says which
+kinds they apply to rather than encoding it in their names
+([ADR-035](adr/ADR-035-signature-and-body-apply-to-functions.md)):
+
+| Change event | Applies to |
+|---|---|
+| `NodeSignatureChanged` | function, method |
+| `NodeBodyChanged` | function, method |
+| every other node change event | every node kind |
+
+"Method" includes constructors, destructors and conversion operators. The table is
+`APPLIES_TO` in `model/events.py`, and the diff stage reads it.
+
+`NodeSignatureChanged` is its own kind, not `NodeAttrChanged(signature)`, because the
+signature is a field of the node (§4.1), not an attribute. The signature spells the return
+type and a method's `const`, so where it changed, those two attributes are not also reported
+as `NodeAttrChanged`.
 
 **Edge** — `EdgeAdded` · `EdgeRemoved` · `EdgeRetargeted` · `EdgeKindChanged` ·
 `EdgeAttrChanged(attr, old, new)`
@@ -264,7 +403,7 @@ A closed, typed set. New signals become new event kinds, never free-text.
 `EdgeAttrChanged` was added after v0 shipped without it, under this section's own rule that new
 signals become new kinds. §4.2 gives edges `attrs` and the producer populates them — `access` on
 `inherits`, virtual/direct on `calls` — so a base class going **public → private** between two
-otherwise unchanged classes was a real C++ breaking change with no event to carry it. Worth
+otherwise unchanged classes was a real C++ breaking change with no change event to carry it. Worth
 knowing before relying on it: it fires correctly but is *rare* on real repositories. Neither
 fixture produced one across 300 commits, because both edge attributes tend to co-occur with edits
 that change a USR, and the entities are then reported as removed and added instead.
@@ -282,33 +421,51 @@ and belong to the matcher, but its kind is diffable state. Between two already-p
 relation that was `calls` and is now `overrides` needs no new identity claim.
 
 **Derived** — `BecameUnreachable` · `BecameReachable` · `CycleIntroduced` · `FanInChanged` ·
-`LayerViolationIntroduced` · `SignatureIncompatible`
+`LayerViolationIntroduced` · `CallerOfChangedSignature(caller, callee, old_signature, new_signature, caller_edited)`
 
-Derived events are computed from the two models plus graph algorithms, not read off either one.
+Derived change events are computed from the two models plus graph algorithms, not read off either one.
 They are the answer to the founding document's §1 point that the most important consequences of a
-change are never *in* the change.
+change are never *in* the change. The derive stage (§3) computes them.
 
-### 6.2 Event shape
+`CallerOfChangedSignature` is the only one v0 emits
+([ADR-040](adr/ADR-040-callers-of-a-changed-signature-are-derived.md)). One per call G → F that
+exists on both sides, where F has a `NodeSignatureChanged`. The subject is the head call edge, so
+its home is the caller and its provenance is the call sites. A new caller, or a new call, is left
+out: it is already an `EdgeAdded`, written against the new signature. `caller_edited` says whether
+G has its own body or signature change in the diff. The kind states an observation, not a verdict:
+nothing checks whether the call still compiles or behaves the same. It is a lower bound: calls the
+model misses (calls that depend on a template parameter, calls from initializers, calls through a
+function pointer) get none. The earlier draft named it `SignatureIncompatible`.
+
+### 6.2 Change event shape
 
 ```
-Event
+ChangeEvent
   id
   kind
   subject       node or edge id
   payload       kind-specific
-  caused_by     optional event id (§6.3)
+  caused_by     optional change event id (§6.3)
   provenance    source hunks: (side, file, line span) — bidirectional with the text diff
-  confidence    derived from match tier + model completeness
+  confidence    derived from match tier (or why unpaired) + model completeness
 ```
 
-**Provenance must be bidirectional.** The reviewer has to get from an event to the lines, *and*
-from a line in the ordinary diff to the events it caused. Without the reverse direction the tool is
-a second disconnected artifact to read alongside the diff, which is a net increase in work.
+**Provenance must be bidirectional.** The reviewer has to get from a change event to the lines,
+*and* from a line in the ordinary diff to the change events it caused. Without the reverse
+direction the tool is a second disconnected artifact to read alongside the diff, which is a net
+increase in work.
+
+**A signature change has its callers as change events.** The call edges of a paired function map
+through the correspondence (§6.1), so a changed signature produces no edge change events. Each call
+into it that exists on both sides is a `CallerOfChangedSignature` instead, caused by the signature
+change (§6.3). They replace the list of callers the output carried beside each
+`NodeSignatureChanged` until then
+([ADR-040](adr/ADR-040-callers-of-a-changed-signature-are-derived.md)).
 
 ### 6.3 Cause and cascade
 
-Rename one function and 200 call edges "change". That is one event with 200 consequences, not 201
-events. Consequences are linked to causes by **an explicit rule table**, not inference:
+Rename one function and 200 call edges "change". That is one change event with 200 consequences, not
+201 change events. Consequences are linked to causes by **an explicit rule table**, not inference:
 
 | Rule | Cause | Consequence | Status |
 |---|---|---|---|
@@ -316,15 +473,18 @@ events. Consequences are linked to causes by **an explicit rule table**, not inf
 | contained-addition | `NodeAdded(C)` | `NodeAdded` for everything C contains | active |
 | edge-lost-its-endpoint | `NodeRemoved(N)` | `EdgeRemoved` for edges touching N | active |
 | call-moved-to-another-overload | `EdgeAdded(caller→G)` | `EdgeRemoved(caller→F)`, F and G overloads of one name | active |
+| signature-change-breaks-overrides | `NodeSignatureChanged(F)` | `EdgeRemoved(override→F)` | active |
 | edge-gained-its-endpoint | `NodeAdded(N)` | `EdgeAdded` for edges touching N | active |
+| alias-target-changes-signature | `NodeAttrChanged(target)` of an alias | `NodeSignatureChanged` of a function whose written signature names it and did not change | active |
+| enumerator-implicit-value-shifted | `NodeAttrChanged(value)`, `NodeAdded` or `NodeRemoved` of the nearest enumerator above | `NodeAttrChanged(value)` of an enumerator whose value is implied on both sides | active |
 | rename-retargets-edges | `NodeRenamed(F)` | `EdgeRetargeted` at F | **unreachable** |
-| signature-change-breaks-callers | `NodeAttrChanged(signature)` | `SignatureIncompatible` on callers | dormant |
+| signature-change-breaks-callers | `NodeSignatureChanged(F)` | `CallerOfChangedSignature` for each call into F | active |
 
-**That is the whole table, and it is closed the way §6.1's event set is closed.** The rows are
+**That is the whole table, and it is closed the way §6.1's change event set is closed.** The rows are
 `CAUSE_RULES` in `classify/rules.py` and the Status column is its `RuleStatus`; nothing outside that
 module decides what causes what. There is no second class of rule — no "implementation detail" tier
 that the design declines to name — because a cause link is exactly the claim this document exists to
-justify: it is what render hides an event under, and a rule that lives only in the code is a
+justify: it is what render hides a change event under, and a rule that lives only in the code is a
 reviewer's change disappearing for a reason the design cannot be read to explain. So a rule found by
 running the tool belongs here at the moment it is added, with where it came from stated in place —
 which is what the rest of this section is. Order is part of the table: the first rule that finds a
@@ -332,23 +492,23 @@ cause wins, which matters wherever two rules share a consequence kind.
 
 The two **addition** rules and the two **edge-endpoint** rules were missing from the earlier draft,
 and between them they carry nearly all of v0's actual cascade volume: without them, removing one
-class leaves every containment and call edge it touched standing as an unexplained top-level event,
-and adding a class of twenty methods reads as twenty-one events while the identical deletion reads
-as one.
+class leaves every containment and call edge it touched standing as an unexplained top-level change
+event, and adding a class of twenty methods reads as twenty-one change events while the identical
+deletion reads as one.
 
 `call-moved-to-another-overload` is the row this section did not reason its way to. It came from
 running the tool: googletest gave `AssertHelper::AssertHelper` a `std::string_view` overload, every
-`TEST` body stopped calling the `const char *` one, and the 28 resulting `EdgeRemoved` events have
+`TEST` body stopped calling the `const char *` one, and the 28 resulting `EdgeRemoved` change events have
 *both* endpoints still present — the old overload is still declared, it is merely no longer called —
 so no endpoint rule reaches them and they were the bulk of what stood at top level after every other
-cascade had collapsed. With the rule in, leveldb `HEAD~10` goes from **39 top-level events to 11**,
+cascade had collapsed. With the rule in, leveldb `HEAD~10` goes from **39 top-level change events to 11**,
 and `fmt` and `spdlog` are unchanged to the digit, which is the check that it collapses a real
 relation rather than whatever happens to be nearby. A call genuinely dropped between two survivors
 still gets no cause and is still shown; that is this section's last paragraph, not a gap in this
 rule.
 
 **It is not `EdgeRetargeted` readmitted under another name**, and §6.1 is why that distinction has
-to be argued rather than assumed. That event is refused because "retargeted from F to G" asserts
+to be argued rather than assumed. That change event is refused because "retargeted from F to G" asserts
 that F and G are the same entity, which is a node-identity claim the one-to-one matcher declined.
 This rule asserts nothing of the kind: F and G are two distinct overloads, both present at head, and
 the claim is only that one call site moved *within* an overload set — a fact about the caller's own
@@ -360,19 +520,50 @@ by `edge-gained-its-endpoint`, and both collapse under it. The row sits below
 `edge-lost-its-endpoint` because both explain an `EdgeRemoved` and the order is the tie-break — an
 endpoint that actually went away is a better explanation than one the caller merely stopped using.
 
+`alias-target-changes-signature` is the cascade an alias has. Change `using T = int` to `long` and
+every `f(T)` gets a new canonical signature without a character of it changing. The evidence is the
+pair of signatures (§4.1): canonical changed, written unchanged, and the alias named in the written
+one. A function whose written signature changed too was edited, and its change is its own.
+
+`enumerator-implicit-value-shifted` is the cascade an enum has. An enumerator with no written value
+is the one before it plus one, so inserting one enumerator changes every implied value below it.
+The cause is the nearest change above, of whichever kind, and a change farther up is linked by the
+enumerators between, so the chain runs up the enum the way the values do. One row rather than one
+per kind of cause, because the first row to find a cause wins, and a farther insertion must not win
+over a nearer value change; `CauseRule.also_caused_by` is how a row names more than one cause kind.
+A value written on either side is an edit of its own and is not explained. "Above" is source order,
+which orders siblings and is never identity (§4.1).
+
+Two rules are recorded here and not in the table, because their consequences need the uses
+relationship ([#10](https://github.com/j-brent/cpp-semantic-diff/issues/10)), which is out of v0
+([ADR-041](adr/ADR-041-v0-scope-of-steps-6-and-7.md)): a changed constant or enumerator value
+causes a change event on each entity that uses it, and an added enumerator causes one on each
+`switch` over its enum that does not name it. Neither has a row or dormant code until the
+relationship exists.
+
 `rename-retargets-edges` is **unreachable, not dormant** — and it is not revived by tier 2. Because
 base edges are rewritten into head coordinates through the correspondence before comparison, a
-rename produces *no edge events at all*, rather than 200 that need collapsing. That is a stronger
+rename produces *no edge change events at all*, rather than 200 that need collapsing. That is a stronger
 answer to the problem this section opens with. Tier 2 makes `NodeRenamed` reachable but adds no edge
-events beside it; only reversing the edge-identity decision in §6.1 would make this rule fire. The
+change events beside it; only reversing the edge-identity decision in §6.1 would make this rule fire. The
 rule is kept and implemented rather than deleted, because deleting it would lose that argument.
 
-`signature-change-breaks-callers` is **dormant** because its consequence is a derived event, which
-§13 puts out of v0. Classify links causes among events that already exist; it never synthesizes one.
-A stage that may create events is a stage that can hide a change inside a cause.
+`signature-change-breaks-callers` links each `CallerOfChangedSignature` to the signature change of
+its callee: the head destination of its subject edge, so there is exactly one candidate. The derive
+stage creates those change events
+([ADR-040](adr/ADR-040-callers-of-a-changed-signature-are-derived.md)). Classify links causes among
+change events that already exist; it never synthesizes one. A stage that may create change events is
+a stage that can hide a change inside a cause. Under one signature change, views list broken
+overrides first, then unedited callers.
 
-Events with no matching rule get no cause link and are shown. **Collapse happens at render, never
-at diff** — the JSON always carries the full event set; the view hides consequences under causes by
+`signature-change-breaks-overrides` covers the other thing a changed virtual signature breaks: an
+override that kept the old signature stops overriding, and its `overrides` edge is removed while
+both functions survive. It applies only while the override's class still derives from the virtual
+function's class at head; a class that stopped inheriting lost the override for that reason. It sits below the endpoint and overload rules, which give a better account
+where they apply.
+
+Change events with no matching rule get no cause link and are shown. **Collapse happens at render, never
+at diff** — the JSON always carries the full change event set; the view hides consequences under causes by
 default. When cause attribution is uncertain, default to showing, because a hidden real change is a
 far worse failure than a redundant one.
 
@@ -383,17 +574,24 @@ far worse failure than a redundant one.
 The founding document's §4 argues that telling the reviewer *what to look at first* may be worth
 more than any individual diff. Ranking is therefore a first-class stage, not a rendering detail.
 
-Risk score per event, from:
+Risk score per change event, from:
 
 - **Blast radius** — transitive reverse reachability of the subject over `calls` + `contains` +
   `uses` edges, computed on the head model. Bounded depth; the count matters more than the set.
 - **Exposure** — is the subject reachable from a public header, or internal?
 - **Novelty** — added and removed outrank modified; attribute changes to `virtual`, `const`,
   access, and signature outrank body changes.
-- **Confidence** — a low-confidence event ranks *up*, not down. Uncertainty is a reason for a human
+- **Confidence** — a low-confidence change event ranks *up*, not down. Uncertainty is a reason for a human
   to look, not a reason to hide.
 
-**Decomposition** falls out of the same data: partition the event graph into connected components.
+**High risk** (`summary.high_risk_count`, §10) is counted on blast radius, exposure and novelty,
+without confidence. A change of spelling only is never counted: an informational attribute
+(`sugared_signature`, `explicit_value`, `message`), or a change event marked `spelling_only`,
+such as a default argument that only dropped its own namespace's qualifier. Such events are
+still listed and ordered as usual
+([ADR-046](adr/ADR-046-spelling-only-changes-are-never-high-risk.md)).
+
+**Decomposition** falls out of the same data: partition the change event graph into connected components.
 A change whose delta has three mutually disconnected components is three changes, and saying so is
 the founding document's §3.11 intent-conformance signal at nearly zero cost.
 
@@ -461,19 +659,33 @@ CodeAtlas TypeScript.
 ```
 {
   meta:        { tool version, schema version, revs, timings }
-  completeness:{ per-side completeness records (§4.4) }
-  entities:    { node id → node summary, for events to reference }
-  events:      [ Event ]              -- complete, uncollapsed
+  completeness:{ per-side completeness records (§4.4), standing limits (§11),
+                 where the uncovered changes are }
+  third_party: [ { path, sources: submodule | declared } ]  -- §4.5
+  third_party_hints: [ directory that looks third-party ]
+  entities:    { node id → node summary, for change events to reference }
+  crossings:   { base: [ Crossing ], head: [ Crossing ] }  -- out of those entities only
+  change_events: [ ChangeEvent ]      -- complete, uncollapsed
   findings:    [ Finding ]            -- evidence, attached by node id
-  ranking:     [ event id ]           -- ordered
-  summary:     { lines_changed, events_reported, compression, high_risk_count }
+  ranking:     [ change event id ]    -- ordered
+  summary:     { lines_changed, change_events_reported, compression, high_risk_count,
+                 changed_cpp_lines, uncovered_lines }
 }
 ```
 
 `summary.compression` is the product's own success metric and prints on every run: *2,431 lines
-changed → 9 semantic events, 2 high-risk*. If that ratio is not dramatic on real commits, the
+changed → 9 change events, 2 high-risk*. If that ratio is not dramatic on real commits, the
 thesis in RESEARCH-002 is wrong, and the design should surface that in week one rather than month
 six.
+
+On its own the ratio improves when the model sees less. So the sentence also states how many of
+the changed C++ lines no change event explains: *580 lines changed → 181 change events, 2
+high-risk · 37 of 412 changed C++ lines explained by no change event*. A changed line is one
+carrying a changed token, so whitespace and comment edits do not count; it is explained when a
+change event's provenance contains it, which makes the uncovered count a lower bound
+([ADR-042](adr/ADR-042-uncovered-changes-are-tokens-on-no-event-line.md)). Files in the
+third-party set are not counted. The uncovered lines in files neither model declares anything in
+are counted apart, as an approximation of files no translation unit includes.
 
 ---
 
@@ -482,17 +694,35 @@ six.
 **A tool that silently degrades is worse than no tool**, because it converts absence of evidence
 into apparent evidence of absence. Three rules:
 
-1. Every event carries confidence derived from its match tier and the completeness of both models.
+1. Every change event carries confidence derived from its match tier and the completeness of both models.
+   An unpaired subject has no tier; it carries why it is unpaired instead: no candidate, a candidate,
+   or an ambiguous pairing. Having no partner is not doubt
+   ([ADR-034](adr/ADR-034-uncertainty-is-doubt-about-the-pairing.md)).
 2. Any output built on an incomplete model states what was missing, at the top, not in a log.
 3. Conditions that eliminate the analysis — shallow clone, unresolvable base, no compile database —
    are **hard failures with actionable messages**, never partial output.
 
-Two systematic limits get stated in the output itself, every time:
+Rule 2 covers inputs as well as models. When a diff exceeds `diff.renameLimit`, git skips inexact
+rename detection and says so only on stderr; the rename map (§5) then holds exact renames only.
+The output states this beside the completeness records, and every unpaired entity in a file the
+diff added or deleted counts as having a candidate, never as having none (rule 1). The limit is
+not lifted: `-l0` is potentially quadratic on the large diffs that hit it.
+
+Rule 2 also covers what a complete model still misses. Every run counts the changes in C++ files,
+headers included, that no change event explains (§10), so a change the model cannot see reads as
+unexplained rather than as no change.
+
+Three systematic limits get stated in the output itself, every time:
 
 - **One model is one preprocessor configuration.** Claims are conditional on the configuration
   analyzed. Variant coverage (RESEARCH-002 §3.10) is unsolved and must not be implied.
 - **Static call graphs are unsound.** Virtual dispatch, function pointers, and inlining mean a
   reachability delta is a lower bound, not a fact, and must be rendered as one.
+- **Some of the code is not visible to the model.** libclang does not expose implicit special
+  members, so a destructor that removes a class's implicit move operations changes nothing the
+  model holds. Each model's completeness record lists this (`not_visible`), and the
+  output states it beside the other two
+  ([ADR-029](adr/ADR-029-libclang-limits-are-reported.md)).
 
 ---
 
@@ -506,7 +736,7 @@ Two distinct properties, and the first is where the damage is:
 
 **1 · Same-run consistency — both sides share one toolchain identity.** A two-point analysis
 subtracts one model from another. If the two were produced by different parsers, different system
-headers, or different target triples, the subtraction yields events that describe the *environment*
+headers, or different target triples, the subtraction yields change events that describe the *environment*
 rather than the change. This is a worse failure than anything in §11: not a missed change, an
 invented one, rendered with full confidence and indistinguishable in the output from a real one.
 `std::string` gaining a member because the base was parsed against libstdc++ 12 and the head
@@ -584,7 +814,7 @@ wall-clock timings, absolute paths, and the tool's own invocation details. Paths
 which are observations. Equality tests and CI gates run over the canonical subset; the full
 document is what a human reads.
 
-**Ordering must come from explicit keys.** §3 calls events "deterministically ordered" without
+**Ordering must come from explicit keys.** §3 calls change events "deterministically ordered" without
 saying from what. Every stage that emits a sequence sorts on a stable total order over ids, and no
 stage may let iteration order stand in for it — Python randomizes string hashing per process under
 `PYTHONHASHSEED`, so a set of node ids iterates differently on every run and produces output that
@@ -596,43 +826,50 @@ is non-reproducible on one machine, let alone across two.
 
 The smallest slice that tests the thesis end to end.
 
-**In:** namespace / class / function / method / field nodes · `contains`, `calls`, `inherits`,
-`overrides` edges · **tier-1 identity only** · node add/remove/attr/body and edge
-add/remove/kind/attr events · JSON + terminal output · the compression metric · fixtures `fmt` and
+**In:** namespace / class / function / method / field / enum / enumerator / alias / variable / macro / static assertion nodes · `contains`, `calls`, `inherits`,
+`overrides` edges · **tier-1 identity, plus the inline namespace tier and the name tier for functions and methods** · node
+add/remove/attr/body/signature and edge add/remove/kind/attr change events · one derived change
+event, `CallerOfChangedSignature` · JSON + terminal output · the compression metric · fixtures `fmt` and
 `spdlog`, with `leveldb` added later ([v0 tracker](../reports/2026-08-01--v0-build/STATUS.md) §3).
 
-**Out, deliberately:** rename detection (tiers 2–4), evidence adapters, derived events, HTML.
+**Out, deliberately:** rename detection (tiers 2–4), evidence adapters, derived change events, HTML.
+
+**One exception to the derived change events being out:** `CallerOfChangedSignature`, from a
+derive stage between diff and classify. It is how ADR-030's v0 tells a reviewer which callers a
+signature change may affect ([ADR-040](adr/ADR-040-callers-of-a-changed-signature-are-derived.md)).
 
 **Prerequisite: third-party code does not change.** v0 analyzes only code the repository owns
 and contains. Third-party code, whether a git submodule or a library copied into the tree, must be
 identical at both points. A comparison where it differs is refused, not analyzed. Its headers are
 still parsed where the repository's code includes them, but its own translation units are not, and
 none of it is in the model, exactly like the standard library. Analyzing third-party changes is
-deferred, not rejected. Decided in [ADR-025](adr/ADR-025-third-party-code-must-not-change.md); not
-yet implemented ([PLAN-004](plans/PLAN-004-third-party-boundary.md)).
+deferred, not rejected. Decided in [ADR-025](adr/ADR-025-third-party-code-must-not-change.md);
+how the tool enforces it is §4.5.
 
 **v0 was redefined on 2026-10-10** as a tool whose output can be trusted on changes the repository
 controls ([ADR-030](adr/ADR-030-what-v0-is.md)). The slice above is what was built first; ADR-030
-says what v0 still needs.
+and [ADR-041](adr/ADR-041-v0-scope-of-steps-6-and-7.md) say what v0 still needs.
 
 Two things listed here as "out" in the original draft shipped anyway, and the reason is the same in
 both cases: they were cheaper *inside* the stage that needed them than as a later bolt-on.
-**Cascade collapse** is in `render` (§6.3) — without it a deleted class reads as one event per
-member plus one per edge, which is most of the volume. **Blast radius** is in `rank` (§7) rather
-than in `enrich`, because it is rank's first input and computing it from the head model needs no
-external tool; §3's table still lists it under `enrich`, which is where the *evidence* adapters
-will attach.
+**Cascade collapse** is in `render` (§6.3) — without it a deleted class reads as one change
+event per member plus one per edge, which is most of the volume. **Blast radius** is in `rank`
+(§7) rather than in `enrich`, because it is rank's first input and computing it from the head
+model needs no external tool; §3's table still lists it under `enrich`, which is where the
+*evidence* adapters will attach.
 
 Tiers 2–4 are excluded on purpose: RESEARCH-002 §7 step 4 says ship tier-1 and *measure how badly
 renames hurt* before building the machinery. That measurement is a v0 deliverable, and it is now
 in — see the [v0 tracker](../reports/2026-08-01--v0-build/STATUS.md) §3. The answer was that on `fmt` and `spdlog` the upper
-bound on events tiers 2–4 could remove is 3, 5 and 1, and on `leveldb` 0. That is an argument
+bound on change events tiers 2–4 could remove is 3, 5 and 1, and on `leveldb` 0. That is an argument
 against building them next, which is what asking the question early was for.
 
-On 2026-10-10 that answer was reopened for one case: a function whose parameters changed is
-reported as removed plus added, and on current upstream spdlog that is every removal in a 30-commit
-range. Pairing it with its old version was decided and is not built
-([#8](https://github.com/j-brent/cpp-semantic-diff/issues/8)).
+On 2026-10-10 that answer was reopened for one case: a function whose parameters changed was
+reported as removed plus added, and on current upstream spdlog that was every removal in a
+30-commit range ([ADR-026](adr/ADR-026-changed-parameters-same-function.md)). The name tier (§5)
+pairs it with its old version. It keys on the name, so it detects no rename. The inline
+namespace tier (§5) pairs one rename, a bumped inline namespace's version tag, on evidence from
+what is inside it. The measurement above still stands for every other rename.
 
 ### Technology
 
@@ -665,10 +902,11 @@ Present tense is what exists; the rest is planned.
 ```
 cpp_semantic_diff/
   model/       IR types ✓ · JSON schema (not generated)
-  acquire/     git revisions · worktrees · compile db  ✓
+  acquire/     git revisions · worktrees · compile db · changed tokens  ✓
   produce/     toolchain ✓ · extraction ✓ · assembly ✓ · per-TU cache ✓
-  match/       tiered matching (tier 1)                 ✓
-  diff/        model × model → events                   ✓
+  match/       tiered matching (tier 1, name tier)      ✓
+  diff/        model × model → change events · uncovered changes  ✓
+  derive/      derived change events (v0: callers)      ✓
   classify/    cause and cascade rules                  ✓
   evidence/    tool adapters                (post-v0)
   rank/        blast radius, scoring                     ✓
@@ -683,7 +921,7 @@ single-point stage.
 
 Every package is now named for its stage, which the earlier draft's `identity/` and `delta/` were
 not. `delta/` in particular grouped two stages with two different contracts — diff may not set
-`caused_by`, classify may not create an event — and a shared package is the wrong place to keep a
+`caused_by`, classify may not create a change event — and a shared package is the wrong place to keep a
 rule that says what its neighbour is forbidden to do.
 
 ---

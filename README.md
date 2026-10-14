@@ -23,7 +23,7 @@ model is an ordered list of lines.
 
 ## Status
 
-The pipeline runs end to end. Seven of eight stages exist; `enrich` (the evidence layer) is deferred
+The pipeline runs end to end. Eight of nine stages exist; `enrich` (the evidence layer) is deferred
 past v0 by design. Where things stand, the known problems and the work ahead are in
 [`ROADMAP.md`](ROADMAP.md).
 
@@ -31,17 +31,17 @@ past v0 by design. Where things stand, the known problems and the work ahead are
 |---|---|
 | `acquire` — worktrees + compile databases at both revs | done |
 | `produce` — worktree → `Model`, cached per TU, parsed in parallel | done |
-| `match` — two models → `Correspondence` | done, tier 1 only |
-| `diff` · `classify` · `rank` · `render` | done |
+| `match` — two models → `Correspondence` | done: tier 1, inline namespace, name |
+| `diff` · `derive` · `classify` · `rank` · `render` | done |
 | `enrich` — evidence adapters | post-v0 |
 
 What the tool reports on real repositories, and how much it compresses a review, is measured in the
 [v0 tracker, §2](reports/2026-08-01--v0-build/STATUS.md#2--the-measurement-this-project-exists-to-take).
 Compression is real on some commits and inverted on others.
 
-v0 requires third-party code to be identical at both points
-([ARCH-001 §13](docs/ARCH-001-architecture.md#13--v0)). The tool does not enforce this yet
-([PLAN-004](docs/plans/PLAN-004-third-party-boundary.md)).
+v0 analyzes only the code the repository owns and contains. Third-party code must be identical
+at both points, and a comparison where it changed is refused
+([ARCH-001 §4.5](docs/ARCH-001-architecture.md#45-the-boundary-of-the-model)).
 
 ## Requirements
 
@@ -91,9 +91,21 @@ uv run cppsd diff    ~/fixtures/fmt --base HEAD~12   # the whole pipeline
 uv run cppsd diff    ~/fixtures/fmt --base HEAD~12 --json --out delta.json
 ```
 
-`diff` prints ranked events with consequences folded under their causes; `--expand` shows the flat
-set. The JSON is the product and always carries every event uncollapsed — the terminal is one
-consumer of it, and any incompleteness in either model is stated before the events, not in a log.
+`diff` prints ranked change events with consequences folded under their causes; `--expand` shows
+the flat set. The JSON is the product and always carries every change event uncollapsed — the
+terminal is one consumer of it, and any incompleteness in either model is stated before the change
+events, not in a log.
+
+Third-party code is left out of both models. Git submodules are third-party without being named.
+A library copied into the tree is named with `--third-party PATH`, once per directory:
+
+```sh
+uv run cppsd diff ~/fixtures/fmt --base HEAD~12 --third-party test/gtest
+```
+
+A directory whose name looks like third-party code, such as `third_party` or `bundled`, gets a
+note suggesting the option; the name alone never leaves anything out. If any third-party code
+changed between the two revisions, `diff` refuses the comparison with exit code 3.
 
 Models are cached per translation unit, so the first run against a new base pays for parsing and
 every later review against that base does not. Timings are in the

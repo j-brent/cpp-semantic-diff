@@ -2,14 +2,20 @@
 
 from cpp_semantic_diff.match.correspondence import Correspondence, Match
 from cpp_semantic_diff.match.declared import DeclaredTier, RenameMap, usr_file
+from cpp_semantic_diff.match.inline import InlineNamespaceTier
 from cpp_semantic_diff.match.matcher import Tier, default_tiers, match_models
+from cpp_semantic_diff.match.name import NameTier
+from cpp_semantic_diff.match.unpaired import containers
 
 __all__ = [
     "Correspondence",
     "DeclaredTier",
+    "InlineNamespaceTier",
     "Match",
+    "NameTier",
     "RenameMap",
     "Tier",
+    "containers",
     "default_tiers",
     "match_models",
     "usr_file",
