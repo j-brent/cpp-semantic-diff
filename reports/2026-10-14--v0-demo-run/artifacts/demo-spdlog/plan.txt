@@ -1,0 +1,6 @@
+comparison     HEAD~30...HEAD  (a2976707813e -> 6c9e898175c6)
+base           merge-base(HEAD~30, HEAD)                     
+files changed  105                                           
+C++ files      95                                            
+files renamed  0                                             
+lines changed  2254                                          

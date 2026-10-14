@@ -1,0 +1,430 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "cppsd diff · pipeline and where the time went (run 38280732734)",
+  "output": "pipeline.html",
+  "quality_profile": "showcase",
+  "repository": {
+   "url": "https://github.com/j-brent/cpp-semantic-diff",
+   "provider": "github",
+   "revision": "c01c58bfe348636daca703316194b6e98214fc03"
+  },
+  "legend": {
+   "entries": {
+    "external": {
+     "label": "boundary stage (git in / not built)"
+    },
+    "backend": {
+     "label": "pipeline stage"
+    },
+    "database": {
+     "label": "store / document"
+    },
+    "frontend": {
+     "label": "view"
+    }
+   }
+  }
+ },
+ "components": [
+  {
+   "id": "acquire",
+   "type": "external",
+   "label": "acquire",
+   "sublabel": "fmt 1.4 s · spdlog 2.9 s",
+   "pos": [
+    40,
+    330
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "worktrees + compile db",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/acquire/workspace.py"
+    }
+   ]
+  },
+  {
+   "id": "prod_base",
+   "type": "backend",
+   "label": "produce · base",
+   "sublabel": "fmt 98.3 s · spdlog 13.4 s",
+   "pos": [
+    340,
+    170
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "50 TUs · 8 TUs",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/produce/build.py"
+    }
+   ]
+  },
+  {
+   "id": "cache",
+   "type": "database",
+   "label": "model cache",
+   "sublabel": "empty root, so a cold run",
+   "pos": [
+    340,
+    330
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "per-TU",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/produce/cache.py"
+    }
+   ]
+  },
+  {
+   "id": "prod_head",
+   "type": "backend",
+   "label": "produce · head",
+   "sublabel": "fmt 94.7 s · spdlog 10.5 s",
+   "pos": [
+    340,
+    490
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "50 TUs · 8 TUs",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/produce/build.py"
+    }
+   ]
+  },
+  {
+   "id": "match",
+   "type": "backend",
+   "label": "match",
+   "sublabel": "fmt 0.12 s · spdlog 0.01 s",
+   "pos": [
+    640,
+    170
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "declared · inline-ns · name",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/match/matcher.py"
+    }
+   ]
+  },
+  {
+   "id": "diff",
+   "type": "backend",
+   "label": "diff",
+   "sublabel": "fmt 0.13 s · spdlog 0.02 s",
+   "pos": [
+    640,
+    330
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "change events",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/diff/differ.py"
+    }
+   ]
+  },
+  {
+   "id": "derive",
+   "type": "backend",
+   "label": "derive",
+   "sublabel": "fmt 0.01 s · spdlog 0.001 s",
+   "pos": [
+    640,
+    490
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "callers of a changed signature",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/derive/deriver.py"
+    }
+   ]
+  },
+  {
+   "id": "classify",
+   "type": "backend",
+   "label": "classify",
+   "sublabel": "fmt 0.08 s · spdlog 0.01 s",
+   "pos": [
+    640,
+    650
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "cause → cascade",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/classify/classifier.py"
+    }
+   ]
+  },
+  {
+   "id": "enrich",
+   "type": "external",
+   "label": "enrich",
+   "sublabel": "not built: post-v0 (§13)",
+   "pos": [
+    940,
+    170
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "findings = []"
+  },
+  {
+   "id": "rank",
+   "type": "backend",
+   "label": "rank",
+   "sublabel": "fmt 0.15 s · spdlog 0.02 s",
+   "pos": [
+    940,
+    330
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "+ blast radius",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/rank/ranker.py"
+    }
+   ]
+  },
+  {
+   "id": "coverage",
+   "type": "backend",
+   "label": "coverage",
+   "sublabel": "fmt 0.75 s · spdlog 0.36 s",
+   "pos": [
+    940,
+    650
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "tokens on no event's lines",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/diff/coverage.py"
+    }
+   ]
+  },
+  {
+   "id": "json",
+   "type": "database",
+   "label": "diff.json",
+   "sublabel": "schema 2.0 · the product",
+   "pos": [
+    1240,
+    490
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "artifact",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/render/document.py"
+    }
+   ]
+  },
+  {
+   "id": "term",
+   "type": "frontend",
+   "label": "terminal view",
+   "sublabel": "pasted into the run summary",
+   "pos": [
+    1240,
+    650
+   ],
+   "size": [
+    200,
+    72
+   ],
+   "tag": "--limit 25",
+   "sources": [
+    {
+     "path": "src/cpp_semantic_diff/render/terminal.py"
+    }
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "a-pb",
+   "from": "acquire",
+   "to": "prod_base",
+   "label": "base worktree",
+   "variant": "emphasis"
+  },
+  {
+   "id": "a-ph",
+   "from": "acquire",
+   "to": "prod_head",
+   "label": "head worktree",
+   "variant": "emphasis"
+  },
+  {
+   "id": "pb-c",
+   "from": "prod_base",
+   "to": "cache",
+   "label": "per-TU",
+   "variant": "dashed",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "ph-c",
+   "from": "prod_head",
+   "to": "cache",
+   "label": "per-TU",
+   "variant": "dashed",
+   "fromSide": "top",
+   "toSide": "bottom"
+  },
+  {
+   "id": "pb-m",
+   "from": "prod_base",
+   "to": "match",
+   "label": "base Model",
+   "variant": "emphasis"
+  },
+  {
+   "id": "ph-m",
+   "from": "prod_head",
+   "to": "match",
+   "label": "head Model",
+   "variant": "emphasis"
+  },
+  {
+   "id": "m-d",
+   "from": "match",
+   "to": "diff",
+   "label": "correspondence",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "d-v",
+   "from": "diff",
+   "to": "derive",
+   "label": "change events",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "v-c",
+   "from": "derive",
+   "to": "classify",
+   "label": "+ derived",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "c-r",
+   "from": "classify",
+   "to": "rank",
+   "label": "caused_by links"
+  },
+  {
+   "id": "c-cov",
+   "from": "classify",
+   "to": "coverage",
+   "label": "final events"
+  },
+  {
+   "id": "e-r",
+   "from": "enrich",
+   "to": "rank",
+   "label": "evidence (none)",
+   "variant": "dashed",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "r-j",
+   "from": "rank",
+   "to": "json",
+   "label": "scored, ordered"
+  },
+  {
+   "id": "cov-j",
+   "from": "coverage",
+   "to": "json",
+   "label": "uncovered lines"
+  },
+  {
+   "id": "j-t",
+   "from": "json",
+   "to": "term",
+   "label": "rendered from",
+   "fromSide": "bottom",
+   "toSide": "top"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "rose",
+   "title": "Where the time goes",
+   "items": [
+    "fmt: produce is 193.0 of 195.8 s (99%)",
+    "spdlog: produce is 24.0 of 27.4 s (87%)",
+    "Everything after produce: 1.30 s on fmt, 0.50 s on spdlog; coverage is the largest part of it"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "New since run 38044461310",
+   "items": [
+    "derive: CallerOfChangedSignature change events (ADR-040)",
+    "coverage: changed lines no change event explains (ADR-042)",
+    "match runs three tiers, not one (ADR-036, ADR-044)",
+    "third-party and untracked files are left out of produce (#48, ADR-037)"
+   ]
+  },
+  {
+   "dot": "slate",
+   "title": "Read with care",
+   "items": [
+    "Timings are meta.timings: in-process, cold, GitHub ubuntu-24.04 runner",
+    "No render timing is recorded",
+    "enrich is still not built; blast radius lives in rank"
+   ]
+  }
+ ]
+}
