@@ -347,9 +347,9 @@ class TestBlastRadiusIsBoundedAndSaysSoWhenItTruncates:
         edges += [edge(chain[i].id, chain[i - 1].id) for i in range(1, len(chain))]
         head = model("m", target, *chain, edges=edges)
         changed = body(target.id)
-        detail = rank([changed], head, head).score_for(changed.id).factor(
-            FactorName.BLAST_RADIUS
-        ).detail
+        detail = (
+            rank([changed], head, head).score_for(changed.id).factor(FactorName.BLAST_RADIUS).detail
+        )
         # `depth` callers are within the cap; the remaining two in the chain are not.
         assert detail.startswith(f"{depth} dependent(s)"), detail
 
@@ -364,9 +364,9 @@ class TestBlastRadiusIsBoundedAndSaysSoWhenItTruncates:
         callers = [node(f"c:@F@c{i}#") for i in range(10)]
         head = model("m", target, *callers, edges=[edge(c.id, target.id) for c in callers])
         changed = body(target.id)
-        detail = rank([changed], head, head).score_for(changed.id).factor(
-            FactorName.BLAST_RADIUS
-        ).detail
+        detail = (
+            rank([changed], head, head).score_for(changed.id).factor(FactorName.BLAST_RADIUS).detail
+        )
         assert detail.startswith("3+ dependent(s)"), detail
 
 
