@@ -327,6 +327,49 @@ class TestBlastRadiusIsWhatMakesThisWorthBuilding:
         assert "9 dependent(s)" in detail and "base model" in detail
 
 
+class TestBlastRadiusIsBoundedAndSaysSoWhenItTruncates:
+    """`graph.py`'s module docstring, the other half of "bounded": depth is capped, and so
+    is the number of nodes visited, and a walk that hits either limit has to report the
+    limit rather than quietly returning a smaller number than the graph actually has.
+
+    Neither limit is exercised above: `TestBlastRadiusIsWhatMakesThisWorthBuilding` builds
+    graphs shallow and small enough that the cap never fires.
+    """
+
+    def test_a_caller_chain_longer_than_the_depth_cap_stops_counting_at_the_cap(self) -> None:
+        """The claim is boundedness, not a particular depth, so the chain length and the
+        expected count are both derived from `w.BLAST_MAX_DEPTH` rather than written as
+        literals -- a retune of the cap must not make this test wrong."""
+        depth = w.BLAST_MAX_DEPTH
+        target = node("c:@F@target#")
+        chain = [node(f"c:@F@c{i}#") for i in range(depth + 2)]
+        edges = [edge(chain[0].id, target.id)]
+        edges += [edge(chain[i].id, chain[i - 1].id) for i in range(1, len(chain))]
+        head = model("m", target, *chain, edges=edges)
+        changed = body(target.id)
+        detail = rank([changed], head, head).score_for(changed.id).factor(
+            FactorName.BLAST_RADIUS
+        ).detail
+        # `depth` callers are within the cap; the remaining two in the chain are not.
+        assert detail.startswith(f"{depth} dependent(s)"), detail
+
+    def test_hitting_the_visit_cap_is_reported_not_hidden(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`weights.py`: "Reported through `BlastResult.saturated` rather than silently
+        truncated (§11)." A cap that truncated silently would look like a smaller blast
+        radius instead of an unmeasured one -- indistinguishable from a real leaf."""
+        monkeypatch.setattr(w, "BLAST_VISIT_CAP", 3)
+        target = node("c:@F@target#")
+        callers = [node(f"c:@F@c{i}#") for i in range(10)]
+        head = model("m", target, *callers, edges=[edge(c.id, target.id) for c in callers])
+        changed = body(target.id)
+        detail = rank([changed], head, head).score_for(changed.id).factor(
+            FactorName.BLAST_RADIUS
+        ).detail
+        assert detail.startswith("3+ dependent(s)"), detail
+
+
 class TestAnEdgeEventIsAboutItsSourceNotItsBusiestEndpoint:
     """The bug the first real run found, and the one that mattered most.
 
@@ -722,6 +765,41 @@ class TestAnEdgeIsAsExposedAsEitherOfItsEnds:
         assert outranks(ranking, containment, churn)
 
 
+class TestExposureReadsTheHeadWhenTheTwoModelsDisagree:
+    """`ScoringContext.of`: "Head first, then base, so a node present on both sides is
+    classified by what it is *now*: a helper moved out of a public header during this
+    change is internal." Every exposure test above gives an entity one location, so the
+    merge order this comment describes has never actually been exercised.
+    """
+
+    def test_an_entity_moved_out_of_a_public_header_is_read_as_internal(self) -> None:
+        base = model("a", node("c:@F@x#", file=PUBLIC))
+        head = model("b", node("c:@F@x#", file=LIB_SOURCE))
+        changed = body("c:@F@x#")
+        score = rank([changed], base, head).score_for(changed.id)
+        assert score.exposure is Exposure.INTERNAL
+        assert score.factor(FactorName.EXPOSURE).detail == "internal"
+
+    def test_an_entity_moved_into_a_public_header_is_read_as_public(self) -> None:
+        """The same claim, the other direction: the merge must not simply prefer whichever
+        class is more exposed, only whichever model is head."""
+        base = model("a", node("c:@F@x#", file=LIB_SOURCE))
+        head = model("b", node("c:@F@x#", file=PUBLIC))
+        changed = body("c:@F@x#")
+        score = rank([changed], base, head).score_for(changed.id)
+        assert score.exposure is Exposure.PUBLIC
+
+    def test_an_edge_whose_endpoints_are_in_neither_model_is_internal_not_unknown(self) -> None:
+        """`score.exposure_of`: "A subject in neither model is INTERNAL: no evidence
+        demotes it to TEST or promotes it to PUBLIC." The node case already has a test
+        (`test_an_event_about_an_entity_in_neither_model_still_scores`); the edge case,
+        whose exposure is read from *two* endpoints instead of one, does not."""
+        stray = edge_event("c:@F@ghost1#", "c:@F@ghost2#")
+        score = rank([stray]).score_for(stray.id)
+        assert score.exposure is Exposure.INTERNAL
+        assert score.factor(FactorName.EXPOSURE).detail == "internal (subject not in either model)"
+
+
 # -- decomposition ----------------------------------------------------------------------
 
 
@@ -904,6 +982,38 @@ class TestThreeDisconnectedChangesAreThreeChanges:
         ranking = rank([low, high], head, head)
         assert ranking.components[0].change_events == [high.id]
         assert ranking.score_for(high.id).component == 0
+
+
+class TestDecompositionReadsBothModelsNotJustHead:
+    """`partition`'s rule 3 reads `for model in (base, head)`, and so does rule 4's
+    containment loop. The module docstring gives the reason for rule 3: "Both models are
+    read because an edge deleted by the change still testifies that the two entities were
+    related when the author started." Every decomposition test above passes the same model
+    object as both `base` and `head`, so neither loop has ever been asked to disagree.
+    """
+
+    def test_an_edge_removed_by_this_change_still_joins_its_two_endpoints(self) -> None:
+        base = model("a", node("c:@F@f#"), node("c:@F@g#"), edges=[edge("c:@F@f#", "c:@F@g#")])
+        head = model("b", node("c:@F@f#"), node("c:@F@g#"))
+        events = [body("c:@F@f#"), body("c:@F@g#")]
+        assert len(rank(events, base, head).components) == 1
+
+    def test_a_container_that_existed_only_in_base_still_joins_its_members(self) -> None:
+        """A class deleted by this change still explains why its two methods are one
+        change, even though head has no containment -- or the class itself -- left to read."""
+        base = model(
+            "a",
+            node("c:@S@C", kind=NodeKind.CLASS),
+            node("c:@S@C@F@m#", kind=NodeKind.METHOD),
+            node("c:@S@C@F@n#", kind=NodeKind.METHOD),
+            edges=[
+                edge("c:@S@C", "c:@S@C@F@m#", EdgeKind.CONTAINS),
+                edge("c:@S@C", "c:@S@C@F@n#", EdgeKind.CONTAINS),
+            ],
+        )
+        head = model("b")
+        events = [body("c:@S@C@F@m#"), body("c:@S@C@F@n#")]
+        assert len(rank(events, base, head).components) == 1
 
 
 # -- the stage's own contract ------------------------------------------------------------
