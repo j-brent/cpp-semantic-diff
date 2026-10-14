@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "6a10a510-c70f-49f4-a7a6-ae99fbf81d80",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/jbrent/dev/cpp-semantic-diff/.claude/worktrees/agent-ace6c8fec9ab5a687/reports/2026-10-14--v0-demo-run/process/B-pipeline/pipeline.json",
+  "output": "/home/jbrent/dev/cpp-semantic-diff/.claude/worktrees/agent-ace6c8fec9ab5a687/reports/2026-10-14--v0-demo-run/process/B-pipeline/pipeline.html",
+  "specification": {
+    "sha256": "d57d422861d6322afc68ed12b91c475983670d61c1ec9ab33e36b98193bb60b8",
+    "bytes": 7403
+  },
+  "artifact": {
+    "sha256": "f9376c68caf9b93eaf1bb0acf5daa73d8ffd1c63abf8cfe1dd3be47d1fc97482",
+    "bytes": 777866
+  }
+}

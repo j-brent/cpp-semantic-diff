@@ -1,0 +1,180 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "spdlog \u00b7 component 1 \u00b7 head (6c9e898175c6)",
+  "output": "head.html",
+  "quality_profile": "showcase",
+  "legend": {
+   "entries": {
+    "external": {
+     "label": "caller (example)"
+    },
+    "backend": {
+     "label": "function the change is about"
+    },
+    "cloud": {
+     "label": "callee"
+    },
+    "frontend": {
+     "label": "same component, no call drawn"
+    }
+   }
+  }
+ },
+ "components": [
+  {
+   "id": "ex_basic",
+   "type": "external",
+   "label": "basic_example",
+   "sublabel": "example.cpp:121",
+   "pos": [
+    40,
+    60
+   ],
+   "size": [
+    230,
+    58
+   ]
+  },
+  {
+   "id": "ex_async",
+   "type": "external",
+   "label": "async_example",
+   "sublabel": "example.cpp:165",
+   "pos": [
+    40,
+    160
+   ],
+   "size": [
+    230,
+    58
+   ]
+  },
+  {
+   "id": "ex_replace",
+   "type": "external",
+   "label": "replace_default_logger_example",
+   "sublabel": "example.cpp:374",
+   "pos": [
+    40,
+    260
+   ],
+   "size": [
+    250,
+    58
+   ]
+  },
+  {
+   "id": "feh",
+   "type": "cloud",
+   "label": "file_event_handlers",
+   "sublabel": "ctor",
+   "pos": [
+    920,
+    160
+   ],
+   "size": [
+    210,
+    58
+   ]
+  },
+  {
+   "id": "blmt",
+   "type": "backend",
+   "label": "spdlog::basic_logger_mt \u00b7 basic_file_sink.h",
+   "sublabel": "(string&, string&, bool = false, handlers& = {}, unsigned long = 0) \u00b7 :48",
+   "pos": [
+    420,
+    120
+   ],
+   "size": [
+    380,
+    130
+   ],
+   "tag": "NodeSignatureChanged \u00b7 risk 0.67"
+  },
+  {
+   "id": "sdl",
+   "type": "frontend",
+   "label": "spdlog::set_default_logger",
+   "sublabel": "void (std::shared_ptr<logger>) \u00b7 spelling only",
+   "pos": [
+    420,
+    360
+   ],
+   "size": [
+    280,
+    64
+   ]
+  },
+  {
+   "id": "dl",
+   "type": "frontend",
+   "label": "spdlog::default_logger",
+   "sublabel": "std::shared_ptr<logger> () \u00b7 spelling only",
+   "pos": [
+    420,
+    460
+   ],
+   "size": [
+    280,
+    64
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "ex_basic-blmt",
+   "from": "ex_basic",
+   "to": "blmt",
+   "label": "caller not edited"
+  },
+  {
+   "id": "ex_async-blmt",
+   "from": "ex_async",
+   "to": "blmt",
+   "label": "caller not edited"
+  },
+  {
+   "id": "ex_replace-blmt",
+   "from": "ex_replace",
+   "to": "blmt",
+   "label": "caller not edited"
+  },
+  {
+   "id": "blmt-feh",
+   "from": "blmt",
+   "to": "feh"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "rose",
+   "title": "What the tool reported",
+   "items": [
+    "8 change events in component 1, 5 of them top-level",
+    "basic_logger_mt: NodeSignatureChanged (0.67) and NodeAttrChanged(default_arguments) (0.64), both high-risk; NodeBodyChanged (0.50)",
+    "3 CallerOfChangedSignature nested under it, none of the callers edited",
+    "set_default_logger and default_logger: NodeAttrChanged(sugared_signature), the spelling of logger only, not high-risk (ADR-046)"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "What changed since run 38044461310",
+   "items": [
+    "Then: the 8 file-logger factories were 8 removals plus 8 additions in one 62-event component",
+    "Now: each factory is one NodeSignatureChanged, paired by the name tier, and the factories fall into components 1 to 9",
+    "The sink constructors they wrap are in component 2, beside the buffer_size methods"
+   ]
+  },
+  {
+   "dot": "slate",
+   "title": "Drawn differently from the document",
+   "items": [
+    "The document does not say which edge puts set_default_logger and default_logger in this component, so none is drawn",
+    "The file_event_handlers edge is in run B's document on both sides; this run reports no change on it"
+   ]
+  }
+ ]
+}

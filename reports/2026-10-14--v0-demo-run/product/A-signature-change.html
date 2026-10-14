@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signature Change · before and after</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .frame { width: 100%; border: 1px solid var(--ring); border-radius: 12px; background: #0b0f17; display: block; }
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 16px 0 10px; }
+  .grid3 h3 { margin-bottom: 6px; }
+  .grid3 ul { margin: 0; padding-left: 18px; }
+  .grid3 li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="crumbs"><a href="../index.html">Run 38280732734</a> <span>/</span> <span class="kicker product">Product</span> <span>/</span> <span>A</span></div>
+    <div id="theme-slot"></div>
+  </div>
+  <h1>A · The signature change, before and after</h1>
+  <p class="lede">In run B the top-ranked change in both repositories was a function that gained a parameter, reported as a
+    removal plus an addition. Here the same change is one entity, paired by the name tier (ADR-036), with a
+    <code>NodeSignatureChanged</code> and a <code>CallerOfChangedSignature</code> for each caller that calls it on both
+    sides (ADR-040). The diagram puts the base and head call graphs on top of each other. <b>Dashed red</b> is only in base,
+    <b>green</b> only in head, and grey is in both.</p>
+
+  <div class="controls"><span id="seg"></span><a id="open" class="note" target="_blank" rel="noopener">Open the diagram on its own ↗</a></div>
+  <div class="grid3" id="cards"></div>
+  <p class="note" style="margin:14px 0 8px">The diagram has its own <b>Before / Delta / After</b> switch at the top left, and an
+    "Exact authored changes" list at the bottom.</p>
+  <iframe class="frame" id="frame" title="before and after call graph"></iframe>
+  <p class="note muted">Drawn with archify <code>compare architecture</code> from <code>A-*/base.json</code> and <code>head.json</code>, which
+    <code>scripts/gen_fmt_component0.py</code> and <code>scripts/gen_spdlog_component1.py</code> write by hand from the components of
+    each <code>diff.json</code>. Archify's own header line ("See what changed before you merge") is its boilerplate.</p>
+</main>
+<script src="../data/run-38280732734.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+const VIEWS = {
+  fmt: {
+    src: "A-fmt/fmt-write-buffer.html", height: 1460,
+    cards: [
+      ["rose", "What the tool reported", [
+        "Component 0: 15 change events, 10 of them top-level",
+        "detail::write_buffer: NodeSignatureChanged (risk 0.74), NodeAttrChanged(default_arguments) (0.71) and NodeBodyChanged (0.57), each top-level and each high-risk",
+        "5 CallerOfChangedSignature nested under the signature change: print, both vprint, and two tests. Only the max_size test was edited",
+        "The max_size test's own changes: body changed, 3 calls removed, 3 added"]],
+      ["amber", "Against run B", [
+        "Run B: write_buffer removed (0.86) and write_buffer added (0.82), 8 consequences under each, 28 events in component 0",
+        "Here the callers' edges map through the pairing, so none of the 16 edge events is reported",
+        "fill_n shared run B's component 0 through namespace detail; here it is component 1"]],
+      ["slate", "Read with care", [
+        "The default argument and the body change are not linked to the signature change by any cause rule, so one edit is three top-level high-risk events",
+        "The edges drawn in both views are inferred: no change event touches them"]],
+    ],
+  },
+  spdlog: {
+    src: "A-spdlog/spdlog-basic-logger.html", height: 1100,
+    cards: [
+      ["rose", "What the tool reported", [
+        "Component 1: 8 change events, 5 top-level",
+        "basic_logger_mt: NodeSignatureChanged (0.67), NodeAttrChanged(default_arguments) (0.64), both high-risk, and NodeBodyChanged (0.50)",
+        "3 CallerOfChangedSignature from example.cpp, none of them edited",
+        "set_default_logger and default_logger: the spelling of their logger type changed (sugared_signature), never high-risk (ADR-046)"]],
+      ["amber", "Against run B", [
+        "Run B: 8 file-logger factories removed and 8 added, all in one 62-event component 0",
+        "Here 11 functions (8 factories, 3 sink constructors) are each one NodeSignatureChanged, spread over components 1 to 9",
+        "This run's component 0 is 20 change events of spelling and sink body changes, topped by a spelling-only default argument (page D)"]],
+      ["slate", "Drawn differently from the document", [
+        "Only basic_logger_mt's component is drawn; the other factories' components look the same, without the examples",
+        "The document does not say which edge puts set_default_logger and default_logger in this component, so none is drawn"]],
+    ],
+  },
+};
+const frame = document.getElementById("frame");
+function show(name) {
+  const v = VIEWS[name];
+  frame.src = v.src;
+  frame.style.height = v.height + "px";
+  document.getElementById("open").href = v.src;
+  document.getElementById("cards").replaceChildren(...v.cards.map(([dot, title, items]) =>
+    el("div", { class: "panel note" },
+      el("h3", {}, el("span", { class: "sw", style: `display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:var(--${{ rose: "critical", amber: "warning", slate: "muted" }[dot]})` }), title),
+      el("ul", {}, items.map((i) => el("li", { text: i }))))));
+}
+document.getElementById("seg").append(segmented([["fmt", "fmt · write_buffer"], ["spdlog", "spdlog · basic_logger_mt"]], "fmt", show));
+show("fmt");
+</script>
+</body>
+</html>

@@ -1,0 +1,10209 @@
+window.RUN_DATA = {
+ "run": {
+  "id": 38280732734,
+  "url": "https://github.com/j-brent/cpp-semantic-diff/actions/runs/38280732734",
+  "event": "pull_request",
+  "pr": 75,
+  "branch": "dev",
+  "commit": "c01c58b",
+  "created": "2026-10-12T16:55:15Z",
+  "analyze_step_s": {
+   "fmt": 217,
+   "spdlog": 36
+  }
+ },
+ "targets": [
+  {
+   "name": "fmt",
+   "base_ref": "HEAD~12",
+   "third_party_flag": "test/gtest",
+   "revs": [
+    "ea0660a1d095",
+    "b4ffa39b9994"
+   ],
+   "range_shift": {
+    "base": [
+     "cdc27f91a007",
+     "ea0660a1d095",
+     1
+    ],
+    "head": [
+     "35c58f084e7c",
+     "b4ffa39b9994",
+     1
+    ]
+   },
+   "schema": "2.0",
+   "plan": {
+    "files_changed": 12,
+    "cpp_files": 10,
+    "files_renamed": 0,
+    "lines_changed": 576
+   },
+   "doctor": [
+    "libclang         /usr/lib/llvm-18/lib/libclang.so.1    ",
+    "version          Ubuntu clang version 18.1.3 (1ubuntu1)",
+    "builtin headers  parsed clean                          ",
+    "target           x86_64-pc-linux-gnu                   ",
+    "producer id      libclang 18.1.3 x86_64-pc-linux-gnu"
+   ],
+   "summary": {
+    "lines_changed": 576,
+    "files_changed": 12,
+    "cpp_files_changed": 10,
+    "files_renamed": 0,
+    "changed_cpp_lines": 412,
+    "uncovered_lines": 18,
+    "uncovered_tokens": 148,
+    "change_events_reported": 143,
+    "compression": "576 lines changed -> 143 change events, 5 high-risk · 18 of 412 changed C++ lines explained by no change event",
+    "compression_ratio": 4.027972027972028,
+    "high_risk_count": 5,
+    "top_level_change_events": 40,
+    "components": 25,
+    "residue": {
+     "matched": 8809,
+     "unmatched_base": 0,
+     "unmatched_head": 51,
+     "internal_linkage_residue": 0,
+     "tiers_run": [
+      "declared",
+      "inline-namespace",
+      "name"
+     ]
+    }
+   },
+   "timings": {
+    "acquire": 1.4096685309999941,
+    "produce_base": 98.343818348,
+    "produce_head": 94.69182087499999,
+    "match": 0.12346675500003812,
+    "diff": 0.12979782700000442,
+    "derive": 0.008372237999992649,
+    "classify": 0.0751552780000111,
+    "coverage": 0.75185981300001,
+    "rank": 0.14810783699999774,
+    "total": 195.750285327
+   },
+   "in_process_s": {
+    "cold": 195.8,
+    "warm": 16.5
+   },
+   "kinds": {
+    "EdgeAdded": 61,
+    "NodeAdded": 51,
+    "NodeBodyChanged": 21,
+    "CallerOfChangedSignature": 5,
+    "EdgeRemoved": 3,
+    "NodeAttrChanged": 1,
+    "NodeSignatureChanged": 1
+   },
+   "attr_kinds": {
+    "default_arguments": 1
+   },
+   "tiers": {
+    "None": 105,
+    "declared": 30,
+    "name": 8
+   },
+   "high_risk_by_kind": {
+    "NodeSignatureChanged": 1,
+    "NodeAttrChanged": 1,
+    "CallerOfChangedSignature": 1,
+    "NodeBodyChanged": 1,
+    "NodeAdded": 1
+   },
+   "spelling_only_gated": 0,
+   "entity_kinds": {
+    "method": 59,
+    "function": 21,
+    "class": 5,
+    "variable": 5,
+    "namespace": 1,
+    "struct": 1,
+    "field": 1,
+    "alias": 1
+   },
+   "third_party": [
+    {
+     "path": "test/gtest",
+     "sources": [
+      "declared"
+     ]
+    }
+   ],
+   "third_party_hints": [],
+   "completeness": {
+    "base": {
+     "tus_total": 50,
+     "tus_parsed": 50,
+     "tus_failed": 0,
+     "tus_cached": 15,
+     "edges_total": 18964,
+     "edges_dropped": 7804,
+     "tus_complete": true,
+     "crossings_by_label": {
+      "C library": 180,
+      "C++ standard library": 1175,
+      "compiler builtins": 2,
+      "function-local": 115,
+      "implicit": 304,
+      "template instantiation": 457,
+      "test/gtest": 5521,
+      "unresolved": 50
+     },
+     "unmodelled": {
+      "friend": 49,
+      "using_declaration": 52,
+      "using_directive": 1
+     },
+     "language_modes": [],
+     "notes": [
+      "2 of 52 compile-database entries are not C++ and were not modelled",
+      "1 of 51 C++ compile-database entries are third-party and were not parsed"
+     ]
+    },
+    "head": {
+     "tus_total": 50,
+     "tus_parsed": 50,
+     "tus_failed": 0,
+     "tus_cached": 17,
+     "edges_total": 19076,
+     "edges_dropped": 7858,
+     "tus_complete": true,
+     "crossings_by_label": {
+      "C library": 180,
+      "C++ standard library": 1183,
+      "compiler builtins": 2,
+      "function-local": 114,
+      "implicit": 306,
+      "template instantiation": 461,
+      "test/gtest": 5562,
+      "unresolved": 50
+     },
+     "unmodelled": {
+      "friend": 50,
+      "using_declaration": 52,
+      "using_directive": 1
+     },
+     "language_modes": [],
+     "notes": [
+      "2 of 52 compile-database entries are not C++ and were not modelled",
+      "1 of 51 C++ compile-database entries are third-party and were not parsed",
+      "33 of 50 cached translation units were invalidated and reparsed, so this build cost close to a cold one: 92.6 s to produce its partial models, 2.8 s per translation unit parsed. The usual cause is a change to a widely-included header, which invalidates every TU that includes it (ARCH-001 §9)"
+     ]
+    }
+   },
+   "renames": {
+    "complete": true,
+    "limit_needed": null
+   },
+   "limits": [
+    "One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not implied.",
+    "Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.",
+    "Implicit special members are not visible. libclang does not expose the copy and move operations the compiler writes, so a change that adds or removes one implicitly -- adding a destructor removes the implicit move operations -- produces no change event."
+   ],
+   "uncovered": {
+    "changed_cpp_lines": 412,
+    "lines": 18,
+    "tokens": 148,
+    "moved_tokens": 0,
+    "lines_in_unmodelled_files": 0,
+    "excluded_files": [],
+    "files_total": 4,
+    "files_unmodelled": 0,
+    "top_files": [
+     {
+      "side": "head",
+      "path": "test/format-test.cc",
+      "tokens": 79,
+      "modelled": true,
+      "lines": 10
+     },
+     {
+      "side": "head",
+      "path": "test/compile-test.cc",
+      "tokens": 54,
+      "modelled": true,
+      "lines": 6
+     },
+     {
+      "side": "base",
+      "path": "test/compile-test.cc",
+      "tokens": 9,
+      "modelled": true,
+      "lines": 1
+     },
+     {
+      "side": "head",
+      "path": "include/fmt/core.h",
+      "tokens": 6,
+      "modelled": true,
+      "lines": 1
+     }
+    ]
+   },
+   "findings": 0,
+   "top_level": [
+    {
+     "rank": 1,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "detail::write_buffer (basic_ostream&, buffer&, unsigned long)",
+     "relation": "",
+     "where": "include/fmt/ostream.h:55",
+     "total": 0.7429,
+     "impact": 0.8298,
+     "informational": false,
+     "high_risk": true,
+     "component": 0,
+     "nested": 5,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2054,
+       "v": 0.5868,
+       "detail": "14 dependent(s), 6 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "detail::write_buffer (basic_ostream&, buffer&, unsigned long)",
+     "relation": "",
+     "where": "include/fmt/ostream.h:55",
+     "total": 0.7054,
+     "impact": 0.7857,
+     "informational": false,
+     "high_risk": true,
+     "component": 0,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2054,
+       "v": 0.5868,
+       "detail": "14 dependent(s), 6 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 4,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "detail::write_buffer (basic_ostream&, buffer&, unsigned long)",
+     "relation": "",
+     "where": "include/fmt/ostream.h:55",
+     "total": 0.5679,
+     "impact": 0.624,
+     "informational": false,
+     "high_risk": true,
+     "component": 0,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2054,
+       "v": 0.5868,
+       "detail": "14 dependent(s), 6 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 5,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "detail::fill_n (basic_appender, unsigned long, T)",
+     "relation": "",
+     "where": "include/fmt/format.h:548",
+     "total": 0.5676,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 1,
+     "nested": 2,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 10,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "detail::is_printable (unsigned int)",
+     "relation": "",
+     "where": "include/fmt/format-inl.h:1827",
+     "total": 0.5069,
+     "impact": 0.5963,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1819,
+       "v": 0.5196,
+       "detail": "10 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 11,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "writer::writer (detail::buffer&)",
+     "relation": "",
+     "where": "include/fmt/format.h:1080",
+     "total": 0.4996,
+     "impact": 0.5878,
+     "informational": false,
+     "high_risk": false,
+     "component": 3,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1746,
+       "v": 0.4989,
+       "detail": "9 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 12,
+     "kind": "EdgeAdded",
+     "detail": "",
+     "label": "detail::write → detail::buffer::clear",
+     "relation": "calls",
+     "where": "include/fmt/format.h:3754",
+     "total": 0.4952,
+     "impact": 0.5826,
+     "informational": false,
+     "high_risk": false,
+     "component": 4,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1577,
+       "v": 0.4506,
+       "detail": "7 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.0875,
+       "v": 0.35,
+       "detail": "EdgeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 13,
+     "kind": "EdgeAdded",
+     "detail": "",
+     "label": "detail::write → basic_specs::upper",
+     "relation": "calls",
+     "where": "include/fmt/format.h:3749",
+     "total": 0.4952,
+     "impact": 0.5826,
+     "informational": false,
+     "high_risk": false,
+     "component": 4,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1577,
+       "v": 0.4506,
+       "detail": "7 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.0875,
+       "v": 0.35,
+       "detail": "EdgeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 14,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "detail::write (T1, T2, format_specs, locale_ref)",
+     "relation": "",
+     "where": "include/fmt/format.h:3678",
+     "total": 0.4827,
+     "impact": 0.5679,
+     "informational": false,
+     "high_risk": false,
+     "component": 4,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1577,
+       "v": 0.4506,
+       "detail": "7 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 15,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "detail::format_hexfloat (T, format_specs, detail::buffer&)",
+     "relation": "",
+     "where": "include/fmt/format.h:3278",
+     "total": 0.4471,
+     "impact": 0.5259,
+     "informational": false,
+     "high_risk": false,
+     "component": 5,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1221,
+       "v": 0.3487,
+       "detail": "4 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 16,
+     "kind": "EdgeAdded",
+     "detail": "",
+     "label": "detail::format_float → detail::count_digits",
+     "relation": "calls",
+     "where": "include/fmt/format.h:3696",
+     "total": 0.4426,
+     "impact": 0.5207,
+     "informational": false,
+     "high_risk": false,
+     "component": 6,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.0875,
+       "v": 0.35,
+       "detail": "EdgeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 17,
+     "kind": "EdgeAdded",
+     "detail": "",
+     "label": "basic_memory_buffer::grow → detail::is_constant_evaluated",
+     "relation": "calls",
+     "where": "include/fmt/format.h:991",
+     "total": 0.4426,
+     "impact": 0.5207,
+     "informational": false,
+     "high_risk": false,
+     "component": 7,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.0875,
+       "v": 0.35,
+       "detail": "EdgeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 19,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "detail::allocator::allocate (unsigned long)",
+     "relation": "",
+     "where": "include/fmt/format.h:891",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 8,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 20,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "basic_memory_buffer::grow (buffer&, unsigned long)",
+     "relation": "",
+     "where": "include/fmt/format.h:950",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 7,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 21,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "detail::allocator::deallocate (T*, unsigned long)",
+     "relation": "",
+     "where": "include/fmt/format.h:896",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 8,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 22,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "detail::write_escaped_alternative (T1, T2&, T3&)",
+     "relation": "",
+     "where": "include/fmt/std.h:138",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 9,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 23,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "detail::format_float (T, int, format_specs&, bool, detail::buffer&)",
+     "relation": "",
+     "where": "include/fmt/format.h:3378",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 6,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 24,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "detail::write_fixed (T2, T3&, int, T, format_specs&, sign, locale_ref)",
+     "relation": "",
+     "where": "include/fmt/format.h:2727",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 10,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 26,
+     "kind": "EdgeRemoved",
+     "detail": "",
+     "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → detail::max_value",
+     "relation": "calls",
+     "where": "test/ostream-test.cc:132",
+     "total": 0.4026,
+     "impact": 0.4736,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.1,
+       "v": 0.4,
+       "detail": "EdgeRemoved"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 27,
+     "kind": "EdgeRemoved",
+     "detail": "",
+     "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → detail::buffer::buffer<T>",
+     "relation": "calls",
+     "where": "test/ostream-test.cc:138",
+     "total": 0.4026,
+     "impact": 0.4736,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.1,
+       "v": 0.4,
+       "detail": "EdgeRemoved"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 28,
+     "kind": "EdgeRemoved",
+     "detail": "",
+     "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → detail::to_unsigned",
+     "relation": "calls",
+     "where": "test/ostream-test.cc:134",
+     "total": 0.4026,
+     "impact": 0.4736,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.1,
+       "v": 0.4,
+       "detail": "EdgeRemoved"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 29,
+     "kind": "EdgeAdded",
+     "detail": "",
+     "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → basic_memory_buffer::basic_memory_buffer<T, SIZE, Allocator>",
+     "relation": "calls",
+     "where": "test/ostream-test.cc:132",
+     "total": 0.3901,
+     "impact": 0.4589,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.0875,
+       "v": 0.35,
+       "detail": "EdgeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 30,
+     "kind": "EdgeAdded",
+     "detail": "",
+     "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → basic_string_view::basic_string_view<Char>",
+     "relation": "calls",
+     "where": "test/ostream-test.cc:133",
+     "total": 0.3901,
+     "impact": 0.4589,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.0875,
+       "v": 0.35,
+       "detail": "EdgeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 31,
+     "kind": "EdgeAdded",
+     "detail": "",
+     "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → detail::buffer::data",
+     "relation": "calls",
+     "where": "test/ostream-test.cc:142",
+     "total": 0.3901,
+     "impact": 0.4589,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.0875,
+       "v": 0.35,
+       "detail": "EdgeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 32,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "stateful_allocator ",
+     "relation": "",
+     "where": "test/format-test.cc:396",
+     "total": 0.2625,
+     "impact": 0.3088,
+     "informational": false,
+     "high_risk": false,
+     "component": 11,
+     "nested": 8,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 33,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "compile_test_format_variant_Test ",
+     "relation": "",
+     "where": "test/compile-test.cc:188",
+     "total": 0.2625,
+     "impact": 0.3088,
+     "informational": false,
+     "high_risk": false,
+     "component": 12,
+     "nested": 16,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 34,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "format_test_high_precision_bounded_output_Test ",
+     "relation": "",
+     "where": "test/format-test.cc:1298",
+     "total": 0.2625,
+     "impact": 0.3088,
+     "informational": false,
+     "high_risk": false,
+     "component": 13,
+     "nested": 16,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 35,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "format_test_high_precision_trailing_zeros_Test ",
+     "relation": "",
+     "where": "test/format-test.cc:1281",
+     "total": 0.2625,
+     "impact": 0.3088,
+     "informational": false,
+     "high_risk": false,
+     "component": 14,
+     "nested": 16,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 36,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "compile_test_format_expected_Test ",
+     "relation": "",
+     "where": "test/compile-test.cc:205",
+     "total": 0.2625,
+     "impact": 0.3088,
+     "informational": false,
+     "high_risk": false,
+     "component": 15,
+     "nested": 16,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 37,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "format_test_high_precision_long_double_Test ",
+     "relation": "",
+     "where": "test/format-test.cc:1312",
+     "total": 0.2625,
+     "impact": 0.3088,
+     "informational": false,
+     "high_risk": false,
+     "component": 16,
+     "nested": 16,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 90,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "ostream_test_write_to_ostream_max_size_Test::TestBody ()",
+     "relation": "",
+     "where": "test/ostream-test.cc:131",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 91,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "ranges_test_escape_Test::TestBody ()",
+     "relation": "",
+     "where": "test/ranges-test.cc:600",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 17,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 92,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "xchar_test_format_Test::TestBody ()",
+     "relation": "",
+     "where": "test/xchar-test.cc:72",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 18,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 93,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "format_test_large_precision_Test::TestBody ()",
+     "relation": "",
+     "where": "test/format-test.cc:1245",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 19,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 94,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "format_test_format_to_n_Test::TestBody ()",
+     "relation": "",
+     "where": "test/format-test.cc:2296",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 20,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 95,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "format_test_format_double_Test::TestBody ()",
+     "relation": "",
+     "where": "test/format-test.cc:1566",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 21,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 96,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "memory_buffer_test_move_ctor_dynamic_buffer_non_propagating_Test::TestBody ()",
+     "relation": "",
+     "where": "test/format-test.cc:383",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 22,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 97,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "format_test_formatted_size_Test::TestBody ()",
+     "relation": "",
+     "where": "test/format-test.cc:2252",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 23,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 98,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "ranges_test_is_printable_Test::TestBody ()",
+     "relation": "",
+     "where": "test/ranges-test.cc:593",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 99,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "format_test_format_to_n_output_iterator_Test::TestBody ()",
+     "relation": "",
+     "where": "test/format-test.cc:2353",
+     "total": 0.1776,
+     "impact": 0.2089,
+     "informational": false,
+     "high_risk": false,
+     "component": 24,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.05,
+       "v": 0.2,
+       "detail": "test"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "spdlog",
+   "base_ref": "HEAD~30",
+   "third_party_flag": "include/spdlog/fmt/bundled",
+   "revs": [
+    "a2976707813e",
+    "6c9e898175c6"
+   ],
+   "range_shift": {
+    "base": [
+     "bfde7d3711d5",
+     "a2976707813e",
+     1
+    ],
+    "head": [
+     "d6c93f38a08b",
+     "6c9e898175c6",
+     1
+    ]
+   },
+   "schema": "2.0",
+   "plan": {
+    "files_changed": 105,
+    "cpp_files": 95,
+    "files_renamed": 0,
+    "lines_changed": 2254
+   },
+   "doctor": [
+    "libclang         /usr/lib/llvm-18/lib/libclang.so.1    ",
+    "version          Ubuntu clang version 18.1.3 (1ubuntu1)",
+    "builtin headers  parsed clean                          ",
+    "target           x86_64-pc-linux-gnu                   ",
+    "producer id      libclang 18.1.3 x86_64-pc-linux-gnu"
+   ],
+   "summary": {
+    "lines_changed": 2254,
+    "files_changed": 105,
+    "cpp_files_changed": 95,
+    "files_renamed": 0,
+    "changed_cpp_lines": 1487,
+    "uncovered_lines": 1219,
+    "uncovered_tokens": 6375,
+    "change_events_reported": 158,
+    "compression": "2,254 lines changed -> 158 change events, 35 high-risk · 1,219 of 1,487 changed C++ lines explained by no change event",
+    "compression_ratio": 14.265822784810126,
+    "high_risk_count": 35,
+    "top_level_change_events": 122,
+    "components": 50,
+    "residue": {
+     "matched": 1032,
+     "unmatched_base": 0,
+     "unmatched_head": 16,
+     "internal_linkage_residue": 3,
+     "tiers_run": [
+      "declared",
+      "inline-namespace",
+      "name"
+     ]
+    }
+   },
+   "timings": {
+    "acquire": 2.9309483070000084,
+    "produce_base": 13.423599882000005,
+    "produce_head": 10.533474171999998,
+    "match": 0.011809366999997906,
+    "diff": 0.017665575000009426,
+    "derive": 0.0010250589999998283,
+    "classify": 0.008018976999991878,
+    "coverage": 0.363195747000006,
+    "rank": 0.024969291000005,
+    "total": 27.387265235
+   },
+   "in_process_s": {
+    "cold": 27.4,
+    "warm": 1.5
+   },
+   "kinds": {
+    "NodeAttrChanged": 58,
+    "NodeBodyChanged": 36,
+    "EdgeAdded": 31,
+    "NodeAdded": 16,
+    "NodeSignatureChanged": 11,
+    "CallerOfChangedSignature": 5,
+    "EdgeRemoved": 1
+   },
+   "attr_kinds": {
+    "sugared_signature": 29,
+    "replacement_hash": 16,
+    "default_arguments": 13
+   },
+   "tiers": {
+    "declared": 73,
+    "None": 47,
+    "name": 38
+   },
+   "high_risk_by_kind": {
+    "NodeSignatureChanged": 11,
+    "NodeAttrChanged": 11,
+    "NodeAdded": 11,
+    "NodeBodyChanged": 2
+   },
+   "spelling_only_gated": 8,
+   "entity_kinds": {
+    "method": 53,
+    "function": 32,
+    "macro": 19,
+    "class": 5,
+    "field": 2,
+    "namespace": 1
+   },
+   "third_party": [
+    {
+     "path": "include/spdlog/fmt/bundled",
+     "sources": [
+      "declared"
+     ]
+    }
+   ],
+   "third_party_hints": [],
+   "completeness": {
+    "base": {
+     "tus_total": 8,
+     "tus_parsed": 8,
+     "tus_failed": 0,
+     "tus_cached": 0,
+     "edges_total": 2579,
+     "edges_dropped": 938,
+     "tus_complete": true,
+     "crossings_by_label": {
+      "C library": 64,
+      "C++ standard library": 666,
+      "function-local": 19,
+      "implicit": 23,
+      "include/spdlog/fmt/bundled": 166
+     },
+     "unmodelled": {
+      "friend": 1,
+      "namespace_alias": 1
+     },
+     "language_modes": [
+      "c++11"
+     ],
+     "notes": []
+    },
+    "head": {
+     "tus_total": 8,
+     "tus_parsed": 8,
+     "tus_failed": 0,
+     "tus_cached": 1,
+     "edges_total": 2619,
+     "edges_dropped": 948,
+     "tus_complete": true,
+     "crossings_by_label": {
+      "C library": 69,
+      "C++ standard library": 670,
+      "function-local": 19,
+      "implicit": 23,
+      "include/spdlog/fmt/bundled": 167
+     },
+     "unmodelled": {
+      "friend": 1,
+      "namespace_alias": 1
+     },
+     "language_modes": [
+      "c++11"
+     ],
+     "notes": [
+      "7 of 8 cached translation units were invalidated and reparsed, so this build cost close to a cold one: 10.3 s to produce its partial models, 1.5 s per translation unit parsed. The usual cause is a change to a widely-included header, which invalidates every TU that includes it (ARCH-001 §9)"
+     ]
+    }
+   },
+   "renames": {
+    "complete": true,
+    "limit_needed": null
+   },
+   "limits": [
+    "One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not implied.",
+    "Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.",
+    "Implicit special members are not visible. libclang does not expose the copy and move operations the compiler writes, so a change that adds or removes one implicitly -- adding a destructor removes the implicit move operations -- produces no change event."
+   ],
+   "uncovered": {
+    "changed_cpp_lines": 1487,
+    "lines": 1219,
+    "tokens": 6375,
+    "moved_tokens": 0,
+    "lines_in_unmodelled_files": 828,
+    "excluded_files": [],
+    "files_total": 179,
+    "files_unmodelled": 52,
+    "top_files": [
+     {
+      "side": "head",
+      "path": "tests/test_file_logging.cpp",
+      "tokens": 1288,
+      "modelled": false,
+      "lines": 138
+     },
+     {
+      "side": "head",
+      "path": "tests/test_systemd_namespace.cpp",
+      "tokens": 1240,
+      "modelled": false,
+      "lines": 152
+     },
+     {
+      "side": "head",
+      "path": "include/spdlog/sinks/loki_sink.h",
+      "tokens": 900,
+      "modelled": false,
+      "lines": 104
+     },
+     {
+      "side": "head",
+      "path": "include/spdlog/sinks/systemd_namespace_sink.h",
+      "tokens": 809,
+      "modelled": false,
+      "lines": 127
+     },
+     {
+      "side": "head",
+      "path": "tests/test_tcp_client.cpp",
+      "tokens": 430,
+      "modelled": false,
+      "lines": 55
+     },
+     {
+      "side": "head",
+      "path": "tests/test_file_helper.cpp",
+      "tokens": 285,
+      "modelled": false,
+      "lines": 38
+     },
+     {
+      "side": "head",
+      "path": "tests/test_ringbuffer.cpp",
+      "tokens": 189,
+      "modelled": false,
+      "lines": 20
+     },
+     {
+      "side": "head",
+      "path": "tests/test_create_dir.cpp",
+      "tokens": 103,
+      "modelled": false,
+      "lines": 10
+     },
+     {
+      "side": "head",
+      "path": "tests/cmake/tweakme/main.cpp",
+      "tokens": 88,
+      "modelled": false,
+      "lines": 14
+     },
+     {
+      "side": "base",
+      "path": "include/spdlog/details/tcp_client.h",
+      "tokens": 50,
+      "modelled": false,
+      "lines": 10
+     },
+     {
+      "side": "base",
+      "path": "src/color_sinks.cpp",
+      "tokens": 48,
+      "modelled": true,
+      "lines": 24
+     },
+     {
+      "side": "head",
+      "path": "src/color_sinks.cpp",
+      "tokens": 48,
+      "modelled": true,
+      "lines": 24
+     }
+    ]
+   },
+   "findings": 0,
+   "top_level": [
+    {
+     "rank": 1,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "pattern_formatter::pattern_formatter (pattern_time_type, basic_string)",
+     "relation": "",
+     "where": "include/spdlog/pattern_formatter-inl.h:964",
+     "total": 0.7277,
+     "impact": 0.8561,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2652,
+       "v": 0.7576,
+       "detail": "32 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 2,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "basic_logger_mt (basic_string&, basic_string&, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink.h:45",
+     "total": 0.6734,
+     "impact": 0.7481,
+     "informational": false,
+     "high_risk": true,
+     "component": 1,
+     "nested": 3,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 4 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 3,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "pattern_formatter::pattern_formatter (basic_string, pattern_time_type, basic_string, unordered_map)",
+     "relation": "",
+     "where": "include/spdlog/pattern_formatter-inl.h:949",
+     "total": 0.6728,
+     "impact": 0.7915,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2103,
+       "v": 0.6008,
+       "detail": "15 dependent(s), 4 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 4,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> (basic_string, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:72",
+     "total": 0.6426,
+     "impact": 0.7119,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 5,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "sinks::rotating_file_sink::rotating_file_sink<Mutex> (basic_string, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink-inl.h:26",
+     "total": 0.6426,
+     "impact": 0.7119,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 6,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "daily_logger_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:206",
+     "total": 0.6426,
+     "impact": 0.7119,
+     "informational": false,
+     "high_risk": true,
+     "component": 3,
+     "nested": 1,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 7,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "rotating_logger_mt (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink.h:69",
+     "total": 0.6426,
+     "impact": 0.7119,
+     "informational": false,
+     "high_risk": true,
+     "component": 4,
+     "nested": 1,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 8,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "sinks::basic_file_sink::basic_file_sink<Mutex> (basic_string&, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink-inl.h:17",
+     "total": 0.6426,
+     "impact": 0.7119,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 9,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "basic_logger_mt (basic_string&, basic_string&, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink.h:45",
+     "total": 0.6359,
+     "impact": 0.704,
+     "informational": false,
+     "high_risk": true,
+     "component": 1,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 4 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 10,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "daily_logger_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:206",
+     "total": 0.6051,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 3,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 11,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "sinks::rotating_file_sink::rotating_file_sink<Mutex> (basic_string, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink-inl.h:26",
+     "total": 0.6051,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 12,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "sinks::basic_file_sink::basic_file_sink<Mutex> (basic_string&, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink-inl.h:17",
+     "total": 0.6051,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 13,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> (basic_string, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:72",
+     "total": 0.6051,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 14,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "rotating_logger_mt (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink.h:69",
+     "total": 0.6051,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 4,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 15,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "daily_logger_format_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:243",
+     "total": 0.5901,
+     "impact": 0.6501,
+     "informational": false,
+     "high_risk": true,
+     "component": 5,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 16,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "basic_logger_st (basic_string&, basic_string&, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink.h:54",
+     "total": 0.5901,
+     "impact": 0.6501,
+     "informational": false,
+     "high_risk": true,
+     "component": 6,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 17,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "rotating_logger_st (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink.h:80",
+     "total": 0.5901,
+     "impact": 0.6501,
+     "informational": false,
+     "high_risk": true,
+     "component": 7,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 18,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "daily_logger_format_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:218",
+     "total": 0.5901,
+     "impact": 0.6501,
+     "informational": false,
+     "high_risk": true,
+     "component": 8,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 19,
+     "kind": "NodeSignatureChanged",
+     "detail": "",
+     "label": "daily_logger_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:231",
+     "total": 0.5901,
+     "impact": 0.6501,
+     "informational": false,
+     "high_risk": true,
+     "component": 9,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "NodeSignatureChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 20,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "sinks::sink::set_formatter (unique_ptr)",
+     "relation": "",
+     "where": "include/spdlog/sinks/sink.h:18",
+     "total": 0.5854,
+     "impact": 0.6887,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2604,
+       "v": 0.7441,
+       "detail": "30 dependent(s), 5 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 21,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "sinks::sink::should_log (level::level_enum)",
+     "relation": "",
+     "where": "include/spdlog/sinks/sink-inl.h:12",
+     "total": 0.5854,
+     "impact": 0.6887,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2604,
+       "v": 0.7441,
+       "detail": "30 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 22,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "default_logger_raw ()",
+     "relation": "",
+     "where": "include/spdlog/spdlog-inl.h:84",
+     "total": 0.5804,
+     "impact": 0.6828,
+     "informational": true,
+     "high_risk": false,
+     "component": 10,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2554,
+       "v": 0.7296,
+       "detail": "28 dependent(s), 20 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 23,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "sinks::basic_file_sink::buffer_size ()",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink-inl.h:44",
+     "total": 0.5676,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 2,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 24,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "sinks::basic_file_sink::set_buffer_size (unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink-inl.h:38",
+     "total": 0.5676,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 2,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 25,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "sinks::rotating_file_sink::buffer_size ()",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink-inl.h:126",
+     "total": 0.5676,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 2,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 26,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "sinks::rotating_file_sink::set_buffer_size (unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink-inl.h:115",
+     "total": 0.5676,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 5,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 27,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "sinks::rotating_file_sink::get_current_size ()",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink-inl.h:109",
+     "total": 0.5676,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 1,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 28,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "sinks::daily_file_sink::buffer_size ()",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:112",
+     "total": 0.5676,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 2,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 29,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "sinks::daily_file_sink::set_buffer_size (unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:107",
+     "total": 0.5676,
+     "impact": 0.6678,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 2,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 30,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "details::file_helper::set_buffer_size (unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/details/file_helper-inl.h:106",
+     "total": 0.5626,
+     "impact": 0.6619,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 6,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.2001,
+       "v": 0.5718,
+       "detail": "13 dependent(s), 7 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 31,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "daily_logger_format_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:218",
+     "total": 0.5526,
+     "impact": 0.606,
+     "informational": false,
+     "high_risk": true,
+     "component": 8,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 32,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "daily_logger_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:231",
+     "total": 0.5526,
+     "impact": 0.606,
+     "informational": false,
+     "high_risk": true,
+     "component": 9,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 33,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "basic_logger_st (basic_string&, basic_string&, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink.h:54",
+     "total": 0.5526,
+     "impact": 0.606,
+     "informational": false,
+     "high_risk": true,
+     "component": 6,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 34,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "daily_logger_format_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:243",
+     "total": 0.5526,
+     "impact": 0.606,
+     "informational": false,
+     "high_risk": true,
+     "component": 5,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 35,
+     "kind": "NodeAttrChanged",
+     "detail": "default_arguments",
+     "label": "rotating_logger_st (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink.h:80",
+     "total": 0.5526,
+     "impact": 0.606,
+     "informational": false,
+     "high_risk": true,
+     "component": 7,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAttrChanged(default_arguments)"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 36,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "details::log_msg_buffer::append_source ()",
+     "relation": "",
+     "where": "include/spdlog/details/log_msg_buffer-inl.h:57",
+     "total": 0.5509,
+     "impact": 0.6482,
+     "informational": false,
+     "high_risk": true,
+     "component": 11,
+     "nested": 3,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1884,
+       "v": 0.5384,
+       "detail": "11 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 37,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "details::file_helper::buffer_size ()",
+     "relation": "",
+     "where": "include/spdlog/details/file_helper-inl.h:120",
+     "total": 0.5509,
+     "impact": 0.6482,
+     "informational": false,
+     "high_risk": true,
+     "component": 2,
+     "nested": 1,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1884,
+       "v": 0.5384,
+       "detail": "11 dependent(s), 5 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 38,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "sinks::sink::level ()",
+     "relation": "",
+     "where": "include/spdlog/sinks/sink-inl.h:20",
+     "total": 0.5399,
+     "impact": 0.6351,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2149,
+       "v": 0.6139,
+       "detail": "16 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 39,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::sink::level ()",
+     "relation": "",
+     "where": "include/spdlog/sinks/sink-inl.h:20",
+     "total": 0.5399,
+     "impact": 0.6351,
+     "informational": false,
+     "high_risk": true,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2149,
+       "v": 0.6139,
+       "detail": "16 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 40,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::registry::registry ()",
+     "relation": "",
+     "where": "include/spdlog/details/registry-inl.h:33",
+     "total": 0.5368,
+     "impact": 0.6315,
+     "informational": false,
+     "high_risk": true,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.3118,
+       "v": 0.8907,
+       "detail": "60 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 41,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "sinks::base_sink::set_formatter_ (unique_ptr)",
+     "relation": "",
+     "where": "include/spdlog/sinks/base_sink-inl.h:57",
+     "total": 0.5195,
+     "impact": 0.6112,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1945,
+       "v": 0.5558,
+       "detail": "12 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 42,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "details::fmt_helper::append_string_view (basic_string_view, basic_memory_buffer&)",
+     "relation": "",
+     "where": "include/spdlog/details/fmt_helper.h:21",
+     "total": 0.517,
+     "impact": 0.6082,
+     "informational": true,
+     "high_risk": false,
+     "component": 12,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.292,
+       "v": 0.8342,
+       "detail": "46 dependent(s), 21 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 43,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "flush_all ()",
+     "relation": "",
+     "where": "include/spdlog/spdlog-inl.h:54",
+     "total": 0.5151,
+     "impact": 0.606,
+     "informational": false,
+     "high_risk": true,
+     "component": 13,
+     "nested": 3,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 49,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::base_sink::set_pattern_ (basic_string&)",
+     "relation": "",
+     "where": "include/spdlog/sinks/base_sink-inl.h:51",
+     "total": 0.5069,
+     "impact": 0.5963,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1819,
+       "v": 0.5196,
+       "detail": "10 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 50,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "sinks::base_sink::set_formatter (unique_ptr)",
+     "relation": "",
+     "where": "include/spdlog/sinks/base_sink-inl.h:45",
+     "total": 0.4996,
+     "impact": 0.5878,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1746,
+       "v": 0.4989,
+       "detail": "9 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 51,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "sinks::base_sink::base_sink<Mutex> (unique_ptr)",
+     "relation": "",
+     "where": "include/spdlog/sinks/base_sink-inl.h:21",
+     "total": 0.4996,
+     "impact": 0.5878,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1746,
+       "v": 0.4989,
+       "detail": "9 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 52,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::base_sink::base_sink<Mutex> ()",
+     "relation": "",
+     "where": "include/spdlog/sinks/base_sink-inl.h:17",
+     "total": 0.4996,
+     "impact": 0.5878,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1746,
+       "v": 0.4989,
+       "detail": "9 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 53,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "basic_logger_mt (basic_string&, basic_string&, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink.h:45",
+     "total": 0.4984,
+     "impact": 0.5422,
+     "informational": false,
+     "high_risk": false,
+     "component": 1,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 4 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 54,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "logger::log_it_ (details::log_msg&, bool, bool)",
+     "relation": "",
+     "where": "include/spdlog/logger-inl.h:124",
+     "total": 0.4827,
+     "impact": 0.5679,
+     "informational": true,
+     "high_risk": false,
+     "component": 14,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1577,
+       "v": 0.4506,
+       "detail": "7 dependent(s), 4 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 55,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "level::from_str (basic_string&)",
+     "relation": "",
+     "where": "include/spdlog/common-inl.h:32",
+     "total": 0.4827,
+     "impact": 0.5679,
+     "informational": true,
+     "high_risk": false,
+     "component": 15,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1577,
+       "v": 0.4506,
+       "detail": "7 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 56,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "level::to_string_view (level::level_enum)",
+     "relation": "",
+     "where": "include/spdlog/common-inl.h:24",
+     "total": 0.4827,
+     "impact": 0.5679,
+     "informational": true,
+     "high_risk": false,
+     "component": 16,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1577,
+       "v": 0.4506,
+       "detail": "7 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 57,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::ansicolor_sink::set_pattern (basic_string&)",
+     "relation": "",
+     "where": "include/spdlog/sinks/ansicolor_sink-inl.h:72",
+     "total": 0.4827,
+     "impact": 0.5679,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1577,
+       "v": 0.4506,
+       "detail": "7 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 58,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::daily_file_sink::now_tm (chrono::time_point)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:146",
+     "total": 0.4827,
+     "impact": 0.5679,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1577,
+       "v": 0.4506,
+       "detail": "7 dependent(s), 5 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 59,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::rotating_file_sink::rotate_ ()",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink-inl.h:138",
+     "total": 0.4726,
+     "impact": 0.556,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1476,
+       "v": 0.4216,
+       "detail": "6 dependent(s), 4 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 60,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "details::file_helper::custom_buffer_size_ ",
+     "relation": "",
+     "where": "include/spdlog/details/file_helper.h:59",
+     "total": 0.4676,
+     "impact": 0.5502,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 1,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 61,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "details::file_helper::custom_buf_ ",
+     "relation": "",
+     "where": "include/spdlog/details/file_helper.h:60",
+     "total": 0.4676,
+     "impact": 0.5502,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 1,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 62,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::rotating_file_sink::rotating_file_sink<Mutex> (basic_string, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink-inl.h:26",
+     "total": 0.4676,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 63,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "rotating_logger_mt (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink.h:69",
+     "total": 0.4676,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 4,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 64,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::basic_file_sink::basic_file_sink<Mutex> (basic_string&, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink-inl.h:17",
+     "total": 0.4676,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 65,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "daily_logger_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:206",
+     "total": 0.4676,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 3,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 66,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> (basic_string, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:72",
+     "total": 0.4676,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 67,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "SPDLOG_NAMESPACE ",
+     "relation": "",
+     "where": "include/spdlog/namespace.h:10",
+     "total": 0.4625,
+     "impact": 0.5441,
+     "informational": false,
+     "high_risk": false,
+     "component": 17,
+     "nested": 0,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 68,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "SPDLOG_NAMESPACE_BEGIN ",
+     "relation": "",
+     "where": "include/spdlog/namespace.h:23",
+     "total": 0.4625,
+     "impact": 0.5441,
+     "informational": false,
+     "high_risk": false,
+     "component": 18,
+     "nested": 0,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 69,
+     "kind": "NodeAdded",
+     "detail": "",
+     "label": "SPDLOG_NAMESPACE_END ",
+     "relation": "",
+     "where": "include/spdlog/namespace.h:26",
+     "total": 0.4625,
+     "impact": 0.5441,
+     "informational": false,
+     "high_risk": false,
+     "component": 19,
+     "nested": 0,
+     "tier": null,
+     "unpaired": "none",
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2125,
+       "v": 0.85,
+       "detail": "NodeAdded"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "unmatched, no candidate"
+      }
+     }
+    },
+    {
+     "rank": 70,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "sinks::stdout_sink_base::set_formatter (unique_ptr)",
+     "relation": "",
+     "where": "include/spdlog/sinks/stdout_sinks-inl.h:89",
+     "total": 0.4609,
+     "impact": 0.5422,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 71,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "logger::swap (logger&)",
+     "relation": "",
+     "where": "include/spdlog/logger-inl.h:42",
+     "total": 0.4609,
+     "impact": 0.5422,
+     "informational": true,
+     "high_risk": false,
+     "component": 14,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 72,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "sinks::ansicolor_sink::set_formatter (unique_ptr)",
+     "relation": "",
+     "where": "include/spdlog/sinks/ansicolor_sink-inl.h:78",
+     "total": 0.4609,
+     "impact": 0.5422,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 73,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "level::to_short_c_str (level::level_enum)",
+     "relation": "",
+     "where": "include/spdlog/common-inl.h:28",
+     "total": 0.4609,
+     "impact": 0.5422,
+     "informational": true,
+     "high_risk": false,
+     "component": 20,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 74,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::stdout_sink_base::set_pattern (basic_string&)",
+     "relation": "",
+     "where": "include/spdlog/sinks/stdout_sinks-inl.h:83",
+     "total": 0.4609,
+     "impact": 0.5422,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 75,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::ansicolor_sink::ansicolor_sink<ConsoleMutex> (_IO_FILE*, color_mode)",
+     "relation": "",
+     "where": "include/spdlog/sinks/ansicolor_sink-inl.h:17",
+     "total": 0.4609,
+     "impact": 0.5422,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 76,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::stdout_sink_base::stdout_sink_base<ConsoleMutex> (_IO_FILE*)",
+     "relation": "",
+     "where": "include/spdlog/sinks/stdout_sinks-inl.h:33",
+     "total": 0.4609,
+     "impact": 0.5422,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 77,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::file_helper::open (basic_string&, bool)",
+     "relation": "",
+     "where": "include/spdlog/details/file_helper-inl.h:26",
+     "total": 0.4559,
+     "impact": 0.5363,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2309,
+       "v": 0.6597,
+       "detail": "20 dependent(s), 6 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 78,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::file_helper::close ()",
+     "relation": "",
+     "where": "include/spdlog/details/file_helper-inl.h:83",
+     "total": 0.4522,
+     "impact": 0.532,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2272,
+       "v": 0.6491,
+       "detail": "19 dependent(s), 4 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 79,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_INFO ",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:319",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 21,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 80,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_WARN ",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:327",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 22,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 81,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LEVEL_NAME_INFO ",
+     "relation": "",
+     "where": "include/spdlog/common.h:258",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 23,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 82,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LEVEL_NAME_TRACE ",
+     "relation": "",
+     "where": "include/spdlog/common.h:256",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 24,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 83,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LEVEL_NAME_WARNING ",
+     "relation": "",
+     "where": "include/spdlog/common.h:259",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 25,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 84,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LEVEL_NAME_ERROR ",
+     "relation": "",
+     "where": "include/spdlog/common.h:260",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 26,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 85,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LOGGER_CALL ",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:292",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 27,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 86,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_ERROR ",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:335",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 28,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 87,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LEVEL_NAME_CRITICAL ",
+     "relation": "",
+     "where": "include/spdlog/common.h:261",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 29,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 88,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LOGGER_CRITICAL ",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:342",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 30,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 89,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LOGGER_ERROR ",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:334",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 31,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 90,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LEVEL_NAME_OFF ",
+     "relation": "",
+     "where": "include/spdlog/common.h:262",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 32,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 91,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LOGGER_INFO ",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:318",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 33,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 92,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LOGGER_WARN ",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:326",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 34,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 93,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_LEVEL_NAME_DEBUG ",
+     "relation": "",
+     "where": "include/spdlog/common.h:257",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 35,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 94,
+     "kind": "NodeAttrChanged",
+     "detail": "replacement_hash",
+     "label": "SPDLOG_CRITICAL ",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:344",
+     "total": 0.45,
+     "impact": 0.5294,
+     "informational": false,
+     "high_risk": false,
+     "component": 36,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "0 dependent(s), 0 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.2,
+       "v": 0.8,
+       "detail": "NodeAttrChanged(replacement_hash)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 96,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "set_formatter (unique_ptr)",
+     "relation": "",
+     "where": "include/spdlog/spdlog-inl.h:23",
+     "total": 0.4471,
+     "impact": 0.5259,
+     "informational": true,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1221,
+       "v": 0.3487,
+       "detail": "4 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 109,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::os::create_dir (basic_string&)",
+     "relation": "",
+     "where": "include/spdlog/details/os-inl.h:482",
+     "total": 0.4399,
+     "impact": 0.5175,
+     "informational": false,
+     "high_risk": false,
+     "component": 2,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2149,
+       "v": 0.6139,
+       "detail": "16 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 112,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "details::log_msg::log_msg (chrono::time_point, source_loc, basic_string_view, level::level_enum, basic_string_view)",
+     "relation": "",
+     "where": "include/spdlog/details/log_msg-inl.h:15",
+     "total": 0.4353,
+     "impact": 0.5121,
+     "informational": true,
+     "high_risk": false,
+     "component": 37,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2103,
+       "v": 0.6008,
+       "detail": "15 dependent(s), 4 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 113,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::log_msg_buffer::update_string_views ()",
+     "relation": "",
+     "where": "include/spdlog/details/log_msg_buffer-inl.h:48",
+     "total": 0.4353,
+     "impact": 0.5121,
+     "informational": false,
+     "high_risk": false,
+     "component": 11,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2103,
+       "v": 0.6008,
+       "detail": "15 dependent(s), 6 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 114,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::log_msg_buffer::log_msg_buffer (details::log_msg&)",
+     "relation": "",
+     "where": "include/spdlog/details/log_msg_buffer-inl.h:13",
+     "total": 0.4353,
+     "impact": 0.5121,
+     "informational": false,
+     "high_risk": false,
+     "component": 11,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2103,
+       "v": 0.6008,
+       "detail": "15 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 115,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "set_default_logger (shared_ptr)",
+     "relation": "",
+     "where": "include/spdlog/spdlog-inl.h:88",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": true,
+     "high_risk": false,
+     "component": 1,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 116,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "sinks::udp_sink::sink_it_ (details::log_msg&)",
+     "relation": "",
+     "where": "include/spdlog/sinks/udp_sink.h:45",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": true,
+     "high_risk": false,
+     "component": 38,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 117,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "default_logger ()",
+     "relation": "",
+     "where": "include/spdlog/spdlog-inl.h:80",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": true,
+     "high_risk": false,
+     "component": 1,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 118,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "udp_logger_mt (basic_string&, sinks::udp_sink_config)",
+     "relation": "",
+     "where": "include/spdlog/sinks/udp_sink.h:64",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 39,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 119,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::z_formatter::format (details::log_msg&, tm&, basic_memory_buffer&)",
+     "relation": "",
+     "where": "include/spdlog/pattern_formatter-inl.h:525",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 40,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 120,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "sinks::udp_sink::sink_it_ (details::log_msg&)",
+     "relation": "",
+     "where": "include/spdlog/sinks/udp_sink.h:45",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 38,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 121,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "formatter::put_newline (type-parameter-1-0, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/fmt/bin_to_hex.h:213",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 41,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 122,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "set_pattern (basic_string, pattern_time_type)",
+     "relation": "",
+     "where": "include/spdlog/spdlog-inl.h:27",
+     "total": 0.4301,
+     "impact": 0.506,
+     "informational": false,
+     "high_risk": false,
+     "component": 0,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 123,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "details::os::now ()",
+     "relation": "",
+     "where": "include/spdlog/details/os-inl.h:75",
+     "total": 0.4251,
+     "impact": 0.5002,
+     "informational": true,
+     "high_risk": false,
+     "component": 37,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.2001,
+       "v": 0.5718,
+       "detail": "13 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 131,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "daily_logger_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:231",
+     "total": 0.4151,
+     "impact": 0.4442,
+     "informational": false,
+     "high_risk": false,
+     "component": 9,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 132,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "rotating_logger_st (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/rotating_file_sink.h:80",
+     "total": 0.4151,
+     "impact": 0.4442,
+     "informational": false,
+     "high_risk": false,
+     "component": 7,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 133,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "basic_logger_st (basic_string&, basic_string&, bool, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/basic_file_sink.h:54",
+     "total": 0.4151,
+     "impact": 0.4442,
+     "informational": false,
+     "high_risk": false,
+     "component": 6,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 134,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "daily_logger_format_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:243",
+     "total": 0.4151,
+     "impact": 0.4442,
+     "informational": false,
+     "high_risk": false,
+     "component": 5,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 135,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "daily_logger_format_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+     "relation": "",
+     "where": "include/spdlog/sinks/daily_file_sink.h:218",
+     "total": 0.4151,
+     "impact": 0.4442,
+     "informational": false,
+     "high_risk": false,
+     "component": 8,
+     "nested": 0,
+     "tier": "name",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0375,
+       "v": 0.25,
+       "detail": "name"
+      }
+     }
+    },
+    {
+     "rank": 136,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "async_logger::clone (basic_string)",
+     "relation": "",
+     "where": "include/spdlog/async_logger-inl.h:80",
+     "total": 0.4083,
+     "impact": 0.4804,
+     "informational": true,
+     "high_risk": false,
+     "component": 42,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0833,
+       "v": 0.238,
+       "detail": "2 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 137,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "async_logger::clone (basic_string)",
+     "relation": "",
+     "where": "include/spdlog/async_logger-inl.h:80",
+     "total": 0.4083,
+     "impact": 0.4804,
+     "informational": false,
+     "high_risk": false,
+     "component": 42,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0833,
+       "v": 0.238,
+       "detail": "2 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 138,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "details::log_msg::log_msg (basic_string_view, level::level_enum, basic_string_view)",
+     "relation": "",
+     "where": "include/spdlog/details/log_msg-inl.h:38",
+     "total": 0.4069,
+     "impact": 0.4786,
+     "informational": true,
+     "high_risk": false,
+     "component": 37,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1819,
+       "v": 0.5196,
+       "detail": "10 dependent(s), 2 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 139,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "details::log_msg::log_msg (source_loc, basic_string_view, level::level_enum, basic_string_view)",
+     "relation": "",
+     "where": "include/spdlog/details/log_msg-inl.h:32",
+     "total": 0.4069,
+     "impact": 0.4786,
+     "informational": true,
+     "high_risk": false,
+     "component": 37,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1819,
+       "v": 0.5196,
+       "detail": "10 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 142,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "create (basic_string, T1&&...)",
+     "relation": "",
+     "where": "include/spdlog/spdlog.h:34",
+     "total": 0.3776,
+     "impact": 0.4442,
+     "informational": true,
+     "high_risk": false,
+     "component": 43,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 143,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "create_async_nb (basic_string, T1&&...)",
+     "relation": "",
+     "where": "include/spdlog/async.h:69",
+     "total": 0.3776,
+     "impact": 0.4442,
+     "informational": true,
+     "high_risk": false,
+     "component": 44,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 144,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "create_async (basic_string, T1&&...)",
+     "relation": "",
+     "where": "include/spdlog/async.h:62",
+     "total": 0.3776,
+     "impact": 0.4442,
+     "informational": true,
+     "high_risk": false,
+     "component": 45,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 145,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "thread_pool ()",
+     "relation": "",
+     "where": "include/spdlog/async.h:96",
+     "total": 0.3776,
+     "impact": 0.4442,
+     "informational": true,
+     "high_risk": false,
+     "component": 46,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0526,
+       "v": 0.1502,
+       "detail": "1 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.25,
+       "v": 1.0,
+       "detail": "public"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 146,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::thread_pool::thread_pool (unsigned long, unsigned long, function, function)",
+     "relation": "",
+     "where": "include/spdlog/details/thread_pool-inl.h:16",
+     "total": 0.3609,
+     "impact": 0.4246,
+     "informational": false,
+     "high_risk": false,
+     "component": 47,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1359,
+       "v": 0.3882,
+       "detail": "5 dependent(s), 3 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 148,
+     "kind": "EdgeRemoved",
+     "detail": "",
+     "label": "details::os::remove_if_exists → details::os::path_exists",
+     "relation": "calls",
+     "where": "include/spdlog/details/os-inl.h:165",
+     "total": 0.3551,
+     "impact": 0.4178,
+     "informational": false,
+     "high_risk": false,
+     "component": 48,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.1,
+       "v": 0.4,
+       "detail": "EdgeRemoved"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 149,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::log_msg_buffer::log_msg_buffer (details::log_msg_buffer&)",
+     "relation": "",
+     "where": "include/spdlog/details/log_msg_buffer-inl.h:20",
+     "total": 0.3471,
+     "impact": 0.4083,
+     "informational": false,
+     "high_risk": false,
+     "component": 11,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1221,
+       "v": 0.3487,
+       "detail": "4 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 152,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "details::os::remove_if_exists (basic_string&)",
+     "relation": "",
+     "where": "include/spdlog/details/os-inl.h:164",
+     "total": 0.3301,
+     "impact": 0.3884,
+     "informational": false,
+     "high_risk": false,
+     "component": 48,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.1051,
+       "v": 0.3004,
+       "detail": "3 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 157,
+     "kind": "NodeAttrChanged",
+     "detail": "sugared_signature",
+     "label": "synchronous_factory::create (basic_string, T1&&...)",
+     "relation": "",
+     "where": "include/spdlog/details/synchronous_factory.h:15",
+     "total": 0.3083,
+     "impact": 0.3627,
+     "informational": true,
+     "high_risk": false,
+     "component": 49,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0833,
+       "v": 0.238,
+       "detail": "2 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeAttrChanged(sugared_signature)"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    },
+    {
+     "rank": 158,
+     "kind": "NodeBodyChanged",
+     "detail": "",
+     "label": "synchronous_factory::create (basic_string, T1&&...)",
+     "relation": "",
+     "where": "include/spdlog/details/synchronous_factory.h:15",
+     "total": 0.3083,
+     "impact": 0.3627,
+     "informational": false,
+     "high_risk": false,
+     "component": 49,
+     "nested": 0,
+     "tier": "declared",
+     "unpaired": null,
+     "factors": {
+      "blast_radius": {
+       "c": 0.0833,
+       "v": 0.238,
+       "detail": "2 dependent(s), 1 direct, head model"
+      },
+      "exposure": {
+       "c": 0.15,
+       "v": 0.6,
+       "detail": "internal"
+      },
+      "novelty": {
+       "c": 0.075,
+       "v": 0.3,
+       "detail": "NodeBodyChanged"
+      },
+      "uncertainty": {
+       "c": 0.0,
+       "v": 0.0,
+       "detail": "declared"
+      }
+     }
+    }
+   ]
+  }
+ ],
+ "previous": {
+  "run": {
+   "id": 38044461310,
+   "url": "https://github.com/j-brent/cpp-semantic-diff/actions/runs/38044461310",
+   "commit": "4d8e367",
+   "analyze_step_s": {
+    "fmt": 192,
+    "spdlog": 28
+   }
+  },
+  "targets": [
+   {
+    "name": "fmt",
+    "base_ref": "HEAD~12",
+    "revs": [
+     "cdc27f91a007",
+     "35c58f084e7c"
+    ],
+    "plan": {
+     "files_changed": 12,
+     "cpp_files": 9,
+     "files_renamed": 0,
+     "lines_changed": 580
+    },
+    "doctor": [
+     "libclang         /usr/lib/llvm-18/lib/libclang.so.1    ",
+     "version          Ubuntu clang version 18.1.3 (1ubuntu1)",
+     "builtin headers  parsed clean                          ",
+     "target           x86_64-pc-linux-gnu                   ",
+     "producer id      libclang 18.1.3 x86_64-pc-linux-gnu"
+    ],
+    "summary": {
+     "lines_changed": 580,
+     "files_changed": 12,
+     "cpp_files_changed": 9,
+     "files_renamed": 0,
+     "events_reported": 181,
+     "vendored_events": 0,
+     "compression": "580 lines changed -> 181 semantic events, 7 high-risk",
+     "compression_ratio": 3.2044198895027622,
+     "high_risk_count": 7,
+     "top_level_events": 39,
+     "components": 24,
+     "residue": {
+      "matched": 10718,
+      "unmatched_base": 1,
+      "unmatched_head": 46,
+      "internal_linkage_residue": 0,
+      "tiers_run": [
+       "declared"
+      ]
+     }
+    },
+    "timings": {
+     "acquire": 2.053739259000025,
+     "produce_base": 89.50058257200001,
+     "produce_head": 78.28045006500003,
+     "match": 0.05933312499996646,
+     "diff": 0.17828202399999782,
+     "classify": 0.11968072199999824,
+     "rank": 0.21440322699999115,
+     "total": 170.46212788100001
+    },
+    "kinds": {
+     "EdgeAdded": 104,
+     "NodeAdded": 46,
+     "NodeBodyChanged": 19,
+     "EdgeRemoved": 11,
+     "NodeRemoved": 1
+    },
+    "completeness": {
+     "base": {
+      "tus_total": 51,
+      "tus_parsed": 51,
+      "tus_failed": 0,
+      "tus_cached": 15,
+      "edges_total": 26458,
+      "edges_dropped": 5181,
+      "tus_complete": true,
+      "notes": [
+       "1 of 52 compile-database entries are not C++ and were not modelled"
+      ]
+     },
+     "head": {
+      "tus_total": 51,
+      "tus_parsed": 51,
+      "tus_failed": 0,
+      "tus_cached": 21,
+      "edges_total": 26584,
+      "edges_dropped": 5214,
+      "tus_complete": true,
+      "notes": [
+       "1 of 52 compile-database entries are not C++ and were not modelled",
+       "30 of 51 cached translation units were invalidated and reparsed, so this build cost close to a cold one: 76.5 s to produce its partial models, 2.5 s per translation unit parsed. The usual cause is a change to a widely-included header, which invalidates every TU that includes it (ARCH-001 §9)"
+      ]
+     }
+    },
+    "findings": 0,
+    "top_level": [
+     {
+      "rank": 1,
+      "kind": "NodeRemoved",
+      "label": "detail::write_buffer (basic_ostream&, buffer&)",
+      "relation": "",
+      "where": "include/fmt/ostream.h:55",
+      "total": 0.8554,
+      "impact": 0.8298,
+      "high_risk": true,
+      "component": 0,
+      "nested": 8,
+      "factors": {
+       "blast_radius": {
+        "c": 0.2054,
+        "v": 0.5868,
+        "detail": "14 dependent(s), 6 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 2,
+      "kind": "NodeAdded",
+      "label": "detail::write_buffer (basic_ostream&, buffer&, unsigned long)",
+      "relation": "",
+      "where": "include/fmt/ostream.h:56",
+      "total": 0.8179,
+      "impact": 0.7857,
+      "high_risk": true,
+      "component": 0,
+      "nested": 8,
+      "factors": {
+       "blast_radius": {
+        "c": 0.2054,
+        "v": 0.5868,
+        "detail": "14 dependent(s), 6 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 3,
+      "kind": "NodeAdded",
+      "label": "detail::fill_n (basic_appender, unsigned long, T)",
+      "relation": "",
+      "where": "include/fmt/format.h:548",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 22,
+      "kind": "NodeBodyChanged",
+      "label": "detail::is_printable (unsigned int)",
+      "relation": "",
+      "where": "include/fmt/format-inl.h:1827",
+      "total": 0.5069,
+      "impact": 0.5963,
+      "high_risk": false,
+      "component": 1,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1819,
+        "v": 0.5196,
+        "detail": "10 dependent(s), 3 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 23,
+      "kind": "EdgeAdded",
+      "label": "detail::write → detail::buffer::clear",
+      "relation": "calls",
+      "where": "include/fmt/format.h:3754",
+      "total": 0.4952,
+      "impact": 0.5826,
+      "high_risk": false,
+      "component": 2,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1577,
+        "v": 0.4506,
+        "detail": "7 dependent(s), 3 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.0875,
+        "v": 0.35,
+        "detail": "EdgeAdded"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 24,
+      "kind": "EdgeAdded",
+      "label": "detail::write → basic_specs::upper",
+      "relation": "calls",
+      "where": "include/fmt/format.h:3749",
+      "total": 0.4952,
+      "impact": 0.5826,
+      "high_risk": false,
+      "component": 2,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1577,
+        "v": 0.4506,
+        "detail": "7 dependent(s), 3 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.0875,
+        "v": 0.35,
+        "detail": "EdgeAdded"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 25,
+      "kind": "NodeBodyChanged",
+      "label": "detail::write (T1, T2, format_specs, locale_ref)",
+      "relation": "",
+      "where": "include/fmt/format.h:3678",
+      "total": 0.4827,
+      "impact": 0.5679,
+      "high_risk": false,
+      "component": 2,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1577,
+        "v": 0.4506,
+        "detail": "7 dependent(s), 3 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 26,
+      "kind": "NodeBodyChanged",
+      "label": "detail::format_hexfloat (T, format_specs, detail::buffer&)",
+      "relation": "",
+      "where": "include/fmt/format.h:3278",
+      "total": 0.4471,
+      "impact": 0.5259,
+      "high_risk": false,
+      "component": 3,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1221,
+        "v": 0.3487,
+        "detail": "4 dependent(s), 2 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 27,
+      "kind": "EdgeAdded",
+      "label": "detail::format_float → detail::count_digits",
+      "relation": "calls",
+      "where": "include/fmt/format.h:3696",
+      "total": 0.4426,
+      "impact": 0.5207,
+      "high_risk": false,
+      "component": 4,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.0875,
+        "v": 0.35,
+        "detail": "EdgeAdded"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 28,
+      "kind": "EdgeAdded",
+      "label": "basic_memory_buffer::grow → detail::is_constant_evaluated",
+      "relation": "calls",
+      "where": "include/fmt/format.h:991",
+      "total": 0.4426,
+      "impact": 0.5207,
+      "high_risk": false,
+      "component": 5,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.0875,
+        "v": 0.35,
+        "detail": "EdgeAdded"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 29,
+      "kind": "NodeBodyChanged",
+      "label": "detail::allocator::allocate (unsigned long)",
+      "relation": "",
+      "where": "include/fmt/format.h:891",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 6,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 30,
+      "kind": "NodeBodyChanged",
+      "label": "basic_memory_buffer::grow (buffer&, unsigned long)",
+      "relation": "",
+      "where": "include/fmt/format.h:950",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 5,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 31,
+      "kind": "NodeBodyChanged",
+      "label": "detail::allocator::deallocate (T*, unsigned long)",
+      "relation": "",
+      "where": "include/fmt/format.h:896",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 6,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 32,
+      "kind": "NodeBodyChanged",
+      "label": "detail::write_escaped_alternative (T1, T2&, T3&)",
+      "relation": "",
+      "where": "include/fmt/std.h:138",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 7,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 33,
+      "kind": "NodeBodyChanged",
+      "label": "detail::format_float (T, int, format_specs&, bool, detail::buffer&)",
+      "relation": "",
+      "where": "include/fmt/format.h:3378",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 4,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 34,
+      "kind": "NodeBodyChanged",
+      "label": "detail::write_fixed (T2, T3&, int, T, format_specs&, sign, locale_ref)",
+      "relation": "",
+      "where": "include/fmt/format.h:2727",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 8,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 35,
+      "kind": "NodeAdded",
+      "label": "stateful_allocator ",
+      "relation": "",
+      "where": "test/format-test.cc:396",
+      "total": 0.4125,
+      "impact": 0.3088,
+      "high_risk": false,
+      "component": 9,
+      "nested": 6,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "0 dependent(s), 0 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 36,
+      "kind": "NodeAdded",
+      "label": "compile_test_format_variant_Test ",
+      "relation": "",
+      "where": "test/compile-test.cc:188",
+      "total": 0.4125,
+      "impact": 0.3088,
+      "high_risk": false,
+      "component": 10,
+      "nested": 15,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "0 dependent(s), 0 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 37,
+      "kind": "NodeAdded",
+      "label": "format_test_high_precision_bounded_output_Test ",
+      "relation": "",
+      "where": "test/format-test.cc:1298",
+      "total": 0.4125,
+      "impact": 0.3088,
+      "high_risk": false,
+      "component": 11,
+      "nested": 15,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "0 dependent(s), 0 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 38,
+      "kind": "NodeAdded",
+      "label": "format_test_high_precision_trailing_zeros_Test ",
+      "relation": "",
+      "where": "test/format-test.cc:1281",
+      "total": 0.4125,
+      "impact": 0.3088,
+      "high_risk": false,
+      "component": 12,
+      "nested": 15,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "0 dependent(s), 0 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 39,
+      "kind": "NodeAdded",
+      "label": "compile_test_format_expected_Test ",
+      "relation": "",
+      "where": "test/compile-test.cc:205",
+      "total": 0.4125,
+      "impact": 0.3088,
+      "high_risk": false,
+      "component": 13,
+      "nested": 15,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "0 dependent(s), 0 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 40,
+      "kind": "NodeAdded",
+      "label": "format_test_high_precision_long_double_Test ",
+      "relation": "",
+      "where": "test/format-test.cc:1312",
+      "total": 0.4125,
+      "impact": 0.3088,
+      "high_risk": false,
+      "component": 14,
+      "nested": 15,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "0 dependent(s), 0 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 86,
+      "kind": "EdgeRemoved",
+      "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → detail::max_value",
+      "relation": "calls",
+      "where": "test/ostream-test.cc:132",
+      "total": 0.4026,
+      "impact": 0.4736,
+      "high_risk": false,
+      "component": 0,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.1,
+        "v": 0.4,
+        "detail": "EdgeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 87,
+      "kind": "EdgeRemoved",
+      "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → detail::buffer::buffer<T>",
+      "relation": "calls",
+      "where": "test/ostream-test.cc:138",
+      "total": 0.4026,
+      "impact": 0.4736,
+      "high_risk": false,
+      "component": 0,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.1,
+        "v": 0.4,
+        "detail": "EdgeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 88,
+      "kind": "EdgeRemoved",
+      "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → detail::to_unsigned",
+      "relation": "calls",
+      "where": "test/ostream-test.cc:134",
+      "total": 0.4026,
+      "impact": 0.4736,
+      "high_risk": false,
+      "component": 0,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.1,
+        "v": 0.4,
+        "detail": "EdgeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 89,
+      "kind": "EdgeAdded",
+      "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → basic_memory_buffer::basic_memory_buffer<T, SIZE, Allocator>",
+      "relation": "calls",
+      "where": "test/ostream-test.cc:132",
+      "total": 0.3901,
+      "impact": 0.4589,
+      "high_risk": false,
+      "component": 0,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.0875,
+        "v": 0.35,
+        "detail": "EdgeAdded"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 90,
+      "kind": "EdgeAdded",
+      "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → basic_string_view::basic_string_view<Char>",
+      "relation": "calls",
+      "where": "test/ostream-test.cc:133",
+      "total": 0.3901,
+      "impact": 0.4589,
+      "high_risk": false,
+      "component": 0,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.0875,
+        "v": 0.35,
+        "detail": "EdgeAdded"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 91,
+      "kind": "EdgeAdded",
+      "label": "ostream_test_write_to_ostream_max_size_Test::TestBody → detail::buffer::data",
+      "relation": "calls",
+      "where": "test/ostream-test.cc:142",
+      "total": 0.3901,
+      "impact": 0.4589,
+      "high_risk": false,
+      "component": 0,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.0875,
+        "v": 0.35,
+        "detail": "EdgeAdded"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 171,
+      "kind": "EdgeAdded",
+      "label": "format_test_format_to_n_output_iterator_Test::TestBody → ?",
+      "relation": "calls",
+      "where": "test/format-test.cc:2459",
+      "total": 0.2375,
+      "impact": 0.2794,
+      "high_risk": false,
+      "component": 15,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "subject not in either model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal (subject not in either model)"
+       },
+       "novelty": {
+        "c": 0.0875,
+        "v": 0.35,
+        "detail": "EdgeAdded"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 172,
+      "kind": "NodeBodyChanged",
+      "label": "ostream_test_write_to_ostream_max_size_Test::TestBody ()",
+      "relation": "",
+      "where": "test/ostream-test.cc:131",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 0,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 173,
+      "kind": "NodeBodyChanged",
+      "label": "ranges_test_escape_Test::TestBody ()",
+      "relation": "",
+      "where": "test/ranges-test.cc:600",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 16,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 174,
+      "kind": "NodeBodyChanged",
+      "label": "xchar_test_format_Test::TestBody ()",
+      "relation": "",
+      "where": "test/xchar-test.cc:72",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 17,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 175,
+      "kind": "NodeBodyChanged",
+      "label": "format_test_large_precision_Test::TestBody ()",
+      "relation": "",
+      "where": "test/format-test.cc:1245",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 18,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 176,
+      "kind": "NodeBodyChanged",
+      "label": "format_test_format_to_n_Test::TestBody ()",
+      "relation": "",
+      "where": "test/format-test.cc:2296",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 19,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 177,
+      "kind": "NodeBodyChanged",
+      "label": "format_test_format_double_Test::TestBody ()",
+      "relation": "",
+      "where": "test/format-test.cc:1566",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 20,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 178,
+      "kind": "NodeBodyChanged",
+      "label": "memory_buffer_test_move_ctor_dynamic_buffer_non_propagating_Test::TestBody ()",
+      "relation": "",
+      "where": "test/format-test.cc:383",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 21,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 179,
+      "kind": "NodeBodyChanged",
+      "label": "format_test_formatted_size_Test::TestBody ()",
+      "relation": "",
+      "where": "test/format-test.cc:2252",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 22,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 180,
+      "kind": "NodeBodyChanged",
+      "label": "ranges_test_is_printable_Test::TestBody ()",
+      "relation": "",
+      "where": "test/ranges-test.cc:593",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 1,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 181,
+      "kind": "NodeBodyChanged",
+      "label": "format_test_format_to_n_output_iterator_Test::TestBody ()",
+      "relation": "",
+      "where": "test/format-test.cc:2353",
+      "total": 0.1776,
+      "impact": 0.2089,
+      "high_risk": false,
+      "component": 23,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.05,
+        "v": 0.2,
+        "detail": "test"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "name": "spdlog",
+    "base_ref": "HEAD~30",
+    "revs": [
+     "bfde7d3711d5",
+     "d6c93f38a08b"
+    ],
+    "plan": {
+     "files_changed": 105,
+     "cpp_files": 95,
+     "files_renamed": 0,
+     "lines_changed": 2161
+    },
+    "doctor": [
+     "libclang         /usr/lib/llvm-18/lib/libclang.so.1    ",
+     "version          Ubuntu clang version 18.1.3 (1ubuntu1)",
+     "builtin headers  parsed clean                          ",
+     "target           x86_64-pc-linux-gnu                   ",
+     "producer id      libclang 18.1.3 x86_64-pc-linux-gnu"
+    ],
+    "summary": {
+     "lines_changed": 2161,
+     "files_changed": 105,
+     "cpp_files_changed": 95,
+     "files_renamed": 0,
+     "events_reported": 171,
+     "vendored_events": 0,
+     "compression": "2,161 lines changed -> 171 semantic events, 36 high-risk",
+     "compression_ratio": 12.637426900584796,
+     "high_risk_count": 36,
+     "top_level_events": 59,
+     "components": 17,
+     "residue": {
+      "matched": 2466,
+      "unmatched_base": 11,
+      "unmatched_head": 24,
+      "internal_linkage_residue": 0,
+      "tiers_run": [
+       "declared"
+      ]
+     }
+    },
+    "timings": {
+     "acquire": 2.133329967999998,
+     "produce_base": 11.075980704000003,
+     "produce_head": 8.562561789,
+     "match": 0.010794578000002275,
+     "diff": 0.028372254000004204,
+     "classify": 0.01526925999999662,
+     "rank": 0.04691517599999884,
+     "total": 21.927999979999996
+    },
+    "kinds": {
+     "EdgeAdded": 70,
+     "EdgeRemoved": 43,
+     "NodeAdded": 24,
+     "NodeBodyChanged": 23,
+     "NodeRemoved": 11
+    },
+    "completeness": {
+     "base": {
+      "tus_total": 8,
+      "tus_parsed": 8,
+      "tus_failed": 0,
+      "tus_cached": 0,
+      "edges_total": 5345,
+      "edges_dropped": 1202,
+      "tus_complete": true,
+      "notes": []
+     },
+     "head": {
+      "tus_total": 8,
+      "tus_parsed": 8,
+      "tus_failed": 0,
+      "tus_cached": 1,
+      "edges_total": 5389,
+      "edges_dropped": 1219,
+      "tus_complete": true,
+      "notes": [
+       "7 of 8 cached translation units were invalidated and reparsed, so this build cost close to a cold one: 8.3 s to produce its partial models, 1.2 s per translation unit parsed. The usual cause is a change to a widely-included header, which invalidates every TU that includes it (ARCH-001 §9)"
+      ]
+     }
+    },
+    "findings": 0,
+    "top_level": [
+     {
+      "rank": 1,
+      "kind": "NodeRemoved",
+      "label": "basic_logger_mt (basic_string&, basic_string&, bool, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/basic_file_sink.h:45",
+      "total": 0.7859,
+      "impact": 0.7481,
+      "high_risk": true,
+      "component": 0,
+      "nested": 5,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1359,
+        "v": 0.3882,
+        "detail": "5 dependent(s), 4 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 2,
+      "kind": "NodeRemoved",
+      "label": "sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> (basic_string, int, int, bool, unsigned short, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:72",
+      "total": 0.7551,
+      "impact": 0.7119,
+      "high_risk": true,
+      "component": 1,
+      "nested": 9,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 3,
+      "kind": "NodeRemoved",
+      "label": "daily_logger_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:206",
+      "total": 0.7551,
+      "impact": 0.7119,
+      "high_risk": true,
+      "component": 0,
+      "nested": 3,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 2 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 4,
+      "kind": "NodeRemoved",
+      "label": "sinks::basic_file_sink::basic_file_sink<Mutex> (basic_string&, bool, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/basic_file_sink-inl.h:17",
+      "total": 0.7551,
+      "impact": 0.7119,
+      "high_risk": true,
+      "component": 1,
+      "nested": 4,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 5,
+      "kind": "NodeRemoved",
+      "label": "sinks::rotating_file_sink::rotating_file_sink<Mutex> (basic_string, unsigned long, unsigned long, bool, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink-inl.h:26",
+      "total": 0.7551,
+      "impact": 0.7119,
+      "high_risk": true,
+      "component": 1,
+      "nested": 8,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 6,
+      "kind": "NodeRemoved",
+      "label": "rotating_logger_mt (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink.h:69",
+      "total": 0.7551,
+      "impact": 0.7119,
+      "high_risk": true,
+      "component": 0,
+      "nested": 3,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 2 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 7,
+      "kind": "NodeAdded",
+      "label": "basic_logger_mt (basic_string&, basic_string&, bool, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/basic_file_sink.h:48",
+      "total": 0.7484,
+      "impact": 0.704,
+      "high_risk": true,
+      "component": 0,
+      "nested": 5,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1359,
+        "v": 0.3882,
+        "detail": "5 dependent(s), 4 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 8,
+      "kind": "NodeAdded",
+      "label": "sinks::daily_file_sink::daily_file_sink<Mutex, FileNameCalc> (basic_string, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:72",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 10,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 9,
+      "kind": "NodeAdded",
+      "label": "sinks::basic_file_sink::buffer_size ()",
+      "relation": "",
+      "where": "include/spdlog/sinks/basic_file_sink-inl.h:44",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 10,
+      "kind": "NodeAdded",
+      "label": "sinks::basic_file_sink::set_buffer_size (unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/basic_file_sink-inl.h:38",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 11,
+      "kind": "NodeAdded",
+      "label": "sinks::rotating_file_sink::buffer_size ()",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink-inl.h:121",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 12,
+      "kind": "NodeAdded",
+      "label": "sinks::rotating_file_sink::set_buffer_size (unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink-inl.h:115",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 13,
+      "kind": "NodeAdded",
+      "label": "sinks::rotating_file_sink::get_current_size ()",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink-inl.h:109",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 1,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 14,
+      "kind": "NodeAdded",
+      "label": "sinks::daily_file_sink::buffer_size ()",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:112",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 15,
+      "kind": "NodeAdded",
+      "label": "daily_logger_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:218",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 0,
+      "nested": 3,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 2 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 16,
+      "kind": "NodeAdded",
+      "label": "rotating_logger_mt (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink.h:73",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 0,
+      "nested": 3,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 2 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 17,
+      "kind": "NodeAdded",
+      "label": "sinks::daily_file_sink::set_buffer_size (unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:107",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 18,
+      "kind": "NodeAdded",
+      "label": "sinks::basic_file_sink::basic_file_sink<Mutex> (basic_string&, bool, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/basic_file_sink-inl.h:17",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 5,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 19,
+      "kind": "NodeAdded",
+      "label": "sinks::rotating_file_sink::rotating_file_sink<Mutex> (basic_string, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink-inl.h:26",
+      "total": 0.7176,
+      "impact": 0.6678,
+      "high_risk": true,
+      "component": 1,
+      "nested": 9,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 20,
+      "kind": "NodeAdded",
+      "label": "details::file_helper::set_buffer_size (unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/details/file_helper-inl.h:106",
+      "total": 0.7126,
+      "impact": 0.6619,
+      "high_risk": true,
+      "component": 1,
+      "nested": 3,
+      "factors": {
+       "blast_radius": {
+        "c": 0.2001,
+        "v": 0.5718,
+        "detail": "13 dependent(s), 7 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 21,
+      "kind": "NodeRemoved",
+      "label": "daily_logger_format_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:243",
+      "total": 0.7026,
+      "impact": 0.6501,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 22,
+      "kind": "NodeRemoved",
+      "label": "basic_logger_st (basic_string&, basic_string&, bool, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/basic_file_sink.h:54",
+      "total": 0.7026,
+      "impact": 0.6501,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 23,
+      "kind": "NodeRemoved",
+      "label": "daily_logger_format_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:218",
+      "total": 0.7026,
+      "impact": 0.6501,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 24,
+      "kind": "NodeRemoved",
+      "label": "rotating_logger_st (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink.h:80",
+      "total": 0.7026,
+      "impact": 0.6501,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 25,
+      "kind": "NodeRemoved",
+      "label": "daily_logger_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:231",
+      "total": 0.7026,
+      "impact": 0.6501,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, base model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "NodeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 26,
+      "kind": "NodeAdded",
+      "label": "details::log_msg_buffer::append_source ()",
+      "relation": "",
+      "where": "include/spdlog/details/log_msg_buffer-inl.h:57",
+      "total": 0.7009,
+      "impact": 0.6482,
+      "high_risk": true,
+      "component": 2,
+      "nested": 3,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1884,
+        "v": 0.5384,
+        "detail": "11 dependent(s), 3 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 27,
+      "kind": "NodeAdded",
+      "label": "details::file_helper::buffer_size ()",
+      "relation": "",
+      "where": "include/spdlog/details/file_helper-inl.h:122",
+      "total": 0.6944,
+      "impact": 0.6404,
+      "high_risk": true,
+      "component": 1,
+      "nested": 1,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1819,
+        "v": 0.5196,
+        "detail": "10 dependent(s), 4 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 29,
+      "kind": "NodeAdded",
+      "label": "daily_logger_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:246",
+      "total": 0.6651,
+      "impact": 0.606,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 30,
+      "kind": "NodeAdded",
+      "label": "rotating_logger_st (basic_string&, basic_string&, unsigned long, unsigned long, bool, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink.h:86",
+      "total": 0.6651,
+      "impact": 0.606,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 31,
+      "kind": "NodeAdded",
+      "label": "flush_all ()",
+      "relation": "",
+      "where": "include/spdlog/spdlog-inl.h:54",
+      "total": 0.6651,
+      "impact": 0.606,
+      "high_risk": true,
+      "component": 0,
+      "nested": 3,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 32,
+      "kind": "NodeAdded",
+      "label": "daily_logger_format_st (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:260",
+      "total": 0.6651,
+      "impact": 0.606,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 33,
+      "kind": "NodeAdded",
+      "label": "basic_logger_st (basic_string&, basic_string&, bool, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/basic_file_sink.h:58",
+      "total": 0.6651,
+      "impact": 0.606,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 34,
+      "kind": "NodeAdded",
+      "label": "daily_logger_format_mt (basic_string&, basic_string&, int, int, bool, unsigned short, file_event_handlers&, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:232",
+      "total": 0.6651,
+      "impact": 0.606,
+      "high_risk": true,
+      "component": 0,
+      "nested": 2,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0526,
+        "v": 0.1502,
+        "detail": "1 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 37,
+      "kind": "NodeAdded",
+      "label": "details::file_helper::custom_buffer_size_ ",
+      "relation": "",
+      "where": "include/spdlog/details/file_helper.h:59",
+      "total": 0.6176,
+      "impact": 0.5502,
+      "high_risk": false,
+      "component": 1,
+      "nested": 1,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 38,
+      "kind": "NodeAdded",
+      "label": "details::file_helper::custom_buf_ ",
+      "relation": "",
+      "where": "include/spdlog/details/file_helper.h:60",
+      "total": 0.6176,
+      "impact": 0.5502,
+      "high_risk": false,
+      "component": 1,
+      "nested": 1,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.2125,
+        "v": 0.85,
+        "detail": "NodeAdded"
+       },
+       "uncertainty": {
+        "c": 0.15,
+        "v": 1.0,
+        "detail": "unmatched"
+       }
+      }
+     },
+     {
+      "rank": 125,
+      "kind": "NodeBodyChanged",
+      "label": "sinks::sink::level ()",
+      "relation": "",
+      "where": "include/spdlog/sinks/sink-inl.h:20",
+      "total": 0.5399,
+      "impact": 0.6351,
+      "high_risk": true,
+      "component": 3,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.2149,
+        "v": 0.6139,
+        "detail": "16 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 126,
+      "kind": "NodeBodyChanged",
+      "label": "details::registry::registry ()",
+      "relation": "",
+      "where": "include/spdlog/details/registry-inl.h:33",
+      "total": 0.5368,
+      "impact": 0.6315,
+      "high_risk": true,
+      "component": 4,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.3118,
+        "v": 0.8907,
+        "detail": "60 dependent(s), 2 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 128,
+      "kind": "NodeBodyChanged",
+      "label": "sinks::base_sink::set_pattern_ (basic_string&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/base_sink-inl.h:51",
+      "total": 0.5069,
+      "impact": 0.5963,
+      "high_risk": false,
+      "component": 5,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1819,
+        "v": 0.5196,
+        "detail": "10 dependent(s), 2 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 147,
+      "kind": "NodeBodyChanged",
+      "label": "sinks::ansicolor_sink::set_pattern (basic_string&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/ansicolor_sink-inl.h:72",
+      "total": 0.4827,
+      "impact": 0.5679,
+      "high_risk": false,
+      "component": 6,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1577,
+        "v": 0.4506,
+        "detail": "7 dependent(s), 2 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 148,
+      "kind": "NodeBodyChanged",
+      "label": "sinks::daily_file_sink::now_tm (chrono::time_point)",
+      "relation": "",
+      "where": "include/spdlog/sinks/daily_file_sink.h:146",
+      "total": 0.4827,
+      "impact": 0.5679,
+      "high_risk": false,
+      "component": 1,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1577,
+        "v": 0.4506,
+        "detail": "7 dependent(s), 5 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 149,
+      "kind": "NodeBodyChanged",
+      "label": "sinks::rotating_file_sink::rotate_ ()",
+      "relation": "",
+      "where": "include/spdlog/sinks/rotating_file_sink-inl.h:138",
+      "total": 0.4726,
+      "impact": 0.556,
+      "high_risk": false,
+      "component": 1,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1476,
+        "v": 0.4216,
+        "detail": "6 dependent(s), 4 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 154,
+      "kind": "NodeBodyChanged",
+      "label": "sinks::stdout_sink_base::set_pattern (basic_string&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/stdout_sinks-inl.h:83",
+      "total": 0.4609,
+      "impact": 0.5422,
+      "high_risk": false,
+      "component": 7,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1359,
+        "v": 0.3882,
+        "detail": "5 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 155,
+      "kind": "NodeBodyChanged",
+      "label": "sinks::stdout_sink_base::stdout_sink_base<ConsoleMutex> (_IO_FILE*)",
+      "relation": "",
+      "where": "include/spdlog/sinks/stdout_sinks-inl.h:33",
+      "total": 0.4609,
+      "impact": 0.5422,
+      "high_risk": false,
+      "component": 7,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1359,
+        "v": 0.3882,
+        "detail": "5 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 156,
+      "kind": "NodeBodyChanged",
+      "label": "details::file_helper::close ()",
+      "relation": "",
+      "where": "include/spdlog/details/file_helper-inl.h:83",
+      "total": 0.4483,
+      "impact": 0.5274,
+      "high_risk": false,
+      "component": 1,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.2233,
+        "v": 0.638,
+        "detail": "18 dependent(s), 4 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 157,
+      "kind": "NodeBodyChanged",
+      "label": "details::file_helper::open (basic_string&, bool)",
+      "relation": "",
+      "where": "include/spdlog/details/file_helper-inl.h:26",
+      "total": 0.4399,
+      "impact": 0.5175,
+      "high_risk": false,
+      "component": 1,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.2149,
+        "v": 0.6139,
+        "detail": "16 dependent(s), 6 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 158,
+      "kind": "NodeBodyChanged",
+      "label": "details::log_msg_buffer::update_string_views ()",
+      "relation": "",
+      "where": "include/spdlog/details/log_msg_buffer-inl.h:48",
+      "total": 0.4353,
+      "impact": 0.5121,
+      "high_risk": false,
+      "component": 2,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.2103,
+        "v": 0.6008,
+        "detail": "15 dependent(s), 6 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 159,
+      "kind": "NodeBodyChanged",
+      "label": "details::log_msg_buffer::log_msg_buffer (details::log_msg&)",
+      "relation": "",
+      "where": "include/spdlog/details/log_msg_buffer-inl.h:13",
+      "total": 0.4353,
+      "impact": 0.5121,
+      "high_risk": false,
+      "component": 2,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.2103,
+        "v": 0.6008,
+        "detail": "15 dependent(s), 3 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 160,
+      "kind": "NodeBodyChanged",
+      "label": "details::os::create_dir (basic_string&)",
+      "relation": "",
+      "where": "include/spdlog/details/os-inl.h:482",
+      "total": 0.4353,
+      "impact": 0.5121,
+      "high_risk": false,
+      "component": 1,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.2103,
+        "v": 0.6008,
+        "detail": "15 dependent(s), 2 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 161,
+      "kind": "NodeBodyChanged",
+      "label": "udp_logger_mt (basic_string&, sinks::udp_sink_config)",
+      "relation": "",
+      "where": "include/spdlog/sinks/udp_sink.h:64",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 8,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 2 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 162,
+      "kind": "NodeBodyChanged",
+      "label": "details::z_formatter::format (details::log_msg&, tm&, basic_memory_buffer&)",
+      "relation": "",
+      "where": "include/spdlog/pattern_formatter-inl.h:525",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 9,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 163,
+      "kind": "NodeBodyChanged",
+      "label": "sinks::udp_sink::sink_it_ (details::log_msg&)",
+      "relation": "",
+      "where": "include/spdlog/sinks/udp_sink.h:45",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 10,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 164,
+      "kind": "NodeBodyChanged",
+      "label": "formatter::put_newline (type-parameter-1-0, unsigned long)",
+      "relation": "",
+      "where": "include/spdlog/fmt/bin_to_hex.h:213",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 11,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 165,
+      "kind": "NodeBodyChanged",
+      "label": "set_pattern (basic_string, pattern_time_type)",
+      "relation": "",
+      "where": "include/spdlog/spdlog-inl.h:27",
+      "total": 0.4301,
+      "impact": 0.506,
+      "high_risk": false,
+      "component": 12,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 3 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 166,
+      "kind": "NodeBodyChanged",
+      "label": "async_logger::clone (basic_string)",
+      "relation": "",
+      "where": "include/spdlog/async_logger-inl.h:80",
+      "total": 0.4083,
+      "impact": 0.4804,
+      "high_risk": false,
+      "component": 13,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0833,
+        "v": 0.238,
+        "detail": "2 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.25,
+        "v": 1.0,
+        "detail": "public"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 167,
+      "kind": "NodeBodyChanged",
+      "label": "details::thread_pool::thread_pool (unsigned long, unsigned long, function, function)",
+      "relation": "",
+      "where": "include/spdlog/details/thread_pool-inl.h:16",
+      "total": 0.3609,
+      "impact": 0.4246,
+      "high_risk": false,
+      "component": 14,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1359,
+        "v": 0.3882,
+        "detail": "5 dependent(s), 3 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 168,
+      "kind": "EdgeRemoved",
+      "label": "details::os::remove_if_exists → details::os::path_exists",
+      "relation": "calls",
+      "where": "include/spdlog/details/os-inl.h:165",
+      "total": 0.3551,
+      "impact": 0.4178,
+      "high_risk": false,
+      "component": 15,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.1,
+        "v": 0.4,
+        "detail": "EdgeRemoved"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 169,
+      "kind": "NodeBodyChanged",
+      "label": "details::log_msg_buffer::log_msg_buffer (details::log_msg_buffer&)",
+      "relation": "",
+      "where": "include/spdlog/details/log_msg_buffer-inl.h:20",
+      "total": 0.3471,
+      "impact": 0.4083,
+      "high_risk": false,
+      "component": 2,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1221,
+        "v": 0.3487,
+        "detail": "4 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 170,
+      "kind": "NodeBodyChanged",
+      "label": "details::os::remove_if_exists (basic_string&)",
+      "relation": "",
+      "where": "include/spdlog/details/os-inl.h:164",
+      "total": 0.3301,
+      "impact": 0.3884,
+      "high_risk": false,
+      "component": 15,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.1051,
+        "v": 0.3004,
+        "detail": "3 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     },
+     {
+      "rank": 171,
+      "kind": "NodeBodyChanged",
+      "label": "synchronous_factory::create (basic_string, T1&&...)",
+      "relation": "",
+      "where": "include/spdlog/details/synchronous_factory.h:15",
+      "total": 0.3083,
+      "impact": 0.3627,
+      "high_risk": false,
+      "component": 16,
+      "nested": 0,
+      "factors": {
+       "blast_radius": {
+        "c": 0.0833,
+        "v": 0.238,
+        "detail": "2 dependent(s), 1 direct, head model"
+       },
+       "exposure": {
+        "c": 0.15,
+        "v": 0.6,
+        "detail": "internal"
+       },
+       "novelty": {
+        "c": 0.075,
+        "v": 0.3,
+        "detail": "NodeBodyChanged"
+       },
+       "uncertainty": {
+        "c": 0.0,
+        "v": 0.0,
+        "detail": "declared"
+       }
+      }
+     }
+    ]
+   }
+  ]
+ }
+};
