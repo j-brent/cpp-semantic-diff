@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Before After v0</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  td.delta { color: var(--muted); }
+  details { margin: 6px 0; }
+  details summary { cursor: pointer; font-size: 14px; }
+  details pre { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font: 12px/1.45 var(--mono); overflow-x: auto; max-height: 360px; }
+  .bucket { font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="crumbs"><a href="../index.html">Run 38280732734</a> <span>/</span> <span class="kicker product">Product</span> <span>/</span> <span>F</span></div>
+    <div id="theme-slot"></div>
+  </div>
+  <h1>F · Against run B: what v0 changed</h1>
+  <p class="lede">The same workflow, the same two repositories and the same <code>HEAD~n</code> bases, two days and 45 commits
+    on <code>dev</code>'s first-parent line apart. The tool moved from <code>4d8e367</code> (schema 1.2) to <code>c01c58b</code> (schema 2.0). Upstream
+    moved too: each end of each range is one commit later. So a difference here is the tool's or upstream's, and the
+    second table says which change events only one run reports.</p>
+
+  <h2>What was run</h2>
+  <div class="panel scroll-x"><table class="data" id="inputs"></table></div>
+
+  <h2>Headline numbers</h2>
+  <p class="note">Run B's names in schema 1.2 were <code>events_reported</code> and <code>top_level_events</code>; schema 2.0 says
+    <code>change_events_reported</code> and <code>top_level_change_events</code> (ADR-027).</p>
+  <div class="panel scroll-x"><table class="data" id="headline"></table></div>
+
+  <h2>Change events only one run reports</h2>
+  <p class="note">Keyed by kind, subject and, for <code>NodeAttrChanged</code>, attribute. Sorted into the first bucket that fits,
+    by what each change event is about (<code>scripts/compare.py</code>). The cause column is the v0 change each bucket is
+    evidence of; it is the report's reading, not something the documents state.</p>
+  <div id="buckets"></div>
+  <p class="note muted">Source: both runs' <code>diff.json</code> (run B's downloaded again on 2026-10-12 with
+    <code>gh run download 38044461310</code>), reduced by <code>scripts/compare.py</code> to
+    <code>data/compare-38044461310.json</code>; range shifts from the GitHub compare API.</p>
+</main>
+<script src="../data/run-38280732734.js"></script>
+<script src="../data/compare-38044461310.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+const NOW = Object.fromEntries(D.targets.map((t) => [t.name, t]));
+const THEN = Object.fromEntries(D.previous.targets.map((t) => [t.name, t]));
+const REPOS = ["fmt", "spdlog"];
+
+function grid(id, rows) {
+  const head = el("tr", {}, el("th", { text: "" }), ...REPOS.flatMap((r) => [
+    el("th", { class: "r mono", text: `${r} · B` }), el("th", { class: "r mono", text: `${r} · now` })]));
+  document.getElementById(id).replaceChildren(el("thead", {}, head), el("tbody", {}, rows.map(([label, then, now]) =>
+    el("tr", {}, el("td", { text: label }), ...REPOS.flatMap((r) => [
+      el("td", { class: "r", text: then(THEN[r]) }), el("td", { class: "r", text: now(NOW[r]) })])))));
+}
+
+grid("inputs", [
+  ["tool commit", () => D.previous.run.commit, () => D.run.commit],
+  ["schema", () => "1.2", (t) => t.schema],
+  ["base → head", (t) => `${t.revs[0]} → ${t.revs[1]}`, (t) => `${t.revs[0]} → ${t.revs[1]}`],
+  ["--third-party", () => "none", (t) => t.third_party_flag],
+  ["lines changed", (t) => fmtN(t.plan.lines_changed), (t) => fmtN(t.plan.lines_changed)],
+  ["files changed (C++)", (t) => `${t.plan.files_changed} (${t.plan.cpp_files})`, (t) => `${t.plan.files_changed} (${t.plan.cpp_files})`],
+]);
+
+const sum = (o) => Object.values(o).reduce((a, c) => a + c, 0);
+grid("headline", [
+  ["change events", (t) => t.summary.events_reported, (t) => t.summary.change_events_reported],
+  ["top-level", (t) => t.summary.top_level_events, (t) => t.summary.top_level_change_events],
+  ["high-risk", (t) => t.summary.high_risk_count, (t) => t.summary.high_risk_count],
+  ["components", (t) => t.summary.components, (t) => t.summary.components],
+  ["lines per change event", (t) => t.summary.compression_ratio.toFixed(2), (t) => t.summary.compression_ratio.toFixed(2)],
+  ["changed C++ lines no change event explains", () => "not measured", (t) => `${fmtN(t.uncovered.lines)} of ${fmtN(t.uncovered.changed_cpp_lines)}`],
+  ["NodeAdded · NodeRemoved", (t) => `${t.kinds.NodeAdded || 0} · ${t.kinds.NodeRemoved || 0}`, (t) => `${t.kinds.NodeAdded || 0} · ${t.kinds.NodeRemoved || 0}`],
+  ["EdgeAdded · EdgeRemoved", (t) => `${t.kinds.EdgeAdded || 0} · ${t.kinds.EdgeRemoved || 0}`, (t) => `${t.kinds.EdgeAdded || 0} · ${t.kinds.EdgeRemoved || 0}`],
+  ["NodeBodyChanged", (t) => t.kinds.NodeBodyChanged || 0, (t) => t.kinds.NodeBodyChanged || 0],
+  ["NodeSignatureChanged · CallerOfChangedSignature", () => "–", (t) => `${t.kinds.NodeSignatureChanged || 0} · ${t.kinds.CallerOfChangedSignature || 0}`],
+  ["NodeAttrChanged", () => "–", (t) => t.kinds.NodeAttrChanged || 0],
+  ["identity tiers", (t) => t.summary.residue.tiers_run.join(", "), (t) => t.summary.residue.tiers_run.join(", ")],
+  ["matched", (t) => fmtN(t.summary.residue.matched), (t) => fmtN(t.summary.residue.matched)],
+  ["unmatched base / head", (t) => `${t.summary.residue.unmatched_base} / ${t.summary.residue.unmatched_head}`, (t) => `${t.summary.residue.unmatched_base} / ${t.summary.residue.unmatched_head}`],
+  ["TUs per side", (t) => t.completeness.base.tus_total, (t) => t.completeness.base.tus_total],
+  ["distinct edges, base (leaving the model)", (t) => `${fmtN(t.completeness.base.edges_total)} (${fmtN(t.completeness.base.edges_dropped)})`, (t) => `${fmtN(t.completeness.base.edges_total)} (${fmtN(t.completeness.base.edges_dropped)})`],
+  ["TUs cached base · head (cold run)", (t) => `${t.completeness.base.tus_cached} · ${t.completeness.head.tus_cached}`, (t) => `${t.completeness.base.tus_cached} · ${t.completeness.head.tus_cached}`],
+  ["pipeline, in-process, cold", (t) => fmtS(t.timings.total), (t) => fmtS(t.timings.total)],
+  ["of which produce", (t) => fmtS(t.timings.produce_base + t.timings.produce_head), (t) => fmtS(t.timings.produce_base + t.timings.produce_head)],
+  ["Analyze step (Actions API)", (t) => D.previous.run.analyze_step_s[t.name] + " s", (t) => D.run.analyze_step_s[t.name] + " s"],
+]);
+
+const CAUSE = {
+  "an endpoint is third-party (path, or googletest's namespace testing)": "third-party code outside the model (#48, ADR-025); now boundary crossings",
+  "about an entity one run splits into removal + addition": "name tier pairs a changed signature (ADR-036); derive adds callers (ADR-040); default arguments compared (ADR-043)",
+  "about an entity of a kind run B did not model": "variables, aliases and macros modelled (#54, ADR-038)",
+  "NodeAttrChanged(sugared_signature)": "signature as written compared (ADR-038); spelling only, never high-risk (ADR-046)",
+  "NodeAttrChanged(default_arguments)": "default arguments compared (ADR-043); both here spelling only (ADR-046)",
+  "other": "not attributed: see the list",
+};
+for (const t of COMPARE.targets) {
+  const section = el("section", { class: "panel", style: "margin:12px 0" },
+    el("h3", {}, el("span", { class: "mono", text: t.repo }), "  ",
+      el("span", { class: "muted", text: `run B ${t.old_total} · now ${t.new_total} · in both ${t.in_both}` })));
+  for (const [side, title] of [["only_old", "only in run B"], ["only_new", "only in this run"]]) {
+    const part = t[side];
+    const rows = Object.entries(part.by_bucket).map(([bucket, kinds]) => el("tr", {},
+      el("td", { class: "bucket", text: bucket }),
+      el("td", { class: "r num", text: sum(kinds) }),
+      el("td", { class: "bucket", text: Object.entries(kinds).map(([k, v]) => `${k} ${v}`).join(" · ") }),
+      el("td", { class: "bucket muted", text: CAUSE[bucket] || "" })));
+    section.append(el("h4", { text: `${title}: ${part.count}` }),
+      el("div", { class: "scroll-x" }, el("table", { class: "data" },
+        el("thead", {}, el("tr", {}, ...["about", "n", "kinds", "cause (reading)"].map((h) => el("th", { text: h })))),
+        el("tbody", {}, rows))),
+      el("details", {}, el("summary", { text: `every one (${part.events.length})` }), el("pre", { text: part.events.join("\n") })));
+  }
+  document.getElementById("buckets").append(section);
+}
+</script>
+</body>
+</html>

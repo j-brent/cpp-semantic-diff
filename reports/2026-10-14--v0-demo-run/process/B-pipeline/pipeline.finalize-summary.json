@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "skipped",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/jbrent/dev/cpp-semantic-diff/.claude/worktrees/agent-ace6c8fec9ab5a687/reports/2026-10-14--v0-demo-run/process/B-pipeline/pipeline.json",
+    "sha256": "d57d422861d6322afc68ed12b91c475983670d61c1ec9ab33e36b98193bb60b8",
+    "bytes": 7403
+  },
+  "artifact": {
+    "path": "/home/jbrent/dev/cpp-semantic-diff/.claude/worktrees/agent-ace6c8fec9ab5a687/reports/2026-10-14--v0-demo-run/process/B-pipeline/pipeline.html",
+    "sha256": "f9376c68caf9b93eaf1bb0acf5daa73d8ffd1c63abf8cfe1dd3be47d1fc97482",
+    "bytes": 777866
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "skipped"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/chrome-unavailable",
+      "severity": "warning",
+      "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+      "subject": {
+        "artifact": "/home/jbrent/dev/cpp-semantic-diff/.claude/worktrees/agent-ace6c8fec9ab5a687/reports/2026-10-14--v0-demo-run/process/B-pipeline/pipeline.html"
+      },
+      "evidence": {
+        "executable": null
+      },
+      "supportedFixes": [
+        "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/jbrent/dev/cpp-semantic-diff/.claude/worktrees/agent-ace6c8fec9ab5a687/reports/2026-10-14--v0-demo-run/process/B-pipeline/pipeline.finalize.json",
+    "summaryReceipt": "/home/jbrent/dev/cpp-semantic-diff/.claude/worktrees/agent-ace6c8fec9ab5a687/reports/2026-10-14--v0-demo-run/process/B-pipeline/pipeline.finalize-summary.json",
+    "browserCheckReceipt": "/home/jbrent/dev/cpp-semantic-diff/.claude/worktrees/agent-ace6c8fec9ab5a687/reports/2026-10-14--v0-demo-run/process/B-pipeline/pipeline.browser-check.json"
+  },
+  "update": {
+    "status": "update_available",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.1.0",
+    "releaseNotes": "https://github.com/tt-a1i/archify/releases/tag/v3.1.0",
+    "severity": "normal",
+    "checkedAt": "2026-10-14T19:09:11.368Z",
+    "source": "cache",
+    "noticeRequired": true,
+    "noticeText": "Archify update: 3.0.1 → 3.1.0. A previous check at 2026-10-14T19:09:11.368Z found a newer release. Release notes: https://github.com/tt-a1i/archify/releases/tag/v3.1.0. The installed Skill has not changed; ask to snooze or ignore this reminder.",
+    "eventKey": "archify@sha256:ffedc53390c9da6e859f41e432c5d2d0615a23cf00a503181f07efbba88a7ce8"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 881
+}

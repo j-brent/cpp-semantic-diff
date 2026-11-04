@@ -1,0 +1,97 @@
+comparing HEAD~30...HEAD  (a2976707813e -> 6c9e898175c6)
+building base model 8 TUs
+building head model 8 TUs
+subject  HEAD~30...HEAD  (a2976707813e -> 6c9e898175c6)
+base 8/8 TUs · head 8/8 TUs · libclang 18.1.3 x86_64-pc-linux-gnu · both sides parsed clean
+  base 938 of 2,579 distinct edges (36.4%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit special 
+members). Expected, and a lower bound on the call graph, not a defect.
+  head 948 of 2,619 distinct edges (36.2%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit special 
+members). Expected, and a lower bound on the call graph, not a defect.
+  base 2 declaration(s) not modelled: 1 friend, 1 namespace_alias
+  head 2 declaration(s) not modelled: 1 friend, 1 namespace_alias
+  third-party include/spdlog/fmt/bundled (declared)
+
+2,254 lines changed -> 158 change events, 35 high-risk · 1,219 of 1,487 changed C++ lines explained by no change event
+  14.3 lines per change event · 122 top-level, 36 nested under a cause · 50 components · 105 files (95 C++) · 1.5s
+  1,219 changed C++ line(s), 6,375 token(s), are on no change event's lines — a lower bound on what the model cannot explain
+    about 828 of those line(s) are in files no model declares anything in (roughly: no translation unit includes them)
+    head tests/test_file_logging.cpp: 1,288 token(s) on 138 line(s), no model declares anything in it
+    head tests/test_systemd_namespace.cpp: 1,240 token(s) on 152 line(s), no model declares anything in it
+    head include/spdlog/sinks/loki_sink.h: 900 token(s) on 104 line(s), no model declares anything in it
+    head include/spdlog/sinks/systemd_namespace_sink.h: 809 token(s) on 127 line(s), no model declares anything in it
+    head tests/test_tcp_client.cpp: 430 token(s) on 55 line(s), no model declares anything in it
+    … 174 more file(s) in the JSON
+
+component 0 · 20 change events
+  0.73 · NodeAttrChanged    spdlog::pattern_formatter::pattern_formatter [void (spdlog::pattern_time_type, std::basic_string<char>)]  
+include/spdlog/pattern_formatter-inl.h:966
+         blast radius 32 dependent(s), 2 direct, head model · exposure public · novelty NodeAttrChanged(default_arguments) · uncertainty declared
+  0.67 · NodeAttrChanged    spdlog::pattern_formatter::pattern_formatter [void (std::basic_string<char>, spdlog::pattern_time_type, std::basic_string<char>, 
+std::unordered_map<char, std::unique_ptr<spdlog::custom_flag_formatter>>)]  include/spdlog/pattern_formatter-inl.h:951
+         exposure public · novelty NodeAttrChanged(default_arguments) · blast radius 15 dependent(s), 4 direct, head model · uncertainty declared
+  0.59 · NodeAttrChanged    spdlog::sinks::sink::set_formatter  include/spdlog/sinks/sink.h:18
+         blast radius 30 dependent(s), 5 direct, head model · exposure public · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.59 · NodeAttrChanged    spdlog::sinks::sink::should_log  include/spdlog/sinks/sink-inl.h:14
+         blast radius 30 dependent(s), 3 direct, head model · exposure public · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.54 · NodeAttrChanged    spdlog::sinks::sink::level  include/spdlog/sinks/sink-inl.h:22
+         exposure public · blast radius 16 dependent(s), 1 direct, head model · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.54 ● NodeBodyChanged    spdlog::sinks::sink::level  include/spdlog/sinks/sink-inl.h:22
+         exposure public · blast radius 16 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.54 ● NodeBodyChanged    spdlog::details::registry::registry  include/spdlog/details/registry-inl.h:33
+         blast radius 60 dependent(s), 2 direct, head model · exposure internal · novelty NodeBodyChanged · uncertainty declared
+  0.52 · NodeAttrChanged    spdlog::sinks::base_sink::set_formatter_  include/spdlog/sinks/base_sink-inl.h:59
+         exposure public · blast radius 12 dependent(s), 3 direct, head model · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.51 · NodeBodyChanged    spdlog::sinks::base_sink::set_pattern_  include/spdlog/sinks/base_sink-inl.h:53
+         exposure public · blast radius 10 dependent(s), 2 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.50 · NodeAttrChanged    spdlog::sinks::base_sink::set_formatter  include/spdlog/sinks/base_sink-inl.h:47
+         exposure public · blast radius 9 dependent(s), 1 direct, head model · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.50 · NodeAttrChanged    spdlog::sinks::base_sink::base_sink<Mutex> [void (std::unique_ptr<spdlog::formatter>)]  include/spdlog/sinks/base_sink-inl.h:23
+         exposure public · blast radius 9 dependent(s), 1 direct, head model · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.50 · NodeBodyChanged    spdlog::sinks::base_sink::base_sink<Mutex> [void ()]  include/spdlog/sinks/base_sink-inl.h:19
+         exposure public · blast radius 9 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.48 · NodeBodyChanged    spdlog::sinks::ansicolor_sink::set_pattern  include/spdlog/sinks/ansicolor_sink-inl.h:72
+         exposure public · blast radius 7 dependent(s), 2 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.46 · NodeAttrChanged    spdlog::sinks::stdout_sink_base::set_formatter  include/spdlog/sinks/stdout_sinks-inl.h:89
+         exposure public · blast radius 5 dependent(s), 1 direct, head model · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.46 · NodeAttrChanged    spdlog::sinks::ansicolor_sink::set_formatter  include/spdlog/sinks/ansicolor_sink-inl.h:78
+         exposure public · blast radius 5 dependent(s), 1 direct, head model · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.46 · NodeBodyChanged    spdlog::sinks::stdout_sink_base::set_pattern  include/spdlog/sinks/stdout_sinks-inl.h:83
+         exposure public · blast radius 5 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.46 · NodeBodyChanged    spdlog::sinks::ansicolor_sink::ansicolor_sink<ConsoleMutex>  include/spdlog/sinks/ansicolor_sink-inl.h:17
+         exposure public · blast radius 5 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.46 · NodeBodyChanged    spdlog::sinks::stdout_sink_base::stdout_sink_base<ConsoleMutex>  include/spdlog/sinks/stdout_sinks-inl.h:33
+         exposure public · blast radius 5 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.45 · NodeAttrChanged    spdlog::set_formatter  include/spdlog/spdlog-inl.h:23
+         exposure public · blast radius 4 dependent(s), 2 direct, head model · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.43 · NodeBodyChanged    spdlog::set_pattern  include/spdlog/spdlog-inl.h:27
+         exposure public · blast radius 3 dependent(s), 3 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 1 · 8 change events
+  0.67 ● NodeSignatureChanged    spdlog::basic_logger_mt  include/spdlog/sinks/basic_file_sink.h:48
+         exposure public · novelty NodeSignatureChanged · blast radius 5 dependent(s), 4 direct, head model · uncertainty name
+         3 consequence(s) nested below
+     0.52 · └ CallerOfChangedSignature  replace_default_logger_example -> spdlog::basic_logger_mt  caller not edited
+     0.52 · └ CallerOfChangedSignature  basic_example -> spdlog::basic_logger_mt  caller not edited
+     0.52 · └ CallerOfChangedSignature  async_example -> spdlog::basic_logger_mt  caller not edited
+  0.64 ● NodeAttrChanged    spdlog::basic_logger_mt  include/spdlog/sinks/basic_file_sink.h:48
+         exposure public · novelty NodeAttrChanged(default_arguments) · blast radius 5 dependent(s), 4 direct, head model · uncertainty name
+  0.50 · NodeBodyChanged    spdlog::basic_logger_mt  include/spdlog/sinks/basic_file_sink.h:48
+         exposure public · blast radius 5 dependent(s), 4 direct, head model · novelty NodeBodyChanged · uncertainty name
+  0.43 · NodeAttrChanged    spdlog::set_default_logger  include/spdlog/spdlog-inl.h:92
+         exposure public · blast radius 3 dependent(s), 2 direct, head model · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+  0.43 · NodeAttrChanged    spdlog::default_logger  include/spdlog/spdlog-inl.h:84
+         exposure public · blast radius 3 dependent(s), 2 direct, head model · novelty NodeAttrChanged(sugared_signature) · uncertainty declared
+
+… 97 more top-level change events (--limit 0 for all, or --json for every one)
+
+identity: tiers declared, inline-namespace, name only (ARCH-001 §13)
+  1,032 matched · 0 base / 16 head unmatched
+  git found no renames; one it could not detect would read here as a removal plus an addition
+  3 unmatched entities have file-scoped USRs (internal linkage); a rename git did not report breaks tier 1 for these
+
+true of every run:
+  One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not 
+implied.
+  Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.
+  Implicit special members are not visible. libclang does not expose the copy and move operations the compiler writes, so a change that adds or removes one 
+implicitly -- adding a destructor removes the implicit move operations -- produces no change event.

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trust Strip · can this run be believed</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .check { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .check .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .check .big { font-size: 22px; font-weight: 650; line-height: 1.15; }
+  .check .why { font-size: 13px; color: var(--ink-2); }
+  .meter { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
+  .meter svg { flex: 1; height: 12px; }
+  .repo-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 30px 0 10px; }
+  .repo-h h2 { margin: 0; font-size: 20px; }
+  pre.raw { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font: 12px/1.45 var(--mono); overflow-x: auto; margin: 6px 0 0; }
+  table.mini { font-size: 12px; border-collapse: collapse; width: 100%; }
+  table.mini td { padding: 1px 0; }
+  table.mini td.r { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="crumbs"><a href="../index.html">Run 38280732734</a> <span>/</span> <span class="kicker process">Process</span> <span>/</span> <span>E</span></div>
+    <div id="theme-slot"></div>
+  </div>
+  <h1>E · Can this run be believed?</h1>
+  <p class="lede">The preconditions and caveats the terminal view prints in prose, one tile each. Read this before
+    pages A, C and D: a truncated parse or a half-modelled repository would make every number there agree with
+    itself and still be wrong (ARCH-001 §11).</p>
+  <div class="legend"></div>
+  <div id="repos"></div>
+
+  <h2>True of every run</h2>
+  <p class="note">Printed by the tool, from <code>completeness.limits</code>. Run B printed the first two; the third is new.</p>
+  <div class="grid3" id="limits"></div>
+  <p class="note muted" style="margin-top:14px">Source: <code>doctor.txt</code>, <code>plan.txt</code>, <code>diff.txt</code>,
+    <code>diff-warm.txt</code>, and <code>completeness</code>, <code>third_party</code>, <code>summary.residue</code>,
+    <code>findings</code> and <code>meta.timings</code> of each <code>diff.json</code>; the step duration is from the Actions API for
+    <a id="run-link">the run</a>. The run summary's wall-clock table and core count are not in the artifacts, so they are
+    not shown here.</p>
+</main>
+<script src="../data/run-38280732734.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+document.getElementById("run-link").href = D.run.url;
+document.getElementById("run-link").textContent = "run " + D.run.id;
+document.querySelector(".legend").replaceChildren(
+  statusChip("good", "precondition holds"), statusChip("warning", "holds, with a known limit"),
+  statusChip("info", "context, not a defect"), statusChip("critical", "would invalidate the run (none here)"));
+
+function meter(part, whole, color) {
+  const f = part / whole;
+  return el("div", { class: "meter" },
+    el("svg:svg", { viewBox: "0 0 100 12", preserveAspectRatio: "none", role: "img", "aria-label": `${part} of ${whole}` },
+      el("svg:rect", { x: 0, y: 2, width: 100, height: 8, rx: 2, fill: "var(--surface-2)" }),
+      el("svg:rect", { x: 0, y: 2, width: Math.max(0.5, f * 100), height: 8, rx: 2, fill: color })),
+    el("span", { class: "num", text: pct(part, whole) }));
+}
+
+function tile(title, level, levelLabel, big, why, extra) {
+  return el("div", { class: "panel" }, el("div", { class: "check" },
+    el("div", { class: "head" }, el("h3", { text: title }), statusChip(level, levelLabel)),
+    big ? el("div", { class: "big num", text: big }) : null,
+    extra || null,
+    el("div", { class: "why" }, why)));
+}
+
+const counts = (obj) => el("table", { class: "mini" }, el("tbody", {},
+  Object.entries(obj).sort((a, b) => b[1] - a[1]).map(([k, v]) => el("tr", {}, el("td", { text: k }), el("td", { class: "r", text: fmtN(v) })))));
+
+for (const t of D.targets) {
+  const b = t.completeness.base, h = t.completeness.head, r = t.summary.residue, tm = t.timings;
+  const doctorClean = t.doctor.some((l) => /builtin headers\s+parsed clean/.test(l));
+  const produce = tm.produce_base + tm.produce_head;
+  const notes = [...new Set([...b.notes, ...h.notes])];
+  const nonCpp = notes.find((n) => /not C\+\+/.test(n));
+  const tpNote = notes.find((n) => /third-party/.test(n));
+  const invalidated = h.notes.find((n) => /invalidated/.test(n));
+  const tp = t.third_party_flag;
+  const unmodSum = (u) => Object.values(u).reduce((a, c) => a + c, 0);
+
+  const section = el("section", {},
+    el("div", { class: "repo-h" }, el("h2", { style: "font-family:var(--mono)", text: t.name }),
+      el("span", { class: "muted mono", text: `${t.base_ref}...HEAD  (${t.revs[0]} → ${t.revs[1]})  --third-party ${tp}` })),
+    el("div", { class: "grid3" },
+      tile("Parser (cppsd doctor)", doctorClean ? "good" : "critical", doctorClean ? "clean" : "not clean",
+        doctorClean ? "builtin headers parsed" : "check doctor output",
+        el("span", {}, "libclang 18.1.3, x86_64-pc-linux-gnu. Without the builtin headers libclang truncates silently and two truncated models agree."),
+        el("pre", { class: "raw", text: t.doctor.map((l) => l.trimEnd()).join("\n") })),
+
+      tile("Translation units modelled", b.tus_complete && h.tus_complete && !b.tus_failed && !h.tus_failed ? "good" : "critical",
+        "all parsed", `${b.tus_parsed}/${b.tus_total} · ${h.tus_parsed}/${h.tus_total}`,
+        el("span", {}, "base · head. 0 failed on either side.", nonCpp ? ` ${nonCpp}.` : "", tpNote ? ` ${tpNote}.` : "",
+          b.language_modes.length ? ` Language mode ${b.language_modes.join(", ")}.` : "")),
+
+      tile("Third-party boundary", "good", "declared, not modelled",
+        `${fmtN(b.crossings_by_label[tp] || 0)} · ${fmtN(h.crossings_by_label[tp] || 0)} crossings`,
+        el("span", {}, `base · head relationships into ${tp}, recorded as boundary crossings instead of modelled (#48). `,
+          `Sources: ${t.third_party.map((x) => x.path + " (" + x.sources.join(", ") + ")").join("; ")}. `,
+          `Paths that look third-party but were not declared: ${t.third_party_hints.length || "none"}.`)),
+
+      tile("Cache, cold then warm", "info", "cold by design",
+        `${b.tus_cached} · ${h.tus_cached} cached`,
+        el("span", {}, `base · head TUs served from cache inside the cold run (the cache root starts empty). `,
+          invalidated ? invalidated.replace(/ \(ARCH-001 §9\)$/, "") + ". " : "",
+          `The identical warm rerun took ${t.in_process_s.warm} s in-process against ${t.in_process_s.cold} s cold, and printed no invalidation.`)),
+
+      tile("Relationships leaving the model", "info", "expected",
+        null,
+        el("span", {}, "An endpoint declared nowhere in the model. A lower bound on the call graph, not a defect. Labelled since schema 2.0 (head side shown):"),
+        el("div", {},
+          el("div", { class: "note", text: `base ${fmtN(b.edges_dropped)} of ${fmtN(b.edges_total)} distinct edges` }), meter(b.edges_dropped, b.edges_total, "var(--s1)"),
+          el("div", { class: "note", text: `head ${fmtN(h.edges_dropped)} of ${fmtN(h.edges_total)}` }), meter(h.edges_dropped, h.edges_total, "var(--s1)"),
+          counts(h.crossings_by_label))),
+
+      tile("Identity (match)", "warning", r.tiers_run.join(", "),
+        `${fmtN(r.matched)} matched`,
+        el("span", {}, `${r.unmatched_base} base / ${r.unmatched_head} head unmatched · ${t.plan.files_renamed} renames found by git (list complete: ${t.renames.complete ? "yes" : "no"}) · ${r.internal_linkage_residue} internal-linkage. `,
+          `Change events by the tier of their pairing: ${Object.entries(t.tiers).map(([k, v]) => `${k === "None" ? "unpaired" : k} ${v}`).join(", ")}. `,
+          "Tiers 2 to 4 of ARCH-001 §5 (structural, positional, similarity) are not built (ADR-020).")),
+
+      tile("Declarations not modelled", "info", "counted",
+        `${unmodSum(b.unmodelled)} · ${unmodSum(h.unmodelled)}`,
+        el("span", {}, "base · head declarations the extractor skips, by kind (#66). Head:"),
+        counts(h.unmodelled)),
+
+      tile("Evidence (enrich)", "info", "not built (post-v0)",
+        `${t.findings} findings`,
+        el("span", {}, "Evidence adapters are deferred by design (ARCH-001 §13). Blast radius, listed under enrich, ships inside rank.")),
+
+      tile("Time", "info", "measured",
+        fmtS(tm.total),
+        el("span", {}, `in-process, cold. Producing both models took ${fmtS(produce)} (${pct(produce, tm.total)}). `,
+          `The whole Analyze step (doctor, plan, cold diff, warm diff) took about ${D.run.analyze_step_s[t.name]} s. Page B breaks it down.`)),
+    ));
+  document.getElementById("repos").append(section);
+}
+
+const limits = D.targets[0].limits;
+document.getElementById("limits").replaceChildren(...limits.map((l) => {
+  const [head, ...rest] = l.split(". ");
+  return el("div", { class: "panel" }, el("div", { class: "check" },
+    el("div", { class: "head" }, el("h3", { text: head }), statusChip("warning", "standing limit")),
+    el("div", { class: "why", text: rest.join(". ") })));
+}));
+</script>
+</body>
+</html>

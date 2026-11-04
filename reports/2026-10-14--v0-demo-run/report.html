@@ -1,0 +1,291 @@
+<!doctype html>
+<!-- metadata
+type: report
+kind: frozen
+frozen: 2026-10-14
+author: Brent Runyan
+created: 2026-10-14
+dependencies: [reports/2026-10-10--up-to-speed/demo-run-b]
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Run Findings</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  main p, main li { max-width: 86ch; }
+  main li { margin: 4px 0; }
+  .panel.scroll-x { padding: 6px 10px; margin: 10px 0; }
+  .inf { color: var(--muted); font-style: italic; }
+  pre.raw { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font: 12px/1.45 var(--mono); overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="crumbs"><a href="index.html">Run 38280732734</a> <span>/</span> <span>Findings</span></div>
+    <div id="theme-slot"></div>
+  </div>
+  <h1>The demo workflow on v0: run 38280732734</h1>
+  <p class="lede"><em>Frozen document: what <a href="https://github.com/j-brent/cpp-semantic-diff/actions/runs/38280732734">run
+    38280732734</a> of the <code>demo</code> workflow produced on 2026-10-12, at
+    <a href="https://github.com/j-brent/cpp-semantic-diff/commit/c01c58bfe348636daca703316194b6e98214fc03"><code>c01c58b</code></a>,
+    set beside <a href="../2026-10-10--up-to-speed/demo-run-b/index.html">demo run B</a> (run 38044461310, 2026-10-10,
+    <code>4d8e367</code>). Written 2026-10-14. Not maintained.</em></p>
+  <p>The pages drawn from this run, as for run B, are linked from <a href="index.html">the index</a>; page F holds the
+    comparison as tables. Every number below comes from the run's artifacts, kept in <code>artifacts/</code>, unless it says
+    otherwise. What is inferred rather than read off a file is marked <span class="inf">(inferred)</span>.</p>
+
+  <h2>1 · What was run</h2>
+  <div class="panel scroll-x"><table class="data"><tbody>
+    <tr><td>Run</td><td><code>demo</code> workflow, run 38280732734, created 2026-10-12 16:55:15 UTC</td></tr>
+    <tr><td>Event</td><td><code>pull_request</code>: <a href="https://github.com/j-brent/cpp-semantic-diff/pull/75">#75</a>, <code>dev</code>
+      into <code>main</code>. The workflow runs on pull requests that touch <code>.github/workflows/</code></td></tr>
+    <tr><td>Branch, commit</td><td><code>dev</code> at <code>c01c58bfe348</code>; schema 2.0; <code>cpp-semantic-diff</code> 0.0.1</td></tr>
+    <tr><td>Conclusion</td><td>success: <code>targets</code> and both <code>analyze</code> legs</td></tr>
+    <tr><td>Runner</td><td>GitHub <code>ubuntu-24.04</code>; libclang 18.1.3 (<code>/usr/lib/llvm-18/lib/libclang.so.1</code>),
+      x86_64-pc-linux-gnu, builtin headers parsed clean</td></tr>
+    <tr><td>Per leg</td><td><code>cppsd doctor</code>; <code>cppsd plan</code>; <code>cppsd diff --limit 25 --third-party &lt;path&gt; --out
+      diff.json</code> on an empty cache root (cold); the same <code>diff</code> again (warm)</td></tr>
+  </tbody></table></div>
+  <div class="panel scroll-x"><table class="data">
+    <thead><tr><th>Target</th><th>Range</th><th>Revisions</th><th><code>--third-party</code></th></tr></thead>
+    <tbody>
+      <tr><td>fmt (<code>fmtlib/fmt</code>, upstream HEAD)</td><td><code>HEAD~12...HEAD</code></td><td><code>ea0660a1d095</code> → <code>b4ffa39b9994</code></td><td><code>test/gtest</code></td></tr>
+      <tr><td>spdlog (<code>gabime/spdlog</code>, upstream HEAD)</td><td><code>HEAD~30...HEAD</code></td><td><code>a2976707813e</code> → <code>6c9e898175c6</code></td><td><code>include/spdlog/fmt/bundled</code></td></tr>
+    </tbody></table></div>
+  <p>Job times from the Actions API: the fmt leg took 4 min 5 s, of which the Analyze step 217 s; the spdlog leg 1 min 13 s,
+    Analyze 36 s.</p>
+
+  <h2>2 · Results</h2>
+  <div class="panel scroll-x"><table class="data">
+    <thead><tr><th></th><th>fmt</th><th>spdlog</th></tr></thead>
+    <tbody>
+      <tr><td>lines changed (files, C++)</td><td>576 (12, 10)</td><td>2,254 (105, 95)</td></tr>
+      <tr><td>change events</td><td>143</td><td>158</td></tr>
+      <tr><td>of which high-risk</td><td>5</td><td>35</td></tr>
+      <tr><td>top-level / nested</td><td>40 / 103</td><td>122 / 36</td></tr>
+      <tr><td>components</td><td>25</td><td>50</td></tr>
+      <tr><td>lines per change event</td><td>4.03</td><td>14.27</td></tr>
+      <tr><td>changed C++ lines no change event explains</td><td>18 of 412 (148 tokens)</td><td>1,219 of 1,487 (6,375 tokens); about 828 in files no model declares anything in</td></tr>
+      <tr><td>change events by kind</td><td>EdgeAdded 61, NodeAdded 51, NodeBodyChanged 21, CallerOfChangedSignature 5, EdgeRemoved 3, NodeAttrChanged 1, NodeSignatureChanged 1</td>
+        <td>NodeAttrChanged 58, NodeBodyChanged 36, EdgeAdded 31, NodeAdded 16, NodeSignatureChanged 11, CallerOfChangedSignature 5, EdgeRemoved 1</td></tr>
+      <tr><td>NodeAttrChanged by attribute</td><td>default_arguments 1</td><td>sugared_signature 29, replacement_hash 16, default_arguments 13</td></tr>
+      <tr><td>high-risk by kind</td><td>NodeSignatureChanged, NodeAttrChanged, NodeBodyChanged, CallerOfChangedSignature, NodeAdded: 1 each</td><td>NodeSignatureChanged 11, NodeAttrChanged 11, NodeAdded 11, NodeBodyChanged 2</td></tr>
+      <tr><td>impact ≥ 0.6 but spelling only, so not high-risk (ADR-046)</td><td>0</td><td>8 (6 sugared_signature, 2 default_arguments)</td></tr>
+      <tr><td>TUs per side (parsed, failed)</td><td>50 (50, 0); 2 of 52 entries not C++, 1 third-party and not parsed</td><td>8 (8, 0)</td></tr>
+      <tr><td>identity tiers</td><td>declared, inline-namespace, name</td><td>declared, inline-namespace, name</td></tr>
+      <tr><td>matched; unmatched base / head</td><td>8,809; 0 / 51</td><td>1,032; 0 / 16 (3 with file-scoped USRs)</td></tr>
+      <tr><td>distinct edges leaving the model, base</td><td>7,804 of 18,964 (41.2%)</td><td>938 of 2,579 (36.4%)</td></tr>
+      <tr><td>crossings into the third-party path, base / head</td><td>5,521 / 5,562 (<code>test/gtest</code>)</td><td>166 / 167 (<code>include/spdlog/fmt/bundled</code>)</td></tr>
+      <tr><td>declarations not modelled, head</td><td>103: 52 using_declaration, 50 friend, 1 using_directive</td><td>2: 1 friend, 1 namespace_alias</td></tr>
+      <tr><td>findings</td><td>0</td><td>0</td></tr>
+      <tr><td>pipeline, cold, in-process</td><td>195.8 s; produce 193.0 s (98.6%)</td><td>27.4 s; produce 24.0 s (87.5%)</td></tr>
+      <tr><td>pipeline, warm rerun, in-process</td><td>16.5 s</td><td>1.5 s</td></tr>
+      <tr><td>TUs cached in the cold run, base · head</td><td>15 · 17 (33 of 50 head TUs invalidated)</td><td>0 · 1 (7 of 8 invalidated)</td></tr>
+    </tbody></table></div>
+  <p>The stages after produce are small: on fmt <code>coverage</code> 0.75 s, <code>rank</code> 0.15 s, <code>diff</code> 0.13 s,
+    <code>match</code> 0.12 s, <code>classify</code> 0.08 s, <code>derive</code> 0.008 s; on spdlog each is under 0.4 s.
+    <code>acquire</code> took 1.4 s and 2.9 s.</p>
+
+  <h3>Top of each ranking</h3>
+  <ul>
+    <li><b>fmt, component 0</b> (15 change events): <code>detail::write_buffer</code> gained a parameter. It is one entity, paired
+      by the name tier, with three top-level change events, each high-risk: <code>NodeSignatureChanged</code> (0.74),
+      <code>NodeAttrChanged(default_arguments)</code> (0.71; the new parameter's default
+      <code>to_unsigned(max_value&lt;std::streamsize&gt;())</code>), and <code>NodeBodyChanged</code> (0.57). Five
+      <code>CallerOfChangedSignature</code> are nested under the signature change: <code>print</code>, both <code>vprint</code>,
+      and two tests, of which only <code>write_to_ostream_max_size</code> was edited. Component 1 is <code>detail::fill_n</code>
+      added (0.57, high-risk).</li>
+    <li><b>spdlog, component 0</b> (20 change events): spelling and sink changes. Its first change event, ranked first overall
+      at 0.73, is <code>NodeAttrChanged(default_arguments)</code> on a <code>pattern_formatter</code> constructor whose default
+      changed from <code>spdlog::details::os::default_eol</code> to <code>details::os::default_eol</code>: spelling only, so
+      not high-risk. Of its 20, 9 more are <code>sugared_signature</code> changes and 9 are body changes, two of them
+      high-risk (<code>sinks::sink::level</code> and the <code>registry</code> constructor, ranks 39 and 40).</li>
+    <li><b>spdlog, components 1 to 9</b>: 11 functions gained a trailing <code>unsigned long</code>, 8 file-logger factories and
+      the constructors of <code>basic_file_sink</code>, <code>rotating_file_sink</code> and <code>daily_file_sink</code>. Each
+      is one <code>NodeSignatureChanged</code>, plus a <code>NodeAttrChanged(default_arguments)</code> (a new <code>0</code>
+      default) and a <code>NodeBodyChanged</code>. Five <code>CallerOfChangedSignature</code> from
+      <code>example/example.cpp</code>, none edited. Component 2 holds the three sink constructors with the new
+      <code>buffer_size</code> and <code>set_buffer_size</code> methods.</li>
+  </ul>
+
+  <h2>3 · Against run B</h2>
+  <h3>3.1 · What differs in the input</h3>
+  <p>The workflow and the bases are the same, but both runs clone upstream's current <code>HEAD</code>, which moved. The GitHub
+    compare API (2026-10-12) shows each end of each range one commit later:</p>
+  <div class="panel scroll-x"><table class="data">
+    <thead><tr><th></th><th>Run B</th><th>This run</th><th>Commit that left the range</th><th>Commit that entered it</th></tr></thead>
+    <tbody>
+      <tr><td>fmt</td><td><code>cdc27f91a007</code> → <code>35c58f084e7c</code></td><td><code>ea0660a1d095</code> → <code>b4ffa39b9994</code></td>
+        <td><code>ea0660a1</code> "Bump urllib3 in /support": <code>support/doc-requirements.txt</code></td>
+        <td><code>b4ffa39b</code> "Block optimize pragma on EDG": 1 line of <code>include/fmt/core.h</code></td></tr>
+      <tr><td>spdlog</td><td><code>bfde7d3711d5</code> → <code>d6c93f38a08b</code></td><td><code>a2976707813e</code> → <code>6c9e898175c6</code></td>
+        <td><code>a2976707</code> "Tcp client auto reconnect": 3 lines of <code>tcp_client-windows.h</code></td>
+        <td><code>6c9e8981</code> "Fix pending output corruption when changing file buffers": <code>file_helper-inl.h</code>,
+          <code>rotating_file_sink-inl.h</code>, two test files</td></tr>
+    </tbody></table></div>
+  <p>So fmt's C++ files went from 9 to 10 and its lines from 580 to 576; spdlog's lines from 2,161 to 2,254. Between the two
+    tool commits are 45 commits on <code>dev</code>'s first-parent line, 42 of them merged pull requests. Run B passed no
+    <code>--third-party</code>: the option did not exist.</p>
+
+  <h3>3.2 · Headline numbers</h3>
+  <div class="panel scroll-x"><table class="data">
+    <thead><tr><th></th><th class="r">fmt B</th><th class="r">fmt now</th><th class="r">spdlog B</th><th class="r">spdlog now</th></tr></thead>
+    <tbody>
+      <tr><td>change events</td><td class="r">181</td><td class="r">143</td><td class="r">171</td><td class="r">158</td></tr>
+      <tr><td>high-risk</td><td class="r">7</td><td class="r">5</td><td class="r">36</td><td class="r">35</td></tr>
+      <tr><td>top-level</td><td class="r">39</td><td class="r">40</td><td class="r">59</td><td class="r">122</td></tr>
+      <tr><td>components</td><td class="r">24</td><td class="r">25</td><td class="r">17</td><td class="r">50</td></tr>
+      <tr><td>lines per change event</td><td class="r">3.20</td><td class="r">4.03</td><td class="r">12.64</td><td class="r">14.27</td></tr>
+      <tr><td>NodeAdded · NodeRemoved</td><td class="r">46 · 1</td><td class="r">51 · 0</td><td class="r">24 · 11</td><td class="r">16 · 0</td></tr>
+      <tr><td>EdgeAdded · EdgeRemoved</td><td class="r">104 · 11</td><td class="r">61 · 3</td><td class="r">70 · 43</td><td class="r">31 · 1</td></tr>
+      <tr><td>identity tiers</td><td class="r">declared</td><td class="r">declared, inline-namespace, name</td><td class="r">declared</td><td class="r">declared, inline-namespace, name</td></tr>
+      <tr><td>matched</td><td class="r">10,718</td><td class="r">8,809</td><td class="r">2,466</td><td class="r">1,032</td></tr>
+      <tr><td>unmatched base / head</td><td class="r">1 / 46</td><td class="r">0 / 51</td><td class="r">11 / 24</td><td class="r">0 / 16</td></tr>
+      <tr><td>TUs per side</td><td class="r">51</td><td class="r">50</td><td class="r">8</td><td class="r">8</td></tr>
+      <tr><td>distinct edges, base (leaving the model)</td><td class="r">26,458 (5,181)</td><td class="r">18,964 (7,804)</td><td class="r">5,345 (1,202)</td><td class="r">2,579 (938)</td></tr>
+      <tr><td>pipeline, cold, in-process</td><td class="r">170.5 s</td><td class="r">195.8 s</td><td class="r">21.9 s</td><td class="r">27.4 s</td></tr>
+      <tr><td>Analyze step</td><td class="r">192 s</td><td class="r">217 s</td><td class="r">28 s</td><td class="r">36 s</td></tr>
+    </tbody></table></div>
+  <p>Schema 2.0 renamed the summary fields: <code>events</code> to <code>change_events</code>, <code>events_reported</code> to
+    <code>change_events_reported</code>, <code>top_level_events</code> to <code>top_level_change_events</code>
+    (<a href="../../docs/adr/ADR-027-term-is-change-event.md">ADR-027</a>), and dropped <code>vendored_events</code>. It added
+    <code>summary.changed_cpp_lines</code>, <code>uncovered_lines</code> and <code>uncovered_tokens</code>,
+    <code>completeness.uncovered</code>, per-side <code>crossings_by_label</code> and <code>unmodelled</code>, top-level
+    <code>third_party</code>, <code>third_party_hints</code> and <code>crossings</code>, <code>derive</code> and
+    <code>coverage</code> timings, and a per-score <code>informational</code>.</p>
+
+  <h3>3.3 · Change events only one run reports</h3>
+  <p><code>scripts/compare.py</code> keys each change event by kind, subject and attribute, and sorts each one that only one run
+    reports by what it is about (<code>data/compare-38044461310.json</code>; the full lists are on
+    <a href="product/F-before-after-v0.html">page F</a>).</p>
+  <p><b>fmt: 122 in both, 59 only in run B, 21 only now.</b></p>
+  <div class="panel scroll-x"><table class="data">
+    <thead><tr><th>Only in</th><th>About</th><th class="r">n</th><th>Cause</th></tr></thead>
+    <tbody>
+      <tr><td>B</td><td>an endpoint in googletest (namespace <code>testing</code>, under <code>test/gtest</code>): new tests' calls into
+        <code>testing::</code> and their base <code>testing::Test</code></td><td class="r">41</td>
+        <td>googletest is outside the model with <code>--third-party test/gtest</code>
+          (<a href="https://github.com/j-brent/cpp-semantic-diff/pull/48">#48</a>); those relationships are now crossings labelled <code>test/gtest</code></td></tr>
+      <tr><td>B</td><td><code>write_buffer</code> removed and added, and the 16 call and contains edges of both</td><td class="r">18</td>
+        <td>the name tier pairs a function whose signature changed (<a href="../../docs/adr/ADR-036-functions-pair-by-name.md">ADR-036</a>);
+          its edges then map through the pairing</td></tr>
+      <tr><td>now</td><td><code>write_buffer</code>: NodeSignatureChanged, NodeAttrChanged(default_arguments), NodeBodyChanged, and 5
+        CallerOfChangedSignature</td><td class="r">8</td>
+        <td>ADR-036; callers derived (<a href="../../docs/adr/ADR-040-callers-of-a-changed-signature-are-derived.md">ADR-040</a>);
+          default arguments compared (<a href="../../docs/adr/ADR-043-default-arguments-and-base-order-are-attributes.md">ADR-043</a>)</td></tr>
+      <tr><td>now</td><td>five <code>test_info_</code> static members of new test classes, and <code>stateful_allocator::value_type</code>,
+        with their contains edges</td><td class="r">12</td>
+        <td>variables and aliases are modelled (<a href="https://github.com/j-brent/cpp-semantic-diff/pull/54">#54</a>,
+          <a href="../../docs/adr/ADR-038-entities-that-carry-values.md">ADR-038</a>)</td></tr>
+      <tr><td>now</td><td><code>writer::writer</code>, NodeBodyChanged</td><td class="r">1</td>
+        <td>not determined: neither commit that left or entered the range touches it</td></tr>
+    </tbody></table></div>
+  <p><b>spdlog: 63 in both, 108 only in run B, 95 only now.</b></p>
+  <div class="panel scroll-x"><table class="data">
+    <thead><tr><th>Only in</th><th>About</th><th class="r">n</th><th>Cause</th></tr></thead>
+    <tbody>
+      <tr><td>B</td><td>11 functions removed and added (8 factories, 3 sink constructors), and 84 of their edges removed and re-added</td>
+        <td class="r">106</td><td>ADR-036, as for fmt</td></tr>
+      <tr><td>B</td><td><code>file_helper::set_buffer_size</code> calling <code>os::filename_to_str</code> and <code>throw_spdlog_ex</code></td>
+        <td class="r">2</td><td><span class="inf">(inferred)</span> the commit that entered the range, <code>6c9e8981</code>, rewrote <code>file_helper-inl.h</code></td></tr>
+      <tr><td>now</td><td>the same 11 functions: NodeSignatureChanged, NodeAttrChanged(default_arguments) and NodeBodyChanged each, and 5
+        CallerOfChangedSignature</td><td class="r">38</td><td>ADR-036, ADR-040, ADR-043</td></tr>
+      <tr><td>now</td><td>NodeAttrChanged(sugared_signature): types such as <code>spdlog::logger</code> now spelled without <code>spdlog::</code></td>
+        <td class="r">29</td><td>the signature as written is compared (ADR-038); spelling only, never high-risk
+          (<a href="../../docs/adr/ADR-046-spelling-only-changes-are-never-high-risk.md">ADR-046</a>)</td></tr>
+      <tr><td>now</td><td>16 macros whose replacement changed, 3 macros added (<code>SPDLOG_NAMESPACE</code>, <code>_BEGIN</code>, <code>_END</code>)</td>
+        <td class="r">19</td><td>macros are modelled (#54, ADR-038)</td></tr>
+      <tr><td>now</td><td>two <code>pattern_formatter</code> constructors, NodeAttrChanged(default_arguments)</td><td class="r">2</td>
+        <td>ADR-043; both spelling only (ADR-046)</td></tr>
+      <tr><td>now</td><td><code>set_buffer_size</code> calling <code>flush</code>, <code>reopen</code>, <code>buffer_size</code>, <code>size</code></td>
+        <td class="r">5</td><td><span class="inf">(inferred)</span> commit <code>6c9e8981</code>, as above</td></tr>
+      <tr><td>now</td><td><code>ansicolor_sink</code> and <code>base_sink</code> constructors, NodeBodyChanged</td><td class="r">2</td><td>not determined</td></tr>
+    </tbody></table></div>
+
+  <h3>3.4 · What that does to the headline numbers</h3>
+  <ul>
+    <li><b>High-risk.</b> fmt's 7 in run B were <code>write_buffer</code> removed and added, <code>fill_n</code> added, and 4 of
+      the edges nested under them. Its 5 now are the three top-level change events on <code>write_buffer</code>, one of its
+      callers (<code>print</code>, 0.61), and <code>fill_n</code> added. spdlog's 36 in run B were 22 NodeAdded (11 of them the
+      re-added functions), 11 NodeRemoved, 2 NodeBodyChanged and 1 EdgeAdded. Its 35 now are 11 NodeSignatureChanged, 11
+      NodeAttrChanged(default_arguments) on the same 11 functions, 11 NodeAdded and 2 NodeBodyChanged. Without ADR-046's gate
+      it would be 43.</li>
+    <li><b>Top-level and components.</b> spdlog's top-level count doubled (59 to 122) and its components nearly tripled (17 to
+      50). <span class="inf">(inferred)</span> In run B a removed function's edges were change events nested under it, and the
+      edges of the 11 split functions joined them into one large component. Paired, those edges are not change events, so the
+      functions fall into separate components; and the 29 <code>sugared_signature</code> and 19 macro change events are
+      top-level, with nothing to nest under.</li>
+    <li><b>Model size.</b> Fewer entities match (fmt 10,718 to 8,809, spdlog 2,466 to 1,032) and fewer edges are counted (fmt
+      26,458 to 18,964, spdlog 5,345 to 2,579). <span class="inf">(inferred)</span> googletest and bundled fmt are no longer
+      modelled: their entities and internal edges are gone, and fmt's calls into googletest now leave the model, which is why
+      fmt's share of edges leaving it rose from 19.6% to 41.2%. fmt's TUs went from 51 to 50: one compile-database entry is
+      third-party and not parsed.</li>
+    <li><b>Unmatched.</b> No base-side entity is left unmatched in either repository (run B: 1 and 11). The head-side ones
+      left are additions.</li>
+    <li><b>Time.</b> The cold pipeline took longer (fmt 170.5 to 195.8 s, spdlog 21.9 to 27.4 s), nearly all of it in produce.
+      One run of each on shared runners, so this is not a measured regression, and the artifacts do not say why. The new stages
+      cost under 1 s on fmt.</li>
+  </ul>
+
+  <h2>4 · Observations</h2>
+  <ol>
+    <li><b>One signature change is still several high-risk change events.</b> No cause rule links a
+      <code>NodeAttrChanged(default_arguments)</code> or a <code>NodeBodyChanged</code> to the <code>NodeSignatureChanged</code>
+      on the same function, so each is top-level. Adding a defaulted parameter changes all three: fmt's one edit is 3 top-level
+      high-risk change events (4 with a caller), and spdlog's 11 edits are 22 of its 35 high-risk ones.</li>
+    <li><b>spdlog's ranking opens on spelling.</b> ADR-046 changes the count, not the order, as it says. Rank 1, and the head
+      of component 0, is a spelling-only default argument (total 0.73, impact 0.86); rank 3 is the other. 11 of component 0's
+      20 change events are spelling only, and its first high-risk change event is at rank 39. The first high-risk change
+      event overall, <code>basic_logger_mt</code>'s signature change, is rank 2.</li>
+    <li><b>Where spdlog's changed lines go.</b> 1,219 of its 1,487 changed C++ lines are on no change event's lines, and the tool
+      puts about 828 of them in files no model declares anything in, such as <code>tests/test_file_logging.cpp</code> and
+      <code>include/spdlog/sinks/loki_sink.h</code> (8 TUs model this repository). fmt has 18 such lines, in 3 files that are
+      all modelled: lines in <code>format-test.cc</code> and <code>compile-test.cc</code>, and the <code>core.h</code> pragma
+      line the commit that entered the range changed.</li>
+    <li><b>No bundled-fmt change events, and none expected.</b> Run B's spdlog document had none under
+      <code>include/spdlog/fmt/bundled</code> either; the path did not change in either range. With the option, 166 and 167
+      relationships into it are recorded as crossings, and the tool listed no other path as looking third-party.</li>
+    <li><b>The warm rerun is fast.</b> fmt 16.5 s and spdlog 1.5 s in-process, against 195.8 s and 27.4 s cold, and the warm
+      terminal views print no invalidation note. The warm runs' documents are not kept, so their stage timings are not known.</li>
+  </ol>
+
+  <h2>5 · What could not be determined</h2>
+  <ul>
+    <li><b>Wall-clock cold and warm times, and the core count.</b> The workflow writes them only to the run's step summary,
+      which the artifacts do not include and the API does not serve.</li>
+    <li><b>Why <code>writer::writer</code> (fmt) and the <code>ansicolor_sink</code> and <code>base_sink</code> constructors
+      (spdlog) have a <code>NodeBodyChanged</code> now and not in run B.</b> Neither upstream commit that entered or left the
+      range touches their files. A tool change is the likely cause, but which one is not shown.</li>
+    <li><b>Why the cold pipeline was slower.</b> One run of each, on GitHub's shared runners.</li>
+    <li><b>Which edge puts <code>set_default_logger</code> and <code>default_logger</code> in spdlog's component 1.</b> The
+      document lists only the entities change events reference, not the edges between them.</li>
+  </ul>
+
+  <h2>6 · Files</h2>
+  <div class="panel scroll-x"><table class="data">
+    <thead><tr><th>Path</th><th>What</th><th class="r">Size</th></tr></thead>
+    <tbody>
+      <tr><td><code>index.html</code>, <code>report.html</code>, <code>product/*.html</code>, <code>process/E-trust.html</code>, <code>assets/</code></td>
+        <td>this page, and pages A, C, D, E, F as for run B (F is new: against run B)</td><td class="r">87 kB</td></tr>
+      <tr><td><code>product/A-fmt/</code>, <code>product/A-spdlog/</code>, <code>process/B-pipeline/</code></td>
+        <td>archify specs, receipts and diagrams (pages A and B)</td><td class="r">5.1 MB</td></tr>
+      <tr><td><code>artifacts/demo-fmt/</code>, <code>artifacts/demo-spdlog/</code></td>
+        <td>the run's artifacts as downloaded: <code>diff.json</code>, <code>diff.txt</code>, <code>diff-warm.txt</code>,
+          <code>plan.txt</code>, <code>doctor.txt</code></td><td class="r">1.5 MB</td></tr>
+      <tr><td><code>data/</code></td><td><code>run-38280732734.json</code> (and <code>.js</code>) from <code>scripts/extract.py</code>;
+        <code>compare-38044461310.json</code> (and <code>.js</code>) from <code>scripts/compare.py</code></td><td class="r">0.5 MB</td></tr>
+      <tr><td><code>scripts/</code></td><td><code>extract.py</code>, <code>compare.py</code>, <code>gen_pipeline.py</code>,
+        <code>gen_fmt_component0.py</code>, <code>gen_spdlog_component1.py</code></td><td class="r">30 kB</td></tr>
+    </tbody></table></div>
+  <p>7.2 MB in all, against run B's 5.4 MB; the difference is mostly the kept artifacts. The archify diagrams' <code>browser-check</code> gate was skipped, as for run B: no Chrome or Chromium on the machine that
+    built them. Run B's artifacts were downloaded again for the comparison and are not kept here. To rebuild the data, from this
+    folder, with run B's artifacts in <code>&lt;b&gt;</code>:</p>
+  <pre class="raw">python3 -I scripts/extract.py artifacts ../2026-10-10--up-to-speed/demo-run-b/data/run-38044461310.json data/run-38280732734.json
+python3 -I scripts/compare.py artifacts &lt;b&gt; data/compare-38044461310.json</pre>
+</main>
+<script src="assets/common.js"></script>
+</body>
+</html>

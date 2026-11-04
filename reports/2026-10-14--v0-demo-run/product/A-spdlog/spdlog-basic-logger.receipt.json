@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "compare",
+  "type": "architecture",
+  "comparatorVersion": 1,
+  "canonicalVersion": 1,
+  "completeness": "complete",
+  "proofLevel": "authored",
+  "base": {
+    "title": "spdlog · component 1 · base (a2976707813e)",
+    "rawSha256": "7a594de21f47764dafa9ae3d268885ad69ea309e773cef8ab62f3686ef8fe0b5",
+    "semanticSha256": "b163082eb6ef7762193ecbe67dfe993cb51b3c98f2939253a7d36c62123154f0",
+    "bytes": 3480
+  },
+  "head": {
+    "title": "spdlog · component 1 · head (6c9e898175c6)",
+    "rawSha256": "4d98e01dec81f772a0d701949bc8fcd61117604c92482137bdfb49504a0ae2eb",
+    "semanticSha256": "a1e9d54c7a4bb6a66586a696c422b9fd6caaa62d4cf6e3c5fe99ecb55a97cf82",
+    "bytes": 3675
+  },
+  "summary": {
+    "components": {
+      "added": 0,
+      "changed": 3,
+      "evidenceChanged": 0,
+      "removed": 0,
+      "moved": 0
+    },
+    "connections": {
+      "added": 0,
+      "changed": 3,
+      "removed": 0,
+      "rerouted": 0
+    },
+    "boundaries": {
+      "added": 0,
+      "changed": 0,
+      "removed": 0,
+      "geometryChanged": 0
+    },
+    "presentationChanged": true,
+    "provenanceChanged": false
+  },
+  "changes": {
+    "components": [
+      {
+        "id": "blmt",
+        "baseLabel": "spdlog::basic_logger_mt · basic_file_sink.h",
+        "headLabel": "spdlog::basic_logger_mt · basic_file_sink.h",
+        "status": "changed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": [
+          "/sublabel",
+          "/tag"
+        ]
+      },
+      {
+        "id": "dl",
+        "baseLabel": "spdlog::default_logger",
+        "headLabel": "spdlog::default_logger",
+        "status": "changed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": [
+          "/sublabel"
+        ]
+      },
+      {
+        "id": "sdl",
+        "baseLabel": "spdlog::set_default_logger",
+        "headLabel": "spdlog::set_default_logger",
+        "status": "changed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": [
+          "/sublabel"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "id": "ex_async-blmt",
+        "base": {
+          "from": "ex_async",
+          "to": "blmt",
+          "label": ""
+        },
+        "head": {
+          "from": "ex_async",
+          "to": "blmt",
+          "label": "caller not edited"
+        },
+        "status": "changed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": [
+          "/label"
+        ]
+      },
+      {
+        "id": "ex_basic-blmt",
+        "base": {
+          "from": "ex_basic",
+          "to": "blmt",
+          "label": ""
+        },
+        "head": {
+          "from": "ex_basic",
+          "to": "blmt",
+          "label": "caller not edited"
+        },
+        "status": "changed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": [
+          "/label"
+        ]
+      },
+      {
+        "id": "ex_replace-blmt",
+        "base": {
+          "from": "ex_replace",
+          "to": "blmt",
+          "label": ""
+        },
+        "head": {
+          "from": "ex_replace",
+          "to": "blmt",
+          "label": "caller not edited"
+        },
+        "status": "changed",
+        "classifications": [
+          "semantic"
+        ],
+        "changedFields": [
+          "/label"
+        ]
+      }
+    ],
+    "boundaries": []
+  },
+  "identity": {
+    "components": "components[].id",
+    "connections": "connections[].id (required)",
+    "boundaries": "boundaries[].kind + boundaries[].label (derived)"
+  },
+  "view": {
+    "visualPreset": "classic"
+  },
+  "limitations": [
+    "Authored Architecture IR only; no runtime impact, causality, risk, or mergeability is inferred.",
+    "Boundary identity is conservatively derived from kind + label."
+  ],
+  "artifact": {
+    "sha256": "96ba3c7f28b6c85782384687da0c3559f82b6a9bed3ba4a5d1aaf0c669029171",
+    "bytes": 2094729
+  },
+  "validation": {
+    "checksPassed": 28,
+    "checkCount": 28,
+    "baseComposition": "pass",
+    "headComposition": "pass"
+  }
+}

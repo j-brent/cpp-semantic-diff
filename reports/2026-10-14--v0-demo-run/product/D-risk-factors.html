@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Risk Factors · why each change event ranks</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 6px; }
+  .rows { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 46%) 92px; gap: 0 12px; align-items: center; }
+  .rows .hdr { font-size: 12px; color: var(--muted); padding: 4px 0 6px; border-bottom: 1px solid var(--grid); }
+  .row { display: contents; }
+  .row > * { padding: 5px 0; border-bottom: 1px solid var(--grid); min-height: 34px; }
+  .lab { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+  .lab .rk { color: var(--muted); font-size: 12px; width: 26px; flex: none; text-align: right; }
+  .lab .k { font-size: 11px; color: var(--ink-2); flex: none; width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lab .n { font-family: var(--mono); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lab .c { color: var(--muted); font-size: 11px; flex: none; }
+  .bar svg { display: block; width: 100%; height: 22px; overflow: visible; }
+  .val { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; justify-content: center; }
+  .row:hover > * { background: var(--surface-2); }
+  .scale { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 46%) 92px; gap: 0 12px; }
+  .scale svg { width: 100%; height: 18px; display: block; overflow: visible; }
+  @media (max-width: 760px) {
+    .rows { display: block; }
+    .rows .hdr { display: none; }
+    .row { display: grid; grid-template-columns: minmax(0, 1fr) 84px; gap: 0 8px; border-bottom: 1px solid var(--grid); padding: 4px 0; }
+    .row > * { border-bottom: 0; min-height: 0; padding: 2px 0; }
+    .row .bar { grid-column: 1 / -1; grid-row: 2; }
+    .lab .k { display: none; }
+    .scale { grid-template-columns: 1fr; }
+    .scale > div:not(.sb) { display: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="crumbs"><a href="../index.html">Run 38280732734</a> <span>/</span> <span class="kicker product">Product</span> <span>/</span> <span>D</span></div>
+    <div id="theme-slot"></div>
+  </div>
+  <h1>D · Why each change event ranks where it does</h1>
+  <p class="lede">Each top-level change event's score is a weighted sum of four factors. The bar shows each factor's
+    contribution, and its length is the ranking <b>total</b>. High-risk is decided separately, by <b>impact</b>:
+    the first three factors only, rescaled to 0–1, at or above 0.6, and never for a change of spelling only (ADR-046).
+    That is why the threshold is not drawn as a line on this axis. A spelling-only change event keeps its place in the
+    order and is marked <i>spelling only</i>.</p>
+
+  <div class="controls">
+    <span id="repo-seg"></span>
+    <span id="limit-seg"></span>
+    <span class="note" id="count"></span>
+  </div>
+  <div class="legend" id="legend"></div>
+
+  <div class="panel" style="padding:12px 14px">
+    <div class="rows" id="rows"></div>
+    <div class="scale" id="scale"></div>
+  </div>
+
+  <h2>How to read a bar</h2>
+  <div class="grid3">
+    <div class="panel note"><h3>blast radius · weight 0.35</h3>Dependents of the subject in the call graph, up to 3 hops,
+      on a log scale that saturates at 100. The call graph is static, so this is a lower bound.</div>
+    <div class="panel note"><h3>exposure · 0.25</h3>public 1.0 · internal 0.6 · test 0.2. The vendored class of run B is
+      gone: third-party code is outside the model, so every change event is the repository's own (#55).</div>
+    <div class="panel note"><h3>novelty · 0.25</h3>By kind: NodeRemoved 1.0 · NodeSignatureChanged 1.0 · NodeAdded 0.85 ·
+      CallerOfChangedSignature 0.7 · EdgeRemoved 0.4 · EdgeAdded 0.35 · NodeBodyChanged 0.3. A NodeAttrChanged takes its
+      attribute's value: default_arguments 0.85, replacement_hash 0.8, sugared_signature 0.3.</div>
+    <div class="panel note"><h3>uncertainty · 0.15</h3>Doubt about the pairing (ADR-034): declared 0 · inline-namespace 0.10 ·
+      name 0.25. Unpaired: no candidate 0 · a candidate 0.5 · ambiguous 1.0. Run B gave every add and remove 1.0. It moves a
+      change event up the order but never counts toward high-risk.</div>
+  </div>
+
+  <h2>Table view</h2>
+  <div class="panel scroll-x"><table class="data" id="table"></table></div>
+  <p class="note muted">Source: <code>scores</code>, <code>ranking</code> and <code>change_events</code> of each <code>diff.json</code>. Rank is the
+    position in <code>ranking</code> across all change events, so gaps are nested change events. Weights from
+    <code>rank/weights.py</code> at <code>c01c58b</code>, as recorded in each factor.</p>
+</main>
+<script src="../data/run-38280732734.js"></script>
+<script src="../assets/common.js"></script>
+<script>
+const FACTORS = [
+  ["blast_radius", "blast radius", "var(--s1)"],
+  ["exposure", "exposure", "var(--s2)"],
+  ["novelty", "novelty", "var(--s3)"],
+  ["uncertainty", "uncertainty", "var(--s4)"],
+];
+let repo = D.targets[0].name, limit = 25;
+
+const legend = document.getElementById("legend");
+for (const [, label, c] of FACTORS) legend.append(el("span", {}, el("span", { class: "sw", style: `background:${c}` }), label));
+
+document.getElementById("repo-seg").append(segmented(D.targets.map((t) => [t.name, t.name]), repo, (v) => { repo = v; render(); }));
+document.getElementById("limit-seg").append(segmented([[25, "Top 25"], [0, "All top-level"]], limit, (v) => { limit = v; render(); }));
+
+function stackSvg(e) {
+  const svg = el("svg:svg", { viewBox: "0 0 100 22", preserveAspectRatio: "none" });
+  let x = 0;
+  for (const [key, , c] of FACTORS) {
+    const w = e.factors[key].c * 100;
+    if (w <= 0) continue;
+    svg.append(el("svg:rect", { x: x, y: 3, width: Math.max(0.3, w - 0.5), height: 16, fill: c }));
+    x += w;
+  }
+  return svg;
+}
+
+function tipFor(e) {
+  const tb = el("tbody");
+  for (const [key, label, c] of FACTORS) {
+    const f = e.factors[key];
+    tb.append(el("tr", {},
+      el("td", {}, el("span", { class: "sw", style: `display:inline-block;width:10px;height:10px;border-radius:2px;background:${c};margin-right:6px` }), label),
+      el("td", { class: "num", text: "+" + f.c.toFixed(3) }),
+      el("td", { class: "muted", text: f.detail })));
+  }
+  return el("div", {},
+    el("div", { class: "t mono", text: e.label }),
+    el("div", { class: "note", style: "margin-bottom:6px", text: `${e.kind}${e.detail ? "(" + e.detail + ")" : ""}${e.relation && e.relation !== "calls" ? " · " + e.relation : ""} · rank ${e.rank} · component ${e.component}${e.where ? " · " + e.where : ""} · tier ${e.tier || "none (" + e.unpaired + ")"}` }),
+    el("table", {}, tb),
+    el("div", { style: "margin-top:6px", class: "num" }, `total ${e.total.toFixed(3)} · impact ${e.impact.toFixed(3)} `,
+      e.high_risk ? statusChip("serious", "high-risk") : e.informational ? statusChip("info", "spelling only") : el("span", { class: "muted", text: "(below 0.6)" })),
+    e.nested ? el("div", { class: "note", text: `${e.nested} consequence(s) nested under it` }) : null);
+}
+
+function render() {
+  const t = D.targets.find((x) => x.name === repo);
+  const list = limit ? t.top_level.slice(0, limit) : t.top_level;
+  document.getElementById("count").textContent =
+    `${list.length} of ${t.top_level.length} top-level change events · ${t.summary.high_risk_count} high-risk across all ${t.summary.change_events_reported} · ${t.spelling_only_gated} more would be without ADR-046`;
+  const rows = document.getElementById("rows");
+  rows.replaceChildren(
+    el("div", { class: "hdr", text: "rank · kind · subject" }),
+    el("div", { class: "hdr bh", text: "contribution to total (0 – 1)" }),
+    el("div", { class: "hdr", style: "text-align:right", text: "total · impact" }));
+  for (const e of list) {
+    const row = el("div", { class: "row", tabindex: 0,
+      onmousemove: (ev) => tip.show(ev, tipFor(e)), onmouseleave: () => tip.hide(),
+      onfocus: (ev) => { const r = ev.currentTarget.firstChild.getBoundingClientRect(); tip.show({ clientX: r.left + 40, clientY: r.bottom }, tipFor(e)); },
+      onblur: () => tip.hide() },
+      el("div", { class: "lab" },
+        el("span", { class: "rk num", text: e.rank }),
+        el("span", { class: "k", text: e.kind, title: e.detail || "" }),
+        el("span", { class: "n", text: e.label })),
+      el("div", { class: "bar" }, stackSvg(e)),
+      el("div", { class: "val" },
+        el("span", {}, el("b", { text: e.total.toFixed(2) }), el("span", { class: "muted", text: " · " + e.impact.toFixed(2) })),
+        e.high_risk ? statusChip("serious", "high-risk") : e.informational ? statusChip("info", "spelling only") : null));
+    rows.append(row);
+  }
+  const scale = document.getElementById("scale");
+  const sv = el("svg:svg", { viewBox: "0 0 100 18", preserveAspectRatio: "none" });
+  const ticks = el("div", { class: "sb", style: "position:relative;height:18px" });
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+    ticks.append(el("span", { class: "muted num", style: `position:absolute;left:${v * 100}%;transform:translateX(-50%);font-size:11px`, text: v }));
+  }
+  scale.replaceChildren(el("div"), ticks, el("div"));
+
+  const table = document.getElementById("table");
+  table.replaceChildren(
+    el("thead", {}, el("tr", {}, ...["rank", "kind", "subject", "location", ...FACTORS.map((f) => f[1]), "total", "impact", "high-risk"]
+      .map((h, i) => el("th", { class: i >= 4 ? "r" : "", text: h })))),
+    el("tbody", {}, t.top_level.map((e) => el("tr", {},
+      el("td", { class: "r", text: e.rank }), el("td", { text: e.kind + (e.detail ? "(" + e.detail + ")" : "") }),
+      el("td", { class: "mono", text: e.label }), el("td", { class: "mono muted", text: e.where || "" }),
+      ...FACTORS.map(([k]) => el("td", { class: "r", text: e.factors[k].c.toFixed(3) })),
+      el("td", { class: "r", text: e.total.toFixed(3) }), el("td", { class: "r", text: e.impact.toFixed(3) }),
+      el("td", { class: "r", text: e.high_risk ? "yes" : e.informational ? "spelling only" : "" })))));
+}
+render();
+</script>
+</body>
+</html>

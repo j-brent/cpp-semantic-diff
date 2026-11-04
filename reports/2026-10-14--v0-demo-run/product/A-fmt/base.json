@@ -1,0 +1,276 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "fmt \u00b7 component 0 \u00b7 base (ea0660a1d095)",
+  "output": "base.html",
+  "quality_profile": "showcase",
+  "legend": {
+   "entries": {
+    "frontend": {
+     "label": "caller (library entry point)"
+    },
+    "external": {
+     "label": "caller (test)"
+    },
+    "backend": {
+     "label": "function the change is about"
+    },
+    "cloud": {
+     "label": "callee"
+    }
+   }
+  }
+ },
+ "components": [
+  {
+   "id": "print",
+   "type": "frontend",
+   "label": "fmt::print",
+   "sublabel": "(std::ostream&, fstring, T&&...)",
+   "pos": [
+    40,
+    40
+   ],
+   "size": [
+    210,
+    58
+   ]
+  },
+  {
+   "id": "vprint_c",
+   "type": "frontend",
+   "label": "fmt::vprint",
+   "sublabel": "(std::ostream&, string_view, args)",
+   "pos": [
+    40,
+    130
+   ],
+   "size": [
+    210,
+    58
+   ]
+  },
+  {
+   "id": "vprint_w",
+   "type": "frontend",
+   "label": "fmt::vprint (wchar_t)",
+   "sublabel": "(std::wostream&, wstring_view, args)",
+   "pos": [
+    40,
+    220
+   ],
+   "size": [
+    210,
+    58
+   ]
+  },
+  {
+   "id": "t_write",
+   "type": "external",
+   "label": "test: write_to_ostream",
+   "sublabel": "ostream-test.cc:127",
+   "pos": [
+    40,
+    310
+   ],
+   "size": [
+    210,
+    58
+   ]
+  },
+  {
+   "id": "max_value",
+   "type": "cloud",
+   "label": "detail::max_value",
+   "sublabel": "T ()",
+   "pos": [
+    800,
+    150
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "to_unsigned",
+   "type": "cloud",
+   "label": "detail::to_unsigned",
+   "sublabel": "make_unsigned<T> (T)",
+   "pos": [
+    800,
+    240
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "buf_ctor",
+   "type": "cloud",
+   "label": "detail::buffer::buffer",
+   "sublabel": "(grow_fn, T*, size, capacity)",
+   "pos": [
+    800,
+    370
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "mem_buf",
+   "type": "cloud",
+   "label": "basic_memory_buffer",
+   "sublabel": "ctor (const Allocator&)",
+   "pos": [
+    800,
+    460
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "sv_ctor",
+   "type": "cloud",
+   "label": "basic_string_view",
+   "sublabel": "ctor (const Char*)",
+   "pos": [
+    800,
+    550
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "buf_data",
+   "type": "cloud",
+   "label": "detail::buffer::data",
+   "sublabel": "T* ()",
+   "pos": [
+    800,
+    640
+   ],
+   "size": [
+    190,
+    58
+   ]
+  },
+  {
+   "id": "t_max",
+   "type": "external",
+   "label": "test: write_to_ostream_max_size",
+   "sublabel": "ostream-test.cc",
+   "pos": [
+    40,
+    410
+   ],
+   "size": [
+    230,
+    80
+   ]
+  },
+  {
+   "id": "wb",
+   "type": "backend",
+   "label": "detail::write_buffer",
+   "sublabel": "(ostream&, buffer&) \u00b7 ostream.h:55",
+   "pos": [
+    420,
+    150
+   ],
+   "size": [
+    250,
+    130
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "print-wb",
+   "from": "print",
+   "to": "wb"
+  },
+  {
+   "id": "vprint_c-wb",
+   "from": "vprint_c",
+   "to": "wb"
+  },
+  {
+   "id": "vprint_w-wb",
+   "from": "vprint_w",
+   "to": "wb"
+  },
+  {
+   "id": "t_write-wb",
+   "from": "t_write",
+   "to": "wb"
+  },
+  {
+   "id": "t_max-wb",
+   "from": "t_max",
+   "to": "wb"
+  },
+  {
+   "id": "wb-max_value",
+   "from": "wb",
+   "to": "max_value"
+  },
+  {
+   "id": "wb-to_unsigned",
+   "from": "wb",
+   "to": "to_unsigned"
+  },
+  {
+   "id": "t_max-max_value",
+   "from": "t_max",
+   "to": "max_value"
+  },
+  {
+   "id": "t_max-to_unsigned",
+   "from": "t_max",
+   "to": "to_unsigned"
+  },
+  {
+   "id": "t_max-buf_ctor",
+   "from": "t_max",
+   "to": "buf_ctor"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "rose",
+   "title": "What the tool reported",
+   "items": [
+    "15 change events in component 0, 10 of them top-level",
+    "write_buffer: NodeSignatureChanged (0.74), NodeAttrChanged(default_arguments) (0.71), NodeBodyChanged (0.57), all high-risk",
+    "5 CallerOfChangedSignature nested under the signature change; one caller (the max_size test) was edited",
+    "The max_size test's body changed: 3 calls removed, 3 added"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "What changed since run 38044461310",
+   "items": [
+    "Then: write_buffer removed plus write_buffer added, 8 consequences under each, 28 events in the component",
+    "Now: the name tier pairs the two (ADR-036), so the callers' edges map and no edge event is reported for them",
+    "fill_n is no longer in this component; it is component 1"
+   ]
+  },
+  {
+   "dot": "slate",
+   "title": "Drawn differently from the document",
+   "items": [
+    "The 'contains' edge from namespace detail is left out; it is not a change event in this run",
+    "Edges drawn in both drawings are inferred: no change event touches them, so they map through the correspondence"
+   ]
+  }
+ ]
+}

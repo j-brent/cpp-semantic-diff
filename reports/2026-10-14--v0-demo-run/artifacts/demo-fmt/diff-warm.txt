@@ -1,0 +1,121 @@
+comparing HEAD~12...HEAD  (ea0660a1d095 -> b4ffa39b9994)
+building base model 51 TUs
+building head model 51 TUs
+subject  HEAD~12...HEAD  (ea0660a1d095 -> b4ffa39b9994)
+
+this model is incomplete — read what follows knowing it
+  base 2 of 52 compile-database entries are not C++ and were not modelled
+  base 1 of 51 C++ compile-database entries are third-party and were not parsed
+  head 2 of 52 compile-database entries are not C++ and were not modelled
+  head 1 of 51 C++ compile-database entries are third-party and were not parsed
+  base 50/50 TUs · head 50/50 TUs · libclang 18.1.3 x86_64-pc-linux-gnu
+  base 7,804 of 18,964 distinct edges (41.2%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit 
+special members). Expected, and a lower bound on the call graph, not a defect.
+  head 7,858 of 19,076 distinct edges (41.2%) lead outside the model: an endpoint is declared nowhere in this repository (external declarations, implicit 
+special members). Expected, and a lower bound on the call graph, not a defect.
+  base 102 declaration(s) not modelled: 52 using_declaration, 49 friend, 1 using_directive
+  head 103 declaration(s) not modelled: 52 using_declaration, 50 friend, 1 using_directive
+  third-party test/gtest (declared)
+
+576 lines changed -> 143 change events, 5 high-risk · 18 of 412 changed C++ lines explained by no change event
+  4.0 lines per change event · 40 top-level, 103 nested under a cause · 25 components · 12 files (10 C++) · 16.5s
+  18 changed C++ line(s), 148 token(s), are on no change event's lines — a lower bound on what the model cannot explain
+    head test/format-test.cc: 79 token(s) on 10 line(s)
+    head test/compile-test.cc: 54 token(s) on 6 line(s)
+    base test/compile-test.cc: 9 token(s) on 1 line(s)
+    head include/fmt/core.h: 6 token(s) on 1 line(s)
+
+component 0 · 15 change events
+  0.74 ● NodeSignatureChanged    fmt::v12::detail::write_buffer  include/fmt/ostream.h:56
+         exposure public · novelty NodeSignatureChanged · blast radius 14 dependent(s), 6 direct, head model · uncertainty name
+         5 consequence(s) nested below
+     0.61 ● └ CallerOfChangedSignature  fmt::v12::print -> fmt::v12::detail::write_buffer  caller not edited
+     0.55 · └ CallerOfChangedSignature  fmt::v12::vprint [void (std::basic_ostream<char> &, fmt::basic_string_view<char>, fmt::basic_format_args<fmt::context>)]
+-> fmt::v12::detail::write_buffer  caller not edited
+     0.55 · └ CallerOfChangedSignature  fmt::v12::vprint [void (std::basic_ostream<wchar_t> &, fmt::basic_string_view<wchar_t>, 
+fmt::basic_format_args<fmt::generic_context<fmt::basic_appender<wchar_t>, wchar_t>>)] -> fmt::v12::detail::write_buffer  caller not edited
+     0.52 · └ CallerOfChangedSignature  ostream_test_write_to_ostream_Test::TestBody -> fmt::v12::detail::write_buffer  caller not edited
+     0.52 · └ CallerOfChangedSignature  ostream_test_write_to_ostream_max_size_Test::TestBody -> fmt::v12::detail::write_buffer  caller edited
+  0.71 ● NodeAttrChanged    fmt::v12::detail::write_buffer  include/fmt/ostream.h:56
+         exposure public · novelty NodeAttrChanged(default_arguments) · blast radius 14 dependent(s), 6 direct, head model · uncertainty name
+  0.57 ● NodeBodyChanged    fmt::v12::detail::write_buffer  include/fmt/ostream.h:56
+         exposure public · blast radius 14 dependent(s), 6 direct, head model · novelty NodeBodyChanged · uncertainty name
+  0.40 · EdgeRemoved  ostream_test_write_to_ostream_max_size_Test::TestBody -> fmt::v12::detail::max_value
+         exposure public · novelty EdgeRemoved · blast radius 1 dependent(s), 1 direct, head model · uncertainty declared
+  0.40 · EdgeRemoved  ostream_test_write_to_ostream_max_size_Test::TestBody -> fmt::v12::detail::buffer::buffer<T>
+         exposure public · novelty EdgeRemoved · blast radius 1 dependent(s), 1 direct, head model · uncertainty declared
+  0.40 · EdgeRemoved  ostream_test_write_to_ostream_max_size_Test::TestBody -> fmt::v12::detail::to_unsigned
+         exposure public · novelty EdgeRemoved · blast radius 1 dependent(s), 1 direct, head model · uncertainty declared
+  0.39 · EdgeAdded  ostream_test_write_to_ostream_max_size_Test::TestBody -> fmt::v12::basic_memory_buffer::basic_memory_buffer<T, SIZE, Allocator>
+         exposure public · novelty EdgeAdded · blast radius 1 dependent(s), 1 direct, head model · uncertainty declared
+  0.39 · EdgeAdded  ostream_test_write_to_ostream_max_size_Test::TestBody -> fmt::v12::basic_string_view::basic_string_view<Char> [void (const 
+type-parameter-0-0 *)]
+         exposure public · novelty EdgeAdded · blast radius 1 dependent(s), 1 direct, head model · uncertainty declared
+  0.39 · EdgeAdded  ostream_test_write_to_ostream_max_size_Test::TestBody -> fmt::v12::detail::buffer::data
+         exposure public · novelty EdgeAdded · blast radius 1 dependent(s), 1 direct, head model · uncertainty declared
+  0.18 · NodeBodyChanged    ostream_test_write_to_ostream_max_size_Test::TestBody  test/ostream-test.cc:131
+         novelty NodeBodyChanged · blast radius 1 dependent(s), 1 direct, head model · exposure test · uncertainty declared
+
+component 1 · 3 change events
+  0.57 ● NodeAdded  + fmt::v12::detail::fill_n  include/fmt/format.h:548
+         exposure public · novelty NodeAdded · blast radius 3 dependent(s), 1 direct, head model · uncertainty unmatched, no candidate
+         2 consequence(s) nested below
+     0.44 · └ EdgeAdded  fmt::v12::detail::fill_n -> fmt::v12::detail::is_constant_evaluated
+     0.42 · └ EdgeAdded  fmt::v12::detail -> fmt::v12::detail::fill_n
+
+component 2 · 2 change events
+  0.51 · NodeBodyChanged    fmt::v12::detail::is_printable  include/fmt/format-inl.h:1827
+         exposure public · blast radius 10 dependent(s), 3 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.18 · NodeBodyChanged    ranges_test_is_printable_Test::TestBody  test/ranges-test.cc:593
+         novelty NodeBodyChanged · blast radius 1 dependent(s), 1 direct, head model · exposure test · uncertainty declared
+
+component 3 · 1 change event
+  0.50 · NodeBodyChanged    fmt::v12::writer::writer  include/fmt/format.h:1114
+         exposure public · blast radius 9 dependent(s), 3 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 4 · 3 change events
+  0.50 · EdgeAdded  fmt::v12::detail::write -> fmt::v12::detail::buffer::clear
+         exposure public · blast radius 7 dependent(s), 3 direct, head model · novelty EdgeAdded · uncertainty declared
+  0.50 · EdgeAdded  fmt::v12::detail::write -> fmt::v12::basic_specs::upper
+         exposure public · blast radius 7 dependent(s), 3 direct, head model · novelty EdgeAdded · uncertainty declared
+  0.48 · NodeBodyChanged    fmt::v12::detail::write  include/fmt/format.h:3715
+         exposure public · blast radius 7 dependent(s), 3 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 5 · 1 change event
+  0.45 · NodeBodyChanged    fmt::v12::detail::format_hexfloat  include/fmt/format.h:3311
+         exposure public · blast radius 4 dependent(s), 2 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 6 · 2 change events
+  0.44 · EdgeAdded  fmt::v12::detail::format_float -> fmt::v12::detail::count_digits
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty EdgeAdded · uncertainty declared
+  0.43 · NodeBodyChanged    fmt::v12::detail::format_float  include/fmt/format.h:3409
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 7 · 2 change events
+  0.44 · EdgeAdded  fmt::v12::basic_memory_buffer::grow -> fmt::v12::detail::is_constant_evaluated
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty EdgeAdded · uncertainty declared
+  0.43 · NodeBodyChanged    fmt::v12::basic_memory_buffer::grow  include/fmt/format.h:978
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 8 · 2 change events
+  0.43 · NodeBodyChanged    fmt::v12::detail::allocator::allocate  include/fmt/format.h:907
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+  0.43 · NodeBodyChanged    fmt::v12::detail::allocator::deallocate  include/fmt/format.h:916
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+component 9 · 1 change event
+  0.43 · NodeBodyChanged    fmt::v12::detail::write_escaped_alternative  include/fmt/std.h:138
+         exposure public · blast radius 3 dependent(s), 1 direct, head model · novelty NodeBodyChanged · uncertainty declared
+
+… 15 more top-level change events (--limit 0 for all, or --json for every one)
+
+identity: tiers declared, inline-namespace, name only (ARCH-001 §13)
+  8,809 matched · 0 base / 51 head unmatched
+  git found no renames; one it could not detect would read here as a removal plus an addition
+
+true of every run:
+  One model is one preprocessor configuration. Every claim here is conditional on the configuration that was analyzed; variant coverage is unsolved and is not 
+implied.
+  Static call graphs are unsound. Virtual dispatch, function pointers and inlining mean any reachability or blast-radius number is a lower bound, not a fact.
+  Implicit special members are not visible. libclang does not expose the copy and move operations the compiler writes, so a change that adds or removes one 
+implicitly -- adding a destructor removes the implicit move operations -- produces no change event.

@@ -1,0 +1,99 @@
+<!doctype html>
+<!-- metadata
+type: report
+kind: frozen
+frozen: 2026-10-14
+author: Brent Runyan
+created: 2026-10-14
+dependencies: [reports/2026-10-10--up-to-speed/demo-run-b]
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Run 38280732734</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .section-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 34px 0 4px; }
+  .section-h h2 { margin: 0; }
+  .grid2 { margin-top: 12px; }
+  .card-link h3 { display: flex; align-items: center; font-size: 16px; margin-bottom: 8px; }
+  .card-link p { font-size: 14px; color: var(--ink-2); margin: 0 0 6px; }
+  .tool { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="crumbs"><span class="kicker">cpp-semantic-diff · demo run on v0</span></div>
+    <div id="theme-slot"></div>
+  </div>
+  <h1>What demo run <a id="run-link"></a> says, drawn</h1>
+  <p class="lede">One-off views of the <code>demo</code> workflow's output for <span id="subjects"></span>, built from the run's two
+    artifacts (<code>demo-fmt</code>, <code>demo-spdlog</code>). The run tested PR #75 (<code>dev</code> into <code>main</code>) at
+    <code>c01c58b</code>, with JSON schema 2.0. Every number comes from those files. Page F sets them beside
+    <a href="../2026-10-10--up-to-speed/demo-run-b/index.html">demo run B</a> (run 38044461310, <code>4d8e367</code>, schema 1.2).
+    <em>Frozen 2026-10-14; not maintained.</em> The findings, in words, are on <a href="report.html">the report page</a>.</p>
+
+  <div class="section-h"><span class="kicker product">Product</span><h2>What changed in the code under review</h2></div>
+  <p class="note">Output about fmt and spdlog themselves: what the semantic diff found, and how it ranked it.</p>
+  <div class="grid2">
+    <a class="card-link" href="product/A-signature-change.html"><div class="panel">
+      <h3><span class="letter product">A</span>The signature change, before and after</h3>
+      <p>The same signature changes run B drew as a removal plus an addition, now one paired entity with its callers listed.
+        fmt's component 0 and spdlog's component 1.</p>
+      <div class="tool">archify · architecture compare</div></div></a>
+    <a class="card-link" href="product/C-compression.html"><div class="panel">
+      <h3><span class="letter product">C</span>How much smaller the change gets</h3>
+      <p>Lines changed against change events, top-level and high-risk, which kinds make up the total, and the changed lines
+        no change event explains.</p>
+      <div class="tool">hand-built chart</div></div></a>
+    <a class="card-link" href="product/D-risk-factors.html"><div class="panel">
+      <h3><span class="letter product">D</span>Why each change event ranks where it does</h3>
+      <p>Every top-level change event's score split into blast radius, exposure, novelty and uncertainty, with high-risk and
+        spelling-only shown separately.</p>
+      <div class="tool">hand-built chart</div></div></a>
+    <a class="card-link" href="product/F-before-after-v0.html"><div class="panel">
+      <h3><span class="letter product">F</span>Against run B: what v0 changed</h3>
+      <p>Headline numbers of both runs side by side, and every change event only one of them reports, sorted by what it
+        is about.</p>
+      <div class="tool">hand-built table</div></div></a>
+  </div>
+
+  <div class="section-h"><span class="kicker process">Process</span><h2>How the tool ran, and whether to trust it</h2></div>
+  <p class="note">Output about cppsd itself: its pipeline, its timings, and the preconditions the product pages rest on.</p>
+  <div class="grid2">
+    <a class="card-link" href="process/B-pipeline/pipeline.html"><div class="panel">
+      <h3><span class="letter process">B</span>Pipeline and where the time went</h3>
+      <p>The stages with each one's in-process time for both targets, including the new <code>derive</code> and
+        <code>coverage</code>. Producing the two models is 87–99% of it. <code>enrich</code> is still not built.</p>
+      <div class="tool">archify · architecture</div></div></a>
+    <a class="card-link" href="process/E-trust.html"><div class="panel">
+      <h3><span class="letter process">E</span>Can this run be believed?</h3>
+      <p>Parser health, translation units modelled, third-party boundary, cache cold and warm, edges leaving the model,
+        identity residue, declarations skipped, findings, and the standing limits. One tile each, with a status.</p>
+      <div class="tool">hand-built status tiles</div></div></a>
+  </div>
+
+  <h2>Where things are</h2>
+  <div class="panel note">
+    <p><code>artifacts/</code> holds the run's two artifacts as downloaded (<code>gh run download 38280732734</code>):
+      <code>diff.json</code>, <code>diff.txt</code>, <code>diff-warm.txt</code>, <code>plan.txt</code>, <code>doctor.txt</code> per target.</p>
+    <p><code>data/run-38280732734.json</code> (and <code>.js</code>) is what the hand-built pages read. It is produced by
+      <code>scripts/extract.py</code> from <code>artifacts/</code> and run B's reduced data.
+      <code>data/compare-38044461310.json</code> is produced by <code>scripts/compare.py</code> from both runs' artifacts.</p>
+    <p><code>product/A-*/base.json</code>, <code>head.json</code> are written by <code>scripts/gen_*_component*.py</code>; the diagram is
+      <code>archify compare architecture base.json head.json</code>. <code>process/B-pipeline/pipeline.json</code> is written by
+      <code>scripts/gen_pipeline.py</code> from the data and goes through <code>archify finalize</code>.</p>
+  </div>
+</main>
+<script src="data/run-38280732734.js"></script>
+<script src="assets/common.js"></script>
+<script>
+const a = document.getElementById("run-link");
+a.href = D.run.url; a.textContent = D.run.id;
+document.getElementById("subjects").textContent =
+  D.targets.map((t) => `${t.name} (${t.base_ref}...HEAD, --third-party ${t.third_party_flag})`).join(" and ");
+</script>
+</body>
+</html>
